@@ -32,6 +32,14 @@ TouchDesigner (TD) drives the 20 ropes over Art-Net **and** the HUB75 panels ove
 - **Remote viewing:** VNC (TightVNC :5900) shows the real console/HDMI; RDP blanks the panels.
 - **Power:** a full-white box is ≈1.5 kW. Cap brightness in TD.
 
+## TouchDesigner gotchas (learned the hard way)
+- **Anything modal in TD freezes the bridge.** A dialog blocks TD's main thread, so `td.ps1` calls hang. `td.ps1` times out after 20 s and names the blocking dialog. Someone then has to answer it on the console (VNC), or Claude clicks it after taking a screenshot.
+- **Save only with `.\tools\td_save.ps1`.** Never call `project.save(...)` directly. TD's incremental save (pref `general.inc`, default 2) made a named save collide with an existing `river.N.toe` and prompt "already exists. Replace?". On bitcube `general.inc` is now 0. `td_save.ps1` re-checks it, refuses to save if it's back on, verifies `river.toe`'s timestamp, and deletes stray `river.N.toe`.
+- **Never put unpicklable objects (sockets, files) in `comp.storage`.** TD pickles storage into the `.toe` on save, and a socket triggers a modal "saved with errors". Keep live objects in a holder module in `sys.modules`, as `td/ropes/artnet_out.py` does.
+- **Save before cooking a new GLSL shader.** A shader that sampled an unwired input hung the Iris Xe driver (TDR) and killed TD. Index `sTD2DInputs[]` with literal constants only, guarded by `TD_NUM_2D_INPUTS`. In multi-input TOPs a new input connector only appears on the next frame (see `wire()` in `td/build/build_panels.py`).
+- **Changes live in the repo, not only in the `.toe`.** The rope/panel logic and shaders are files synced into DATs. `td/build/*.py` rebuild the COMPs idempotently: `.\tools\td.ps1 -File .\td\build\build_ropes.py`. From Git Bash, run PowerShell scripts with `powershell -ExecutionPolicy Bypass -File ...`.
+- **This box has only one display:** the Colorlight sender (`LED 1920X1080`, HDMI). The desktop *is* the panel feed. The panels window is borderless and always on top at (0,0).
+
 ## Rules
 - It's a shared show machine. Ask Gavin before uninstalling anything, changing network/firewall/Tailscale settings, or touching Will's RopeLights setup.
 - Never write passwords, tokens or camera logins into tracked files.
