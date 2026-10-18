@@ -1,6 +1,6 @@
 # A River Becoming: design notes
 
-Digest of the in-person hacking session at Agape, 2026-10-17. Hardware details are in [a-river-becoming-hardware.md](a-river-becoming-hardware.md). The raw Signal thread is in `~/claude/local/signal-export/out/Ariverbecoming/chat.md`.
+Digest of the in-person hacking session at Agape, 2026-10-17. Hardware details are in [a-river-becoming-hardware.md](a-river-becoming-hardware.md). The raw Signal thread is exported on Gavin's Mac mini (not in this repo).
 
 ## Tonight's goal
 TouchDesigner on bitcube (the Windows mini PC) drives both outputs: the ropes over Art-Net and one HUB75 quad over HDMI. Layer-one hardware (screen, PSU, sender/receiver) gets laid out in parallel. Exploring animations is out of scope tonight.

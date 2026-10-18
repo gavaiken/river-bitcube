@@ -2,10 +2,13 @@
 
 Running record of what Gavin and Claude have done on this project, plus how to pick up from here. **Append new sessions at the bottom (newest last). Never put passwords or tokens in this file.**
 
-Related files (all on Gavin's Mac mini, `gav-m1-mini`):
-- `~/claude/docs/a-river-becoming-hardware.md`: verified hardware reference (ropes, PSAC10 boxes, rack controller, universes, panels, open hardware questions).
-- `~/claude/docs/a-river-becoming-notes.md`: design notes digested from the meetings (TouchDesigner's job, the open question about what Modal outputs, panel mapping modes, sensing ideas).
-- `~/claude/local/signal-export/out/Ariverbecoming/chat.md`: full export of the team's Signal group (Oct 6–17), with media in `media/`. To refresh it: `cd ~/claude/local/signal-export && .venv/bin/sigexport out --chats "A river becoming" --no-stickers`. The first run needs someone to click Allow on a macOS Keychain prompt on the mini's screen.
+Related files:
+- `docs/plan.md`: the shared checklist and open questions. `docs/index.md` is the public status page (https://gavaiken.github.io/river-bitcube/).
+- `docs/a-river-becoming-hardware.md`: verified hardware reference (ropes, PSAC10 boxes, rack controller, universes, panels, cameras).
+- `docs/a-river-becoming-notes.md`: design notes digested from the meetings.
+- The team's Signal group is exported to markdown on Gavin's Mac mini (not in this repo); Claude there refreshes it when asked.
+
+**This repo is public.** Never commit passwords, tokens, camera logins, private keys, personal emails or phone numbers. Secrets live only in untracked `secrets.local.json` on bitcube.
 
 ---
 
@@ -41,12 +44,12 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
 ## 4. Access
 ### GitHub
 - Repo: **`drocamor/river-agent`** (Dave's, private). Merged PRs to `main` auto-deploy to Modal. Will added a `rope-lights` PR.
-- As of 2026-10-17, `gavaiken` had **no access**. Ask Dave to add him. Clone to `~/claude/Source/river-agent` once access is granted.
+- As of 2026-10-17, `gavaiken` had **no access**. Ask Dave to add him. Clone it once access is granted (done 2026-10-18).
 - Decision: contribute to river-agent rather than starting a new repo.
 
 ### Tailscale
-- Will's tailnet: account `itsriverbox@outlook.com` (tailnet `tail03bc1a`), max 6 users (free plan). Gavin accepted an **Admin** invite on 2026-10-17.
-- Gavin's own tailnet (`tailddc624`) holds the mini (`gav-m1-mini`, 100.126.113.14) and his MacBook Air. **Don't move the mini to Will's tailnet**: a device is on one tailnet at a time, and the mini is Gavin's remote-access path.
+- Will's tailnet: a project account Will created (tailnet `tail03bc1a`), max 6 users (free plan). Gavin accepted an **Admin** invite on 2026-10-17.
+- Gavin's own tailnet holds his Mac mini and laptop. **Don't move the mini to Will's tailnet**: a device is on one tailnet at a time, and the mini is Gavin's remote-access path.
 - **bitcube is shared into Gavin's tailnet** (node share, accepted 2026-10-17) → 100.73.68.60 from the mini/Air. If accepting a share fails with "Failed to accept invite", the console was set to the sharer's tailnet; switch to your own first.
 - Cameras sit behind the GL.iNet router's subnet route, which node sharing doesn't carry. To reach them, a device has to actually join Will's tailnet (account switcher on the Air/phone).
 
@@ -90,7 +93,7 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
 ## Session log
 
 ### 2026-10-17 (evening, Gavin + Claude on the mini via remote-control)
-- Installed signal-export in `~/claude/local/signal-export` (venv). Exported the "A river becoming" group to markdown. Signal Desktop was installed from the web, not via `dots`.
+- Installed signal-export on the mini (venv). Exported the "A river becoming" group to markdown. Signal Desktop was installed from the web, not via `dots`.
 - Digested the Signal thread and two in-person meeting transcripts into the notes doc. Saved Gavin's hardware rundown as the hardware doc.
 - Found Dave's repo `drocamor/river-agent` (no access yet).
 - Tailscale: Will invited Gavin as Admin on his tailnet; Gavin accepted and shared bitcube into his own tailnet. Verified a 13 ms direct path, SSH key auth (Will had already added the mini's key) and RDP port open. Added the `bitcube` SSH alias on the mini.
@@ -161,7 +164,7 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
   - Ropes blacked out (TD `Active` off; port 6454 released). Panels `Source=black`, window still open.
   - `river.toe` saved in this dark state, so a reboot comes up dark. RopeLights stopped (task Ready, no trigger).
   - The 01:35 rope test run was **not watched** (no photos), so colour, order and direction are all still unverified. Re-run tomorrow with someone watching, ropes uncoiled ~1 m at the plug end.
-  - Team handoff summary published as a private page: https://claude.ai/artifact/SZwraPQpZLgTdyAEM9MnKA
+  - Team handoff summary published as a private page (link shared in Signal).
 - **Correction, 01:47:** with TD's output off, the ropes did **not** stay dark. Gavin saw them cycling colours.
   - Nothing on bitcube was sending (port 6454 free, RopeLights Ready, `dmxout1` off). So when Art-Net stops, the hardware falls back to its own program: either the rack controller's SD card (program 2) or the PSAC10s' PLAY mode. That answers hardware open question 3: live Art-Net overrides it, and silence hands control back.
   - Overnight fix: TD `Active` on with `Source=black` (continuous zeros at 40 fps, 0 W), saved into `river.toe`.
@@ -182,7 +185,7 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
 - **Cameras** (Will, Signal DM 2026-10-18): gallery E1 Pro `192.168.8.103`, river E1 Outdoor Pro `192.168.8.217`, RTSP `/Preview_01_main` on 554, user `admin`. The password is in the untracked `secrets.local.json` only. bitcube reaches both over Will's tailnet, and `tools\cam_snap.ps1 gallery|river` works (12:10).
   - The **river cam** sees the rope coils on the floor. The **gallery cam** is pressed against a ribbon cable and needs re-aiming. Frames show housemates; they stay in `frames\` (git-ignored).
   - Will's PTZ example is in `tools/cameras/test_cam_move.py`, and the details are in the hardware doc.
-- **Dave:** added gavaiken as a collaborator on `drocamor/river-agent` (push access) and posted an SSH public key for bitcube (`dave@rocamr.com river`, SHA256:aXW4LMdJXbPfPv8mRImLDWTjkVZ3f6Y818HEqin+/No). The key is **not yet added**: the mini session's attempt was blocked pending Gavin's confirmation.
+- **Dave:** added gavaiken as a collaborator on `drocamor/river-agent` (push access) and posted an SSH public key for bitcube (comment `river`, SHA256:aXW4LMdJXbPfPv8mRImLDWTjkVZ3f6Y818HEqin+/No). The key is **not yet added**: the mini session's attempt was blocked pending Gavin's confirmation.
 - **Dave's SSH key added** to bitcube (`administrators_authorized_keys`, with Gavin's OK). Dave can `ssh user@bitcube.tail03bc1a.ts.net` over Will's tailnet.
 - **Boot fix (with Gavin's OK):**
   - The firmware boot order had **Ubuntu first**, so GRUB showed a menu on every boot. Windows Boot Manager is now first (`bcdedit /set {fwbootmgr} displayorder {bootmgr} /addfirst`); Ubuntu stays in the list.
