@@ -27,7 +27,7 @@ The shared checklist for **A River Becoming**'s show machine, bitcube. Install a
 |---|---|---|---|
 | A | Public status page: tidy docs, make this repo public, GitHub Pages from `/docs` | mini | **done** 18 Oct |
 | B | Panels window on the **LED** display whichever monitors are plugged in. Pick the monitor whose name starts with `LED`, cover all 1920×1080 in black, panel atlas top-left. Fall back to primary. (`td/build/build_panels.py`) | bitcube | todo |
-| E | Camera-based rope identification. Gavin aims the gallery cam at the ropes and HUB75; `tools/rope_identify.py` lights each rope, diffs frames, and reports position, plug end and colour order | Gavin, then bitcube | todo |
+| E | Camera-based rope identification with the **`river` cam** (E1 Outdoor Pro, `192.168.8.217`), which sits on the LED controller and sees all three coil piles. Tilt/pan it so the HUB75 is in frame too, uncoil the plug ends, and run it dim (dusk or curtains closed). `tools/rope_identify.py` lights each rope, diffs frames, and reports position, plug end and colour order. Once this camera goes to the river, identification needs another camera | Gavin, then bitcube | todo |
 | C | Dave's visuals into TD: run river-agent's `gallery/sync.py` mirror on port **8770** (8765 is RopeLights); Web Render TOP of `canvas.html` feeds the ropes crop and the panels; offline fallback visual | bitcube (+ Dave) | todo |
 | F | At login, open Chrome frontmost on the M14 monitor with this status page (local fallback if offline) | bitcube | todo |
 | G | Gallery-cam snapshot every 15 min, force-pushed to orphan branch `snapshot` and shown on the status page | bitcube | todo |
