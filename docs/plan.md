@@ -27,13 +27,20 @@ The shared checklist for **A River Becoming**'s show machine, bitcube. Install a
 |---|---|---|---|
 | A | Public status page: tidy docs, make this repo public, GitHub Pages from `/docs` | mini | **done** 18 Oct |
 | B | Panels window on the **LED** display whichever monitors are plugged in. Pick the monitor whose name starts with `LED`, cover all 1920×1080 in black, panel atlas top-left. Fall back to primary. (`td/build/build_panels.py`) | bitcube | todo |
-| E | Camera-based rope identification with the **`river` cam** (E1 Outdoor Pro, `192.168.8.217`), which sits on the LED controller and sees all three coil piles. Tilt/pan it so the HUB75 is in frame too, uncoil the plug ends, and run it dim (dusk or curtains closed). `tools/rope_identify.py` lights each rope, diffs frames, and reports position, plug end and colour order. Once this camera goes to the river, identification needs another camera | Gavin, then bitcube | todo |
+| E | Camera-based rope identification with the **`river` cam** (E1 Outdoor Pro, `.217`), sitting on the LED controller and watching the three coil piles. `tools\rope_capture.ps1` lights each rope alone and grabs a frame; `tools/rope_identify.py` finds it. **First run, 18 Oct 13:13:** the camera moved partway through, so only ropes 1–14 are usable. Right pile: 1, 4, 8, 10. Middle: 2, 3, 5, 6, 7. Left: 11, 13, 14. **Ropes 9 (box 1 OUT9) and 12 (box 2 OUT2) lit nothing**, probably the two dead ropes. Next: re-run with the camera still and the HUB75 in view, then the plug-end and colour-order frames | mini (Gavin keeps the camera still) | **in progress** |
 | C | Dave's visuals into TD: run river-agent's `gallery/sync.py` mirror on port **8770** (8765 is RopeLights); Web Render TOP of `canvas.html` feeds the ropes crop and the panels; offline fallback visual | bitcube (+ Dave) | todo |
 | F | At login, open Chrome frontmost on the M14 monitor with this status page (local fallback if offline) | bitcube | todo |
 | G | Gallery-cam snapshot every 15 min, force-pushed to orphan branch `snapshot` and shown on the status page | bitcube | todo |
 | D | Cameras into Dave's agent: run river-agent's `capture/capture.py` on bitcube, POSTing clips to Modal `/ingest` | bitcube (after Dave answers) | blocked |
 | H | Panel quad 2 connected and checked | Andi + Gavin | todo |
+| J | **Per-rope sample paths (Colin's suggestion).** Replace the straight 20×400 crop with a list of UV sample points per rope that follows how each tube actually hangs (straight, curved, meandering on the floor). Sample with TOP to CHOP's UV input, then RGB ordering, then Art-Net. Source the paths from Gavin's Chromatik pixel map or by measuring the hung tubes with the camera. Add a calibration mode that steps one pixel along a rope, to confirm pixel order and the 170/340 universe boundaries | bitcube | todo (after E) |
 | I | Rope mapping fixes from the identification run (order, reversed ropes, colour order) | bitcube (Will OKs his config) | blocked on E |
+
+## Decisions
+- **TouchDesigner is the single renderer** for ropes and panels: one river image, sampled by both. This agrees with Colin's recommendation (18 Oct).
+- **TD sends Art-Net straight to the PSAC10 boxes** (`2.0.0.10`, `2.0.0.11`), not via the rack controller's playback. The rack controller only plays its own program when TD stops sending, so TD sends black to keep the ropes dark.
+- **Art-Net sender:** we use our own Python sender inside TD (`td/ropes/artnet_out.py`). It's byte-for-byte the same as Will's RopeLights and has brightness/power caps. Colin suggests TD's DMX Out CHOP with a routing table; it's a fine alternative, but there's no need to switch while this one works.
+- **Rope facts Colin asked for:** each 10 m tube has **400 individually addressable pixels** (40 ICs/m; the 240 LEDs/m are driven in groups of 6), i.e. 3 universes per rope (170+170+60 px). Will's provisional mapping reserves 4 universes per rope: box 1 = universes 0–39 (ropes 1–10), box 2 = 40–79 (ropes 11–20). 18 of 20 ropes have lit with it; ropes 9 and 12 haven't.
 
 ## Open questions
 | Question | Ask | Asked | Answer |

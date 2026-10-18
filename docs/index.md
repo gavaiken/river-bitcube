@@ -17,7 +17,7 @@ bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes ov
   - The panels window is moving to the LED display (it currently lands on the USB-C monitor).
   - Making this status page part of every work session.
 - **Next:**
-  1. Identify the ropes automatically with the camera.
+  1. Identify the ropes automatically with the camera (first run: ropes 1–14 located, 9 and 12 look dead).
   2. Feed Dave's Modal visuals into the ropes and panels.
   3. Connect quad 2.
   4. Push the cameras into Dave's agent.

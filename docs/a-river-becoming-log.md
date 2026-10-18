@@ -203,3 +203,13 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
   - Full-history check before publishing: no passwords, camera logins, private keys or tokens.
   - Added `docs/index.md` (welcome/status), `docs/plan.md` (checklist with owners plus open questions) and `docs/_config.yml`. Made **gavaiken/river-bitcube public** and enabled GitHub Pages from `main:/docs` → https://gavaiken.github.io/river-bitcube/ (all pages return 200).
   - `CLAUDE.md` now says the repo is public and sets the coordination rules: `git pull` first, one Claude at a time, tick `plan.md` and update `index.md` + the log in the same commit as the work.
+
+### 2026-10-18 afternoon (Gavin + mini Claude)
+- **Rope identification, first run (plan item E):** the lighting NIC is up again. Ran `tools/rope_capture.ps1` on bitcube with the `river` cam (it's the E1 Outdoor Pro sitting on the LED controller, not the gallery cam): baseline, each rope alone at 40%, heads, box1 red, box2 green.
+  - The camera was moved at about 13:14:26 (rope 15 onwards), so only ropes 1–14 are usable.
+  - The median-reference diff (`tools/rope_identify.py`) puts ropes 1/4/8/10 in the right coil pile, 2/3/5/6/7 in the middle and 11/13/14 on the left.
+  - **Ropes 9 (box 1 OUT9) and 12 (box 2 OUT2) showed nothing:** likely the two dead ropes (or hidden).
+  - In daylight a lit rope reads clearly white against the dark coils, so the method works. Frames stay local in `frames/` (people appear in them).
+- **Colin's recommendations** (via ChatGPT) folded into `docs/plan.md`:
+  - New item J: per-rope UV sample paths following the physical hang, plus a one-pixel stepping calibration.
+  - New Decisions section: TD as the single renderer, Art-Net direct to the PSAC10s, keep our Python sender for now, and the rope pixel facts he asked for (400 px per rope, universe mapping).
