@@ -2,7 +2,7 @@
 # Idempotent; run with  .\tools\td.ps1 -File .\td\build\build_ropes.py
 # Output starts OFF. Turn on with  op('/project1/ropes').par.Active = True
 
-REPO = 'C:/Users/user/River'
+REPO = 'C:/Users/user/River/river-bitcube'
 proj = op('/project1')
 ropes = proj.op('ropes') or proj.create(baseCOMP, 'ropes')
 ropes.nodeX, ropes.nodeY = 1325, -250

@@ -4,7 +4,7 @@
 # Endpoints (localhost only; other clients get 403):
 #   POST /exec        body = Python source. If it's a single expression, its value is returned.
 #   GET  /errors      every operator error/warning in the project.
-#   GET  /screenshot?op=/project1/out1&path=C:/Users/user/River/frames/x.png   save a TOP to an image.
+#   GET  /screenshot?op=/project1/out1&path=C:/Users/user/River/river-bitcube/frames/x.png   save a TOP to an image.
 # Response: JSON {"ok": bool, "result": str|null, "stdout": str, "error": str|null}
 
 import contextlib

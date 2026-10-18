@@ -2,7 +2,7 @@
 # Idempotent; run with  .\tools\td.ps1 -File .\td\build\build_panels.py
 # Open the output window with  op('/project1/panels').par.Output = True
 
-REPO = 'C:/Users/user/River'
+REPO = 'C:/Users/user/River/river-bitcube'
 proj = op('/project1')
 panels = proj.op('panels') or proj.create(baseCOMP, 'panels')
 panels.nodeX, panels.nodeY = 1575, 400

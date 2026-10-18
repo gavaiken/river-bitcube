@@ -43,3 +43,11 @@ LED art installation that should read as a river. LED rope is the rain/flow (par
 4. Whether the rack unit can record Art-Net to SD for standalone playback of our own content.
 5. Rope colour order (RGB vs GRB) and gamma.
 6. No manual online. AoShow's YouTube has PSAC tutorials for MadMapper, Resolume and TouchDesigner, and they respond on WhatsApp/WeChat during Shenzhen hours.
+
+## Cameras (from Will, 2026-10-18)
+- Two Reolinks behind the GL.iNet travel router (`192.168.8.0/24`), which runs Tailscale on Will's tailnet:
+  - **Gallery:** Reolink E1 Pro, `192.168.8.103`.
+  - **River:** Reolink E1 Outdoor Pro, `192.168.8.217`.
+- **RTSP:** `rtsp://admin:<password>@<ip>:554/Preview_01_main`, best with `-rtsp_transport tcp` (e.g. `ffplay -rtsp_transport tcp "<url>"`). The password is the same as bitcube's login; it is not stored in git (on bitcube it's in the untracked `river-bitcube\secrets.local.json`).
+- **Pan/tilt:** HTTPS JSON API `https://<ip>/cgi-bin/api.cgi` (self-signed cert). `?cmd=Login` with `{"User":{"userName":"admin","password":...}}` returns a token. Then `PtzCtrl` with `{"channel":0,"op":"Left|Right|Up|Down|Stop","speed":1}`, then `Logout`. Always follow a move with `Stop`. Will's working example: `tools/cameras/test_cam_move.py`.
+- The gallery cam has a motion-triggered spotlight; Will turned it off on 2026-10-16.

@@ -1,11 +1,11 @@
 # One-time install of the Claude bridge into the open TouchDesigner project.
 # In TD: open the Textport (Alt+T) and run:
-#   exec(open(r'C:\Users\user\River\td\bridge\install_bridge.py').read())
+#   exec(open(r'C:\Users\user\River\river-bitcube\td\bridge\install_bridge.py').read())
 # then save the project (Ctrl+S). The bridge listens on port 9980 and only answers localhost.
 
 import os
 
-BRIDGE_DIR = r'C:\Users\user\River\td\bridge'
+BRIDGE_DIR = r'C:\Users\user\River\river-bitcube\td\bridge'
 PORT = 9980
 
 root = op('/')
