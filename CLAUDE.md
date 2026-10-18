@@ -28,7 +28,8 @@ TouchDesigner (TD) drives the 20 ropes over Art-Net **and** the HUB75 panels ove
 - **Will's RopeLights app** (scheduled task `RopeLights`, `Start/Stop-Rope-Lights.cmd`) also sends Art-Net. Stop it (with Gavin's OK) before TD drives the ropes. Never run both at once.
 - **Panels:** the single HDMI output (1920×1080) goes to the Colorlight sender, which samples the top-left region. A panel is 128×64; a quad is 256×128.
 - **Cameras** (from Will, 2026-10-18): Reolinks behind the GL.iNet router (subnet `192.168.8.0/24`, reached over Will's tailnet). Full URLs including the password are in `secrets.local.json` (untracked; never commit it). Grabbing frames shows you what the ropes and panels are actually doing.
-  - Gallery cam (E1 Pro): `192.168.8.103`. River cam (E1 Outdoor Pro): `192.168.8.217`.
+  - Gallery cam (E1 Pro): `192.168.8.189` since 18 Oct 13:50 (was `.103`; DHCP, so it can move: rescan port 554 on `192.168.8.0/24` if it vanishes). River cam (E1 Outdoor Pro): `192.168.8.217`.
+  - Aim with `python tools/cameras/ptz.py <cam> Left|Right|Up|Down <seconds>`. Roughly 2,600 px/s of pan at 2880 px width, so nudge 0.1–0.4 s at a time and check with `cam_snap.ps1`. The gallery cam is aimed (18 Oct 13:59) at all the coil piles plus the HUB75 and PSAC10s.
   - RTSP: `rtsp://admin:<password>@<ip>:554/Preview_01_main` (`-rtsp_transport tcp`). The password is the same as bitcube's login.
   - Pan/tilt: HTTPS JSON API at `https://<ip>/cgi-bin/api.cgi` (self-signed cert): `Login` → token → `PtzCtrl` (`op` Left/Right/Up/Down/Stop, `speed`) → `Logout`. Always send `Stop`. Will's example: `tools/cameras/test_cam_move.py`.
 - **Dave's visuals:** web canvas `https://to-be-a-river--river.modal.run/canvas.html` (Web Render TOP).
