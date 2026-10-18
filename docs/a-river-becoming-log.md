@@ -168,3 +168,18 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
   - If bitcube or TD goes down, the colour cycle comes back. Switching off the PSAC10s is the only sure off.
   - **"Blackout" must mean sending black, never stopping output.**
 - 01:50: Gavin confirmed the ropes went dark once TD sent continuous black. Overnight state verified.
+
+### 2026-10-18 midday (Gavin + Claude on the mini)
+- **bitcube boot:** Gavin power-cycled bitcube. A cold boot stops at a GRUB menu (dual boot with Ubuntu, so Windows has to be picked by hand) and then at the Windows password screen, so auto-login didn't happen. **Don't power it off;** any reboot needs someone at the box until the boot order/GRUB default and auto-login are fixed. Afterwards the lighting NIC (`Ethernet`) showed **Disconnected** again. bitcube's Tailscale was offline from about 02:45 until the reboot, and the mini's own Tailscale had stopped (restarted with Gavin's OK, same settings).
+- **Second display:** a USB-C monitor (`M14`) is now plugged in as well as the Colorlight sender (`LED 1920X1080`).
+- **Folder layout:** `C:\Users\user\River` is now a plain folder (not a repo, still the SMB share) holding two checkouts:
+  - `river-bitcube\`: this repo, moved from the River root. Copied with robocopy, then old root copies deleted.
+  - `river-agent\`: Dave's repo, copied from the mini's clone. bitcube has no GitHub credentials for it.
+  - Also a short root `CLAUDE.md` describing the layout.
+  - Repointed TD's 5 file DATs/shaders to the new path and saved `river.toe` there (`td_save.ps1`). TD now runs from `river-bitcube\river.toe` with no errors. Startup shortcut now targets `river-bitcube\Start-River.cmd`.
+  - Hard-coded paths updated in `td/build/*.py`, the bridge installer, `CLAUDE.md` and the README.
+  - Added `safe.directory` for river-agent in bitcube's global git config and `core.filemode=false` in that repo, since an exec-bit difference had shown as a change.
+- **Cameras** (Will, Signal DM 2026-10-18): gallery E1 Pro `192.168.8.103`, river E1 Outdoor Pro `192.168.8.217`, RTSP `/Preview_01_main` on 554, user `admin`. The password is in the untracked `secrets.local.json` only. bitcube reaches both over Will's tailnet, and `tools\cam_snap.ps1 gallery|river` works (12:10).
+  - The **river cam** sees the rope coils on the floor. The **gallery cam** is pressed against a ribbon cable and needs re-aiming. Frames show housemates; they stay in `frames\` (git-ignored).
+  - Will's PTZ example is in `tools/cameras/test_cam_move.py`, and the details are in the hardware doc.
+- **Dave:** added gavaiken as a collaborator on `drocamor/river-agent` (push access) and posted an SSH public key for bitcube (`dave@rocamr.com river`, SHA256:aXW4LMdJXbPfPv8mRImLDWTjkVZ3f6Y818HEqin+/No). The key is **not yet added**: the mini session's attempt was blocked pending Gavin's confirmation.
