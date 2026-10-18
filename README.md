@@ -20,7 +20,7 @@ Set up 2026-10-17. This box auto-logs in as `user`, and the shortcut
 `C:\Users\user\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\Start-River.lnk`
 runs `C:\Users\user\River\river-bitcube\Start-River.cmd` at every login.
 
-`Start-River.cmd` waits 10 s, then opens `C:\Users\user\River\river-bitcube\river.toe` in TouchDesigner
+`Start-River.cmd` waits 10 s, then opens `C:\Users\user\River\river-bitcube\river-local-oct-18.toe` (the local rain checkpoint; set 18 Oct, was `river.toe`) in TouchDesigner
 (`C:\Program Files\Derivative\TouchDesigner\bin\TouchDesigner.exe`, build 2025.33230). If `river.toe` doesn't exist yet, it opens TouchDesigner with no file.
 
 - To change what runs at boot, put the show file at `river-bitcube\river.toe`, or edit the `TOE` line in the script.

@@ -18,7 +18,7 @@ TouchDesigner (TD) drives the 20 ropes over Art-Net **and** the HUB75 panels ove
 5. **One shared canvas,** saved as `river.toe`.
 
 ## Facts you'll need
-- **TD 2025.33230:** `C:\Program Files\Derivative\TouchDesigner\bin\TouchDesigner.exe`. The login autostart (`Start-River.cmd`, next to this file) opens `river.toe` in this folder.
+- **TD 2025.33230:** `C:\Program Files\Derivative\TouchDesigner\bin\TouchDesigner.exe`. The login autostart (`Start-River.cmd`, next to this file) opens **`river-local-oct-18.toe`** (the local rain checkpoint) since 18 Oct; `river.toe` is the general show file for Dave's visuals (session D).
 - **Andi's TD project:** `river_masks\river_masks.toe`. `panel_crop.glsl` samples 4 rotated rects into 4 colour buffers (one quad). Reuse it.
 - **Rope mapping** (Will's, provisional; source of truth `C:\Users\user\RopeLights\config.local.json`, read it rather than retyping):
   - 20 ropes × 400 px RGB; 170 px per universe; 4 universes reserved per rope (3 used, 4th cleared).
