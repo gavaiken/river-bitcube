@@ -109,7 +109,11 @@ win.par.winop = out
 win.par.borders = False
 win.par.alwaysontop = True
 win.par.justifyh, win.par.justifyv = 'left', 'top'
-win.par.justifyoffsetto = 'primarydisplay'
+# Put the window on the Colorlight sender: the monitor whose EDID name starts with 'LED' ("LED 1920X1080").
+# Works with or without the USB-C monitor plugged in; falls back to monitor 0 if no LED display is found.
+win.par.location = 'specifydisplay'
+win.par.justifyoffsetto = 'specifydisplay'
+win.par.monitor.expr = "next((m.index for m in monitors if m.description.upper().startswith('LED')), 0)"
 win.par.winoffsetx, win.par.winoffsety = 0, 0
 win.par.dpiscaling = 'native'        # 1 TD pixel = 1 HDMI pixel regardless of Windows scaling
 win.par.size = 'custom'
