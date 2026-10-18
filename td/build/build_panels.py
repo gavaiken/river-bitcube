@@ -33,6 +33,10 @@ if not hasattr(panels.par, 'Source'):
     pg.appendToggle('Output', label='Output Window Open')[0].default = False
     for p in panels.customPars:
         p.val = p.default
+if not hasattr(panels.par, 'Sweep'):
+    pg.appendToggle('Sweep', label='Test Sweep Bar')[0].default = False
+    pg.appendToggle('Quad2off', label='Blank Quad 2')[0].default = False
+    panels.par.Sweep = panels.par.Quad2off = False
 
 # Canvas inputs and test patterns
 for i in (1, 2):
@@ -53,6 +57,7 @@ for i in (1, 2):
     t.par.vec0name = 'uQuad'
     t.par.vec0valuex = i
     t.par.vec0valuey.expr = 'absTime.seconds'
+    t.par.vec0valuez.expr = 'parent().par.Sweep'
     t.nodeX, t.nodeY = 0, -150 * i - 150
 
 lay_pix = panels.op('layout_pixel') or panels.create(textDAT, 'layout_pixel')
@@ -91,6 +96,7 @@ lay.par.vec1valuez, lay.par.vec1valuew = 256, 128
 lay.par.vec2name = 'uMode'
 lay.par.vec2valuex.expr = "parent().par.Source.menuIndex"
 lay.par.vec2valuey.expr = 'parent().par.Brightness'
+lay.par.vec2valuez.expr = 'parent().par.Quad2off'
 lay.nodeX, lay.nodeY = 300, 0
 
 out = panels.op('panel_out') or panels.create(nullTOP, 'panel_out')

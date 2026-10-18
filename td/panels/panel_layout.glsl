@@ -2,7 +2,7 @@
 // Places two 256x128 quad images into the HDMI output that the Colorlight sender samples (top-left).
 // Inputs: 0 = quad 1, 1 = quad 2 (each already switched between canvas crop and test pattern).
 // uQuad0/uQuad1 = (x, y, w, h) in output pixels, origin TOP-LEFT (as in Colorlight/LEDVision).
-// uMode.x = 2 for black, uMode.y = brightness gain.
+// uMode.x = 2 for black, uMode.y = brightness gain, uMode.z = 1 to blank quad 2.
 //
 // Sampler arrays are indexed with literal constants only, and only for inputs that exist.
 // Sampling a missing input hung the Intel Iris Xe driver (TDR, 2026-10-18) and took TD down.
@@ -34,7 +34,7 @@ void main()
 #endif
 #if TD_NUM_2D_INPUTS > 1
     vec2 b = local(uQuad1, px);
-    if (b.x >= 0.0) c = texture(sTD2DInputs[1], b).rgb;   // quad 2 wins where they overlap
+    if (b.x >= 0.0 && uMode.z < 0.5) c = texture(sTD2DInputs[1], b).rgb;   // quad 2 wins where they overlap
 #endif
 
     if (uMode.x > 1.5) c = vec3(0.0);

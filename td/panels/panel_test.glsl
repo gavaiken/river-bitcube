@@ -1,8 +1,9 @@
 // panel_test.glsl: GLSL TOP pixel shader, a 256x128 identification pattern for one 2x2 panel quad.
 // Panels (128x64 each): top-left red, top-right green, bottom-left blue, bottom-right yellow,
 // each with a 1 px white border. Quad number = count of white squares in the top-left panel.
-// A white bar sweeps left to right once per second so motion/frame drops are visible.
-// uQuad.x = quad number (1, 2, ...), uQuad.y = time in seconds.
+// Optional (uQuad.z = 1): a full-height white bar sweeps left to right once per second to show
+// motion/frame drops. Off by default: in a photo it looks like an extra panel border.
+// uQuad.x = quad number (1, 2, ...), uQuad.y = time in seconds, uQuad.z = sweep on.
 
 uniform vec4 uQuad;
 
@@ -26,7 +27,7 @@ void main()
     }
 
     float sweep = floor(fract(uQuad.y) * 256.0);
-    if (abs(px.x - sweep) < 1.5) c = vec3(1.0);
+    if (uQuad.z > 0.5 && abs(px.x - sweep) < 1.5) c = vec3(1.0);
 
     fragColor = TDOutputSwizzle(vec4(c, 1.0));
 }
