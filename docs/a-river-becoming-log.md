@@ -213,3 +213,10 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
 - **Colin's recommendations** (via ChatGPT) folded into `docs/plan.md`:
   - New item J: per-rope UV sample paths following the physical hang, plus a one-pixel stepping calibration.
   - New Decisions section: TD as the single renderer, Art-Net direct to the PSAC10s, keep our Python sender for now, and the rope pixel facts he asked for (400 px per rope, universe mapping).
+- **Gallery cam moved and aimed:** it moved to Agape WiFi (`10.0.7.76`, read from the Reolink app). The mini Claude aimed it with `tools/cameras/ptz.py` (down 0.4 s, left 0.3 s, right 0.12 s) so it sees every coil pile, the HUB75, both PSAC10s and the controller.
+- **Rope calibration, full run (14:11, gallery cam, drift 9.9 = steady):**
+  - **18/20 ropes found.** Right pile: 1, 4, 8, 10. Centre: 2, 3, 5, 6, 7, 16. Left-centre: 11, 13, 14, 18. Far left: 12, 15, 19, 20. Image: `docs/img/rope-map-2026-10-18.png`.
+  - **Rope 9 (box 1 OUT9) and rope 17 (box 2 OUT7) never light.** Rope 12, which looked dark in the first run, was only hidden.
+  - **Colour order RGB confirmed:** box 1 red frame gain R/G/B = 179/−23/7; box 2 green = 1/203/108.
+  - Plug ends couldn't be resolved while the ropes are coiled; recheck once hung.
+- **HUB75 calibration (14:13):** moved the panels window onto the LED display by EDID name (`location`/`justifyoffsetto` = specifydisplay, `monitor` expression picks the `LED…` monitor). The camera confirms quad 1 shows the test pattern correctly (red TL with the quad-1 marker, green TR, blue BL, yellow BR). The earlier "split right column" was the test bar, now off. Saved `river.toe`; `build_panels.py` updated. Image: `docs/img/hub75-quad1-test-2026-10-18.jpg`.

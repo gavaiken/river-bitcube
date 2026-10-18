@@ -4,23 +4,24 @@ title: A River Becoming: show machine status
 
 # Welcome to bitcube
 
-**Status as of Sun 18 Oct 2026, 13:00.** Gray Area install starts **Wed 22 Oct**.
+**Status as of Sun 18 Oct 2026, 14:20.** Gray Area install starts **Wed 22 Oct**.
 
 bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes over Art-Net, the HUB75 panels over HDMI, and the Reolink cameras. It runs TouchDesigner and a Claude Code session.
 
 ## Where we are
 - **Working:**
-  - TouchDesigner drives all 20 ropes and HUB75 quad 1 from one show file.
+  - TouchDesigner drives the ropes and HUB75 quad 1 from one show file. Quad 1's test pattern is verified on the panels.
+  - **Camera calibration:** 18 of 20 ropes located (see the [rope map](img/rope-map-2026-10-18.png)), colour order confirmed. **Ropes 9 and 17 never light**: check their cables.
   - Both cameras are reachable.
   - bitcube boots straight into the show (about 1 minute) and is on Tailscale.
 - **In progress:**
-  - The panels window is moving to the LED display (it currently lands on the USB-C monitor).
   - Making this status page part of every work session.
 - **Next:**
-  1. Identify the ropes automatically with the camera (first run: ropes 1–14 located, 9 and 12 look dead).
+  1. Fix ropes 9 and 17.
   2. Feed Dave's Modal visuals into the ropes and panels.
   3. Connect quad 2.
   4. Push the cameras into Dave's agent.
+  5. Map each rope's actual hang (sample paths) once installed.
 
 Full checklist and **open questions** (some are waiting on Dave, Andi and Will): **[plan](plan.md)**.
 

@@ -26,14 +26,15 @@ The shared checklist for **A River Becoming**'s show machine, bitcube. Install a
 | # | Item | Owner | Status |
 |---|---|---|---|
 | A | Public status page: tidy docs, make this repo public, GitHub Pages from `/docs` | mini | **done** 18 Oct |
-| B | Panels window on the **LED** display whichever monitors are plugged in. Pick the monitor whose name starts with `LED`, cover all 1920×1080 in black, panel atlas top-left. Fall back to primary. (`td/build/build_panels.py`) | bitcube | todo |
-| E | Camera-based rope identification with the **`river` cam** (E1 Outdoor Pro, `.217`), sitting on the LED controller and watching the three coil piles. `tools\rope_capture.ps1` lights each rope alone and grabs a frame; `tools/rope_identify.py` finds it. **First run, 18 Oct 13:13:** the camera moved partway through, so only ropes 1–14 are usable. Right pile: 1, 4, 8, 10. Middle: 2, 3, 5, 6, 7. Left: 11, 13, 14. **Ropes 9 (box 1 OUT9) and 12 (box 2 OUT2) lit nothing**, probably the two dead ropes. Next: re-run with the camera still and the HUB75 in view, then the plug-end and colour-order frames | mini (Gavin keeps the camera still) | **in progress** |
+| B | Panels window on the **LED** display whichever monitors are plugged in | mini | **done** 18 Oct 14:14. Found by EDID name (`LED…`) in `build_panels.py`; quad 1 test pattern verified on the HUB75 by camera. Still to do: cover the whole 1920×1080 LED display in black so nothing else can leak onto it |
+| E | Camera-based rope identification (gallery cam on Agape WiFi, aimed at all coil piles + HUB75) | mini | **done** 18 Oct 14:11. See [rope map](img/rope-map-2026-10-18.png). 18/20 ropes found and located by pile. **Ropes 9 (box 1 OUT9) and 17 (box 2 OUT7) are dark.** Colour order **RGB confirmed** (box 1 red, box 2 green). Plug-end direction can't be told while coiled; recheck when hung. Re-run any time: `tools\rope_capture.ps1 -Cam gallery`, then `tools/rope_identify.py` |
 | C | Dave's visuals into TD: run river-agent's `gallery/sync.py` mirror on port **8770** (8765 is RopeLights); Web Render TOP of `canvas.html` feeds the ropes crop and the panels; offline fallback visual | bitcube (+ Dave) | todo |
 | F | At login, open Chrome frontmost on the M14 monitor with this status page (local fallback if offline) | bitcube | todo |
 | G | Gallery-cam snapshot every 15 min, force-pushed to orphan branch `snapshot` and shown on the status page | bitcube | todo |
 | D | Cameras into Dave's agent: run river-agent's `capture/capture.py` on bitcube, POSTing clips to Modal `/ingest` | bitcube (after Dave answers) | blocked |
-| H | Panel quad 2 connected and checked | Andi + Gavin | todo |
+| H | Panel quad 2 connected and checked (quad 1 verified 18 Oct: red/green/blue/yellow in the right places, marker top-left) | Andi + Gavin | todo |
 | J | **Per-rope sample paths (Colin's suggestion).** Replace the straight 20×400 crop with a list of UV sample points per rope that follows how each tube actually hangs (straight, curved, meandering on the floor). Sample with TOP to CHOP's UV input, then RGB ordering, then Art-Net. Source the paths from Gavin's Chromatik pixel map or by measuring the hung tubes with the camera. Add a calibration mode that steps one pixel along a rope, to confirm pixel order and the 170/340 universe boundaries | bitcube | todo (after E) |
+| K | Check the cables/plugs and power for **rope 9 (box 1 OUT9) and rope 17 (box 2 OUT7)**: the only two that never light | Gavin / Will | todo |
 | I | Rope mapping fixes from the identification run (order, reversed ropes, colour order) | bitcube (Will OKs his config) | blocked on E |
 
 ## Decisions
@@ -48,7 +49,7 @@ The shared checklist for **A River Becoming**'s show machine, bitcube. Install a
 | Is `SITE_TOKEN` set on Modal? Can bitcube get an `INGEST_TOKEN`? | Dave | | |
 | What location/channel names and clip cadence should bitcube use for camera ingest? Is anything already pushing these cameras? | Dave | | |
 | Preferred canvas design size (`?w=&h=`) for 20×400 ropes + panels? OK to run `gallery/sync.py` on bitcube? | Dave | | |
-| Receive-card layout for quads 1–2 (quad 1's right column looked split). Thread size for the panel mounts? | Andi | | |
+| Receive-card layout for quad 2? (Quad 1 is correct; the 'split' was a test-pattern bar.) Thread size for the panel mounts? | Andi | | |
 | Retire RopeLights or keep it as a backup? OK for Claude to edit `config.local.json` after the rope-ID run? | Will | | |
 | Gallery network: dual NIC plan, and how the gallery cam reaches Tailscale at Gray Area | Will | | |
 | What should the gallery show if bitcube goes down? (Today: the rack controller's SD-card colour cycle) | Team | | |
