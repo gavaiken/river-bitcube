@@ -52,6 +52,7 @@ def onHTTPRequest(webServerDAT, request, response):
 
     parsed = urllib.parse.urlparse(request.get('uri', ''))
     query = dict(urllib.parse.parse_qsl(parsed.query))
+    query.update(request.get('pars') or {})     # TD passes query parameters here, not in 'uri'
     try:
         if parsed.path == '/exec':
             result, stdout = _run(_body(request))
