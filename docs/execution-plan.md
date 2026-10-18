@@ -4,7 +4,7 @@ title: Execution plan
 
 # Execution plan: from today's hardware to the full Modal-driven show
 
-**Updated Sun 18 Oct 2026, 14:50, by session A (coordinator).**
+**Updated Sun 18 Oct 2026, 16:15, by session A (coordinator).**
 
 ## Status
 ✅ done · ➡️ next (in order) · ❌ blocked
@@ -109,7 +109,7 @@ Follow the Coordination contract in docs/execution-plan.md throughout: docs/sess
 You are session C (bitcube · Sonnet 5). Read CLAUDE.md, docs/plan.md and docs/execution-plan.md, git pull. Do:
 C1 A scheduled task (every 15 min, 08:00–02:00) that grabs a gallery-cam still (~640 px wide JPEG) and force-pushes it as gallery.jpg to an orphan branch `snapshot` of this repo via the deploy key (one commit, amended each time, no history growth). Test the pure parts with Pester or pytest.
 C2 docs/index.md embeds raw.githubusercontent.com/gavaiken/river-bitcube/snapshot/gallery.jpg, which is broken until C1's first push. Make sure the page never shows a broken image (placeholder or latest calibration image until the branch exists), then confirm the live snapshot shows.
-C3 In td/build/build_panels.py, make the panels window cover the whole LED display (1920×1080) in black with the panel atlas at its top-left, so nothing else can ever appear on the HUB75. Rebuild, save with tools\td_save.ps1 for river.toe (and river-local-oct-18.toe if it exists), and verify with a gallery-cam frame.
+C3 In td/build/build_panels.py, make the panels window cover the whole LED display (1920×1080) in black with the panel atlas at its top-left, so nothing else can ever appear on the HUB75. Rebuild and save in BOTH show files: td_save.ps1 saves whichever file is open, so open river-local-oct-18.toe, rebuild, save; then open river.toe, rebuild, save; then reopen whichever file the login autostart uses (see Start-River.cmd). Verify with a gallery-cam frame that only the panel atlas shows on the HUB75.
 Tick plan items G and B. Follow the Coordination contract in docs/execution-plan.md throughout (docs/sessions/C.md, Status table, push after every step, summary at the end).
 ```
 
