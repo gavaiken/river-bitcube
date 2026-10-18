@@ -112,3 +112,28 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
 - Plan agreed (Claude on bitcube executes): repo → TD bridge → ropes via TD Art-Net → 2 panel quads → camera snapshots as Claude's "eyes" → one shared canvas saved as `river.toe`.
 - Created private repo **github.com/gavaiken/river-bitcube**. `C:\Users\user\River` is the working copy, and `docs\` there is now the source of truth. Installed on bitcube via winget: ffmpeg, GitHub CLI, Python 3.13. Added `td/bridge/` (WebServer DAT bridge on localhost:9980, installed once from the TD Textport), `tools/td.ps1`, `tools/cam_snap.ps1`, and `secrets.local.example.json`.
 - bitcube pushes to GitHub with a **repo-only deploy key** (`C:\Users\user\.ssh\river_bitcube_deploy`, read-write on gavaiken/river-bitcube only; set via `core.sshCommand` in this repo). No personal GitHub login on bitcube. Revoke it under the repo Settings, Deploy keys.
+
+### 2026-10-18 ~01:00–01:25 (Claude Code on bitcube, solo after handoff)
+- **Bridge:** works (`.\tools\td.ps1 "app.build"`). `td.ps1` now prints plain text (stdout, then result). The `/screenshot` endpoint was fixed: TD passes query params in `request['pars']`. From Git Bash use `powershell -ExecutionPolicy Bypass -File tools/td.ps1 ...`, because the system policy blocks scripts.
+- **Licence:** TD is **Non-Commercial** (TOPs capped at 1280×1280). That's fine for our sizes, but Gavin should decide whether a gallery show needs a Commercial key.
+- **Show file:** `River\river.toe` now exists and is in git. It is Andi's `river_masks` network + `/claude_bridge` + `/project1/ropes` + `/project1/panels`, so the login launcher opens it with the bridge already live. Andi's shader DATs now point to `river_masks/*.glsl`. Andi's original `river_masks.toe` is untouched. TD saves incrementally (`river.N.toe`, gitignored) and also writes `river.toe`.
+- **Ropes over Art-Net (working, pending eyes on the ropes):** `/project1/ropes` = canvas (`/project1/null5`, Dave's Web Render 500×800) → crop → fit 20×400 (column = rope, top row = pixel 0) → `artnet_out` (Python, synced from `td/ropes/artnet_out.py`, sent from an Execute DAT at 40 fps).
+  - It reads Will's `config.local.json`. Its packets are **byte-identical to RopeLights'**, checked against Will's own `packets()` for all 80 universes.
+  - Custom params: `Active`, `Source` (canvas / identify / order / black), `Identify`, `Brightness` 0.15, `Maxbrightness` cap 0.4, `Boxwatts` limiter 600 W/box, `Fps` 40, crop. Status: `op('/project1/ropes/artnet_out').module.status(op('/project1/ropes'))`.
+  - It binds `2.0.0.8:6454` exclusively, like RopeLights, so the two can't both send: if RopeLights is running, TD's output fails and turns itself off. Turning `Active` off sends a blackout.
+  - Andi's old `dmxout1` (Art-Net broadcast, empty routing table) is now deactivated.
+- **RopeLights stopped** (Gavin OK'd). `stop.ps1` refused because a non-elevated shell can't read the S4U task process path, so Claude created `stop.request` itself. That is the same graceful path: the app blacked out and exited in 0.5 s. Task state: Ready. Restart it with `Start-Rope-Lights.cmd` only after setting TD `Active` off.
+- Ethernet up, and both PSAC10s answer ping: `2.0.0.10` and `2.0.0.11`.
+- **Panels over HDMI (working on screen, pending eyes on the panels):** `/project1/panels` puts quad 1 (Andi's rect 0) at HDMI (0,0) and quad 2 (rect 1) at (256,0) via `td/panels/panel_layout.glsl`. Its window is 512×128, borderless, always on top, DPI-native, and reopens at load.
+  - `Source` test/canvas/black, `Brightness` 0.8, `Quad1pos`/`Quad2pos`.
+  - Test pattern per quad: panels red/green/blue/yellow with white borders, quad number as white squares, and a sweep bar. Confirmed in a desktop screenshot at exactly (0,0)–(511,127).
+  - Andi's `window1` (one quad) stays closed.
+- **TD crash, 01:13:** GPU driver TDR (`LiveKernelEvent 141`, "igfxn stopped responding"). It happened when the first `panel_layout.glsl` sampled `sTD2DInputs[2/3]` before those inputs were wired. The shader now uses only literal indices behind `#if TD_NUM_2D_INPUTS`.
+  - The bridge had never been saved, so Claude relaunched TD, reopened the Textport via the Dialogs menu (Alt+T via SendKeys doesn't register) and typed the install line.
+  - Lesson: **save before cooking a new shader.** In multi-input TOPs, only the next connector appears, one per frame, so `build_panels.py` wires inputs on successive frames.
+- Rebuild scripts: `td/build/build_ropes.py` and `td/build/build_panels.py` are idempotent (`.\tools\td.ps1 -File ...`).
+- **State at end of session:** ropes `Active`, `Source=order` at 15% (~35 W box 1, ~97 W box 2); panels `Source=test`, window open; TD at 60 fps.
+- **Needs a human (Gavin):**
+  - Look at the ropes. Rope *r* should be lit from its input end for (r+1)×15 px; box 1 cyan, box 2 magenta, ropes 4/9/14/19 white. Report any rope out of order or reversed, and the colours (RGB vs GRB).
+  - Look at the panels. Each quad should show red/green/blue/yellow panels and 1 or 2 white squares, and should match the LEDVision receive config (quad 2 at x=256).
+- Next: calibration from that feedback (`reverse_ropes`/`color_order` in Will's config, or a TD-side remap), then switch both `Source`s to canvas, a local fallback visual for when Modal is down, and cameras once Will sends the URLs.
