@@ -37,7 +37,7 @@ if ($MyInvocation.InvocationName -ne '.') {
     # The network can lag behind login, so give the live page a few tries before falling back.
     foreach ($attempt in 1..3) {
         $target = Resolve-StatusTarget -Url $Url -FallbackPath $fallback
-        if ($target -eq $Url) { break }
+        if ($target -eq $Url -or $attempt -eq 3) { break }
         Start-Sleep -Seconds 10
     }
     Start-Process -FilePath $Chrome -ArgumentList (Get-StatusChromeArgs $target)
