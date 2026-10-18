@@ -183,3 +183,9 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
   - The **river cam** sees the rope coils on the floor. The **gallery cam** is pressed against a ribbon cable and needs re-aiming. Frames show housemates; they stay in `frames\` (git-ignored).
   - Will's PTZ example is in `tools/cameras/test_cam_move.py`, and the details are in the hardware doc.
 - **Dave:** added gavaiken as a collaborator on `drocamor/river-agent` (push access) and posted an SSH public key for bitcube (`dave@rocamr.com river`, SHA256:aXW4LMdJXbPfPv8mRImLDWTjkVZ3f6Y818HEqin+/No). The key is **not yet added**: the mini session's attempt was blocked pending Gavin's confirmation.
+- **Dave's SSH key added** to bitcube (`administrators_authorized_keys`, with Gavin's OK). Dave can `ssh user@bitcube.tail03bc1a.ts.net` over Will's tailnet.
+- **Boot fix (with Gavin's OK):**
+  - The firmware boot order had **Ubuntu first**, so GRUB showed a menu on every boot. Windows Boot Manager is now first (`bcdedit /set {fwbootmgr} displayorder {bootmgr} /addfirst`); Ubuntu stays in the list.
+  - Auto-login had `AutoAdminLogon=1` but **no stored password**, so it fell back to the login screen. Installed Sysinternals Autologon (winget) and set `user` / `BITCUBE`; the password is an LSA secret.
+  - Set `DevicePasswordLessBuildVersion=0` (Hello-only sign-in was on).
+  - **Not yet verified with a reboot.**
