@@ -27,7 +27,10 @@ try {
         if (-not $Code) { throw 'Pass Python code, -File, -Errors or -Screenshot.' }
         $r = Invoke-RestMethod -Uri "$base/exec" -Method Post -Body $Code -ContentType 'text/plain; charset=utf-8'
     }
-    $r | ConvertTo-Json -Depth 6
+    if ($Errors) { $r.result | ConvertTo-Json -Depth 6; exit 0 }
+    if ($r.stdout) { $r.stdout.TrimEnd() }
+    if ($null -ne $r.result) { $r.result }
+    if (-not $r.ok -or $r.error) { Write-Error $r.error; exit 1 }
 } catch {
     Write-Error "TD bridge call failed (is TouchDesigner open with claude_bridge installed on port $Port?): $_"
     exit 1
