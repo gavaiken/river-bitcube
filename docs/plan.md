@@ -23,6 +23,8 @@ The shared checklist for **A River Becoming**'s show machine, bitcube. Install a
 - [x] Repo split: `River\river-bitcube` (this repo) and `River\river-agent` (Dave's).
 
 ## Now
+Session-by-session prompts, models and skills: **[execution plan](execution-plan.md)**.
+
 | # | Item | Owner | Status |
 |---|---|---|---|
 | A | Public status page: tidy docs, make this repo public, GitHub Pages from `/docs` | mini | **done** 18 Oct |
@@ -34,6 +36,7 @@ The shared checklist for **A River Becoming**'s show machine, bitcube. Install a
 | D | Cameras into Dave's agent: run river-agent's `capture/capture.py` on bitcube, POSTing clips to Modal `/ingest` | bitcube (after Dave answers) | blocked |
 | H | Panel quad 2 connected and checked (quad 1 verified 18 Oct: red/green/blue/yellow in the right places, marker top-left) | Andi + Gavin | todo |
 | J | **Per-rope sample paths (Colin's suggestion).** Replace the straight 20×400 crop with a list of UV sample points per rope that follows how each tube actually hangs (straight, curved, meandering on the floor). Sample with TOP to CHOP's UV input, then RGB ordering, then Art-Net. Source the paths from Gavin's Chromatik pixel map or by measuring the hung tubes with the camera. Add a calibration mode that steps one pixel along a rope, to confirm pixel order and the 170/340 universe boundaries | bitcube | todo (after E) |
+| L | **Local rain checkpoint:** new `river-local-oct-18.toe`, self-contained (no Modal). Camera structured-light pixel map of all ropes (`tools/pixelmap/`), with a rain/river field in camera space sampled onto the ropes and HUB75 quad 1 | bitcube (Session 1, Opus) | **next** |
 | K | Check the cables/plugs and power for **rope 9 (box 1 OUT9) and rope 17 (box 2 OUT7)**: the only two that never light | Gavin / Will | todo |
 | I | Rope mapping fixes from the identification run (order, reversed ropes, colour order) | bitcube (Will OKs his config) | blocked on E |
 

@@ -18,12 +18,13 @@ bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes ov
   - Making this status page part of every work session.
 - **Next:**
   1. Fix ropes 9 and 17.
-  2. Feed Dave's Modal visuals into the ropes and panels.
-  3. Connect quad 2.
-  4. Push the cameras into Dave's agent.
-  5. Map each rope's actual hang (sample paths) once installed.
+  2. **Checkpoint:** a local rain/river across all ropes and the HUB75, mapped by camera (no Modal).
+  3. Feed Dave's Modal visuals into the ropes and panels.
+  4. Connect quad 2.
+  5. Push the cameras into Dave's agent.
+  6. Map each rope's actual hang (sample paths) once installed.
 
-Full checklist and **open questions** (some are waiting on Dave, Andi and Will): **[plan](plan.md)**.
+How we'll get there, session by session: **[execution plan](execution-plan.md)**. Full checklist and **open questions** (some are waiting on Dave, Andi and Will): **[plan](plan.md)**.
 
 ## Latest camera snapshot
 ![Latest gallery-cam snapshot](https://raw.githubusercontent.com/gavaiken/river-bitcube/snapshot/gallery.jpg)
