@@ -97,6 +97,22 @@ def heads_frame(ropes, pixels, n=20):
     return f
 
 
+ROPE_BITS = 5      # Gray-code bits for the rope index (20 ropes)
+
+
+def gray_frame(ropes, pixels, bit, invert=False):
+    """Structured-light pattern for tools/pixelmap: white where bit `bit` of the Gray code is 1.
+    Bits 0..4 encode the rope index, bits 5.. the pixel index (bit 5 = pixel LSB). invert flips it."""
+    r = np.arange(ropes)[:, None]
+    p = np.arange(pixels)[None, :]
+    code = (r ^ (r >> 1)) if bit < ROPE_BITS else (p ^ (p >> 1))
+    k = bit if bit < ROPE_BITS else bit - ROPE_BITS
+    on = ((np.broadcast_to(code, (ropes, pixels)) >> k) & 1).astype(bool) != bool(invert)
+    f = np.zeros((ropes, pixels, 3), np.float32)
+    f[on] = 1
+    return f
+
+
 # ---- output -----------------------------------------------------------------------------------
 
 def to_bytes(frame, config, brightness, box_watts):
@@ -200,6 +216,8 @@ def tick(comp):
             frame = rope_frame(ropes, pixels, p.Identify.eval())
         elif source == 'heads':
             frame = heads_frame(ropes, pixels)
+        elif source == 'gray':
+            frame = gray_frame(ropes, pixels, p.Graybit.eval(), p.Grayinvert.eval())
         else:
             frame = np.zeros((ropes, pixels, 3), np.float32)
         brightness = min(p.Brightness.eval(), p.Maxbrightness.eval())

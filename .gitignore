@@ -12,3 +12,6 @@ frames/
 
 # TouchDesigner numbered save copies (e.g. river_masks.41.toe)
 *.[0-9]*.toe
+# Python venv for tools/pixelmap
+.venv/
+__pycache__/
