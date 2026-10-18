@@ -137,3 +137,23 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
   - Look at the ropes. Rope *r* should be lit from its input end for (r+1)×15 px; box 1 cyan, box 2 magenta, ropes 4/9/14/19 white. Report any rope out of order or reversed, and the colours (RGB vs GRB).
   - Look at the panels. Each quad should show red/green/blue/yellow panels and 1 or 2 white squares, and should match the LEDVision receive config (quad 2 at x=256).
 - Next: calibration from that feedback (`reverse_ropes`/`color_order` in Will's config, or a TD-side remap), then switch both `Source`s to canvas, a local fallback visual for when Modal is down, and cameras once Will sends the URLs.
+
+### 2026-10-18 ~01:30–01:40 (Claude Code on bitcube): hardware feedback, rope tests, save fix
+- **Gavin's photos:** Art-Net reaches both boxes. Only one panel quad is connected; its left column is right, and its right column looked "split by an extra vertical line". That line was almost certainly the test pattern's **sweep bar**: in Claude's desktop screenshot at the same time it sat at x≈228, inside the right-hand panels, splitting green and yellow at the same x.
+  - The sweep is now off by default (`Sweep` toggle), and `Quad2off` blanks quad 2. The screen corner now shows a static quad 1 with no extra lines. **Recheck the panels.**
+- **Display:** Windows is *not* mirroring. bitcube has exactly one monitor, `LED 1920X1080` on HDMI (the Colorlight sender), so `DisplaySwitch /extend` has nothing to extend to and wasn't run. Options to keep the desktop off the panels:
+  - (a) Keep the borderless always-on-top TD window at (0,0). That's the current setup; only other always-on-top windows or toasts can cover it.
+  - (b) Add a second display: an HDMI dummy plug, or a virtual display driver (needs Gavin's OK to install). Then make the virtual display primary and give the LED display to TD.
+  - (c) Make TD fullscreen on the LED display (console unusable, VNC only).
+- **Rope tests** (`tools/rope_tests.ps1 colour|order|direction|all`, new sources `box1_red`, `box2_green`, `rope`, `heads`). The run at 01:35:42–01:37:22:
+  - Colour: box 1 red / box 2 green, 5 s each, twice, at the 0.4 cap. Pure hue, value 102.
+  - Order: ropes 1→20, 4 s each, full length, 15%. Printed log: rope *n* = box ⌈n/10⌉ OUT((n−1) mod 10 + 1), universes 4(n−1)…4(n−1)+2. Rope 1 started at 01:36:02 and rope 20 at 01:37:18.
+  - Direction: first 20 px white on all ropes. **Left on.**
+  - `color_order` unchanged pending Gavin's report.
+- **Save hang, fixed:** `project.save(path)` with TD's incremental save on (`general.inc` = 2) tried to write `river.1.toe`, found it existed and opened a modal "Replace?" that froze the bridge. Fixes:
+  - `general.inc` set to 0 and saved to TD prefs.
+  - New `tools/td_save.ps1`: checks the pref, saves, verifies the `river.toe` timestamp and deletes stray `river.N.toe`.
+  - `td.ps1`: 20 s timeout. On timeout it lists TD's windows and names any dialog (exit 3); it now shows TD tracebacks plainly and always sets its exit code.
+- **A second modal, fixed:** "river.toe saved with errors: cannot pickle 'socket'". The rope sender kept its UDP socket in `comp.storage`, which TD pickles on save. Socket and config now live in a `sys.modules` holder, migrated live without dropping output.
+- Both gotchas, plus the GLSL/TDR one, are now in CLAUDE.md under "TouchDesigner gotchas".
+- Side note: TD's pref `general.startupfilename` still points to `Desktop\Bitcube4\Bitcube4.toe` (startupfilemode 2). It's harmless while the launcher passes `river.toe`.
