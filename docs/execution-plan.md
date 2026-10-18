@@ -20,9 +20,9 @@ title: Execution plan
 | ✅ | B1 | **Checkpoint** ([plan](sessions/B-plan.md), [progress](sessions/B.md)): structured-light capture of all ropes with the gallery cam | B (bitcube · Opus 5.5) | Claude |
 | ✅ | B2 | Decoder + pixel map `tools/pixelmap/pixelmap-2026-10-18.json` (TDD) | B (bitcube · Opus 5.5) | Claude |
 | ✅ | B3 | HUB75 quad 1 corners in camera space | B (bitcube · Opus 5.5) | Claude |
-| ➡️ | B4 | Rain/river field in camera space (built-in TOPs) | B (bitcube · Opus 5.5) | Claude |
-| ➡️ | B5 | Sampling onto the ropes and HUB75 quad 1 | B (bitcube · Opus 5.5) | Claude |
-| ➡️ | B6 | `river-local-oct-18.toe` + `build_river_local.py` + `td_save.ps1 -Target` | B (bitcube · Opus 5.5) | Claude |
+| ✅ | B4 | Rain/river field in camera space (built-in TOPs) | B (bitcube · Opus 5.5) | Claude |
+| ✅ | B5 | Sampling onto the ropes and HUB75 quad 1 | B (bitcube · Opus 5.5) | Claude |
+| ✅ | B6 | `river-local-oct-18.toe` + `build_river_local.py` + `td_save.ps1 -Target` | B (bitcube · Opus 5.5) | Claude |
 | ➡️ | B7 | Verify by camera, tune, watts and fps | B (bitcube · Opus 5.5) | Claude |
 | ➡️ | B8 | Checkpoint still on the status page, tick L, summary | B (bitcube · Opus 5.5) | Claude |
 | ➡️ | C1–C3 | Camera snapshot on the status page (fixes the broken image) and full black LED-display window | C (bitcube · Sonnet 5) | Claude |
