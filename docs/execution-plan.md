@@ -26,7 +26,7 @@ title: Execution plan
 | ✅ | B7 | Verify by camera, tune, watts and fps | B (bitcube · Opus 5.5) | Claude |
 | ✅ | B8 | Checkpoint still on the status page, tick L, summary | B (bitcube · Opus 5.5) | Claude |
 | ✅ | C1 | Gallery-cam snapshot every 15 min (08:00–02:00), force-pushed to orphan branch `snapshot` | C (bitcube · Opus 5.5) | Claude |
-| ➡️ | C2 | Status page never shows a broken image; live snapshot confirmed | C (bitcube · Opus 5.5) | Claude |
+| ✅ | C2 | Status page never shows a broken image; live snapshot confirmed | C (bitcube · Opus 5.5) | Claude |
 | ➡️ | C3 | Panels window covers the whole LED display in black (both show files) | C (bitcube · Opus 5.5) | Claude |
 | ❌ | D1–D4 | Dave's Modal visuals on the ropes and HUB75. *Blocked: waiting on Dave (OK to run `gallery/sync.py`; is `SITE_TOKEN` set?)* | D (bitcube · Opus 5.5) | Claude |
 | ❌ | E1–E3 | Cameras pushing clips to Dave's agent. *Blocked: needs `INGEST_TOKEN` and channel names from Dave* | E (bitcube · Opus 5.5) | Claude |

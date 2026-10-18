@@ -14,3 +14,4 @@ Steps:
 
 Progress:
 - 16:37 C1 ✅ `tools/snapshot.ps1` + scheduled task `RiverSnapshot` (`tools/snapshot_task.ps1`: daily 08:00, every 15 min for 18 h, run through `conhost --headless` so no window appears). Each run pushes one parentless commit to `snapshot` from a bare repo in `%LOCALAPPDATA%\river-snapshot`, never touching this checkout. 640×360, about 60 KB, 2–3 s per run. Registering it as S4U (runs with nobody logged in) needs an elevated shell, so it's an Interactive task: it runs while the auto-logged-in user is signed in. 13 new Pester tests pass. (commit b7affbf)
+- 16:50 C2 ✅ `docs/index.md`: the `<img>` starts as the checkpoint still and switches to the live snapshot only after it loads; the caption shows "Taken …" from the GitHub API. Checked in headless Chrome: the live page shows the 16:36 snapshot, and a copy pointing at a missing branch shows the checkpoint still with a note, not a broken image. Plan item G ticked. (commit 4b5eb6f)
