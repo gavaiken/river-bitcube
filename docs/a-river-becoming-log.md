@@ -270,3 +270,5 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
   - Any reboot would have done the same. The 12:27 restart probably got away with it because the file had been saved soon after TD started.
   - Fix: a `last_send` ahead of the clock is reset. Verified by save and reload: Art-Net resumes 1.4 s after load.
 
+- **Autostart → rain (session A, Gavin's call):** `Start-River.cmd` now opens `river-local-oct-18.toe`. Restart test at 16:53:46: Windows back at 16:54:39, TD in the rain file with the bridge answering at 16:54:53. Ropes `Source=canvas` (rope_canvas), panels `Source=canvas` with the window open, Art-Net sending. Watts vary 8–27 per box as drops pass; 60 fps. The gallery cam shows the teal/blue rain on the coils. Session C's sender-stall fix held: the ropes didn't go red on load.
+- **Session H** ("the spring": HUB75 as the source, optimised for a viewer about 6 ft right of the camera) is parked by Gavin; notes are in the execution plan.

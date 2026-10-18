@@ -4,7 +4,7 @@ title: Execution plan
 
 # Execution plan: from today's hardware to the full Modal-driven show
 
-**Updated Sun 18 Oct 2026, 16:15, by session A (coordinator).**
+**Updated Sun 18 Oct 2026, 17:00, by session A (coordinator).**
 
 ## Status
 ✅ done · ➡️ next (in order) · ❌ blocked
@@ -16,6 +16,7 @@ title: Execution plan
 | ✅ | A3 | Status page opens in Chrome at login (plan item F) | A (Mac mini · Opus 5.5) | Claude |
 | ✅ | A4 | This execution plan | A (Mac mini · Opus 5.5) | Claude |
 | ✅ | A5 | Recheck ropes 9 and 17 after cables were tightened: **still dark** (14:33 run) | A (Mac mini · Opus 5.5) | Claude |
+| ✅ | A6 | Login autostart now opens the rain checkpoint `river-local-oct-18.toe`. Verified with a restart at 16:54: back in 50 s, rain on the ropes and HUB75 by itself | A (Mac mini · Opus 5.5) | Claude |
 | ❌ | P1 | Swap test for ropes 9 and 17. *Deferred by Gavin (18 Oct): carry on with 18 ropes* | Gavin, in person | Gavin |
 | ✅ | B1 | **Checkpoint** ([plan](sessions/B-plan.md), [progress](sessions/B.md)): structured-light capture of all ropes with the gallery cam | B (bitcube · Opus 5.5) | Claude |
 | ✅ | B2 | Decoder + pixel map `tools/pixelmap/pixelmap-2026-10-18.json` (TDD) | B (bitcube · Opus 5.5) | Claude |
@@ -150,6 +151,9 @@ E2 Run capture.py on bitcube for the gallery cam (location/channel names and cad
 E3 Verify on Modal: /data/status.json sensor freshness updates and reflex.json reacts.
 Tick plan item D. Follow the Coordination contract in docs/execution-plan.md throughout (docs/sessions/E.md, Status table, push after every step, summary at the end).
 ```
+
+## Session H: "the spring" (parked)
+*Parked by Gavin 18 Oct.* Idea: the HUB75 as the river's source, with waves visibly flowing out across the ropes, optimised for a viewer standing about 6 ft right of the gallery cam (Gavin's reference photo). Mapping options: the phone as the viewer's eye (a video during the pattern run), or 3D by triangulating the two Reolinks. Revisit after D/E.
 
 ## Session G: install at Gray Area (bitcube · Opus 5.5 · plan mode)
 *From Wed 22 Oct.*
