@@ -260,4 +260,13 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
   - Registering the task as S4U (runs with nobody logged in) needs an elevated shell. It's an Interactive task, launched through `conhost --headless` so no console window flashes on the M14. Auto-login means it runs whenever bitcube is up.
   - Pester: `Invoke-Pester .\tools\tests` (18 tests).
 - **Status page:** the snapshot `<img>` starts as the checkpoint still and switches to the live snapshot only after it loads, so the page never shows a broken image. It shows the snapshot time from the GitHub API.
+- **Full black LED window (plan item B):** `/project1/panels/window` now shows a `screen` Container COMP sized to the LED monitor (1920×1080, found by EDID name). It is opaque black, with an `atlas` child that shows `panel_out` at native size (nearest filtering) pinned to the top-left.
+  - It's a container rather than a bigger TOP because the **Non-Commercial key caps TOPs at 1280×1280**, so a 1920×1080 layout TOP rendered at 1280×720.
+  - Panel `y` counts up from the bottom, and `justifyv='top'` on the child didn't move it, so the atlas has `y = parent().height - me.height`.
+  - Without an LED display, the screen shrinks to the atlas, so it never blanks the M14.
+  - Checked by DPI-aware desktop capture: the atlas is at x 0–255, y 0–127, pixel-exact, and the rest is black. Checked by gallery cam: only quad 1's test pattern shows on the HUB75.
+  - Rebuilt and saved in `river-local-oct-18.toe` and then `river.toe`. `river.toe` (the autostart file) is open now: ropes black, panels test pattern.
+- **Bug found and fixed: ropes stopped after a project load.** `artnet_out.tick` compared `absTime.seconds` with `last_send` from `comp.storage`. Storage is saved in the `.toe`, but `absTime` restarts at 0 when a project loads, so the sender waited as long as TD had been running at the last save. While it waited, the hardware played its own program (the coils went **full red** at 16:44).
+  - Any reboot would have done the same. The 12:27 restart probably got away with it because the file had been saved soon after TD started.
+  - Fix: a `last_send` ahead of the clock is reset. Verified by save and reload: Art-Net resumes 1.4 s after load.
 

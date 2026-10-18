@@ -84,7 +84,8 @@ def wire(dst, names, k=0):
 wire(lay, ['quad1', 'quad2'])      # input order matters: see panel_layout.glsl
 lay.par.pixeldat = lay_pix
 lay.par.outputresolution = 'custom'
-# Output just big enough for both quads (smaller window = less desktop covered).
+# Just big enough for both quads: the Non-Commercial key caps TOPs at 1280x1280, so the full-display
+# black comes from the 'screen' container below, not from this TOP.
 lay.par.resolutionw.expr = "max(parent().par.Quad1pos1, parent().par.Quad2pos1) + 256"
 lay.par.resolutionh.expr = "max(parent().par.Quad1pos2, parent().par.Quad2pos2) + 128"
 lay.par.vec0name = 'uQuad0'
@@ -104,8 +105,29 @@ out.inputConnectors[0].connect(lay)
 out.nodeX, out.nodeY = 450, 0
 out.viewer = True
 
+# 'screen' fills the whole LED display (1920x1080) in black, with the atlas at its top-left at native
+# pixels, so the window covers the Colorlight sender completely and nothing else (desktop, other windows)
+# can reach the HUB75. Containers aren't capped like TOPs. Without an LED display it shrinks to the atlas,
+# so it never blanks the human (M14) monitor.
+LED = "next((m.{} for m in monitors if m.description.upper().startswith('LED')), None)"
+scr = panels.op('screen') or panels.create(containerCOMP, 'screen')
+scr.par.w.expr = LED.format('width') + " or op('panel_out').width"
+scr.par.h.expr = LED.format('height') + " or op('panel_out').height"
+scr.par.bgcolorr = scr.par.bgcolorg = scr.par.bgcolorb = 0
+scr.par.bgalpha = 1
+scr.nodeX, scr.nodeY = 600, 150
+atl = scr.op('atlas') or scr.create(containerCOMP, 'atlas')
+atl.par.top = out.path
+atl.par.topsmoothness = 'nearest'      # 1 atlas pixel = 1 HDMI pixel, no filtering
+atl.par.w.expr = "op('../panel_out').width"
+atl.par.h.expr = "op('../panel_out').height"
+atl.par.justifyh, atl.par.justifyv = 'off', 'off'
+atl.par.x = 0
+atl.par.y.expr = "parent().height - me.height"   # panel y counts up from the bottom; this pins it to the top
+atl.par.bgalpha = 0
+
 win = panels.op('window') or panels.create(windowCOMP, 'window')
-win.par.winop = out
+win.par.winop = scr
 win.par.borders = False
 win.par.alwaysontop = True
 win.par.justifyh, win.par.justifyv = 'left', 'top'
@@ -113,12 +135,12 @@ win.par.justifyh, win.par.justifyv = 'left', 'top'
 # Works with or without the USB-C monitor plugged in; falls back to monitor 0 if no LED display is found.
 win.par.location = 'specifydisplay'
 win.par.justifyoffsetto = 'specifydisplay'
-win.par.monitor.expr = "next((m.index for m in monitors if m.description.upper().startswith('LED')), 0)"
+win.par.monitor.expr = LED.format('index') + " or 0"
 win.par.winoffsetx, win.par.winoffsety = 0, 0
 win.par.dpiscaling = 'native'        # 1 TD pixel = 1 HDMI pixel regardless of Windows scaling
 win.par.size = 'custom'
-win.par.winw.expr = "op('panel_out').width"
-win.par.winh.expr = "op('panel_out').height"
+win.par.winw.expr = "op('screen').width"
+win.par.winh.expr = "op('screen').height"
 win.nodeX, win.nodeY = 600, 0
 
 wx = panels.op('window_exec') or panels.create(parameterexecuteDAT, 'window_exec')
@@ -150,5 +172,5 @@ old = proj.op('window1')
 if old is not None and old.isOpen:
     old.par.winclose.pulse()
 
-print('panels built:', panels.path, '| out', out.width, 'x', out.height,
+print('panels built:', panels.path, '| out', out.width, 'x', out.height, '| window', scr.width, 'x', scr.height,
       '| errors:', panels.errors(recurse=True) or 'none', '| warnings:', panels.warnings(recurse=True) or 'none')

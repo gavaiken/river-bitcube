@@ -195,6 +195,8 @@ def tick(comp):
     now = absTime.seconds
     period = 1.0 / max(1, p.Fps.eval())
     last = s.get('last_send', 0)
+    if last > now:      # absTime restarts at 0 on project load/reboot, but last_send was saved in the .toe
+        last = 0
     if now - last < period - 0.002:      # small slack so 40 fps on a 60 fps timeline isn't rounded down to 30
         return
     now = last + period if now - last < 2 * period else now
