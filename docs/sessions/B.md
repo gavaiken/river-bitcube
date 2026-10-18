@@ -38,7 +38,7 @@ Progress:
   - **Art-Net 68–196 W total** (10 samples, both boxes), no dropped frames, about 35 of 40 frames/s sent. **TD 60 fps** (measured over 10 s).
   - (B5 line fixed: an earlier push had control characters where backticks were.)
 - 15:58 B8 ✅ Checkpoint still `docs/img/rain-checkpoint-2026-10-18.jpg` (cropped, no people) on the status page; plan item **L** ticked; log entry; CLAUDE.md now lists both show files. (commit 4c3e7c8)
-- 16:05 Code review ✅ 10 findings, all fixed. **The important one:** plain Gray codes are unbalanced, so the 15:42 capture lit `b04n` (ropes 0–15 fully, about 960 W) and `b13n` (64% of every rope) at 0.4, twice each. My CLAUDE.md line "patterns light at most half the pixels" was wrong. `capture.py` now dims each bit/inverse pair so no box draws more than half its power at the cap (at most 300 W/box). Also fixed: Graybit clamp, build guard against `river.toe`, settings restored after a capture (checked on the hardware), newest-pixel-map rule, `td_save` with an incremental file open, clear errors, and a TD↔decoder sync test (26 tests). (commit 4c3e7c8)
+- 16:05 Code review ✅ 10 findings, all fixed. **The important one:** plain Gray codes are unbalanced, so the 15:42 capture lit `b04n` (ropes 0–15 fully, about 960 W) and `b13n` (64% of every rope) at 0.4, twice each. My CLAUDE.md line "patterns light at most half the pixels" was wrong. `capture.py` now dims each bit/inverse pair so no box draws more than half its power at the cap (at most 300 W/box). Also fixed: Graybit clamp, build guard against `river.toe`, settings restored after a capture (checked on the hardware), newest-pixel-map rule, `td_save` with an incremental file open, clear errors, and a TD↔decoder sync test (26 tests). (commit dbd50f9: the fixes landed in the commit titled "B8 done, code review line, SESSION SUMMARY" because a commit message with quotes failed in PowerShell)
 
 ### SESSION B SUMMARY — Sun 18 Oct 2026, 16:06
 Done:
@@ -51,7 +51,7 @@ Done:
 - B7 Camera check: drops fall through every pile as columns of lit rings and the same streaks cross the HUB75 in step; river washes drift across the piles. 68–196 W total, TD 60 fps, Art-Net about 35 fps sent, no drops.
 - B8 Still on the status page, plan item L ticked, log and CLAUDE.md updated, code review done and fixed.
 Not done / blocked: none. Ropes 9 and 17 still dark (P1 deferred).
-Evidence: commits d4edc83 (plan), bc4e2f0, 043a8cf, 5cd1ac6, 1ebe7d9, 2310582, 4c3e7c8, 4c3e7c8. `docs/img/rain-checkpoint-2026-10-18.jpg`, `tools/pixelmap/pixelmap-2026-10-18.json`. Overlay, corners and clips in `frames/` (local only; people in them).
+Evidence: commits d4edc83 (plan), bc4e2f0, 043a8cf, 5cd1ac6, 1ebe7d9, 2310582, 4c3e7c8, dbd50f9 (code review fixes). `docs/img/rain-checkpoint-2026-10-18.jpg`, `tools/pixelmap/pixelmap-2026-10-18.json`. Overlay, corners and clips in `frames/` (local only; people in them).
 Hardware state now: TD runs `river-local-oct-18.toe`. Ropes `Source=canvas`, Brightness 0.4 (cap), showing the rain. Panels `Source=canvas`, Brightness 0.5, quad 1 rain, quad 2 blanked. RopeLights stopped. **The login autostart still opens `river.toe`** (ropes black, panel test pattern), so a reboot leaves the checkpoint.
 Decisions or answers needed from Gavin/team:
 - Should the login autostart open `river-local-oct-18.toe` until Dave's visuals are in? Not changed; your call.
