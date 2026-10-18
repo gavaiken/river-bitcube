@@ -189,3 +189,7 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
   - Auto-login had `AutoAdminLogon=1` but **no stored password**, so it fell back to the login screen. Installed Sysinternals Autologon (winget) and set `user` / `BITCUBE`; the password is an LSA secret.
   - Set `DevicePasswordLessBuildVersion=0` (Hello-only sign-in was on).
   - **Not yet verified with a reboot.**
+- **Tailscale on bitcube (Gavin asked for auto-start):**
+  - The service was already Automatic with restart-on-failure, and the login key expires 2027-04-11. But "Run unattended" (`ForceDaemon`) was **off**, so Tailscale only connected while someone was logged in to Windows. That's why bitcube was offline from the 01:55 shutdown (a manual Start → Shut down, via RuntimeBroker) until Gavin logged in at 12:02.
+  - Set `tailscale set --unattended=true`, so it now connects at boot before login and survives logout.
+  - Also set **hibernate on AC to never** (was 3 h; sleep was already never).
