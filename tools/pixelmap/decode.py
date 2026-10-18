@@ -113,37 +113,58 @@ def aggregate(rope, px, conf, n_ropes=N_ROPES, n_pixels=N_PIXELS, min_count=3):
     return u, v, count
 
 
-def reject_outliers(uv, window=4, max_dist=0.05):
-    """uv: (n_pixels, 2), NaN = unseen. Drop points farther than max_dist from the median of their
-    visible neighbours within +-window along the rope. Points with no visible neighbours are kept."""
+def reject_outliers(uv, window=4, max_dist=0.05, max_jump=0.08, min_segment=8):
+    """uv: (n_pixels, 2), NaN = unseen. Two passes:
+    1. drop points with no visible neighbour within +-window along the rope that is also within
+       max_dist in the image (stray decodes);
+    2. split the remaining points into segments wherever consecutive visible points are more than
+       max_jump apart, and drop segments shorter than min_segment (islands such as a reflection or the
+       camera's status light). If no segment is that long, only the longest is kept."""
     out = uv.copy()
     vis = ~np.isnan(uv[:, 0])
     n = len(uv)
     for i in np.nonzero(vis)[0]:
         lo, hi = max(0, i - window), min(n, i + window + 1)
         nb = [j for j in range(lo, hi) if j != i and vis[j]]
-        if nb and np.linalg.norm(uv[i] - np.median(uv[nb], axis=0)) > max_dist:
+        if not nb or np.linalg.norm(uv[nb] - uv[i], axis=1).min() > max_dist:
             out[i] = np.nan
+    idx = np.nonzero(~np.isnan(out[:, 0]))[0]
+    if len(idx) == 0:
+        return out
+    breaks = np.nonzero(np.linalg.norm(np.diff(out[idx], axis=0), axis=1) > max_jump)[0] + 1
+    segments = np.split(idx, breaks)
+    longest = max(len(s) for s in segments)
+    for s in segments:
+        if len(s) < min(min_segment, longest):
+            out[s] = np.nan
     return out
 
 
-def fill_along_rope(uv):
+def fill_along_rope(uv, max_step=None):
     """Interpolate unseen pixels linearly between visible neighbours; the ends hold the nearest
-    visible point. Returns (filled (n, 2) or None if nothing is visible, visible mask)."""
+    visible point. Where the two visible points around a hidden stretch are more than max_step apart
+    (the rope runs hidden from one pile to another), don't draw a chord across the floor: each half of
+    the stretch holds its nearer visible point. Returns (filled (n, 2) or None, visible mask)."""
     vis = ~np.isnan(uv[:, 0])
     if not vis.any():
         return None, vis
     idx = np.arange(len(uv))
     filled = np.stack([np.interp(idx, idx[vis], uv[vis, c]) for c in range(2)], axis=1)
+    if max_step is not None:
+        seen = idx[vis]
+        for i, j in zip(seen[:-1], seen[1:]):
+            if j - i > 1 and np.linalg.norm(uv[j] - uv[i]) > max_step:
+                mid = (i + j) / 2
+                filled[i + 1:j] = np.where((idx[i + 1:j] <= mid)[:, None], uv[i], uv[j])
     return filled, vis
 
 
-def build_map(u, v, window=4, max_dist=0.05, meta=None):
+def build_map(u, v, window=4, max_dist=0.05, max_jump=0.08, min_segment=8, max_step=0.05, meta=None):
     """Pixel-map dict: meta, per-rope counts, and one point per pixel of every rope that was seen."""
     points, ropes = [], {}
     for r in range(u.shape[0]):
-        uv = reject_outliers(np.stack([u[r], v[r]], axis=1), window, max_dist)
-        filled, vis = fill_along_rope(uv)
+        uv = reject_outliers(np.stack([u[r], v[r]], axis=1), window, max_dist, max_jump, min_segment)
+        filled, vis = fill_along_rope(uv, max_step)
         if filled is None:
             continue
         ropes[str(r)] = {'visible': int(vis.sum()), 'filled': int((~vis).sum())}
@@ -182,12 +203,16 @@ def overlay(base_rgb, rope, px, pmap):
     for p in pmap['points']:
         by_rope.setdefault(p['rope'], []).append((p['u'] * w, (1 - p['v']) * h))
     for r, pts in by_rope.items():
-        dr.line(pts, fill=PALETTE[r % 10], width=1)
+        for a, b in zip(pts[:-1], pts[1:]):           # no line across a jump between piles
+            if np.hypot(a[0] - b[0], a[1] - b[1]) < 0.05 * w:
+                dr.line([a, b], fill=PALETTE[r % 10], width=1)
         x, y = pts[len(pts) // 2]
         dr.text((x + 3, y - 6), str(r + 1), fill=(255, 255, 255))
         dr.ellipse((pts[0][0] - 3, pts[0][1] - 3, pts[0][0] + 3, pts[0][1] + 3), outline=(255, 255, 255))
-    for name, (cu, cv) in (pmap.get('hub75_quad1') or {}).items():
-        if name in ('tl', 'tr', 'br', 'bl'):
+    quad = pmap.get('hub75_quad1') or {}
+    for name in ('tl', 'tr', 'br', 'bl'):
+        if name in quad:
+            cu, cv = quad[name]
             dr.text((cu * w + 3, (1 - cv) * h + 3), name, fill=(255, 255, 0))
     return im
 

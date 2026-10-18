@@ -109,6 +109,37 @@ def test_reject_outliers_drops_far_points():
     assert not np.isnan(out[np.r_[0:20, 21:30, 31:50]]).any()
 
 
+def test_reject_outliers_drops_island_and_isolated_points():
+    uv = np.stack([np.linspace(0.1, 0.5, 100), np.full(100, 0.5)], axis=1)
+    uv[40:46] = (0.45, 0.9)               # six px "seen" on the camera's status light
+    uv[70] = (0.05, 0.05)                 # one stray far away
+    uv[80:100] = np.nan
+    uv[95] = (0.3, 0.3)                   # a lone point among hidden pixels
+    out = decode.reject_outliers(uv, window=4, max_dist=0.05, max_jump=0.08, min_segment=8)
+    assert np.isnan(out[40:46]).all() and np.isnan(out[70]).all() and np.isnan(out[95]).all()
+    assert not np.isnan(out[np.r_[0:40, 46:70, 71:80]]).any()
+
+
+def test_reject_outliers_keeps_two_long_segments_on_different_piles():
+    uv = np.full((60, 2), np.nan)
+    uv[0:20] = np.stack([np.linspace(0.1, 0.2, 20), np.full(20, 0.5)], axis=1)
+    uv[40:60] = np.stack([np.linspace(0.7, 0.8, 20), np.full(20, 0.5)], axis=1)
+    out = decode.reject_outliers(uv, window=4, max_dist=0.05, max_jump=0.08, min_segment=8)
+    assert not np.isnan(out[0:20]).any() and not np.isnan(out[40:60]).any()
+
+
+def test_fill_does_not_bridge_long_jumps():
+    uv = np.full((10, 2), np.nan)
+    uv[0:3] = (0.1, 0.5)
+    uv[7:10] = (0.8, 0.5)                 # rope runs from one pile to another, hidden in between
+    filled, visible = decode.fill_along_rope(uv, max_step=0.05)
+    assert np.allclose(filled[3:5], (0.1, 0.5)) and np.allclose(filled[5:7], (0.8, 0.5))
+    uv2 = uv.copy()
+    uv2[7:10] = (0.12, 0.5)               # short gap: interpolate as before
+    filled2, _ = decode.fill_along_rope(uv2, max_step=0.05)
+    assert np.allclose(filled2[5], (0.112, 0.5))
+
+
 def test_fill_along_rope_interpolates_and_holds_ends():
     uv = np.full((10, 2), np.nan)
     uv[2] = (0.2, 0.2)
@@ -128,7 +159,7 @@ def test_build_map_leaves_out_empty_ropes():
     u = np.full((3, 5), np.nan)
     v = np.full((3, 5), np.nan)
     u[1, [0, 4]], v[1, [0, 4]] = (0.1, 0.5), (0.2, 0.2)
-    m = decode.build_map(u, v, max_dist=1.0)
+    m = decode.build_map(u, v, max_dist=1.0, max_jump=1.0, max_step=1.0)
     ropes = {p['rope'] for p in m['points']}
     assert ropes == {1}
     pts = [p for p in m['points'] if p['rope'] == 1]
