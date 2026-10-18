@@ -15,7 +15,7 @@ bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes ov
   - bitcube boots straight into the show (about 1 minute) and is on Tailscale.
 - **In progress:**
   - The panels window is moving to the LED display (it currently lands on the USB-C monitor).
-  - This status page.
+  - Making this status page part of every work session.
 - **Next:**
   1. Identify the ropes automatically with the camera.
   2. Feed Dave's Modal visuals into the ropes and panels.
