@@ -162,3 +162,8 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
   - `river.toe` saved in this dark state, so a reboot comes up dark. RopeLights stopped (task Ready, no trigger).
   - The 01:35 rope test run was **not watched** (no photos), so colour, order and direction are all still unverified. Re-run tomorrow with someone watching, ropes uncoiled ~1 m at the plug end.
   - Team handoff summary published as a private page: https://claude.ai/artifact/SZwraPQpZLgTdyAEM9MnKA
+- **Correction, 01:47:** with TD's output off, the ropes did **not** stay dark. Gavin saw them cycling colours.
+  - Nothing on bitcube was sending (port 6454 free, RopeLights Ready, `dmxout1` off). So when Art-Net stops, the hardware falls back to its own program: either the rack controller's SD card (program 2) or the PSAC10s' PLAY mode. That answers hardware open question 3: live Art-Net overrides it, and silence hands control back.
+  - Overnight fix: TD `Active` on with `Source=black` (continuous zeros at 40 fps, 0 W), saved into `river.toe`.
+  - If bitcube or TD goes down, the colour cycle comes back. Switching off the PSAC10s is the only sure off.
+  - **"Blackout" must mean sending black, never stopping output.**
