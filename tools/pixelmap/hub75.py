@@ -80,6 +80,9 @@ def find_corners(test, black, thresh=40):
     lit = (test - black).max(axis=2) > thresh
     region = largest_component(_dilate(lit)) & lit
     ys, xs = np.nonzero(region)
+    if len(xs) < 50:
+        raise ValueError('the HUB75 test pattern was not seen (panels off, window not on the LED display, '
+                         'or the camera can\'t see them): nothing changed between the black and test frames')
     x, y = xs + 0.5, ys + 0.5
     pick = {'tl': np.argmin(x + y), 'br': np.argmax(x + y), 'tr': np.argmax(x - y), 'bl': np.argmin(x - y)}
     corners = {k: (float(x[i]), float(y[i])) for k, i in pick.items()}
@@ -115,7 +118,11 @@ def main(capture, pixelmap=None):
     print(json.dumps(res, indent=1))
     if res['red_at'] != 'tl':
         print(f"WARNING: red panel is nearest the {res['red_at']} corner, not tl: check the orientation")
-    pixelmap = Path(pixelmap or Path(__file__).parent / 'pixelmap-2026-10-18.json')
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from pixelmap.decode import latest_pixelmap
+    pixelmap = Path(pixelmap) if pixelmap else latest_pixelmap()
+    if pixelmap is None:
+        sys.exit('no tools/pixelmap/pixelmap-*.json yet: run capture.py ropes and decode.py first')
     pm = json.loads(pixelmap.read_text())
     pm['hub75_quad1'] = uv | {'capture': capture.name, 'frame_size': [w, h], 'check_px': res['check_px']}
     pixelmap.write_text(json.dumps(pm, indent=0).replace('\n', ' ').replace('} {', '},\n{') + '\n')

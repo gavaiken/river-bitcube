@@ -102,7 +102,12 @@ ROPE_BITS = 5      # Gray-code bits for the rope index (20 ropes)
 
 def gray_frame(ropes, pixels, bit, invert=False):
     """Structured-light pattern for tools/pixelmap: white where bit `bit` of the Gray code is 1.
-    Bits 0..4 encode the rope index, bits 5.. the pixel index (bit 5 = pixel LSB). invert flips it."""
+    Bits 0..4 encode the rope index, bits 5.. the pixel index (bit 5 = pixel LSB). invert flips it.
+    Plain Gray codes are unbalanced (bit 4 inverted lights every rope of box 1): the capture script
+    dims those pairs (tools/pixelmap/graycode.pattern_brightness). Must match tools/pixelmap/graycode.py
+    (tested by tools/pixelmap/tests/test_td_sync.py)."""
+    if not 0 <= bit < ROPE_BITS + 9:
+        return np.zeros((ropes, pixels, 3), np.float32)     # never let a bad bit become all-white
     r = np.arange(ropes)[:, None]
     p = np.arange(pixels)[None, :]
     code = (r ^ (r >> 1)) if bit < ROPE_BITS else (p ^ (p >> 1))

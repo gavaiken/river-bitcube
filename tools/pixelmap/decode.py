@@ -26,11 +26,7 @@ R = graycode.ROPE_BITS
 
 # ---- per camera pixel ---------------------------------------------------------------------------
 
-def pattern_bit(rope, px, bit):
-    """What a Gray-code pattern shows at (rope, px): True = lit (same rule as gray_frame in TD)."""
-    code = graycode.gray(rope) if bit < R else graycode.gray(px)
-    k = bit if bit < R else bit - R
-    return ((code >> k) & 1).astype(bool)
+pattern_bit = graycode.pattern_bit
 
 
 def lit_level(frames):
@@ -217,6 +213,12 @@ def overlay(base_rgb, rope, px, pmap):
     return im
 
 
+def latest_pixelmap(folder=Path(__file__).parent):
+    """The newest tools/pixelmap/pixelmap-YYYY-MM-DD.json (the one TD builds from), or None."""
+    maps = sorted(Path(folder).glob('pixelmap-????-??-??.json'))
+    return maps[-1] if maps else None
+
+
 def main(capture, out_json=None):
     from PIL import Image
     capture = Path(capture)
@@ -226,7 +228,10 @@ def main(capture, out_json=None):
     u, v, count = aggregate(rope, px, conf)
     date = meta.get('date', capture.name.split('-')[1])
     out_json = Path(out_json or Path(__file__).parent / f"pixelmap-{date[:4]}-{date[4:6]}-{date[6:8]}.json")
-    old = json.loads(out_json.read_text()) if out_json.exists() else {}
+    prev = out_json if out_json.exists() else latest_pixelmap()
+    old = json.loads(prev.read_text()) if prev else {}
+    if 'hub75_quad1' in old and prev != out_json:
+        print(f'hub75_quad1 carried over from {prev.name}: re-run hub75.py if the panel or camera moved')
     h, w = rope.shape
     pmap = build_map(u, v, meta={
         'capture': capture.name, 'camera': meta.get('camera'), 'frame_size': [w, h], 'drift': meta.get('drift'),

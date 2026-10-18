@@ -37,3 +37,24 @@ Progress:
   - Tuning: rain density 0.06 and wider streaks (sx 4.5); river inlow 0.5; ropes Brightness 0.4 (cap); panels Brightness 0.5 (0.8 overexposed next to the ropes).
   - **Art-Net 68–196 W total** (10 samples, both boxes), no dropped frames, about 35 of 40 frames/s sent. **TD 60 fps** (measured over 10 s).
   - (B5 line fixed: an earlier push had control characters where backticks were.)
+- 15:58 B8 ✅ Checkpoint still `docs/img/rain-checkpoint-2026-10-18.jpg` (cropped, no people) on the status page; plan item **L** ticked; log entry; CLAUDE.md now lists both show files. (commit 4c3e7c8)
+- 16:05 Code review ✅ 10 findings, all fixed. **The important one:** plain Gray codes are unbalanced, so the 15:42 capture lit `b04n` (ropes 0–15 fully, about 960 W) and `b13n` (64% of every rope) at 0.4, twice each. My CLAUDE.md line "patterns light at most half the pixels" was wrong. `capture.py` now dims each bit/inverse pair so no box draws more than half its power at the cap (at most 300 W/box). Also fixed: Graybit clamp, build guard against `river.toe`, settings restored after a capture (checked on the hardware), newest-pixel-map rule, `td_save` with an incremental file open, clear errors, and a TD↔decoder sync test (26 tests). (commit 4c3e7c8)
+
+### SESSION B SUMMARY — Sun 18 Oct 2026, 16:06
+Done:
+- B1 Gray-code structured-light capture of all ropes with the gallery cam (`tools/pixelmap/capture.py`, rope Source `gray`).
+- B2 Decoder (TDD, 26 tests) and `tools/pixelmap/pixelmap-2026-10-18.json`: all 18 working ropes located, hidden pixels filled along the rope, islands and jumps rejected.
+- B3 HUB75 quad 1 corners in camera space (`hub75.py`), red at TL, checked by eye.
+- B4 Rain/river field `/project1/river_local`, built-in TOPs only: drifting, breathing blue/teal/white river plus falling streak rain, on black.
+- B5 Sampling: TOP to CHOP at 8,000 UVs → 20×400 → ropes; Corner Pin → 256×128 → panels quad 1. Both checked numerically (error < 0.001).
+- B6 `river-local-oct-18.toe` (Save As of river.toe; river.toe untouched); idempotent `td/build/build_river_local.py`; `td_save.ps1 -Target`.
+- B7 Camera check: drops fall through every pile as columns of lit rings and the same streaks cross the HUB75 in step; river washes drift across the piles. 68–196 W total, TD 60 fps, Art-Net about 35 fps sent, no drops.
+- B8 Still on the status page, plan item L ticked, log and CLAUDE.md updated, code review done and fixed.
+Not done / blocked: none. Ropes 9 and 17 still dark (P1 deferred).
+Evidence: commits d4edc83 (plan), bc4e2f0, 043a8cf, 5cd1ac6, 1ebe7d9, 2310582, 4c3e7c8, 4c3e7c8. `docs/img/rain-checkpoint-2026-10-18.jpg`, `tools/pixelmap/pixelmap-2026-10-18.json`. Overlay, corners and clips in `frames/` (local only; people in them).
+Hardware state now: TD runs `river-local-oct-18.toe`. Ropes `Source=canvas`, Brightness 0.4 (cap), showing the rain. Panels `Source=canvas`, Brightness 0.5, quad 1 rain, quad 2 blanked. RopeLights stopped. **The login autostart still opens `river.toe`** (ropes black, panel test pattern), so a reboot leaves the checkpoint.
+Decisions or answers needed from Gavin/team:
+- Should the login autostart open `river-local-oct-18.toe` until Dave's visuals are in? Not changed; your call.
+- Awareness: the 15:42 capture briefly lit near the limiters (all-white reference, then `b04n`/`b13n`, about 1 kW for a few seconds each). It is fixed in code now.
+Suggested next step: C1–C3 (session C). C3 must save each show file while it is open (`td_save.ps1` saves the open file). Then D, which reuses `build_river_local.py`'s sampling for Dave's canvas.
+

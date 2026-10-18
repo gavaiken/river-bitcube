@@ -43,6 +43,9 @@ if not hasattr(ropes.par, 'Graybit'):
     p.normMin, p.normMax, p.clampMin, p.min, p.default = 0, 13, True, 0, 0
     pg.appendToggle('Grayinvert', label='Gray Code Inverse')[0].default = False
     ropes.par.Graybit, ropes.par.Grayinvert = 0, False
+# Out-of-range bits would read as 0 everywhere, so their inverse would be every rope full white.
+ropes.par.Graybit.min, ropes.par.Graybit.max = 0, 13
+ropes.par.Graybit.clampMin = ropes.par.Graybit.clampMax = True
 # Menu entries are (re)set on every build so new sources reach an existing COMP.
 # Test sources: see the *_frame functions in td/ropes/artnet_out.py and tools/rope_tests.ps1.
 ropes.par.Source.menuNames = ['canvas', 'identify', 'order', 'box1_red', 'box2_green', 'rope', 'heads',

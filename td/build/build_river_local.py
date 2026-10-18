@@ -7,12 +7,20 @@
 #   field (1280x720, camera frame) = river (noise -> level -> colour ramp) + rain (feedback streaks)
 #   -> TOP to CHOP at 8000 UVs (rope-major) -> CHOP to TOP 400x20 -> flop -> 20x400 rope_canvas
 #   -> /project1/ropes Canvas;  field -> Corner Pin (quad 1 corners) -> 256x128 -> /project1/panels Quad1
+#
+# Only for the checkpoint file: it rewires the shared ropes and panels COMPs and switches Andi's Web Render
+# off, so it refuses to run in river.toe (the login show file).
+import glob
 import json
 
 REPO = 'C:/Users/user/River/river-bitcube'
-PIXELMAP = REPO + '/tools/pixelmap/pixelmap-2026-10-18.json'
+PIXELMAP = sorted(glob.glob(REPO + '/tools/pixelmap/pixelmap-????-??-??.json'))[-1].replace('\\', '/')   # newest
 N_ROPES, N_PX = 20, 400
 FIELD_W, FIELD_H = 1280, 720
+
+if not project.name.startswith('river-local'):
+    raise RuntimeError(f'build_river_local.py rewires ropes/panels; open river-local-*.toe first '
+                       f'(TD has {project.name} open). Use  td_save.ps1 -Target river-local-....toe  to make one.')
 
 proj = op('/project1')
 rl = proj.op('river_local') or proj.create(baseCOMP, 'river_local')
@@ -124,12 +132,6 @@ lv.par.brightness1.expr = 'parent().par.Riverlevel'
 
 # ---- rain: thin vertical streak noise scrolling down, thresholded to sparse drops, ---------------
 # ---- then a feedback loop (move down + fade) that gives each drop a trail -----------------------
-for old in ('noise_seed', 'level_seed'):             # first version used per-frame random seeds
-    if rl.op(old) is not None:
-        rl.op(old).destroy()
-if hasattr(rl.par, 'Rainrate'):
-    rl.par.Rainrate.destroy()
-
 ns = get(noiseTOP, 'rain_noise', 0, 0)
 res(ns, 640, 360, 'rgba16float')
 ns.par.type = 'simplex3d'
@@ -265,14 +267,17 @@ rc.inputConnectors[0].connect(fl)
 rc.viewer = True
 
 # ---- HUB75 quad 1: camera-space quad -> 256x128 --------------------------------------------------
-q = pm['hub75_quad1']
+q = pm.get('hub75_quad1')
 cp = get(cornerpinTOP, 'quad1', 2100, 150)
 cp.inputConnectors[0].connect(out)
 res(cp, 256, 128)
-for corner, key in (('tl', 'tl'), ('tr', 'tr'), ('bl', 'bl'), ('br', 'br')):
-    getattr(cp.par, f'extract{corner}unit').val = 'fraction'
-    getattr(cp.par, f'extract{corner}x').val = q[key][0]
-    getattr(cp.par, f'extract{corner}y').val = q[key][1]
+if q is None:
+    print('WARNING: no hub75_quad1 in', PIXELMAP, '- quad 1 keeps its previous corners (run hub75.py)')
+else:
+    for corner in ('tl', 'tr', 'bl', 'br'):
+        getattr(cp.par, f'extract{corner}unit').val = 'fraction'
+        getattr(cp.par, f'extract{corner}x').val = q[corner][0]
+        getattr(cp.par, f'extract{corner}y').val = q[corner][1]
 cp.par.extractmapping = 'perspective'
 cp.par.extend = 'zero'
 
@@ -299,5 +304,5 @@ web = proj.op('Mask_Panels/webrender1')
 if web is not None:
     web.par.active = False
 
-print('river_local built:', rl.path, '| uv rows:', tab.numRows - 1, '| mapped ropes:', sorted(int(k) + 1 for k in pm['ropes']),
+print('river_local built from', PIXELMAP.rsplit('/', 1)[-1], '|', rl.path, '| uv rows:', tab.numRows - 1, '| mapped ropes:', sorted(int(k) + 1 for k in pm['ropes']),
       '| errors:', rl.errors(recurse=True) or 'none', '| warnings:', rl.warnings(recurse=True) or 'none')

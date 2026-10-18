@@ -45,6 +45,16 @@ def test_ignores_smaller_blob():
     assert abs(c['corners']['tl'][0] - QUAD['tl'][0]) <= 1.5
 
 
+def test_no_panel_seen_is_a_clear_error():
+    _, black = render_panel()
+    try:
+        hub75.find_corners(black.copy(), black)
+    except ValueError as e:
+        assert 'not seen' in str(e)
+    else:
+        raise AssertionError('expected ValueError')
+
+
 def test_to_uv_td_convention():
     uv = hub75.to_uv({'tl': (0, 0), 'br': (200, 120), 'mid': (50, 30)}, W, H)
     assert np.allclose(uv['tl'], (0, 1)) and np.allclose(uv['br'], (1, 0))

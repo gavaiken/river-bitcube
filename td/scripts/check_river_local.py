@@ -11,6 +11,8 @@ tex = op('/project1/ropes/rope_tex')
 tex.cook(force=True)              # nothing pulls rope_tex while the ropes Source isn't 'canvas'
 frame = np.transpose(tex.numpyArray()[::-1, :, :3], (1, 0, 2))     # = artnet_out.canvas_frame at 20x400
 mapped = uv[:, :, 0] >= 0
+if not mapped.any():
+    raise RuntimeError('uv_table maps no rope pixels: rebuild with td/build/build_river_local.py')
 err_u = np.abs(frame[:, :, 0] - uv[:, :, 0])[mapped]
 err_v = np.abs(frame[:, :, 1] - uv[:, :, 1])[mapped]
 print('uvtest on:', rl.par.Uvtest.eval(),

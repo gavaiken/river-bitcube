@@ -4,10 +4,13 @@
     .venv\\Scripts\\python tools\\pixelmap\\capture.py hub75  [--cam gallery]   -> frames\\hub75-<stamp>\\
 
 ropes: drives /project1/ropes (via the Claude bridge) through black and every Gray-code bit plus its
-inverse (graycode.patterns()), one averaged camera frame each. Never all ropes white at once (power). The whole sequence runs twice
+inverse (graycode.patterns()), one averaged camera frame each. Never all ropes white at once (power):
+plain Gray codes are unbalanced (rope bit 4's inverse lights all of box 1), so each pair is dimmed until
+no box draws more than half its power at the cap (graycode.pattern_brightness; <= 300 W/box at 0.4). The whole sequence runs twice
 (passes A and B); a pattern whose two frames disagree (someone walked through) is retaken until two
-agree. Brightness 0.4 (the cap). Ends with the ropes black and Brightness restored.
-hub75: ropes black; panels black / test pattern, twice each. Panels Source restored at the end.
+agree. Brightness cap 0.4. hub75: ropes black; panels black / test pattern, twice each.
+Both modes put the ropes (Active, Source, Brightness, Graybit, Grayinvert) and panels Source back as
+they were, also when the run fails.
 
 One ffmpeg RTSP reader stays open for the whole run (a fresh connect per frame takes seconds).
 Don't move the camera during a run; meta.json records the drift between the first and last black frame.
@@ -83,8 +86,13 @@ class Reader:
         self.p.kill()
 
 
+CAP = 0.4      # set from --brightness; each pattern is dimmed below it as needed (graycode.pattern_brightness)
+
+
 def set_ropes(pat):
-    code = f"r=op('/project1/ropes'); r.par.Source='{pat['source']}'"
+    """Show one pattern. Brightness is set in the same call, so no box ever exceeds half power."""
+    b = graycode.pattern_brightness(pat, CAP)
+    code = f"r=op('/project1/ropes'); r.par.Brightness={b:.4f}; r.par.Source='{pat['source']}'"
     if pat['source'] == 'gray':
         code += f"; r.par.Graybit={pat['bit']}; r.par.Grayinvert={pat['invert']}"
     td(code)
@@ -174,15 +182,22 @@ def main():
     stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
     out = REPO / 'frames' / f"{'pixelmap' if args.mode == 'ropes' else 'hub75'}-{stamp}"
     out.mkdir(parents=True)
-    r = td("r=op('/project1/ropes'); p=op('/project1/panels'); "
-           "print(r.par.Brightness.eval(), r.par.Source.eval(), p.par.Source.eval())")
-    old_bright, old_src, old_panels = r['stdout'].split()
+    # Ropes and panels settings to put back afterwards, whatever happens (also printed, in case).
+    keep = ('Active', 'Source', 'Brightness', 'Graybit', 'Grayinvert')
+    r = td("import json; r=op('/project1/ropes'); print(json.dumps({**{k: getattr(r.par, k).eval() for k in "
+           f"{keep!r}}}, 'Panels': op('/project1/panels').par.Source.eval(), "
+           "'Maxbrightness': r.par.Maxbrightness.eval()}))")
+    before = json.loads(r['stdout'])
+    print('before:', before)
+    restore = ("r=op('/project1/ropes'); " + '; '.join(f'r.par.{k}={before[k]!r}' for k in keep)
+               + f"; op('/project1/panels').par.Source={before['Panels']!r}")
+    global CAP
+    CAP = min(args.brightness, before['Maxbrightness'])
     cam = Reader(url)
     try:
         cam.after(time.monotonic(), n=2, timeout=30)          # stream is up
-        td(f"r=op('/project1/ropes'); r.par.Active=True; "
-           f"r.par.Brightness=min({args.brightness}, r.par.Maxbrightness.eval())")
-        settle = args.settle or measure_settle(cam)
+        td("op('/project1/ropes').par.Active = True")
+        settle = args.settle if args.settle is not None else measure_settle(cam)
         print(f'settle {settle:.2f} s, start {datetime.now():%H:%M:%S}')
         if args.mode == 'ropes':
             info = run_ropes(cam, out, settle)
@@ -191,10 +206,11 @@ def main():
             info = run_hub75(cam, out, settle)
     finally:
         cam.close()
-        td(f"r=op('/project1/ropes'); r.par.Source='black'; r.par.Brightness={old_bright}; "
-           f"op('/project1/panels').par.Source='{old_panels}'")
+        td(restore)
     meta = {'mode': args.mode, 'camera': args.cam, 'date': stamp[:8], 'stamp': stamp, 'frame_size': [W, H],
-            'settle': settle, 'brightness': args.brightness, 'ropes_source_before': old_src} | info
+            'settle': settle, 'brightness_cap': CAP, 'before': before,
+            'pattern_brightness': {p['name']: round(graycode.pattern_brightness(p, CAP), 4)
+                                   for p in graycode.patterns()}} | info
     (out / 'meta.json').write_text(json.dumps(meta, indent=1))
     print(json.dumps({k: v for k, v in meta.items() if k != 'patterns'}))
     print(f'OUT {out}')

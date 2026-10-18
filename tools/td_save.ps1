@@ -14,6 +14,8 @@ $td = Join-Path $PSScriptRoot 'td.ps1'
 if (-not $Target) {
     $Target = & $td "print(project.folder + '/' + project.name)"
     if ($LASTEXITCODE -ne 0 -or -not $Target) { Write-Error 'Could not read the open project path from TD.'; exit 1 }
+    # An incremental copy (river.7.toe) is open: save the real file (river.toe), never the copy.
+    $Target = $Target -replace '\.\d+\.toe$', '.toe'
 }
 if (-not [IO.Path]::IsPathRooted($Target)) { $Target = Join-Path $root $Target }
 $Target = [IO.Path]::GetFullPath($Target)

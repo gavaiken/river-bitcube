@@ -247,3 +247,10 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
   - A TOP that nothing pulls doesn't cook, so checks must `cook(force=True)`.
   - Per-frame random drop seeds with sub-pixel feedback motion looked like stationary dots, so the rain uses scrolling streak noise instead.
   - Never pass Markdown with backticks through a PowerShell double-quoted string: `` `r `` and `` `t `` become control characters. Write files from Python or the Write tool.
+- **Code review (16:00) and fixes:**
+  - **Power:** plain Gray codes are unbalanced. In the 15:42 capture, `b04n` lit ropes 0–15 fully (box 1 at its 600 W limit plus about 360 W on box 2) and `b13n` lit 64% of every rope, each twice, at 0.4. `capture.py` now dims every bit/inverse pair so no box draws more than half its power at the cap (`graycode.pattern_brightness`, at most 300 W/box), and logs the brightness per pattern. The 15:42 capture stays valid: the decoder is unchanged.
+  - The Graybit parameter is clamped to 0–13; `gray_frame` returns black for an out-of-range bit, instead of a pattern that could light all ropes white.
+  - `build_river_local.py` refuses to run unless a `river-local*.toe` is open, so it can't rewire `river.toe`. It builds from the newest `pixelmap-*.json`; `decode.py` and `hub75.py` use the same rule.
+  - `capture.py` puts the ropes (Active, Source, Brightness, Graybit, Grayinvert) and panels Source back as they were, even on failure. Checked on the hardware at 16:04.
+  - `td_save.ps1` saves `river.toe` when TD has an incremental `river.N.toe` open. There are clear errors when the HUB75 isn't seen or no rope is mapped, and a test checks `artnet_out.gray_frame` against the decoder. 26 tests.
+

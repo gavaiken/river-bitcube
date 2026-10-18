@@ -24,7 +24,7 @@ title: Execution plan
 | ✅ | B5 | Sampling onto the ropes and HUB75 quad 1 | B (bitcube · Opus 5.5) | Claude |
 | ✅ | B6 | `river-local-oct-18.toe` + `build_river_local.py` + `td_save.ps1 -Target` | B (bitcube · Opus 5.5) | Claude |
 | ✅ | B7 | Verify by camera, tune, watts and fps | B (bitcube · Opus 5.5) | Claude |
-| ➡️ | B8 | Checkpoint still on the status page, tick L, summary | B (bitcube · Opus 5.5) | Claude |
+| ✅ | B8 | Checkpoint still on the status page, tick L, summary | B (bitcube · Opus 5.5) | Claude |
 | ➡️ | C1–C3 | Camera snapshot on the status page (fixes the broken image) and full black LED-display window | C (bitcube · Sonnet 5) | Claude |
 | ❌ | D1–D4 | Dave's Modal visuals on the ropes and HUB75. *Blocked: waiting on Dave (OK to run `gallery/sync.py`; is `SITE_TOKEN` set?)* | D (bitcube · Opus 5.5) | Claude |
 | ❌ | E1–E3 | Cameras pushing clips to Dave's agent. *Blocked: needs `INGEST_TOKEN` and channel names from Dave* | E (bitcube · Opus 5.5) | Claude |
