@@ -38,6 +38,7 @@ TouchDesigner (TD) drives the 20 ropes over Art-Net **and** the HUB75 panels ove
 - **Never put unpicklable objects (sockets, files) in `comp.storage`.** TD pickles storage into the `.toe` on save, and a socket triggers a modal "saved with errors". Keep live objects in a holder module in `sys.modules`, as `td/ropes/artnet_out.py` does.
 - **Save before cooking a new GLSL shader.** A shader that sampled an unwired input hung the Iris Xe driver (TDR) and killed TD. Index `sTD2DInputs[]` with literal constants only, guarded by `TD_NUM_2D_INPUTS`. In multi-input TOPs a new input connector only appears on the next frame (see `wire()` in `td/build/build_panels.py`).
 - **Changes live in the repo, not only in the `.toe`.** The rope/panel logic and shaders are files synced into DATs. `td/build/*.py` rebuild the COMPs idempotently: `.\tools\td.ps1 -File .\td\build\build_ropes.py`. From Git Bash, run PowerShell scripts with `powershell -ExecutionPolicy Bypass -File ...`.
+- **Dark ropes = keep sending black.** When Art-Net stops, the lighting hardware plays its own colour-cycling program (rack SD card or PSAC10 PLAY mode). To keep the ropes dark, use `Source='black'` with `Active` on, never `Active` off.
 - **This box has only one display:** the Colorlight sender (`LED 1920X1080`, HDMI). The desktop *is* the panel feed. The panels window is borderless and always on top at (0,0).
 
 ## Rules
