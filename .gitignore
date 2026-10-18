@@ -1,0 +1,14 @@
+# TouchDesigner autosave/backup copies
+Backup/
+*.toe.bak
+# Archives and installers
+*.zip
+*.exe
+# Local secrets (camera URLs/logins etc.) - never commit
+secrets.local.json
+# Camera snapshots and logs
+frames/
+*.log
+
+# TouchDesigner numbered save copies (e.g. river_masks.41.toe)
+*.[0-9]*.toe
