@@ -167,3 +167,4 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
   - Overnight fix: TD `Active` on with `Source=black` (continuous zeros at 40 fps, 0 W), saved into `river.toe`.
   - If bitcube or TD goes down, the colour cycle comes back. Switching off the PSAC10s is the only sure off.
   - **"Blackout" must mean sending black, never stopping output.**
+- 01:50: Gavin confirmed the ropes went dark once TD sent continuous black. Overnight state verified.
