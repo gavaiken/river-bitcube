@@ -4,83 +4,147 @@ title: Execution plan
 
 # Execution plan: from today's hardware to the full Modal-driven show
 
-## Context
-bitcube now boots into TouchDesigner (TD) and drives 18 of 20 ropes (Art-Net) and HUB75 quad 1 (HDMI, verified by camera). The gallery cam (Agape WiFi, `10.0.7.76`) sees every coil pile and the HUB75. Rope ID, colour order and the panel test pattern are calibrated. The repo `gavaiken/river-bitcube` is public, with the status page, `docs/plan.md` and the log.
+**Updated Sun 18 Oct 2026, 14:40, by session A (coordinator).**
 
-Gavin's goal: everything working end to end, including Dave's Modal agent. First comes a **checkpoint**: a new, self-contained TD file, **`river-local-oct-18.toe`**, that makes a coherent rain/river appear across the ropes and HUB75 *as they sit now*, mapped by their real positions, with no Modal or other outside input. Gavin won't move the hardware during that step, and he's checking the cables of the two dark ropes (9 = box 1 OUT9, 17 = box 2 OUT7) meanwhile.
+## Status
+✅ done · ➡️ next (in order) · ❌ blocked
 
-The ropes are coiled in four piles, so we don't know where each of the 8,000 pixels physically is. **Key idea:** measure it with the camera. Structured light (Gray-code patterns) lets the camera decode, for every visible LED pixel, which rope and which pixel index it is. That gives a pixel → camera-image map in about 2 minutes. Then render one rain/river field in the camera's view, and sample it at each pixel's position (and across the HUB75's rectangle). From the camera's viewpoint, which stands in for a visitor's, rain falls coherently through the coils and the panels. The same tool remaps everything after the install at Gray Area (plan item J), so it isn't throwaway work.
+| | Step | What | Session (machine · model) | Owner |
+|---|---|---|---|---|
+| ✅ | A1 | Public repo and status page, `plan.md`, coordination rules | A (Mac mini · Opus 5.5) | Claude |
+| ✅ | A2 | Rope identification by camera (18/20 located, colour order RGB) and HUB75 quad 1 test pattern verified | A (Mac mini · Opus 5.5) | Claude |
+| ✅ | A3 | Status page opens in Chrome at login (plan item F) | A (Mac mini · Opus 5.5) | Claude |
+| ✅ | A4 | This execution plan | A (Mac mini · Opus 5.5) | Claude |
+| ✅ | A5 | Recheck ropes 9 and 17 after cables were tightened: **still dark** (14:33 run) | A (Mac mini · Opus 5.5) | Claude |
+| ➡️ | P1 | Swap test: plug a known-good rope into box 1 OUT9 and box 2 OUT7, to tell a port fault from a rope fault | Gavin, in person | Gavin |
+| ➡️ | B1–B8 | **Checkpoint:** `river-local-oct-18.toe`, a local rain/river across all working ropes and HUB75 quad 1, mapped by camera, no Modal | B (bitcube · Opus 5.5) | Claude |
+| ➡️ | C1–C3 | Camera snapshot on the status page (fixes the broken image) and full black LED-display window | C (bitcube · Sonnet 5) | Claude |
+| ❌ | D1–D4 | Dave's Modal visuals on the ropes and HUB75. *Blocked: waiting on Dave (OK to run `gallery/sync.py`; is `SITE_TOKEN` set?)* | D (bitcube · Opus 5.5) | Claude |
+| ❌ | E1–E3 | Cameras pushing clips to Dave's agent. *Blocked: needs `INGEST_TOKEN` and channel names from Dave* | E (bitcube · Opus 5.5) | Claude |
+| ❌ | P2 | Panel quad 2 connected. *Blocked: Andi (receive-card layout)* | Andi + Gavin, in person | Andi |
+| ❌ | G1–G3 | Remap the hung installation at Gray Area. *Blocked: install starts Wed 22 Oct* | G (bitcube · Opus 5.5) | Claude |
 
-## How to run the sessions
-- **Where:** do device work in **Claude Code on bitcube**: the terminal opened at login in `C:\Users\user\River`, or PowerShell → `cd C:\Users\user\River\river-bitcube` → `claude`. Use the **Mac mini** Claude only for docs, GitHub, Signal and checking from outside.
-- **New conversation per session.** This mini conversation is very long, so start fresh each time; the repo carries the context (`CLAUDE.md`, `docs/plan.md`, the log). In an existing bitcube terminal, run `/clear` first. Only one Claude works at a time.
-- **Model:** **Opus 5.5** for sessions with real design or debugging (1, 3, 4). **Sonnet 5** for well-specified, mechanical ones (2, 5). Switch with `/model`.
-- **Mode:** start sessions 1, 3 and 4 in **plan mode** (Shift+Tab until it shows "plan mode") so you approve the approach first, then auto mode to execute.
-- **Every session ends** by ticking `docs/plan.md`, updating `docs/index.md` + the log, and pushing (already the rule in `CLAUDE.md`).
+The coordinator (session A) updates this table whenever a session's summary is pasted back.
 
-## Session 0 (now, Gavin, no Claude needed)
-Check ropes 9 and 17: plugs, adapter cables, OUT9 on box 1 and OUT7 on box 2 (try swapping a known-good rope onto those ports to tell a port fault from a rope fault). Then, from any Claude session, re-run `tools\rope_capture.ps1 -Cam gallery` + `tools/rope_identify.py` to confirm all 20.
+## How we work
+- **Session A is the coordinator:** the Mac mini conversation Gavin keeps open. It tracks this plan, docs, GitHub and Signal, and doesn't touch devices while another session is working.
+- **Sessions B–G each run in a fresh Claude Code conversation on bitcube:** the terminal opened at login in `C:\Users\user\River`, or PowerShell → `cd C:\Users\user\River\river-bitcube` → `claude`. In an existing terminal, `/clear` first. Set the model with `/model`. Start in **plan mode** (Shift+Tab) where marked, approve, then let it run in auto mode.
+- **Only one Claude works at a time.** Every session starts with `git pull` and ends by ticking `docs/plan.md`, updating `docs/index.md` + the log, and pushing.
+- **Every session ends with a summary** in the format below. Gavin pastes it into session A, which updates the table.
 
-## Session 1: local rain checkpoint `river-local-oct-18.toe` (bitcube, Opus 5.5, plan mode)
-**Skills:** `mattpocock-skills:tdd` for the pure Python (Gray-code encode/decode, map clean-up and interpolation, at the `tools/pixelmap/*.py` seam), `mattpocock-skills:diagnosing-bugs` if hardware output misbehaves, `code-review` at the end. Optional: `mattpocock-skills:prototype` for a quick look-and-feel pass on the visual before polishing.
+```
+SESSION <letter> SUMMARY — <date, time>
+Done: <step id> <one line each>
+Not done / blocked: <step id> <why>
+Evidence: <commit hashes, files, images>
+Hardware state now: <ropes/panels showing what; anything left running>
+Decisions or answers needed from Gavin/team: <list or "none">
+Suggested next step: <step id>
+```
+
+## Steps P1 (Gavin, now)
+**P1.** Swap test for ropes 9 and 17:
+1. Plug a rope that works into **box 1 OUT9**, and the rope from OUT9 into a working port. Same for **box 2 OUT7**.
+2. Tell session A what changed.
+3. Session A re-runs `tools\rope_capture.ps1 -Cam gallery` + `tools/rope_identify.py`. If the good rope lights on the "dead" port, the rope or its adapter is the fault; if not, the port or box is.
+
+Don't move the gallery cam before session B. Its view changed between 14:11 and 14:33 (it was bumped), and B's pixel map depends on it staying put.
+
+## Session B: local rain checkpoint (bitcube · Opus 5.5 · plan mode)
+**Skills:** `mattpocock-skills:tdd` for the pure Python in `tools/pixelmap/`, `mattpocock-skills:diagnosing-bugs` if output misbehaves, `code-review` at the end. Optional: `mattpocock-skills:prototype` for a quick look-and-feel pass.
+
+**Steps:**
+- **B1:** structured-light capture.
+- **B2:** decoder and pixel map (TDD).
+- **B3:** HUB75 corners in camera space.
+- **B4:** rain/river field.
+- **B5:** sampling onto the ropes and HUB75.
+- **B6:** build and save `river-local-oct-18.toe`.
+- **B7:** verify with the camera and tune the look.
+- **B8:** docs, push, summary.
 
 **Prompt to paste:**
 ```
-Read CLAUDE.md, docs/plan.md and the end of docs/a-river-becoming-log.md, then git pull. Goal for this session: a CHECKPOINT — a new, self-contained TouchDesigner file C:\Users\user\River\river-bitcube\river-local-oct-18.toe that makes a beautiful, coherent rain/river appear across ALL working hardware (the 18–20 lit ropes over Art-Net and HUB75 quad 1 over HDMI), mapped by where the pixels physically are right now. No Modal, no web, no outside input. Gavin will not move the ropes, HUB75 or gallery camera during this session. Start in plan mode and show me the plan first.
+You are session B (bitcube · Opus 5.5). Read CLAUDE.md, docs/plan.md, docs/execution-plan.md and the end of docs/a-river-becoming-log.md, then git pull. Goal: steps B1–B8, a CHECKPOINT — a new, self-contained TouchDesigner file C:\Users\user\River\river-bitcube\river-local-oct-18.toe that makes a beautiful, coherent rain/river appear across ALL working hardware (the lit ropes over Art-Net — ropes 9 and 17 may still be dark — and HUB75 quad 1 over HDMI), mapped by where the pixels physically are right now. No Modal, no web, no outside input. Gavin will not move the ropes, HUB75 or gallery camera during this session. Start in plan mode and show me the plan first.
 
-Approach (adapt if you find better):
-1. Pixel map by structured light, using the gallery cam (secrets.local.json 'gallery', aimed at all coils + HUB75; don't move it — tools/cameras/ptz.py exists but leave the aim alone).
-   - New tools/pixelmap/: capture script (PowerShell or Python) that drives /project1/ropes (or a test source you add to td/ropes/artnet_out.py) through Gray-code patterns encoding rope index (5 bits) and pixel index (9 bits), each bit plus its inverse, plus black/white references; one camera frame per pattern (keep one ffmpeg RTSP reader open if per-frame connects are too slow). Brightness ≤ the 0.4 cap, never full white on all ropes at once.
-   - Decoder (Python 3.13 + numpy/pillow — pip install into a venv under river-bitcube, gitignored): per camera pixel → (rope, px) with confidence; per (rope, px) → median camera (u,v). Fill pixels hidden inside coils by interpolating along the rope between visible neighbours; ropes 9/17 if still dark get no samples. Write tools/pixelmap/pixelmap-<date>.json (rope, px, u, v, visible) and an annotated overlay image in frames/. Pure functions under TDD with pytest.
-   - Also find the HUB75's 4 corners in camera space from the panels test pattern (Source='test').
-2. River/rain field in camera space in the new .toe — NO custom GLSL (Intel Iris Xe hangs; see CLAUDE.md gotchas). Built-in TOPs only: Noise/Ramp/Feedback/Transform/Level/Composite. Something that reads as rain falling (streaks moving down) blended with a slow river flow (horizontal drift, breathing brightness between blue/teal and white highlights), on black. High contrast, black background, slow enough to feel calm, with a few visible "drops" travelling through the coil piles top to bottom.
-3. Sampling: TOP to CHOP with UV input from the pixel map (8000 samples) → CHOP to TOP shaped 20×400 (column per rope, row 0 = plug end, matching /project1/ropes/rope_tex) → set the ropes COMP's Canvas parameter to it (Source='canvas', crops 0..1). For the HUB75: perspective-correct the field's quad-1 region from the camera corners to 256×128 and feed panels Quad1 (Source='canvas').
-4. Build river-local-oct-18.toe from a copy of river.toe so it keeps the bridge, ropes and panels COMPs; build the new network with an idempotent td/build/build_river_local.py. Save only with tools\td_save.ps1 (extend it with a -Target parameter for this file). Do NOT change the login autostart (Start-River.cmd keeps opening river.toe) unless I say so.
-5. Verify with the camera: grab frames/clips of the result (tools\cam_snap.ps1 gallery, a short ffmpeg clip), confirm the motion is coherent across piles and the HUB75, and iterate on the look. Report power (artnet_out status watts) and fps.
-6. Finish: add a docs/img checkpoint still (no people in it), tick a new plan item L "Local rain checkpoint", update docs/index.md and the log, commit and push in small steps. Ask before anything outside TD and the repo.
+B1 Structured-light capture with the gallery cam (secrets.local.json 'gallery'; it sees all coils + the HUB75; don't re-aim it). New tools/pixelmap/: a capture script that drives /project1/ropes (add a test source to td/ropes/artnet_out.py if needed) through Gray-code patterns encoding rope index (5 bits) and pixel index (9 bits), each bit plus its inverse, plus black/white references; one camera frame per pattern (keep one ffmpeg RTSP reader open if per-frame connects are too slow). Brightness ≤ the 0.4 cap. People walk through the room: take each pattern twice and reject frames that disagree.
+B2 Decoder (Python 3.13 + numpy/pillow in a gitignored venv under river-bitcube), pure functions under TDD with pytest: per camera pixel → (rope, px) with confidence; per (rope, px) → median camera (u,v). Fill pixels hidden inside coils by interpolating along the rope between visible neighbours; ropes with no samples are left out. Write tools/pixelmap/pixelmap-<date>.json (rope, px, u, v, visible) and an annotated overlay in frames/.
+B3 Find the HUB75's 4 corners in camera space from the panels test pattern (panels Source='test').
+B4 In a new TD network, a rain/river field in camera space — NO custom GLSL (Intel Iris Xe hangs; see CLAUDE.md gotchas). Built-in TOPs only: Noise/Ramp/Feedback/Transform/Level/Composite. It should read as rain (streaks falling) over a slow river flow (horizontal drift, brightness breathing between blue/teal and white highlights), on black, high contrast, calm, with visible drops travelling down through the coil piles.
+B5 Sampling: TOP to CHOP with UV input from the pixel map → CHOP to TOP shaped 20×400 (column per rope, row 0 = plug end, as /project1/ropes/rope_tex expects) → the ropes COMP's Canvas parameter (Source='canvas', crops 0..1). For the HUB75, perspective-correct the field's quad-1 region from the B3 corners to 256×128 → panels Quad1 (Source='canvas').
+B6 Make river-local-oct-18.toe from a copy of river.toe (keeps the bridge, ropes, panels COMPs); build the new network with an idempotent td/build/build_river_local.py. Save only via tools\td_save.ps1 (add a -Target parameter). Do NOT change the login autostart unless I say so.
+B7 Verify with the camera (tools\cam_snap.ps1 gallery and a short ffmpeg clip): coherent motion across piles and the HUB75. Tune the look. Report Art-Net watts (artnet_out status) and fps.
+B8 Add a docs/img checkpoint still (no people in it), tick plan item L, update docs/index.md, the log and the Status table in docs/execution-plan.md, commit and push in small steps. Ask before anything outside TD and the repo.
+Finish with the SESSION B SUMMARY in the format given in docs/execution-plan.md, so I can paste it to the coordinator.
 ```
-**Done when:** the ropes and HUB75 show one continuous rain/river that moves coherently when seen from the camera; there's a checkpoint photo on the status page; `pixelmap-<date>.json` and the tools are in the repo.
+**Done when:** the ropes and HUB75 show one continuous rain/river that moves coherently from the camera's viewpoint, the checkpoint photo is on the status page, and the pixel-map tools plus `pixelmap-<date>.json` are in the repo.
 
-## Session 2: housekeeping (bitcube, Sonnet 5)
-**Skills:** `mattpocock-skills:tdd` for the snapshot script's pure parts, `code-review`.
+## Session C: housekeeping (bitcube · Sonnet 5)
+**Skills:** `mattpocock-skills:tdd`, `code-review`.
 
-**Prompt:**
+**Steps:**
+- **C1:** snapshot task.
+- **C2:** status page image placeholder until C1 is live.
+- **C3:** full black LED-display window.
+
+**Prompt to paste:**
 ```
-Read CLAUDE.md and docs/plan.md, git pull. Do plan items G and the rest of B:
-- G: a scheduled task (every 15 min, 08:00–02:00) that grabs a gallery-cam still (~640 px wide JPEG), and force-pushes it as gallery.jpg to an orphan branch `snapshot` of this repo via the deploy key (no history growth: one commit, amended). docs/index.md already embeds raw.githubusercontent.com/gavaiken/river-bitcube/snapshot/gallery.jpg — until the first push, the image is broken; make the page show a placeholder or the latest calibration image instead, then switch back once live.
-- B remainder: make the panels window cover the whole LED display (1920×1080) in black with the panel atlas at its top-left, in td/build/build_panels.py, so nothing else can ever appear on the HUB75.
-Tick both in docs/plan.md, update docs/index.md and the log, commit and push.
-```
-
-## Session 3: Dave's visuals on the hardware (bitcube, Opus 5.5, plan mode; after Dave answers the open questions)
-**Skills:** `mattpocock-skills:diagnosing-bugs`, `code-review`.
-
-**Prompt:**
-```
-Read CLAUDE.md, docs/plan.md (item C and the open questions to Dave) and ..\river-agent\CLAUDE.md, docs/gallery-kit.md, gallery/sync.py, tools/site.py, web/canvas.html. git pull both repos (river-agent may need pulling via the Mac mini — bitcube has no credentials for it).
-Goal: Dave's Modal agent drives the ropes and HUB75 through the same pixel-map sampling as river-local-oct-18.
-1. Run river-agent's gallery/sync.py + site.py serve on bitcube on port 8770 (8765 is RopeLights), as a login task; venv under river-agent (gitignored); any SITE_TOKEN in river-bitcube\secrets.local.json.
-2. In river.toe: Web Render TOP of http://127.0.0.1:8770/canvas.html?w=..&h=.. (pick a design size suited to the camera-space field), feeding the same UV sampling to ropes and HUB75 as river-local-oct-18 (reuse its build script; make the source switchable: local rain / Dave's canvas).
-3. Fallback: if the mirror or canvas stalls (no new frames for N s), crossfade to the local rain — never let the ropes fall back to the hardware colour cycle.
-4. Verify by forcing a scene change (edit the local mirror's state.json), with camera clips as evidence. Measure fps/CPU on the Iris Xe; if the Web Render TOP is too heavy, write up Dave's documented fallback (render the 8 animations natively from state.json + reflex.json) as a plan item instead.
-Tick C, update index + log, push.
+You are session C (bitcube · Sonnet 5). Read CLAUDE.md, docs/plan.md and docs/execution-plan.md, git pull. Do:
+C1 A scheduled task (every 15 min, 08:00–02:00) that grabs a gallery-cam still (~640 px wide JPEG) and force-pushes it as gallery.jpg to an orphan branch `snapshot` of this repo via the deploy key (one commit, amended each time, no history growth). Test the pure parts with Pester or pytest.
+C2 docs/index.md embeds raw.githubusercontent.com/gavaiken/river-bitcube/snapshot/gallery.jpg, which is broken until C1's first push. Make sure the page never shows a broken image (placeholder or latest calibration image until the branch exists), then confirm the live snapshot shows.
+C3 In td/build/build_panels.py, make the panels window cover the whole LED display (1920×1080) in black with the panel atlas at its top-left, so nothing else can ever appear on the HUB75. Rebuild, save with tools\td_save.ps1 for river.toe (and river-local-oct-18.toe if it exists), and verify with a gallery-cam frame.
+Tick plan items G and B, update docs/index.md, the log and the Status table in docs/execution-plan.md, commit and push. Finish with the SESSION C SUMMARY in the format in docs/execution-plan.md.
 ```
 
-## Session 4: cameras into Dave's agent (bitcube, Opus 5.5; needs `INGEST_TOKEN` from Dave)
-**Prompt:**
+## Session D: Dave's visuals on the hardware (bitcube · Opus 5.5 · plan mode)
+*Blocked until Dave answers the open questions in `docs/plan.md`.* **Skills:** `mattpocock-skills:diagnosing-bugs`, `code-review`.
+
+**Steps:**
+- **D1:** local mirror of Dave's site on port 8770.
+- **D2:** Web Render TOP → the same camera-space sampling as B.
+- **D3:** switchable source, with fallback to local rain.
+- **D4:** verify with a forced scene change, and check performance.
+
+**Prompt to paste:**
 ```
-Read CLAUDE.md, docs/plan.md item D and ..\river-agent\capture\capture.py + modal_deploy/app.py (/ingest). Put INGEST_TOKEN in secrets.local.json (never in git). Run capture.py on bitcube for the gallery cam (location/channel names and cadence as Dave answered in plan.md) as a resilient scheduled task with logging and backoff; add the river cam when it's at the river (its Starlink kit pushes on its own or via the GL.iNet router — check with Will). Verify on Modal: /data/status.json sensor freshness updates and reflex.json reacts. Tick D, update index + log, push.
+You are session D (bitcube · Opus 5.5). Read CLAUDE.md, docs/plan.md (item C and Dave's answers), docs/execution-plan.md, and ..\river-agent\CLAUDE.md, docs/gallery-kit.md, gallery/sync.py, tools/site.py, web/canvas.html. git pull both repos (river-agent may need pulling via the Mac mini; bitcube has no credentials for it). Start in plan mode.
+D1 Run river-agent's gallery/sync.py + site.py serve on bitcube on port 8770 (8765 is RopeLights) as a login task; venv under river-agent (gitignored); any SITE_TOKEN in river-bitcube\secrets.local.json.
+D2 In river.toe: Web Render TOP of http://127.0.0.1:8770/canvas.html?w=..&h=.. (design size suited to the camera-space field), feeding the same pixel-map sampling to ropes and HUB75 as river-local-oct-18 (reuse td/build/build_river_local.py).
+D3 Make the source switchable (local rain / Dave's canvas). If the canvas stalls (no new frames for N s), crossfade to local rain; never let the ropes fall back to the hardware's own colour cycle.
+D4 Force a scene change (edit the local mirror's state.json) and capture camera clips as evidence. Measure fps/CPU on the Iris Xe; if the Web Render TOP is too heavy, write up Dave's documented fallback (native animations from state.json + reflex.json) as a plan item instead.
+Tick plan item C, update docs/index.md, the log and the Status table, push. Finish with the SESSION D SUMMARY.
 ```
 
-## Session 5: comms and docs (Mac mini, Sonnet 5, any time)
-**Prompt:**
+## Session E: cameras into Dave's agent (bitcube · Opus 5.5)
+*Blocked until Dave provides `INGEST_TOKEN` and channel names.*
+
+**Steps:**
+- **E1:** token into `secrets.local.json`.
+- **E2:** capture task for the gallery cam.
+- **E3:** verify on Modal.
+
+**Prompt to paste:**
 ```
-cd ~/claude/Source/river-bitcube && git pull. Re-export the Signal group "A river becoming" (Signal Desktop must be running), fold any answers into docs/plan.md open questions, and draft a short Signal update for the team from docs/index.md (I'll send it). Push doc changes.
+You are session E (bitcube · Opus 5.5). Read CLAUDE.md, docs/plan.md item D, docs/execution-plan.md, ..\river-agent\capture\capture.py and modal_deploy/app.py (/ingest).
+E1 Put INGEST_TOKEN in secrets.local.json (never in git).
+E2 Run capture.py on bitcube for the gallery cam (location/channel names and cadence from Dave's answers in plan.md) as a resilient scheduled task with logging and backoff. Leave the river cam for when it's at the river (check with Will how its Starlink kit pushes).
+E3 Verify on Modal: /data/status.json sensor freshness updates and reflex.json reacts.
+Tick plan item D, update docs/index.md, the log and the Status table, push. Finish with the SESSION E SUMMARY.
 ```
 
-## Later, at Gray Area (Oct 22–27)
-Rerun the Session 1 pixel-mapping tool once the ropes and HUB75 are hung (this is plan item J, real hang paths). Re-aim or re-position the gallery cam for a viewer's eye height. Confirm the dual-NIC gallery network and the camera's network (open questions to Will).
+## Session G: install at Gray Area (bitcube · Opus 5.5 · plan mode)
+*From Wed 22 Oct.*
+
+**Steps:**
+- **G1:** re-run B1–B5 on the hung ropes and HUB75. This is plan item J, real hang paths.
+- **G2:** re-aim the gallery cam to a visitor's eye height.
+- **G3:** gallery network: bitcube's dual NIC, and the cameras' network (open questions to Will).
+
+The prompt will be written by session A once the hang is done.
 
 ## Verification of the whole path
-- **Checkpoint:** camera clip of coherent rain across all piles and the HUB75; status page photo.
-- **End to end:** a Modal scene change visibly changes ropes and HUB75 within a tick. Unplug bitcube's internet: the last scene keeps playing, then crossfades to local rain. Reboot: everything comes back by itself (boot fix, auto-login, launchers already verified).
+- **Checkpoint (B):** a camera clip of coherent rain across all piles and the HUB75, and the photo on the status page.
+- **End to end (D/E):**
+  - A Modal scene change visibly changes the ropes and HUB75 within a tick.
+  - Cutting bitcube's internet: the last scene keeps playing, then crossfades to local rain.
+  - A reboot brings everything back by itself.

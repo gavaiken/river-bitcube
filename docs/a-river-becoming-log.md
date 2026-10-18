@@ -226,3 +226,5 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
   - Pester 3.4 tests in `tools/tests/status_page.Tests.ps1`, 5/5 passing (`Invoke-Pester .\tools\tests`).
   - Tested by running it once in the console session via a temporary interactive scheduled task (removed afterwards): Chrome started in session 1 at 14:20:32.
 - Gavin flagged the **broken snapshot image** on the status page; added to plan item G.
+- **Ropes 9 and 17 recheck (14:33, after Gavin tightened the cables):** both are still dark. The only "detections" were a person by the window at the top right of the frame; nothing lit on any coil. The other 18 lit as before; drift 11.1, so the camera was steady during the run. The camera's aim had moved between the 14:11 and 14:33 runs (it was bumped; everything is about 40–100 px further right). Next is the swap test (P1).
+- **Execution plan restructured** (`docs/execution-plan.md`): a status table (✅/➡️/❌), lettered sessions with machine and model (A = coordinator on the Mac mini; B–G on bitcube), numbered steps, and a SESSION SUMMARY format that each session ends with, for pasting back to the coordinator.
