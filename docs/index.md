@@ -4,6 +4,8 @@ title: A River Becoming: show machine status
 
 # Welcome to bitcube
 
+**[Execution plan](execution-plan.md)** (status table and session prompts) · **[Plan & open questions](plan.md)** · **[Log](a-river-becoming-log.md)** · **[Hardware](a-river-becoming-hardware.md)**
+
 **Status as of Sun 18 Oct 2026, 14:20.** Gray Area install starts **Wed 22 Oct**.
 
 bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes over Art-Net, the HUB75 panels over HDMI, and the Reolink cameras. It runs TouchDesigner and a Claude Code session.
@@ -38,6 +40,7 @@ How we'll get there, session by session: **[execution plan](execution-plan.md)**
 - **Don't** shut bitcube down; restart instead. **Don't** run Will's RopeLights while TouchDesigner drives the ropes.
 
 ## Archive
+- [Execution plan](execution-plan.md): status table, sessions and copy-paste prompts.
 - [Running log](a-river-becoming-log.md): everything done so far, session by session.
 - [Hardware reference](a-river-becoming-hardware.md): ropes, PSAC10 boxes, controller, panels, cameras.
 - [Design notes](a-river-becoming-notes.md): from the team meetings.

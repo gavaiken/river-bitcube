@@ -1,0 +1,29 @@
+<!-- Copy buttons on every code block (used for the session prompts in the execution plan). -->
+<style>
+  .copy-wrap { position: relative; }
+  .copy-btn { position: absolute; top: 6px; right: 6px; padding: 3px 10px; font: 600 12px/1.6 system-ui, sans-serif;
+              border: 1px solid #bbb; border-radius: 4px; background: #fff; color: #333; cursor: pointer; opacity: .9; }
+  .copy-btn:hover { opacity: 1; border-color: #888; }
+  .copy-btn.done { background: #e6f4ea; border-color: #1e7e34; color: #1e7e34; }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('pre').forEach(function (pre) {
+    var box = pre.closest('div.highlighter-rouge') || pre;
+    if (box.dataset.copy) return;
+    box.dataset.copy = '1';
+    box.classList.add('copy-wrap');
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'copy-btn'; b.textContent = 'Copy';
+    b.addEventListener('click', function () {
+      var text = pre.innerText.replace(/\n$/, '');
+      var ok = function () { b.textContent = 'Copied'; b.classList.add('done');
+                             setTimeout(function () { b.textContent = 'Copy'; b.classList.remove('done'); }, 1500); };
+      if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(ok); }
+      else { var t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select();
+             document.execCommand('copy'); t.remove(); ok(); }
+    });
+    box.appendChild(b);
+  });
+});
+</script>
