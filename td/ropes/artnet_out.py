@@ -112,11 +112,12 @@ def open_socket(config):
     try:
         if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1 << 20)   # a frame is 80 x 530 B
         sock.bind((config['source_ip'], PORT))
     except OSError:
         sock.close()
         raise
-    sock.setblocking(False)
+    sock.setblocking(False)      # never stall TD's main thread on the network
     return sock
 
 
@@ -157,9 +158,12 @@ def tick(comp):
         data, watts = to_bytes(frame, config, brightness, p.Boxwatts.eval())
         seq = s.get('seq', 0) % 255 + 1
         n = 0
-        for target, packet in packets(data, config, seq):
-            s['sock'].sendto(packet, target)
-            n += 1
+        try:
+            for target, packet in packets(data, config, seq):
+                s['sock'].sendto(packet, target)
+                n += 1
+        except BlockingIOError:
+            s['dropped'] = s.get('dropped', 0) + 1     # send buffer momentarily full: skip the frame
         s.update(seq=seq, last_send=now, sent=s.get('sent', 0) + 1, packets=n, watts=watts, error=None)
     except Exception as e:
         s['error'] = repr(e)
@@ -189,5 +193,5 @@ def close(comp, blackout=True):
 
 def status(comp):
     s = comp.storage
-    return {k: s.get(k) for k in ('error', 'sent', 'packets', 'watts', 'seq')} | {
+    return {k: s.get(k) for k in ('error', 'sent', 'dropped', 'packets', 'watts', 'seq')} | {
         'active': comp.par.Active.eval(), 'open': bool(s.get('sock')), 'source': comp.par.Source.eval()}
