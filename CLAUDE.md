@@ -48,6 +48,7 @@ TouchDesigner (TD) drives the 20 ropes over Art-Net **and** the HUB75 panels ove
 
 ## Rules
 - **This repo is public** (status page: https://gavaiken.github.io/river-bitcube/). Never commit passwords, tokens, camera logins, private keys, personal emails or phone numbers. Secrets live only in untracked `secrets.local.json`.
+- **Sessions:** you are one lettered session in `docs/execution-plan.md` (the prompt says which). Follow its **Coordination contract**: progress lines in `docs/sessions/<letter>.md` and the Status table updated and **pushed after every step**, decisions you need under `### Waiting on Gavin`, a SESSION SUMMARY at the end. Session A (Gavin's Mac mini) coordinates by pulling the repo.
 - **Coordination:** `docs/plan.md` is the shared checklist. `git pull` before starting. Only one Claude (this one or the Mac mini one) works at a time. When you finish an item, tick it in `docs/plan.md`, update `docs/index.md` (the public status page: keep it to one screen, refresh the "Status as of" line) and add a log entry, all in the same commit as the work.
 - It's a shared show machine. Ask Gavin before uninstalling anything, changing network/firewall/Tailscale settings, or touching Will's RopeLights setup.
 - Never write passwords, tokens or camera logins into tracked files.

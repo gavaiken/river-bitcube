@@ -4,7 +4,7 @@ title: Execution plan
 
 # Execution plan: from today's hardware to the full Modal-driven show
 
-**Updated Sun 18 Oct 2026, 14:40, by session A (coordinator).**
+**Updated Sun 18 Oct 2026, 14:50, by session A (coordinator).**
 
 ## Status
 ✅ done · ➡️ next (in order) · ❌ blocked
@@ -16,7 +16,7 @@ title: Execution plan
 | ✅ | A3 | Status page opens in Chrome at login (plan item F) | A (Mac mini · Opus 5.5) | Claude |
 | ✅ | A4 | This execution plan | A (Mac mini · Opus 5.5) | Claude |
 | ✅ | A5 | Recheck ropes 9 and 17 after cables were tightened: **still dark** (14:33 run) | A (Mac mini · Opus 5.5) | Claude |
-| ➡️ | P1 | Swap test: plug a known-good rope into box 1 OUT9 and box 2 OUT7, to tell a port fault from a rope fault | Gavin, in person | Gavin |
+| ❌ | P1 | Swap test for ropes 9 and 17. *Deferred by Gavin (18 Oct): carry on with 18 ropes* | Gavin, in person | Gavin |
 | ➡️ | B1–B8 | **Checkpoint:** `river-local-oct-18.toe`, a local rain/river across all working ropes and HUB75 quad 1, mapped by camera, no Modal | B (bitcube · Opus 5.5) | Claude |
 | ➡️ | C1–C3 | Camera snapshot on the status page (fixes the broken image) and full black LED-display window | C (bitcube · Sonnet 5) | Claude |
 | ❌ | D1–D4 | Dave's Modal visuals on the ropes and HUB75. *Blocked: waiting on Dave (OK to run `gallery/sync.py`; is `SITE_TOKEN` set?)* | D (bitcube · Opus 5.5) | Claude |
@@ -24,16 +24,26 @@ title: Execution plan
 | ❌ | P2 | Panel quad 2 connected. *Blocked: Andi (receive-card layout)* | Andi + Gavin, in person | Andi |
 | ❌ | G1–G3 | Remap the hung installation at Gray Area. *Blocked: install starts Wed 22 Oct* | G (bitcube · Opus 5.5) | Claude |
 
-The coordinator (session A) updates this table whenever a session's summary is pasted back.
+Bitcube sessions update this table themselves, as they finish each step. Session A reads it on **sync**.
 
 ## How we work
 - **Session A is the coordinator:** the Mac mini conversation Gavin keeps open. It tracks this plan, docs, GitHub and Signal, and doesn't touch devices while another session is working.
 - **Sessions B–G each run in a fresh Claude Code conversation on bitcube:** the terminal opened at login in `C:\Users\user\River`, or PowerShell → `cd C:\Users\user\River\river-bitcube` → `claude`. In an existing terminal, `/clear` first. Set the model with `/model`. Start in **plan mode** (Shift+Tab) where marked, approve, then let it run in auto mode.
 - **Only one Claude works at a time.** Every session starts with `git pull` and ends by ticking `docs/plan.md`, updating `docs/index.md` + the log, and pushing.
-- **Every session ends with a summary** in the format below. Gavin pastes it into session A, which updates the table.
+- **Coordination happens through the repo:** see the contract below. Gavin says **"sync"** to session A, which runs `git pull` and reports from the files. No copy-pasting needed.
+
+## Coordination contract (every bitcube session follows this)
+1. **Start:** `git pull`. Create or append `docs/sessions/<letter>.md` with a header line `## <date time> start: <machine> · <model>` and the steps you plan to do.
+2. **After each step:**
+   - Append a line to `docs/sessions/<letter>.md`: `- <time> <step id> ✅ <one line> (commit <hash>)`, or `❌ <why>` if blocked.
+   - Set that step's mark in the Status table above (✅ done, ➡️ next, ❌ blocked). When a session has several steps, split its row (e.g. `B1`, `B2`…) as you go.
+   - Commit and **push**.
+3. **Keep the shared pages current:** tick `docs/plan.md`; refresh `docs/index.md` (the public status page; keep it to one screen and update its "Status as of" line); add a log entry for anything notable.
+4. **Need a decision?** Write it under `### Waiting on Gavin` in your session file, push, and stop asking in the terminal only. Session A sees it on sync.
+5. **End:** append the summary below to `docs/sessions/<letter>.md` and push. Also print it in the terminal.
 
 ```
-SESSION <letter> SUMMARY — <date, time>
+### SESSION <letter> SUMMARY — <date, time>
 Done: <step id> <one line each>
 Not done / blocked: <step id> <why>
 Evidence: <commit hashes, files, images>
@@ -42,7 +52,7 @@ Decisions or answers needed from Gavin/team: <list or "none">
 Suggested next step: <step id>
 ```
 
-## Steps P1 (Gavin, now)
+## Step P1 (Gavin, deferred)
 **P1.** Swap test for ropes 9 and 17:
 1. Plug a rope that works into **box 1 OUT9**, and the rope from OUT9 into a working port. Same for **box 2 OUT7**.
 2. Tell session A what changed.
@@ -65,7 +75,7 @@ Don't move the gallery cam before session B. Its view changed between 14:11 and 
 
 **Prompt to paste:**
 ```
-You are session B (bitcube · Opus 5.5). Read CLAUDE.md, docs/plan.md, docs/execution-plan.md and the end of docs/a-river-becoming-log.md, then git pull. Goal: steps B1–B8, a CHECKPOINT — a new, self-contained TouchDesigner file C:\Users\user\River\river-bitcube\river-local-oct-18.toe that makes a beautiful, coherent rain/river appear across ALL working hardware (the lit ropes over Art-Net — ropes 9 and 17 may still be dark — and HUB75 quad 1 over HDMI), mapped by where the pixels physically are right now. No Modal, no web, no outside input. Gavin will not move the ropes, HUB75 or gallery camera during this session. Start in plan mode and show me the plan first.
+You are session B (bitcube · Opus 5.5). Read CLAUDE.md, docs/plan.md, docs/execution-plan.md and the end of docs/a-river-becoming-log.md, then git pull. Goal: steps B1–B8, a CHECKPOINT — a new, self-contained TouchDesigner file C:\Users\user\River\river-bitcube\river-local-oct-18.toe that makes a beautiful, coherent rain/river appear across ALL working hardware (the lit ropes over Art-Net — ropes 9 and 17 may still be dark — and HUB75 quad 1 over HDMI), mapped by where the pixels physically are right now. No Modal, no web, no outside input. Gavin will not move the ropes, HUB75 or gallery camera during this session. Ropes 9 and 17 are dark; ignore them (Gavin deferred the fix). Start in plan mode and show me the plan first. Put the approved plan's step list into docs/sessions/B.md and push before executing.
 
 B1 Structured-light capture with the gallery cam (secrets.local.json 'gallery'; it sees all coils + the HUB75; don't re-aim it). New tools/pixelmap/: a capture script that drives /project1/ropes (add a test source to td/ropes/artnet_out.py if needed) through Gray-code patterns encoding rope index (5 bits) and pixel index (9 bits), each bit plus its inverse, plus black/white references; one camera frame per pattern (keep one ffmpeg RTSP reader open if per-frame connects are too slow). Brightness ≤ the 0.4 cap. People walk through the room: take each pattern twice and reject frames that disagree.
 B2 Decoder (Python 3.13 + numpy/pillow in a gitignored venv under river-bitcube), pure functions under TDD with pytest: per camera pixel → (rope, px) with confidence; per (rope, px) → median camera (u,v). Fill pixels hidden inside coils by interpolating along the rope between visible neighbours; ropes with no samples are left out. Write tools/pixelmap/pixelmap-<date>.json (rope, px, u, v, visible) and an annotated overlay in frames/.
@@ -74,8 +84,8 @@ B4 In a new TD network, a rain/river field in camera space — NO custom GLSL (I
 B5 Sampling: TOP to CHOP with UV input from the pixel map → CHOP to TOP shaped 20×400 (column per rope, row 0 = plug end, as /project1/ropes/rope_tex expects) → the ropes COMP's Canvas parameter (Source='canvas', crops 0..1). For the HUB75, perspective-correct the field's quad-1 region from the B3 corners to 256×128 → panels Quad1 (Source='canvas').
 B6 Make river-local-oct-18.toe from a copy of river.toe (keeps the bridge, ropes, panels COMPs); build the new network with an idempotent td/build/build_river_local.py. Save only via tools\td_save.ps1 (add a -Target parameter). Do NOT change the login autostart unless I say so.
 B7 Verify with the camera (tools\cam_snap.ps1 gallery and a short ffmpeg clip): coherent motion across piles and the HUB75. Tune the look. Report Art-Net watts (artnet_out status) and fps.
-B8 Add a docs/img checkpoint still (no people in it), tick plan item L, update docs/index.md, the log and the Status table in docs/execution-plan.md, commit and push in small steps. Ask before anything outside TD and the repo.
-Finish with the SESSION B SUMMARY in the format given in docs/execution-plan.md, so I can paste it to the coordinator.
+B8 Add a docs/img checkpoint still (no people in it) to docs/index.md and tick plan item L. Ask before anything outside TD and the repo.
+Follow the Coordination contract in docs/execution-plan.md throughout: docs/sessions/B.md progress lines and the Status table updated and pushed after EVERY step, the summary at the end.
 ```
 **Done when:** the ropes and HUB75 show one continuous rain/river that moves coherently from the camera's viewpoint, the checkpoint photo is on the status page, and the pixel-map tools plus `pixelmap-<date>.json` are in the repo.
 
@@ -93,7 +103,7 @@ You are session C (bitcube · Sonnet 5). Read CLAUDE.md, docs/plan.md and docs/e
 C1 A scheduled task (every 15 min, 08:00–02:00) that grabs a gallery-cam still (~640 px wide JPEG) and force-pushes it as gallery.jpg to an orphan branch `snapshot` of this repo via the deploy key (one commit, amended each time, no history growth). Test the pure parts with Pester or pytest.
 C2 docs/index.md embeds raw.githubusercontent.com/gavaiken/river-bitcube/snapshot/gallery.jpg, which is broken until C1's first push. Make sure the page never shows a broken image (placeholder or latest calibration image until the branch exists), then confirm the live snapshot shows.
 C3 In td/build/build_panels.py, make the panels window cover the whole LED display (1920×1080) in black with the panel atlas at its top-left, so nothing else can ever appear on the HUB75. Rebuild, save with tools\td_save.ps1 for river.toe (and river-local-oct-18.toe if it exists), and verify with a gallery-cam frame.
-Tick plan items G and B, update docs/index.md, the log and the Status table in docs/execution-plan.md, commit and push. Finish with the SESSION C SUMMARY in the format in docs/execution-plan.md.
+Tick plan items G and B. Follow the Coordination contract in docs/execution-plan.md throughout (docs/sessions/C.md, Status table, push after every step, summary at the end).
 ```
 
 ## Session D: Dave's visuals on the hardware (bitcube · Opus 5.5 · plan mode)
@@ -112,7 +122,7 @@ D1 Run river-agent's gallery/sync.py + site.py serve on bitcube on port 8770 (87
 D2 In river.toe: Web Render TOP of http://127.0.0.1:8770/canvas.html?w=..&h=.. (design size suited to the camera-space field), feeding the same pixel-map sampling to ropes and HUB75 as river-local-oct-18 (reuse td/build/build_river_local.py).
 D3 Make the source switchable (local rain / Dave's canvas). If the canvas stalls (no new frames for N s), crossfade to local rain; never let the ropes fall back to the hardware's own colour cycle.
 D4 Force a scene change (edit the local mirror's state.json) and capture camera clips as evidence. Measure fps/CPU on the Iris Xe; if the Web Render TOP is too heavy, write up Dave's documented fallback (native animations from state.json + reflex.json) as a plan item instead.
-Tick plan item C, update docs/index.md, the log and the Status table, push. Finish with the SESSION D SUMMARY.
+Tick plan item C. Follow the Coordination contract in docs/execution-plan.md throughout (docs/sessions/D.md, Status table, push after every step, summary at the end).
 ```
 
 ## Session E: cameras into Dave's agent (bitcube · Opus 5.5)
@@ -129,7 +139,7 @@ You are session E (bitcube · Opus 5.5). Read CLAUDE.md, docs/plan.md item D, do
 E1 Put INGEST_TOKEN in secrets.local.json (never in git).
 E2 Run capture.py on bitcube for the gallery cam (location/channel names and cadence from Dave's answers in plan.md) as a resilient scheduled task with logging and backoff. Leave the river cam for when it's at the river (check with Will how its Starlink kit pushes).
 E3 Verify on Modal: /data/status.json sensor freshness updates and reflex.json reacts.
-Tick plan item D, update docs/index.md, the log and the Status table, push. Finish with the SESSION E SUMMARY.
+Tick plan item D. Follow the Coordination contract in docs/execution-plan.md throughout (docs/sessions/E.md, Status table, push after every step, summary at the end).
 ```
 
 ## Session G: install at Gray Area (bitcube · Opus 5.5 · plan mode)
