@@ -6,25 +6,22 @@ title: A River Becoming: show machine status
 
 **[Execution plan](execution-plan.md)** (status table and session prompts) · **[Plan & open questions](plan.md)** · **[Log](a-river-becoming-log.md)** · **[Hardware](a-river-becoming-hardware.md)**
 
-**Status as of Sun 18 Oct 2026, 14:20.** Gray Area install starts **Wed 22 Oct**.
+**Status as of Sun 18 Oct 2026, 16:00.** Gray Area install starts **Wed 22 Oct**.
 
 bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes over Art-Net, the HUB75 panels over HDMI, and the Reolink cameras. It runs TouchDesigner and a Claude Code session.
 
 ## Where we are
 - **Working:**
-  - TouchDesigner drives the ropes and HUB75 quad 1 from one show file. Quad 1's test pattern is verified on the panels.
-  - **Camera calibration:** 18 of 20 ropes located (see the [rope map](img/rope-map-2026-10-18.png)), colour order confirmed. **Ropes 9 and 17 never light**: check their cables.
-  - Both cameras are reachable.
-  - bitcube boots straight into the show (about 1 minute) and is on Tailscale.
-- **In progress:**
-  - Making this status page part of every work session.
+  - **Local rain checkpoint** (`river-local-oct-18.toe`, no Modal): one rain/river field in the camera's view, sampled onto every pixel of the 18 working ropes and onto HUB75 quad 1. Every rope pixel's position comes from a camera structured-light pixel map (`tools/pixelmap/`). About 70–200 W in total.
+  - **Camera calibration:** 18 of 20 ropes located, colour order confirmed. **Ropes 9 and 17 never light** (swap test deferred).
+  - Both cameras are reachable. bitcube boots straight into the show (about 1 minute) and is on Tailscale. *After a reboot it opens `river.toe` (ropes black), not the checkpoint.*
 - **Next:**
-  1. Fix ropes 9 and 17.
-  2. **Checkpoint:** a local rain/river across all ropes and the HUB75, mapped by camera (no Modal).
-  3. Feed Dave's Modal visuals into the ropes and panels.
-  4. Connect quad 2.
-  5. Push the cameras into Dave's agent.
-  6. Map each rope's actual hang (sample paths) once installed.
+  1. Feed Dave's Modal visuals into the ropes and panels through the same pixel map.
+  2. Connect quad 2, and fix ropes 9 and 17.
+  3. Push the cameras into Dave's agent.
+  4. Re-map once the ropes are hung at Gray Area.
+
+![Rain checkpoint on the coiled ropes and HUB75, 18 Oct 15:57](img/rain-checkpoint-2026-10-18.jpg)
 
 How we'll get there, session by session: **[execution plan](execution-plan.md)**. Full checklist and **open questions** (some are waiting on Dave, Andi and Will): **[plan](plan.md)**.
 

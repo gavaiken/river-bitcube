@@ -229,3 +229,21 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
 - **Ropes 9 and 17 recheck (14:33, after Gavin tightened the cables):** both are still dark. The only "detections" were a person by the window at the top right of the frame; nothing lit on any coil. The other 18 lit as before; drift 11.1, so the camera was steady during the run. The camera's aim had moved between the 14:11 and 14:33 runs (it was bumped; everything is about 40–100 px further right). Next is the swap test (P1).
 - **Execution plan restructured** (`docs/execution-plan.md`): a status table (✅/➡️/❌), lettered sessions with machine and model (A = coordinator on the Mac mini; B–G on bitcube), numbered steps, and a SESSION SUMMARY format that each session ends with, for pasting back to the coordinator.
 - **Coordination via the repo:** sessions now report by pushing `docs/sessions/<letter>.md` (a line per step, then a SESSION SUMMARY) and updating the Status table in `docs/execution-plan.md` after every step. Gavin says "sync" to session A, which runs `git pull` and reports. The contract is in `docs/execution-plan.md` and `CLAUDE.md`. P1 (ropes 9/17 swap test) was deferred by Gavin; B is next.
+
+### 2026-10-18 15:36–16:00 (session B, Claude on bitcube): local rain checkpoint (plan item L)
+- **Show file:** `river-local-oct-18.toe`, a Save As of the running `river.toe` made before any building, so `river.toe` is untouched. TD runs it now. The login autostart still opens `river.toe` (not changed, per Gavin).
+- **`tools\td_save.ps1`** now saves the file TD has open by default; `-Target <file>.toe` does a Save As. A plain save in the checkpoint can no longer overwrite `river.toe`.
+- **Pixel map** (`tools/pixelmap/`, venv `.venv`, `pytest tools/pixelmap`, 22 tests): new rope Source `gray` (`Graybit` 0–13, `Grayinvert`). Gray code: rope index 5 bits, pixel 9 bits, each bit plus its inverse, plus black; two passes with retakes on disagreement; one ffmpeg RTSP reader at 1440×808.
+  - `capture.py ropes` takes about 2 minutes. `decode.py` gives per camera pixel (rope, px, conf), per rope pixel a weighted-median (u, v), outlier and island rejection, and fill along the rope (no chords across jumps between piles).
+  - **18/18 working ropes located** (47–207 of 400 px visible each). Result: `tools/pixelmap/pixelmap-2026-10-18.json`.
+  - The first capture still used an **all-ropes white** reference (about 1.2 kW, both boxes at the 600 W limiter, about 10 s in total) before session A's review. White is now removed: the lit level comes from max(bit, inverse).
+- **HUB75 corners:** `capture.py hub75` + `hub75.py`, stored as `hub75_quad1` in the pixel map.
+- **Field** `/project1/river_local` (`td/build/build_river_local.py`, built-in TOPs only, 1280×720 in camera space):
+  - River: simplex noise, horizontal drift, 14 s breathing through black/deep blue/teal/white.
+  - Rain: thin streak noise scrolling down, with feedback trails.
+  - Sampling: TOP to CHOP at 8,000 UVs → CHOP to TOP `rowswrapped` → flop → 20×400 → ropes `Canvas`; Corner Pin → panels `Quad1`. Checked with the `Uvtest` field (`td/scripts/check_river_local.py`): max error 0.0006.
+- **Live state:** ropes `Source=canvas`, Brightness 0.4 (cap), about 70–200 W total; panels `Source=canvas`, Brightness 0.5, quad 2 blanked; TD 60 fps, Art-Net about 35 fps sent, no drops. Andi's Web Render is off in this file.
+- **Lessons:**
+  - A TOP that nothing pulls doesn't cook, so checks must `cook(force=True)`.
+  - Per-frame random drop seeds with sub-pixel feedback motion looked like stationary dots, so the rain uses scrolling streak noise instead.
+  - Never pass Markdown with backticks through a PowerShell double-quoted string: `` `r `` and `` `t `` become control characters. Write files from Python or the Write tool.
