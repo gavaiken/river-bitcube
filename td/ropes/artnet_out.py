@@ -12,6 +12,8 @@
 import json
 import socket
 import struct
+import sys
+import types
 
 import numpy as np
 
@@ -73,6 +75,28 @@ def order_frame(ropes, pixels, step=15):
     return f
 
 
+def box_frame(ropes, pixels, box, rgb, per_box=10):
+    """Every pixel of one box's ropes set to rgb, the other box dark (colour-order test)."""
+    f = np.zeros((ropes, pixels, 3), np.float32)
+    f[box * per_box:(box + 1) * per_box] = rgb
+    return f
+
+
+def rope_frame(ropes, pixels, selected):
+    """One rope white over its full length (rope-order test)."""
+    f = np.zeros((ropes, pixels, 3), np.float32)
+    if 0 <= selected < ropes:
+        f[selected] = 1
+    return f
+
+
+def heads_frame(ropes, pixels, n=20):
+    """First n px of every rope white: shows which end is pixel 0 (direction test)."""
+    f = np.zeros((ropes, pixels, 3), np.float32)
+    f[:, :n] = 1
+    return f
+
+
 # ---- output -----------------------------------------------------------------------------------
 
 def to_bytes(frame, config, brightness, box_watts):
@@ -123,12 +147,28 @@ def open_socket(config):
 
 # ---- per-frame driver (called from the Execute DAT) -------------------------------------------
 
+def _live(comp):
+    """Per-COMP dict for the socket and config. It lives in a holder module in sys.modules, so it
+    survives this file being re-synced, and it is NOT in comp.storage: TD pickles storage into the
+    .toe on save, a socket can't be pickled, and that raised a modal "saved with errors" dialog."""
+    holder = sys.modules.setdefault('river_ropes_live', types.ModuleType('river_ropes_live'))
+    if not hasattr(holder, 'by_path'):
+        holder.by_path = {}
+    live = holder.by_path.setdefault(comp.path, {'sock': None, 'config': None})
+    for key in ('sock', 'config'):          # migrate from older versions that kept them in storage
+        if key in comp.storage:
+            live[key] = live[key] or comp.storage[key]
+            comp.unstore(key)
+    return live
+
+
 def tick(comp):
-    """Send one frame if Active and due. State lives in comp.storage so it survives module reloads."""
+    """Send one frame if Active and due. Counters live in comp.storage (picklable), the socket in _live()."""
     s = comp.storage
+    live = _live(comp)
     p = comp.par
     if not p.Active.eval():
-        if s.get('sock'):
+        if live['sock']:
             close(comp)
         return
     now = absTime.seconds
@@ -138,10 +178,10 @@ def tick(comp):
         return
     now = last + period if now - last < 2 * period else now
     try:
-        config = s.get('config') or load_config()
-        s['config'] = config
-        if not s.get('sock'):
-            s['sock'] = open_socket(config)
+        config = live['config'] or load_config()
+        live['config'] = config
+        if not live['sock']:
+            live['sock'] = open_socket(config)
             s['error'] = None
         ropes = sum(b['ropes'] for b in config['boxes'])
         pixels = config['pixels_per_rope']
@@ -152,6 +192,14 @@ def tick(comp):
             frame = identify_frame(ropes, pixels, p.Identify.eval(), config['pixels_per_universe'])
         elif source == 'order':
             frame = order_frame(ropes, pixels)
+        elif source == 'box1_red':
+            frame = box_frame(ropes, pixels, 0, (1, 0, 0))
+        elif source == 'box2_green':
+            frame = box_frame(ropes, pixels, 1, (0, 1, 0))
+        elif source == 'rope':
+            frame = rope_frame(ropes, pixels, p.Identify.eval())
+        elif source == 'heads':
+            frame = heads_frame(ropes, pixels)
         else:
             frame = np.zeros((ropes, pixels, 3), np.float32)
         brightness = min(p.Brightness.eval(), p.Maxbrightness.eval())
@@ -160,7 +208,7 @@ def tick(comp):
         n = 0
         try:
             for target, packet in packets(data, config, seq):
-                s['sock'].sendto(packet, target)
+                live['sock'].sendto(packet, target)
                 n += 1
         except BlockingIOError:
             s['dropped'] = s.get('dropped', 0) + 1     # send buffer momentarily full: skip the frame
@@ -173,10 +221,10 @@ def tick(comp):
 
 def close(comp, blackout=True):
     """Send a few black frames (if the socket is open), then release the port."""
-    s = comp.storage
-    sock = s.get('sock')
-    if sock and blackout and s.get('config'):
-        config = s['config']
+    live = _live(comp)
+    sock = live['sock']
+    if sock and blackout and live['config']:
+        config = live['config']
         ropes = sum(b['ropes'] for b in config['boxes'])
         data = np.zeros((ropes, config['pixels_per_rope'], 3), np.uint8)
         for _ in range(3):
@@ -187,11 +235,11 @@ def close(comp, blackout=True):
                     pass
     if sock:
         sock.close()
-    s['sock'] = None
-    s['config'] = None     # re-read config.local.json on next start
+    live['sock'] = None
+    live['config'] = None     # re-read config.local.json on next start
 
 
 def status(comp):
     s = comp.storage
     return {k: s.get(k) for k in ('error', 'sent', 'dropped', 'packets', 'watts', 'seq')} | {
-        'active': comp.par.Active.eval(), 'open': bool(s.get('sock')), 'source': comp.par.Source.eval()}
+        'active': comp.par.Active.eval(), 'open': bool(_live(comp)['sock']), 'source': comp.par.Source.eval()}

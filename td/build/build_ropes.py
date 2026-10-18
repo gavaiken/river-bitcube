@@ -19,10 +19,7 @@ def page(comp, name):
 pg = page(ropes, 'Ropes')
 if not hasattr(ropes.par, 'Active'):
     pg.appendToggle('Active', label='Output Active')[0].default = False
-    p = pg.appendMenu('Source')[0]
-    p.menuNames = ['canvas', 'identify', 'order', 'black']
-    p.menuLabels = ['Canvas', 'Identify rope', 'Rope order', 'Black']
-    p.default = 'canvas'
+    pg.appendMenu('Source')[0].default = 'canvas'
     p = pg.appendInt('Identify', label='Identify Rope (0-19)')[0]
     p.normMin, p.normMax, p.clampMin, p.min, p.default = 0, 19, True, 0, 0
     p = pg.appendFloat('Brightness')[0]
@@ -40,6 +37,11 @@ if not hasattr(ropes.par, 'Active'):
         pg.appendFloat(name)[0].default = 1
     for p in ropes.customPars:
         p.val = p.default
+# Menu entries are (re)set on every build so new sources reach an existing COMP.
+# Test sources: see the *_frame functions in td/ropes/artnet_out.py and tools/rope_tests.ps1.
+ropes.par.Source.menuNames = ['canvas', 'identify', 'order', 'box1_red', 'box2_green', 'rope', 'heads', 'black']
+ropes.par.Source.menuLabels = ['Canvas', 'Identify rope (markers)', 'Rope order (steps)', 'Box 1 red',
+                               'Box 2 green', 'One rope (Identify)', 'Rope heads (first 20 px)', 'Black']
 
 # canvas -> crop -> fit to 20 x 400 (one column per rope, top row = pixel 0)
 src = ropes.op('canvas') or ropes.create(selectTOP, 'canvas')
