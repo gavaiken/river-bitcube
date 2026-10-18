@@ -11,6 +11,7 @@ Show machine for **A River Becoming** (Gray Area, Oct 2026). Lives at `C:\Users\
 | `tools/td.ps1` | Run Python inside the open TD project via the bridge |
 | `tools/cam_snap.ps1` | Grab a camera frame (URLs in untracked `secrets.local.json`) |
 | `Start-River.cmd` | Login autostart: opens `river.toe` in TouchDesigner |
+| `Start-Claude.cmd` | Login autostart: terminal in `C:\Users\user\River` running Claude, told to read all docs and wait |
 
 ## Login launcher
 
