@@ -17,8 +17,8 @@ title: Execution plan
 | ✅ | A4 | This execution plan | A (Mac mini · Opus 5.5) | Claude |
 | ✅ | A5 | Recheck ropes 9 and 17 after cables were tightened: **still dark** (14:33 run) | A (Mac mini · Opus 5.5) | Claude |
 | ❌ | P1 | Swap test for ropes 9 and 17. *Deferred by Gavin (18 Oct): carry on with 18 ropes* | Gavin, in person | Gavin |
-| ➡️ | B1 | **Checkpoint** ([plan](sessions/B-plan.md), [progress](sessions/B.md)): structured-light capture of all ropes with the gallery cam | B (bitcube · Opus 5.5) | Claude |
-| ➡️ | B2 | Decoder + pixel map `tools/pixelmap/pixelmap-2026-10-18.json` (TDD) | B (bitcube · Opus 5.5) | Claude |
+| ✅ | B1 | **Checkpoint** ([plan](sessions/B-plan.md), [progress](sessions/B.md)): structured-light capture of all ropes with the gallery cam | B (bitcube · Opus 5.5) | Claude |
+| ✅ | B2 | Decoder + pixel map `tools/pixelmap/pixelmap-2026-10-18.json` (TDD) | B (bitcube · Opus 5.5) | Claude |
 | ➡️ | B3 | HUB75 quad 1 corners in camera space | B (bitcube · Opus 5.5) | Claude |
 | ➡️ | B4 | Rain/river field in camera space (built-in TOPs) | B (bitcube · Opus 5.5) | Claude |
 | ➡️ | B5 | Sampling onto the ropes and HUB75 quad 1 | B (bitcube · Opus 5.5) | Claude |

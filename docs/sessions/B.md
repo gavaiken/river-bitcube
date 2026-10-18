@@ -18,3 +18,6 @@ Steps:
 - **B8** Checkpoint still on the status page, tick L, log, code review, summary.
 
 Progress:
+- 15:38 B6 (early) TD saved as `river-local-oct-18.toe` via the new `td_save.ps1 -Target` before any building, so `river.toe` stays untouched. TD now runs the checkpoint file.
+- 15:44 B1 ✅ Capture `frames/pixelmap-20261018-154155` (29 patterns × 2 passes, settle 1.75 s, drift 13.3, no retakes needed, all pairs agree to within 1.6%). **Note:** this run still had the all-ropes white reference (≈1.2 kW, both boxes at the limiter, about 10 s in total) because session A's review arrived after it started. White is now removed from the code; the lit level comes from the bit/inverse pairs. (commit bc4e2f0)
+- 15:50 B2 ✅ Decoder (15 pytest tests) → `tools/pixelmap/pixelmap-2026-10-18.json`: 164k camera px decoded; **all 18 working ropes located**, 53–214 of 400 px visible each, the rest interpolated along the rope; ropes 9 and 17 absent. (commit 043a8cf)
