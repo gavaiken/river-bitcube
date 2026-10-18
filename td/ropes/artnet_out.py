@@ -131,8 +131,11 @@ def tick(comp):
             close(comp)
         return
     now = absTime.seconds
-    if now - s.get('last_send', 0) < 1.0 / max(1, p.Fps.eval()):
+    period = 1.0 / max(1, p.Fps.eval())
+    last = s.get('last_send', 0)
+    if now - last < period - 0.002:      # small slack so 40 fps on a 60 fps timeline isn't rounded down to 30
         return
+    now = last + period if now - last < 2 * period else now
     try:
         config = s.get('config') or load_config()
         s['config'] = config
