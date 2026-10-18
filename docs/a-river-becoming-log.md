@@ -254,3 +254,10 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
   - `capture.py` puts the ropes (Active, Source, Brightness, Graybit, Grayinvert) and panels Source back as they were, even on failure. Checked on the hardware at 16:04.
   - `td_save.ps1` saves `river.toe` when TD has an incremental `river.N.toe` open. There are clear errors when the HUB75 isn't seen or no rope is mapped, and a test checks `artnet_out.gray_frame` against the decoder. 26 tests.
 
+### 2026-10-18 16:26– (session C, Claude on bitcube): camera snapshot, black LED window
+- **Snapshot (plan item G):** scheduled task `RiverSnapshot` (registered by `tools/snapshot_task.ps1`) runs `tools/snapshot.ps1` daily from 08:00, every 15 min for 18 h. Each run grabs a 640×360 gallery-cam JPEG and force-pushes it as `gallery.jpg` to the orphan branch `snapshot`.
+  - It pushes one parentless commit each time, so the branch never grows. It pushes from its own bare repo `%LOCALAPPDATA%\river-snapshot\repo.git` with the deploy key, so it never touches the working checkout. The log is next to it (`snapshot.log`, camera login masked).
+  - Registering the task as S4U (runs with nobody logged in) needs an elevated shell. It's an Interactive task, launched through `conhost --headless` so no console window flashes on the M14. Auto-login means it runs whenever bitcube is up.
+  - Pester: `Invoke-Pester .\tools\tests` (18 tests).
+- **Status page:** the snapshot `<img>` starts as the checkpoint still and switches to the live snapshot only after it loads, so the page never shows a broken image. It shows the snapshot time from the GitHub API.
+

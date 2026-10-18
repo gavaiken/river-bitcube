@@ -6,7 +6,7 @@ title: A River Becoming: show machine status
 
 **[Execution plan](execution-plan.md)** (status table and session prompts) · **[Plan & open questions](plan.md)** · **[Log](a-river-becoming-log.md)** · **[Hardware](a-river-becoming-hardware.md)**
 
-**Status as of Sun 18 Oct 2026, 16:00.** Gray Area install starts **Wed 22 Oct**.
+**Status as of Sun 18 Oct 2026, 16:45.** Gray Area install starts **Wed 22 Oct**.
 
 bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes over Art-Net, the HUB75 panels over HDMI, and the Reolink cameras. It runs TouchDesigner and a Claude Code session.
 
@@ -26,9 +26,23 @@ bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes ov
 How we'll get there, session by session: **[execution plan](execution-plan.md)**. Full checklist and **open questions** (some are waiting on Dave, Andi and Will): **[plan](plan.md)**.
 
 ## Latest camera snapshot
-![Latest gallery-cam snapshot](https://raw.githubusercontent.com/gavaiken/river-bitcube/snapshot/gallery.jpg)
+<!-- The snapshot branch is force-pushed by tools/snapshot.ps1. If the image can't load, fall back to the checkpoint still, never a broken image. -->
+<img id="snap" src="img/rain-checkpoint-2026-10-18.jpg" alt="Latest gallery-cam snapshot" width="640">
+<script>
+(function () {
+  var img = document.getElementById('snap');
+  var live = 'https://raw.githubusercontent.com/gavaiken/river-bitcube/snapshot/gallery.jpg?t=' + Math.floor(Date.now() / 300000);
+  var probe = new Image();
+  probe.onload = function () { img.src = live; };
+  probe.onerror = function () { document.getElementById('snap-note').textContent = 'The live snapshot is unavailable, so this is the 18 Oct rain checkpoint still.'; };
+  probe.src = live;
+  fetch('https://api.github.com/repos/gavaiken/river-bitcube/commits/snapshot').then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (c) { if (c) document.getElementById('snap-time').textContent = 'Taken ' + new Date(c.commit.committer.date).toLocaleString() + '. '; })
+    .catch(function () {});
+})();
+</script>
 
-*Updated every 15 minutes once item G is live. People in the room may appear.*
+<span id="snap-time"></span><span id="snap-note">Every 15 minutes, 08:00–02:00 Pacific. People in the room may appear.</span>
 
 ## Using bitcube
 - **Look at it:** VNC to `bitcube.tail03bc1a.ts.net` (needs access to Will's Tailscale network). VNC shows the real screens; avoid RDP, which blanks the panels.
