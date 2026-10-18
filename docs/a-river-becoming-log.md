@@ -157,3 +157,8 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
 - **A second modal, fixed:** "river.toe saved with errors: cannot pickle 'socket'". The rope sender kept its UDP socket in `comp.storage`, which TD pickles on save. Socket and config now live in a `sys.modules` holder, migrated live without dropping output.
 - Both gotchas, plus the GLSL/TDR one, are now in CLAUDE.md under "TouchDesigner gotchas".
 - Side note: TD's pref `general.startupfilename` still points to `Desktop\Bitcube4\Bitcube4.toe` (startupfilemode 2). It's harmless while the launcher passes `river.toe`.
+- **Sign-off, 01:45:**
+  - Ropes blacked out (TD `Active` off; port 6454 released). Panels `Source=black`, window still open.
+  - `river.toe` saved in this dark state, so a reboot comes up dark. RopeLights stopped (task Ready, no trigger).
+  - The 01:35 rope test run was **not watched** (no photos), so colour, order and direction are all still unverified. Re-run tomorrow with someone watching, ropes uncoiled ~1 m at the plug end.
+  - Team handoff summary published as a private page: https://claude.ai/artifact/SZwraPQpZLgTdyAEM9MnKA
