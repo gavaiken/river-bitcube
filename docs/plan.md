@@ -53,4 +53,5 @@ The shared checklist for **A River Becoming**'s show machine, bitcube. Install a
 | Gallery network: dual NIC plan, and how the gallery cam reaches Tailscale at Gray Area | Will | | |
 | What should the gallery show if bitcube goes down? (Today: the rack controller's SD-card colour cycle) | Team | | |
 | Does the show need a TouchDesigner Commercial licence? (bitcube has Non-Commercial) | Gavin | | |
+| Gallery cam is on Agape WiFi (`10.0.7.76`, DHCP). Give it a fixed address? At Gray Area, does it join the gallery network or go back on the GL.iNet router? | Will | | |
 | Can the Colorlight sender run at a lower resolution? Not needed (we only use the top-left 512×128). | Andi | | |
