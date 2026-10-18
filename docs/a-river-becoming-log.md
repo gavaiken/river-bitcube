@@ -220,3 +220,9 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
   - **Colour order RGB confirmed:** box 1 red frame gain R/G/B = 179/−23/7; box 2 green = 1/203/108.
   - Plug ends couldn't be resolved while the ropes are coiled; recheck once hung.
 - **HUB75 calibration (14:13):** moved the panels window onto the LED display by EDID name (`location`/`justifyoffsetto` = specifydisplay, `monitor` expression picks the `LED…` monitor). The camera confirms quad 1 shows the test pattern correctly (red TL with the quad-1 marker, green TR, blue BL, yellow BR). The earlier "split right column" was the test bar, now off. Saved `river.toe`; `build_panels.py` updated. Image: `docs/img/hub75-quad1-test-2026-10-18.jpg`.
+- **Status page at boot (plan item F, mini Claude):**
+  - Added `Start-Status.cmd` + Startup shortcut `Start-Status.lnk`. 40 s after login, after TD (10 s) and the Claude terminal (20 s), it runs `tools/status_page.ps1`, which opens Chrome (`--new-window --start-maximized`) on the primary monitor (M14).
+  - It opens https://gavaiken.github.io/river-bitcube/ if a HEAD request succeeds (3 tries, 10 s apart, for slow network after boot), else `file:///…/docs/index.md`.
+  - Pester 3.4 tests in `tools/tests/status_page.Tests.ps1`, 5/5 passing (`Invoke-Pester .\tools\tests`).
+  - Tested by running it once in the console session via a temporary interactive scheduled task (removed afterwards): Chrome started in session 1 at 14:20:32.
+- Gavin flagged the **broken snapshot image** on the status page; added to plan item G.
