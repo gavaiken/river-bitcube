@@ -7,7 +7,7 @@ LED art installation that should read as a river. LED rope is the rain/flow (par
 - 15 W/m, so 150 W per rope at full white. 22 mm diameter, IP66/67.
 - The male round plug is the INPUT end. The female plug at the far end is for chaining and is unused (one rope per port).
 - The loose red/black pair at each end is power taps (R‑24V+, B‑V−, Y GND). Not needed, left capped.
-- Colour order assumed RGB, not yet verified.
+- Colour order RGB, confirmed by camera on 2026-10-18 (box 1 red / box 2 green test).
 
 ## Controllers/power: 2× AoShow "AS_PSAC10 BOX_SPI_60U_1750W"
 - Art-Net node and PSU in one box: 10 × 175 W (1,750 W max). Mains in via blue powerCON, breaker on the back. IP20, indoor only.
@@ -41,14 +41,14 @@ LED art installation that should read as a river. LED rope is the rain/flow (par
 2. How to get into the PSAC10 menu, or whether config is PC-tool-only.
 3. Whether the boxes auto-switch from PLAY to Art-Net when live frames arrive.
 4. Whether the rack unit can record Art-Net to SD for standalone playback of our own content.
-5. Rope colour order (RGB vs GRB) and gamma.
+5. Rope gamma. (Colour order is RGB, confirmed 2026-10-18.)
 6. No manual online. AoShow's YouTube has PSAC tutorials for MadMapper, Resolume and TouchDesigner, and they respond on WhatsApp/WeChat during Shenzhen hours.
 
 ## Cameras (from Will, 2026-10-18)
 - Two Reolinks behind the GL.iNet travel router (`192.168.8.0/24`), which runs Tailscale on Will's tailnet:
-  - **Gallery:** Reolink E1 Pro, `192.168.8.103`.
+  - **Gallery:** Reolink E1 Pro. Was `192.168.8.103`; since 18 Oct 14:09 it is on Agape WiFi at `10.0.7.76` (DHCP), reached directly over the house network, not via Tailscale.
   - **River:** Reolink E1 Outdoor Pro, `192.168.8.217`.
 - **RTSP:** `rtsp://admin:<password>@<ip>:554/Preview_01_main`, best with `-rtsp_transport tcp` (e.g. `ffplay -rtsp_transport tcp "<url>"`). The password is the same as bitcube's login; it is not stored in git (on bitcube it's in the untracked `river-bitcube\secrets.local.json`).
 - **Pan/tilt:** HTTPS JSON API `https://<ip>/cgi-bin/api.cgi` (self-signed cert). `?cmd=Login` with `{"User":{"userName":"admin","password":...}}` returns a token. Then `PtzCtrl` with `{"channel":0,"op":"Left|Right|Up|Down|Stop","speed":1}`, then `Logout`. Always follow a move with `Stop`. Will's working example: `tools/cameras/test_cam_move.py`.
 - The gallery cam has a motion-triggered spotlight; Will turned it off on 2026-10-16.
-- **Where the cameras are (2026-10-18, at Agape):** the **river** cam (E1 Outdoor Pro, `.217`, S/N on its base) sits on top of the rack LED controller, looking along the floor at the three rope coil piles; the HUB75 is out of frame. The **gallery** cam (E1 Pro, `.103`) is pressed against a ribbon cable and sees nothing useful. The river cam goes to the river with the Starlink kit, so the gallery cam (or another) will need to take over watching the installation.
+- **Where the cameras are (2026-10-18, at Agape):** the **river** cam (E1 Outdoor Pro, `.217`, S/N on its base) sits on top of the rack LED controller, looking along the floor at the three rope coil piles; the HUB75 is out of frame. The **gallery** cam (E1 Pro, now `10.0.7.76`) was aimed on 18 Oct 13:59 at all the coil piles, the HUB75, both PSAC10s and the controller; the rope pixel map depends on it staying put. The river cam goes to the river with the Starlink kit, so the gallery cam (or another) will need to take over watching the installation.

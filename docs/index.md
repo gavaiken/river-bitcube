@@ -6,7 +6,7 @@ title: A River Becoming: show machine status
 
 **[Execution plan](execution-plan.md)** (status table and session prompts) · **[Plan & open questions](plan.md)** · **[Log](a-river-becoming-log.md)** · **[Hardware](a-river-becoming-hardware.md)**
 
-**Status as of Sun 18 Oct 2026, 16:50.** Gray Area install starts **Wed 22 Oct**.
+**Status as of Sun 18 Oct 2026, 17:35.** Gray Area install starts **Wed 22 Oct**.
 
 bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes over Art-Net, the HUB75 panels over HDMI, and the Reolink cameras. It runs TouchDesigner and a Claude Code session.
 
@@ -15,7 +15,7 @@ bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes ov
   - **Local rain checkpoint** (`river-local-oct-18.toe`, no Modal): one rain/river field in the camera's view, sampled onto every pixel of the 18 working ropes and onto HUB75 quad 1. Every rope pixel's position comes from a camera structured-light pixel map (`tools/pixelmap/`). About 70–200 W in total.
   - **HUB75:** TouchDesigner's window covers the whole LED display in black, with only the panel image at its top-left, so nothing else can show on the panels.
   - **Camera calibration:** 18 of 20 ropes located, colour order confirmed. **Ropes 9 and 17 never light** (swap test deferred).
-  - Both cameras are reachable. bitcube boots straight into the show (about 1 minute) and is on Tailscale. *After a reboot it opens `river.toe` (ropes black), not the checkpoint.*
+  - Both cameras are reachable. bitcube boots straight into the rain checkpoint (about 1 minute; restart-tested 16:54) and is on Tailscale.
 - **Next:**
   1. Feed Dave's Modal visuals into the ropes and panels through the same pixel map.
   2. Connect quad 2, and fix ropes 9 and 17.

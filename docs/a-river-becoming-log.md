@@ -64,8 +64,12 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
 - **Cancelling a tool call does not stop a command already running on bitcube.** After any interrupted remote command, audit what actually ran.
 
 ### What runs on bitcube
-- **Login autostart:** `Startup\Start-River.lnk` → `C:\Users\user\River\Start-River.cmd`. It waits 10 s, then opens `River\river.toe` in TouchDesigner, or TD empty if that file doesn't exist. README at `C:\Users\user\River\README.md`.
-- **TouchDesigner 2025.33230** at `C:\Program Files\Derivative\TouchDesigner\bin\TouchDesigner.exe`. The licence/first-launch step was **still pending** at the end of the session and needs RDP.
+- **Login autostart** (Startup folder shortcuts → `river-bitcube\*.cmd`; README in `river-bitcube\`):
+  - `Start-River.cmd` (10 s): opens `river-bitcube\river-local-oct-18.toe` (the rain checkpoint; `river.toe` until 18 Oct 16:54) in TouchDesigner, or TD empty if that file doesn't exist.
+  - `Start-Claude.cmd` (20 s): a Claude terminal in `C:\Users\user\River`.
+  - `Start-Status.cmd` (40 s): Chrome with the status page on the M14.
+  - Scheduled task `RiverSnapshot`: gallery-cam still to the `snapshot` branch every 15 min, 08:00–02:00.
+- **TouchDesigner 2025.33230** at `C:\Program Files\Derivative\TouchDesigner\bin\TouchDesigner.exe`, **Non-Commercial** licence (TOPs capped at 1280×1280).
 - **RopeLights (Will's):** scheduled task `RopeLights`, which runs `C:\Users\user\RopeLights\runtime\python.exe app.py --config config.local.json` (its own Python, plus a small web app with rope patterns). It has **no trigger**, so it won't start after a reboot. Don't run it while TD also sends Art-Net.
 - Other autostart, left alone (probably BitCube leftovers): loopMIDI, Ableton Push control panel, TeamViewer service (a second remote-access path; worth reviewing), Java updater, OneDrive, Edge.
 - **Archived 2023 BitCube autostart:** `C:\Users\user\Archive\2023-bitcube-startup\` (README + restore steps, the original startup shortcut, `startup-inventory-2026-10-17.txt`). The project files stay in `Desktop\Bitcube4`, and its old Chromatik setup is in `~\Chromatik`.
@@ -273,3 +277,8 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
 - **Autostart → rain (session A, Gavin's call):** `Start-River.cmd` now opens `river-local-oct-18.toe`. Restart test at 16:53:46: Windows back at 16:54:39, TD in the rain file with the bridge answering at 16:54:53. Ropes `Source=canvas` (rope_canvas), panels `Source=canvas` with the window open, Art-Net sending. Watts vary 8–27 per box as drops pass; 60 fps. The gallery cam shows the teal/blue rain on the coils. Session C's sender-stall fix held: the ropes didn't go red on load.
 - **Session H** ("the spring": HUB75 as the source, optimised for a viewer about 6 ft right of the camera) is parked by Gavin; notes are in the execution plan.
 - **Session I added** (plan item M): interactive system documentation for Will, Andi, Dave and their agents. `system.json` is the source of truth; the clickable SVG diagram groups nodes by place (the River, Agape/Gray Area scenarios, Modal cloud, Tailscale), with IPs, usernames and the Modal↔bitcube API; `system.md` + `llms.txt` serve agents. Runs on the Mac mini (Opus, plan mode). Gavin's rule: everything except secrets.
+
+### 2026-10-18 17:35 (Claude on bitcube): out-of-date doc lines fixed
+- Brought the docs in line with the 16:54 autostart change: the status page, plan item L, CLAUDE.md's "Two show files" line and "What runs on bitcube" now say the login opens `river-local-oct-18.toe` (the last also lists `Start-Claude`, `Start-Status` and `RiverSnapshot`). Session C's "Waiting on Gavin" item about it is closed.
+- Fixed the dark-rope numbers in plan.md's Decisions (9 and **17**, not 12), the hardware doc's colour order (RGB, confirmed) and the gallery cam's address (`10.0.7.76` on Agape WiFi, aimed at the piles).
+- Docs only, made while session I runs on the Mac mini (Gavin's OK). The camera-password hint is left for session I's step I6.

@@ -19,7 +19,7 @@ Progress:
 - 16:50 **Bug found and fixed (outside C's scope, needed to leave the ropes safe):** after loading `river.toe`, the rope sender sent nothing. `absTime` restarts at 0 on load, but `last_send` (6365 s) came back from `comp.storage` in the `.toe`, so `tick()` waited about 1¾ h. Meanwhile the hardware played its own program, and the coils went **full red for about a minute** (16:44). A reboot would do the same. Fixed in `artnet_out.tick` (a `last_send` ahead of the clock is reset). Verified with save and reload: Art-Net resumes 1.4 s after load, and the camera shows the ropes dark. (commit 4c40b0e)
 
 ### Waiting on Gavin
-- **TD now runs `river.toe`** (ropes black, panels test pattern), as the C3 prompt asked, so the rain checkpoint isn't showing. To bring it back: open `river-local-oct-18.toe` (it has the new window and picks up the sender fix on load).
+- ~~**TD now runs `river.toe`** (ropes black, panels test pattern), as the C3 prompt asked, so the rain checkpoint isn't showing.~~ **Resolved 16:54** (session A, Gavin's call): the autostart now opens `river-local-oct-18.toe`, and a restart brought the rain back by itself.
 - Optional: to make `RiverSnapshot` run with nobody logged in, run `tools\snapshot_task.ps1` once from an elevated PowerShell (it registers as S4U then). Not needed while auto-login is on.
 
 ### SESSION C SUMMARY — 2026-10-18 16:50
