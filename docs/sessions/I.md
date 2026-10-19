@@ -1,0 +1,18 @@
+---
+title: Session I progress
+---
+
+# Session I: interactive system documentation (plan item M)
+
+## 2026-10-18 17:28 start: Mac mini · Opus 5.5
+Docs only. bitcube is read over `ssh bitcube`; nothing is changed there. Gavin's rule: show everything except secrets (names, hostnames, LAN and Tailscale IPs, ports, device usernames and account emails yes; passwords and token values never). The river site is given as "near Dobbins, CA" only, never its coordinates (Gavin, 18 Oct).
+
+Steps:
+- **I1** Every fact into `docs/system/system.json`: places, nodes, links, scenarios `now` (Agape) and `show` (Gray Area), the Modal↔bitcube API, where secrets live (never values). Anything not verified is marked `unverified`.
+- **I2** Validator, test first: `tools/tests/test_system_json.py` (pytest). Ids, link endpoints, placement per scenario, statuses, the rope mapping, a secret scan, the real secret values from bitcube (read over ssh at test time, never printed), and `system.md` in sync.
+- **I3** `docs/system/index.html`: a self-contained interactive SVG diagram. Click any node or link for its details; deep links, search, Now/Show toggle, API tab, light/dark, phone, keyboard.
+- **I4** `tools/system_docs.py` generates `docs/system/system.md` (text + Mermaid); `docs/llms.txt` for agents.
+- **I5** Verify: pytest, a headless Chrome test (`tools/tests/test_system_page.py`), and the published URLs after the Pages build.
+- **I6** Remove the camera-password hint, link the page from the status page and README, tick M, code review, Signal draft, summary.
+
+Progress:
