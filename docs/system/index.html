@@ -317,7 +317,9 @@ body.panel-open footer { margin-right: 420px; }
   function readHash() {
     const h = {};
     location.hash.replace(/^#/, '').split('&').filter(Boolean).forEach((kv) => {
-      const [k, v] = kv.split('='); h[decodeURIComponent(k)] = decodeURIComponent(v || '');
+      const [k, v] = kv.split('=');
+      const dec = (x) => { try { return decodeURIComponent(x); } catch (e) { return x; } };  // a mistyped link must not break the page
+      h[dec(k)] = dec(v || '');
     });
     return h;
   }
@@ -647,7 +649,7 @@ body.panel-open footer { margin-right: 420px; }
     } else {
       $('panel-kicker').textContent = `${item.medium} link · ${item.scenarios.map((s) => (s === 'now' ? 'Now' : 'Show')).join(' + ')}`;
       $('panel-title').textContent = linkName(item);
-      body.append(el('div', { class: 'endpoints' }, xref('node', item.from), el('span', { text: String(item.direction || '').startsWith('two') ? '↔' : '→' }), xref('node', item.to)));
+      body.append(el('div', { class: 'endpoints' }, xref('node', item.from), el('span', { text: String(item.direction || 'two-way').startsWith('one-way') ? '→' : '↔' }), xref('node', item.to)));
       body.append(el('div', { class: 'pills' }, pill(item.status, statusColor(item.status)), verifiedPill(item.verified), pill(item.medium, mediumColor(item.medium))));
       body.append(el('p', { class: 'summary', text: item.summary }));
       const fields = {};
@@ -683,6 +685,7 @@ body.panel-open footer { margin-right: 420px; }
   function setScenario(s, silent) {
     if (!S.doc.scenarios.some((x) => x.id === s)) s = 'now';
     S.scenario = s;
+    if (S.sel && !(S.sel.type === 'node' ? nodeVisible(byId[S.sel.id]) : linkVisible(byId[S.sel.id]))) close(true);
     document.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.scenario === s)));
     const sc = S.doc.scenarios.find((x) => x.id === s);
     const lede = $('scenario-lede');
@@ -860,7 +863,7 @@ body.panel-open footer { margin-right: 420px; }
   q.addEventListener('input', () => { S.query = q.value; activeResult = -1; renderResults(); applyMapClasses(); renderList(); });
   q.addEventListener('keydown', (e) => {
     const btns = [...$('results').querySelectorAll('button')];
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!btns.length) return; activeResult = (activeResult + (e.key === 'ArrowDown' ? 1 : -1) + btns.length) % btns.length; renderResults(); }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!btns.length) return; activeResult = activeResult < 0 ? (e.key === 'ArrowDown' ? 0 : btns.length - 1) : (activeResult + (e.key === 'ArrowDown' ? 1 : -1) + btns.length) % btns.length; renderResults(); }
     else if (e.key === 'Enter') { const b = btns[Math.max(0, activeResult)]; if (b) { e.preventDefault(); b.click(); } }
     else if (e.key === 'Escape') { q.value = ''; S.query = ''; hideResults(); applyMapClasses(); renderList(); }
   });

@@ -61,10 +61,35 @@ def structure_errors(doc):
                 if n is not None and n.get("place", {}).get(s) is None:
                     errors.append(f"link {link['id']!r} is in scenario {s!r} but {link[end]!r} is not")
     errors += _rope_errors(nodes.values())
+    errors += _reference_errors(doc, nodes)
     api = doc.get("api", {})
     for item in api.get("contract", []) + api.get("endpoints", []):
         if not VERIFIED_RE.match(str(item.get("state"))) or item.get("state") == "unverified":
             errors.append(f"api item {item.get('id')!r}: state {item.get('state')!r} is not confirmed or awaiting:<Name>")
+    return errors
+
+
+def _reference_errors(doc, nodes):
+    """Ids that point elsewhere in the map (questions, sources, owners, parents) must exist."""
+    errors = []
+    questions = {q["id"] for q in doc.get("open_questions", [])}
+    sources = {s["id"] for s in doc.get("sources", [])}
+    people = {p["id"] for p in doc.get("people", [])} | {"team"}
+    for item in doc.get("nodes", []) + doc.get("links", []) + doc.get("places", []) + doc.get("scenarios", []):
+        for q in item.get("open_questions", []):
+            if q not in questions:
+                errors.append(f"{item['id']!r}: unknown open question {q!r}")
+        for src in item.get("sources", []):
+            if src not in sources:
+                errors.append(f"{item['id']!r}: unknown source {src!r}")
+    for node in nodes.values():
+        if "owner" in node and node["owner"] not in people:
+            errors.append(f"{node['id']!r}: unknown owner {node['owner']!r}")
+        if "parent" in node:
+            parent = nodes.get(node["parent"])
+            for s, place in node.get("place", {}).items():
+                if place is not None and (parent is None or parent.get("place", {}).get(s) is None):
+                    errors.append(f"{node['id']}: parent {node['parent']!r} is missing or not placed in scenario {s!r}")
     return errors
 
 
@@ -87,9 +112,14 @@ def _rope_errors(nodes):
 # ---------------------------------------------------------------- secret scanning
 
 def _is_placeholder(value):
-    v = value.strip("\"'")
-    return (not v or v[0] in "<${*" or v.lower() in {"password", "pass", "passwd", "secret", "token", "xxx", "..."}
-            or re.fullmatch(r"[A-Z][A-Z0-9_]*", v) is not None)  # an environment-variable name, not a value
+    """True for stand-ins that are safe to publish: <NAME>, $NAME or ${NAME}, an environment-variable
+    name with an underscore (INGEST_TOKEN), a mask (***, xxx), or a plain word like PASSWORD."""
+    v = value.strip("\"'\\")  # quotes, and the backslash of an escaped quote in JSON
+    return (not v or (v.startswith("<") and v.endswith(">"))
+            or re.fullmatch(r"\$\{?[A-Z_][A-Z0-9_]*\}?", v) is not None
+            or re.fullmatch(r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+", v) is not None
+            or re.fullmatch(r"[*x.]+", v) is not None
+            or v.lower() in {"password", "pass", "passwd", "secret", "token", "changeme"})
 
 
 _KEY = r"(?i)(?<![\w-])\w*(?:password|passwd|secret|token|api[_-]?key|access[_-]?key)"
@@ -148,7 +178,8 @@ def secret_values(obj):
                 walk(v)
         elif isinstance(o, str) and len(o) >= 6:
             out.append(o)
-            m = _PATTERNS[0][1].search(o)
+            # greedy up to the last @ before the host, so a password may contain / or @
+            m = re.match(r"^[a-z][a-z0-9+.-]*://[^:/@\s]+:(.+)@[^@\s]+$", o)
             if m and not _is_placeholder(m.group(1)):
                 out.append(m.group(1))
                 out.append(urllib.parse.unquote(m.group(1)))
@@ -156,17 +187,38 @@ def secret_values(obj):
     return [Redacted(v) for v in dict.fromkeys(out) if len(v) >= 4]
 
 
+class _Needles:
+    """The byte forms of the secrets (UTF-8, UTF-16, percent-encoded), kept out of any printable local."""
+
+    def __init__(self, values):
+        self._b = [form for v in values for form in _byte_forms(v)]
+
+    def __repr__(self):
+        return "<redacted needles>"
+
+    def found_in(self, data):
+        return any(n in data for n in self._b)
+
+
+def _byte_forms(v):
+    plain = v.reveal() if isinstance(v, Redacted) else str(v)
+    return [plain.encode("utf-8"), plain.encode("utf-16-le"), urllib.parse.quote(plain, safe="").encode("ascii")]
+
+
 def files_containing(values, paths, root):
-    """Relative names of the files that contain any of the values (as UTF-8, UTF-16 or percent-encoded)."""
-    needles = []
-    for v in values:
-        plain = v.reveal() if isinstance(v, Redacted) else v
-        needles += [plain.encode("utf-8"), plain.encode("utf-16-le"), urllib.parse.quote(plain, safe="").encode("ascii")]
+    """Relative names of the files that contain any of the values (as UTF-8, UTF-16 or percent-encoded).
+    A file that can't be read is listed as "<name> (unreadable)", so it fails the check instead of being skipped."""
+    needles = _Needles(values)
     found = []
     for p in paths:
-        data = Path(p).read_bytes()
-        if any(n in data for n in needles):
-            found.append(Path(p).relative_to(root).as_posix())
+        name = Path(p).relative_to(root).as_posix()
+        try:
+            hit = needles.found_in(Path(p).read_bytes())
+        except OSError:
+            found.append(name + " (unreadable)")
+            continue
+        if hit:
+            found.append(name)
     return sorted(found)
 
 
@@ -176,17 +228,20 @@ BITCUBE_SECRETS = r"C:\Users\user\River\river-bitcube\secrets.local.json"
 def real_secret_values(repo):
     """(values, where from) from secrets.local.json: the local file on bitcube, else over `ssh bitcube`.
     Returns ([], reason) when neither works. Nothing read is ever printed."""
-    local = Path(repo) / "secrets.local.json"
+    candidates = [Path(repo) / "secrets.local.json", main_checkout(repo) / "secrets.local.json"]
+    local = next((c for c in candidates if c.exists()), None)
     try:
-        if local.exists():
-            text, source = local.read_text(encoding="utf-8-sig"), "local secrets.local.json"
+        if local is not None:
+            text, source = local.read_text(encoding="utf-8-sig"), f"local {local.parent.name}/secrets.local.json"
         else:
             r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "bitcube", "type " + BITCUBE_SECRETS],
                                capture_output=True, timeout=40)
             if r.returncode != 0:
                 return [], f"ssh bitcube exited {r.returncode}"
             text, source = r.stdout.decode("utf-8-sig"), "ssh bitcube"
-        return secret_values(json.loads(text)), source
+        values = secret_values(json.loads(text))
+        del text
+        return values, source
     except (OSError, subprocess.TimeoutExpired):
         return [], "could not read secrets.local.json"
     except ValueError:
@@ -200,22 +255,35 @@ def repo_files(repo):
     return sorted({Path(repo) / f for f in out.split("\0") if f and (Path(repo) / f).is_file()})
 
 
-def sibling_repo(repo, name):
-    """A checkout next to this one (River\\river-agent on bitcube, ~/claude/Source/river-agent on the mini),
-    found from the main checkout even when this runs in a git worktree."""
+def main_checkout(repo):
+    """The main working tree, even when repo is a git worktree of it."""
     common = subprocess.run(["git", "-C", str(repo), "rev-parse", "--path-format=absolute", "--git-common-dir"],
                             capture_output=True, text=True).stdout.strip()
-    main = Path(common).parent if common else Path(repo)
-    return main.parent / name
+    return Path(common).parent if common else Path(repo)
+
+
+def sibling_repo(repo, name):
+    """A checkout next to this one (River\\river-agent on bitcube, ~/claude/Source/river-agent on the mini)."""
+    return main_checkout(repo).parent / name
 
 
 def river_coordinates(agent_env):
-    """WEATHER_LAT and WEATHER_LON from river-agent's agent.env, full and to two decimals, as Redacted."""
-    vals = dict(line.split("=", 1) for line in agent_env.splitlines() if line.startswith(("WEATHER_LAT=", "WEATHER_LON=")))
+    """WEATHER_LAT and WEATHER_LON from river-agent's agent.env: in full, truncated and rounded to two decimals,
+    without sign or quotes, as Redacted."""
+    vals = {}
+    for line in agent_env.splitlines():
+        line = line.strip()
+        if line.startswith("export "):
+            line = line[7:].strip()
+        k, sep, v = line.partition("=")
+        if sep and k.strip() in ("WEATHER_LAT", "WEATHER_LON"):
+            vals[k.strip()] = v.strip().strip("\"'").lstrip("-")
     out = []
-    for key in ("WEATHER_LAT", "WEATHER_LON"):
-        v = vals.get(key, "").strip().lstrip("-")
-        if v:
-            whole, _, frac = v.partition(".")
-            out += [Redacted(v), Redacted(f"{whole}.{frac[:2]}")]
-    return out
+    for v in vals.values():
+        whole, _, frac = v.partition(".")
+        out += [v, f"{whole}.{frac[:2]}"]
+        try:
+            out.append(f"{float(v):.2f}")
+        except ValueError:
+            pass
+    return [Redacted(x) for x in dict.fromkeys(out)]

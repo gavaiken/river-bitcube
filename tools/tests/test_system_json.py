@@ -107,9 +107,19 @@ def test_every_placed_node_has_a_diagram_position():
 
 
 def test_ropes_are_positioned_automatically():
-    doc = tiny()
+    doc = with_boxes(tiny())
     doc["nodes"].append(rope(1, 1, 1, [0, 1, 2]))
     assert sc.structure_errors(doc) == []
+
+
+def with_boxes(doc):
+    """Add the two PSAC10s that ropes hang off."""
+    for b in (1, 2):
+        doc["nodes"].append({"id": f"psac10-{b}", "kind": "led-controller", "place": {"now": "agape", "show": "agape"},
+                             "status": "working", "verified": "confirmed"})
+        for s in ("now", "show"):
+            doc["layout"]["scenarios"][s]["nodes"][f"psac10-{b}"] = [b, 1]
+    return doc
 
 
 def rope(n, box, out, universes):
@@ -118,7 +128,7 @@ def rope(n, box, out, universes):
 
 
 def test_a_rope_must_match_wills_universe_mapping():
-    doc = tiny()
+    doc = with_boxes(tiny())
     # Will's config.local.json: box 2 starts at universe 40, 4 universes per rope, so rope 12 is box 2 OUT2, universes 44-46.
     doc["nodes"].append(rope(12, 2, 2, [44, 45, 46]))
     assert not any("rope-12" in e for e in sc.structure_errors(doc))
@@ -253,7 +263,7 @@ def test_the_river_sites_coordinates_are_not_published():
     if not env.exists():
         pytest.skip("river-agent checkout not found next to this repo")
     coords = sc.river_coordinates(env.read_text(encoding="utf-8"))
-    assert len(coords) == 4  # lat and lon, full and to two decimals
+    assert len(coords) >= 4  # lat and lon: full, truncated and rounded to two decimals
     docs = [f for f in sc.repo_files(REPO) if f.relative_to(REPO).parts[0] == "docs"]
     assert sc.files_containing(coords, docs, root=REPO) == []
 
@@ -282,3 +292,63 @@ def test_system_md_is_in_sync_with_system_json(real):
     import system_docs
     assert SYSTEM_MD.exists(), "run: python3 tools/system_docs.py"
     assert SYSTEM_MD.read_text(encoding="utf-8") == system_docs.render(real), "system.md is stale: run python3 tools/system_docs.py"
+
+
+# ---------------------------------------------------------------- code review fixes (18 Oct)
+
+@pytest.mark.parametrize("text", [
+    'curl -H \\"Authorization: Bearer $INGEST_TOKEN\\" (inside a JSON string)',
+])
+def test_an_escaped_quote_after_a_placeholder_is_not_a_secret(text):
+    assert sc.secret_pattern_hits(text) == []
+
+
+@pytest.mark.parametrize("text", [
+    "INGEST_TOKEN=AB12CD34EF56GH",          # an uppercase token is still a token
+    "Authorization: Bearer K7Q2ZP9M4X",
+    '"password": "$ecretPa55"',             # starts with $, but isn't an environment-variable reference
+    "password='*Hunter22'",
+])
+def test_secret_shaped_values_that_look_like_names_are_still_flagged(text):
+    assert sc.secret_pattern_hits(text) != []
+
+
+def test_a_password_with_a_slash_is_extracted_from_its_url():
+    values = sc.secret_values({"cam": "rtsp://admin:ab/cd99" + FAKE + "@10.0.7.76:554/Preview_01_main"})
+    assert "ab/cd99" + FAKE in [v.reveal() for v in values]
+
+
+def test_river_coordinates_handle_quotes_export_and_rounding():
+    coords = [c.reveal() for c in sc.river_coordinates('export WEATHER_LAT="12.3456"\nWEATHER_LON=-98.7654\n')]
+    assert {"12.3456", "12.34", "12.35", "98.7654", "98.76", "98.77"} <= set(coords)
+
+
+@pytest.mark.parametrize("where,field,value,message", [
+    ("nodes", "open_questions", ["q-typo"], "unknown open question 'q-typo'"),
+    ("links", "sources", ["s-missing"], "unknown source 's-missing'"),
+    ("nodes", "owner", "nobody", "unknown owner 'nobody'"),
+])
+def test_references_to_questions_sources_and_people_must_exist(where, field, value, message):
+    doc = tiny()
+    doc[where][0][field] = value
+    assert any(message in e for e in sc.structure_errors(doc))
+
+
+def test_a_rope_needs_its_box_placed_wherever_the_rope_is():
+    doc = tiny()
+    doc["nodes"].append(rope(1, 1, 1, [0, 1, 2]))
+    assert any("rope-01: parent 'psac10-1'" in e for e in sc.structure_errors(doc))
+
+
+def test_an_unreadable_file_is_reported_not_skipped(tmp_path):
+    missing = tmp_path / "gone.toe"
+    assert sc.files_containing([sc.Redacted(FAKE)], [missing], root=tmp_path) == ["gone.toe (unreadable)"]
+
+
+def test_secrets_are_found_in_the_main_checkout_from_a_worktree(tmp_path, monkeypatch):
+    main = tmp_path / "main"
+    (main / ".git").mkdir(parents=True)
+    (main / "secrets.local.json").write_text(json.dumps({"cameras": {"gallery": "rtsp://admin:" + FAKE + "@10.0.7.76:554/x"}}))
+    monkeypatch.setattr(sc, "main_checkout", lambda repo: main)
+    values, source = sc.real_secret_values(tmp_path / "main" / ".worktrees" / "wt")
+    assert FAKE in [v.reveal() for v in values] and "secrets.local.json" in source

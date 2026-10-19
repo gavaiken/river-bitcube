@@ -185,3 +185,31 @@ def test_dark_theme_follows_the_system_and_the_toggle(page):
     p.pg.locator("#theme").click()  # auto -> light
     light_bg = p.pg.evaluate("getComputedStyle(document.body).backgroundColor")
     assert dark_bg == "rgb(12, 20, 24)" and light_bg == "rgb(242, 245, 246)"
+
+
+def test_a_malformed_deep_link_still_loads_the_map(page):
+    p = page("#node=%E0")
+    assert p.pg.locator("#map .node").count() > 40 and not p.panel_open()
+    assert p.problems == []
+
+
+def test_switching_away_from_a_selected_show_only_item_closes_the_panel(page):
+    p = page("#node=gallery-net")
+    p.pg.locator("#sc-now").click()
+    assert not p.panel_open()
+    assert "gallery-net" not in p.pg.evaluate("location.hash")
+    assert p.pg.evaluate("document.getElementById('map').classList.contains('focusing')") is False
+
+
+def test_a_link_without_a_direction_reads_as_two_way(page):
+    p = page("#link=wifi-bitcube")
+    assert "↔" in p.pg.locator("#panel-body .endpoints").inner_text()
+
+
+def test_arrow_up_from_the_search_box_picks_the_last_result(page):
+    p = page()
+    p.pg.locator("#q").fill("rope")
+    buttons = p.pg.locator("#results button")
+    last = buttons.nth(buttons.count() - 1).inner_text()
+    p.pg.locator("#q").press("ArrowUp")
+    assert p.pg.locator("#results button.active").inner_text() == last
