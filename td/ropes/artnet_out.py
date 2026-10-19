@@ -19,6 +19,7 @@ import numpy as np
 
 CONFIG_PATH = r'C:\Users\user\RopeLights\config.local.json'
 PORT = 6454
+RETRY_SECONDS = 2.0                 # after a network error, wait this long before reopening and resending
 WATTS_PER_CHANNEL = 150 / 400 / 3   # 150 W per rope at full white, 400 px, 3 channels
 
 
@@ -193,6 +194,12 @@ def tick(comp):
             close(comp)
         return
     now = absTime.seconds
+    retry_at = s.get('retry_at')
+    if retry_at is not None:
+        if retry_at > now + RETRY_SECONDS:     # saved in the .toe before a reload: the clock restarted
+            s['retry_at'] = retry_at = None
+        elif now < retry_at:                   # backing off after a network error
+            return
     period = 1.0 / max(1, p.Fps.eval())
     last = s.get('last_send', 0)
     if last > now:      # absTime restarts at 0 on project load/reboot, but last_send was saved in the .toe
@@ -237,11 +244,19 @@ def tick(comp):
                 n += 1
         except BlockingIOError:
             s['dropped'] = s.get('dropped', 0) + 1     # send buffer momentarily full: skip the frame
-        s.update(seq=seq, last_send=now, sent=s.get('sent', 0) + 1, packets=n, watts=watts, error=None)
+        s.update(seq=seq, last_send=now, sent=s.get('sent', 0) + 1, packets=n, watts=watts, error=None,
+                 retry_at=None)
+    except OSError as e:
+        # Network trouble: the lights were switched off, a cable was pulled, or the lighting NIC lost
+        # 2.0.0.8 (bind fails). Back off and retry, so the ropes pick the rain up again by themselves
+        # when the lights come back, instead of playing the hardware's own colour cycle.
+        s['error'] = repr(e)
+        close(comp, blackout=False)
+        s['retry_at'] = now + RETRY_SECONDS
     except Exception as e:
         s['error'] = repr(e)
         close(comp, blackout=False)
-        p.Active = False          # stop retrying every frame; the error stays in storage
+        p.Active = False          # a bug or bad config: stop retrying every frame; the error stays in storage
 
 
 def close(comp, blackout=True):
@@ -267,4 +282,5 @@ def close(comp, blackout=True):
 def status(comp):
     s = comp.storage
     return {k: s.get(k) for k in ('error', 'sent', 'dropped', 'packets', 'watts', 'seq')} | {
-        'active': comp.par.Active.eval(), 'open': bool(_live(comp)['sock']), 'source': comp.par.Source.eval()}
+        'active': comp.par.Active.eval(), 'open': bool(_live(comp)['sock']), 'source': comp.par.Source.eval(),
+        'retrying': s.get('retry_at') is not None}
