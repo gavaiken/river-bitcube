@@ -48,6 +48,8 @@ LOOK = [  # name, label, default, min, max
     ('Raindensity', 'Rain Density', 0.06, 0, 0.6),
     ('Raindecay', 'Rain Trail Decay (per frame)', 0.9, 0.5, 0.99),
     ('Blur', 'Field Blur (px)', 6.0, 0, 30),
+    ('Panelgain', 'HUB75 Gain', 3.0, 0, 6),
+    ('Panelgamma', 'HUB75 Gamma (lifts dim rain)', 0.7, 0.3, 1.5),
 ]
 pg = page(rl, 'River')
 for name, label, default, lo, hi in LOOK:
@@ -281,8 +283,13 @@ else:
 cp.par.extractmapping = 'perspective'
 cp.par.extend = 'zero'
 
+# The HUB75's region of the field is mostly dark sky, so lift and brighten it to read next to the ropes.
+pg_ = get(levelTOP, 'quad1_gain', 2175, 150)
+pg_.inputConnectors[0].connect(cp)
+pg_.par.brightness1.expr = 'parent().par.Panelgain'
+pg_.par.gamma1.expr = 'parent().par.Panelgamma'
 q1 = get(nullTOP, 'quad1_out', 2250, 150)
-q1.inputConnectors[0].connect(cp)
+q1.inputConnectors[0].connect(pg_)
 q1.viewer = True
 blk = get(constantTOP, 'quad_black', 2250, 300)
 res(blk, 256, 128)
@@ -298,6 +305,7 @@ panels = proj.op('panels')
 panels.par.Quad1 = q1.path
 panels.par.Quad2 = blk.path
 panels.par.Quad2off = True
+panels.par.Brightness = 1.0   # full HUB75 brightness; the look is set by Panelgain/Panelgamma above
 
 # No web input in the local checkpoint: Andi's Web Render (Dave's canvas) is switched off.
 web = proj.op('Mask_Panels/webrender1')
