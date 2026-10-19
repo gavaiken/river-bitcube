@@ -83,14 +83,31 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
   - Chromatik free tier caps output at 1k px.
 - `river_masks.zip`: Gavin was dragging it to `\\bitcube\River` at the end of the session (not yet confirmed or unzipped).
 
-## 6. Open items / next steps
-1. Accept the TouchDesigner 2025 licence on bitcube via RDP, then hand the session back to the console.
-2. Get Dave to add `gavaiken` to `river-agent`; clone it.
-3. Copy the Chromatik model, pixel map and TD patch to bitcube (`River\`), port them to TD 2025, and save as `River\river.toe` so the launcher picks it up.
-4. Tonight's goal from the Oct 17 meeting: TD on bitcube driving the ropes (Art-Net) **and** one HUB75 quad (HDMI).
-5. Hardware unknowns (see the hardware doc): PSAC10 port ↔ universe mapping, box IPs, rope colour order, whether the boxes auto-switch from PLAY to Art-Net.
-6. Before the gallery (Will's call): give `RopeLights` a trigger, or retire it once TD drives the ropes; review TeamViewer; plan bitcube's dual-NIC gallery network and how the gallery camera reaches Tailscale.
-7. Optional: an ongoing Signal link via `signal-cli` as a linked device (offered, not done). For now Gavin sends Signal messages himself.
+## 6. Open items / next steps (as of 18 Oct 2026, 18:00)
+The live checklist is `docs/plan.md` (items and open questions) and the session status is `docs/execution-plan.md`. This is the short handoff view.
+
+**Showing now:** the local rain checkpoint (`river-local-oct-18.toe`, opened at login) on the 18 working ropes and HUB75 quad 1, with no Modal.
+
+**Waiting on people:**
+1. **Dave:** OK to run `gallery/sync.py` on bitcube, whether `SITE_TOKEN` is set, and the canvas design size. Unblocks session D (his visuals on the ropes and HUB75, falling back to local rain). `INGEST_TOKEN`, location/channel names and clip cadence unblock session E (cameras into his agent).
+2. **Andi:** the receive-card layout for quad 2 and the panel-mount thread size (P2, plan item H).
+3. **Will:** retire RopeLights or keep it as a backup (it is stopped and has no trigger); OK to edit `config.local.json`; the Gray Area network (bitcube's dual NIC, the cameras' network); a fixed address for the gallery cam.
+4. **Gavin / team:** the swap test for ropes 9 and 17 (P1, deferred); whether the show needs a Commercial TouchDesigner licence; what the gallery shows if bitcube goes down (today the hardware's own colour cycle).
+
+**Next work:**
+
+5. Session I (Mac mini, running): interactive system docs (plan item M).
+6. From Wed 22 Oct at Gray Area (session G): re-run the pixel map on the hung ropes and HUB75 (plan item J, including each rope's plug-end direction and the 170/340 universe boundaries), re-aim the gallery cam, set up the gallery network. Advertise the gallery cam's new address from bitcube on Will's tailnet and remove `10.0.7.76/32`. Never advertise the venue's own LAN from another device (`docs/sessions/A.md`, 17:50).
+7. bitcube has no GitHub credentials for `river-agent`: pull and push it from a machine that has them, or ask Dave for a deploy key. Needed before D and E.
+
+**Housekeeping (not urgent):**
+
+8. Review the TeamViewer service (a second remote-access path).
+9. Optional: run `tools\snapshot_task.ps1` once from an elevated PowerShell so `RiverSnapshot` also runs with nobody logged in.
+10. Gavin's Oct 7 Chromatik model and pixel map were never copied to bitcube. The camera pixel map has replaced them for now; they're only needed if item J uses them.
+11. Optional: an ongoing Signal link via `signal-cli` as a linked device (offered, not done). For now Gavin sends Signal messages himself.
+
+*Done from the 17 Oct list:* TouchDesigner licence (Non-Commercial); `river-agent` access and clone; TD driving the ropes over Art-Net and HUB75 quad 1 over HDMI; box IPs (`2.0.0.10`/`.11`) and the universe mapping (Will's config); colour order (RGB); live Art-Net overrides the boxes' own program, and silence hands it back.
 
 ---
 
@@ -282,3 +299,4 @@ Cameras (Reolink, RTSP + pan/tilt) ─► GL.iNet router running Tailscale ─�
 - Brought the docs in line with the 16:54 autostart change: the status page, plan item L, CLAUDE.md's "Two show files" line and "What runs on bitcube" now say the login opens `river-local-oct-18.toe` (the last also lists `Start-Claude`, `Start-Status` and `RiverSnapshot`). Session C's "Waiting on Gavin" item about it is closed.
 - Fixed the dark-rope numbers in plan.md's Decisions (9 and **17**, not 12), the hardware doc's colour order (RGB, confirmed) and the gallery cam's address (`10.0.7.76` on Agape WiFi, aimed at the piles).
 - Docs only, made while session I runs on the Mac mini (Gavin's OK). The camera-password hint is left for session I's step I6.
+- 18:00: rewrote section 6 ("Open items / next steps"). The 17 Oct list was mostly done; it now lists who we are waiting on, next work (including session A's 17:50 Tailscale rule for Gray Area) and housekeeping, and points to `plan.md` as the live checklist.
