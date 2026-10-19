@@ -313,3 +313,7 @@ The live checklist is `docs/plan.md` (items and open questions) and the session 
   - No device of Dave's was visible on Will's tailnet. TeamViewer still listens on bitcube (5938). The TD bridge binds `0.0.0.0:9980` but answers only localhost.
 - **Camera-password hint removed** from CLAUDE.md and the hardware doc. It's still in git history; that history was not rewritten. The "personal emails" rule in CLAUDE.md and above now matches Gavin's call: account emails and usernames may be published, passwords and tokens never. CLAUDE.md's gallery-cam line was updated for the `/32` route.
 - Session I worked in a git worktree (`.worktrees/session-i`) because session A was committing in the same checkout.
+
+### 2026-10-18 18:46 (Claude on bitcube): HUB75 off for the day
+
+- Gavin asked to turn the HUB75 off for the day: panels `Source=black` set live in `river-local-oct-18.toe` (output max 0.0, gallery cam shows the panel dark; the window still covers the LED display in black). **Not saved**, so the next reboot or reload brings the HUB75 rain back. The ropes still show the rain (about 136 W). To turn it back on: `.\tools\td.ps1 "setattr(op('/project1/panels').par, 'Source', 'canvas')"`.
