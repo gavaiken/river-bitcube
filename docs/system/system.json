@@ -1582,8 +1582,8 @@
    "interfaces": [
     {
      "name": "WAN",
-     "ip": "10.0.7.150",
-     "how": "on Agape LAN until 18 Oct; at the river: unknown (Starlink?)",
+     "ip": null,
+     "how": "at the river: unknown (Starlink?); was 10.0.7.150 on the Agape LAN until 18 Oct",
      "verified": "unverified"
     },
     {

@@ -1,0 +1,27 @@
+# A River Becoming
+
+> An LED and AI art installation for Gray Area, San Francisco (install 22-27 Oct 2026). 20 LED ropes (Art-Net) and HUB75 panels (HDMI) are driven by TouchDesigner on "bitcube", a Windows mini PC. An AI agent on Modal composes the scene from cameras at the gallery and at a real river. This site holds the status, plan and docs for bitcube.
+
+- The whole system (machines, devices, IPs, hostnames, ports, usernames, connections, the Modal to bitcube API) is in system.json. Read it rather than scraping the HTML pages.
+- No passwords or token values appear anywhere here. Secrets are listed only by name and where they live.
+- The repo (github.com/gavaiken/river-bitcube) is public. Changes go through git; docs/ is the source of truth.
+
+## System map
+
+- [system.json](https://gavaiken.github.io/river-bitcube/system/system.json): the machine-readable map. Places, nodes, links, the `now` (Agape) and `show` (Gray Area) scenarios, the API contract with examples, secrets by name, open questions and sources.
+- [system.md](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/system/system.md): the same facts as Markdown, with a Mermaid diagram per scenario. Generated from system.json.
+- [Interactive map](https://gavaiken.github.io/river-bitcube/system/): the clickable diagram for people. Deep links like #node=bitcube or #link=artnet-box1.
+
+## Working on the installation
+
+- [CLAUDE.md](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/CLAUDE.md): rules and hard-won facts for agents working on bitcube. Read first.
+- [plan.md](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/plan.md): the shared checklist, decisions and open questions.
+- [Log](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/a-river-becoming-log.md): everything done so far, session by session.
+- [Execution plan](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/execution-plan.md): lettered Claude sessions, their status and the coordination contract.
+- [Hardware](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/a-river-becoming-hardware.md): ropes, PSAC10 boxes, rack controller, panels, cameras.
+
+## Optional
+
+- [Status page](https://gavaiken.github.io/river-bitcube/): the one-screen status, with the latest gallery-cam snapshot.
+- [Design notes](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/a-river-becoming-notes.md): from the team meetings.
+- [river-agent](https://github.com/drocamor/river-agent): Dave's agent and Modal app (private repo).

@@ -256,3 +256,29 @@ def test_the_river_sites_coordinates_are_not_published():
     assert len(coords) == 4  # lat and lon, full and to two decimals
     docs = [f for f in sc.repo_files(REPO) if f.relative_to(REPO).parts[0] == "docs"]
     assert sc.files_containing(coords, docs, root=REPO) == []
+
+
+# ---------------------------------------------------------------- system.md (tools/system_docs.py)
+
+SYSTEM_MD = REPO / "docs" / "system" / "system.md"
+
+
+def test_system_md_covers_every_node_link_and_secret(real):
+    import system_docs
+    md = system_docs.render(real)
+    missing = [i["id"] for k in ("nodes", "links") for i in real[k] if f"`{i['id']}`" not in md]
+    missing += [s["name"] for s in real["secrets"] if s["name"] not in md]
+    assert missing == []
+    assert md.count("```mermaid") == len(real["scenarios"])
+
+
+def test_system_md_survives_github_pages_liquid(real):
+    import system_docs
+    md = system_docs.render(real)
+    assert "{{" not in md and "{%" not in md
+
+
+def test_system_md_is_in_sync_with_system_json(real):
+    import system_docs
+    assert SYSTEM_MD.exists(), "run: python3 tools/system_docs.py"
+    assert SYSTEM_MD.read_text(encoding="utf-8") == system_docs.render(real), "system.md is stale: run python3 tools/system_docs.py"
