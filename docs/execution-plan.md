@@ -32,7 +32,7 @@ title: Execution plan
 | ✅ | I1 | **Interactive system documentation** ([progress](sessions/I.md)): every fact into `docs/system/system.json` | I (Mac mini · Opus 5.5) | Claude |
 | ✅ | I2 | Validator with secret scanning (TDD) | I (Mac mini · Opus 5.5) | Claude |
 | ✅ | I3 | Interactive page `docs/system/` (clickable diagram, API tab) | I (Mac mini · Opus 5.5) | Claude |
-| ➡️ | I4 | Generated `system.md` + `llms.txt` for agents | I (Mac mini · Opus 5.5) | Claude |
+| ✅ | I4 | Generated `system.md` + `llms.txt` for agents | I (Mac mini · Opus 5.5) | Claude |
 | ➡️ | I5 | Verify in headless Chrome and on the published URLs | I (Mac mini · Opus 5.5) | Claude |
 | ➡️ | I6 | Remove the password hint, links, code review, Signal draft, summary | I (Mac mini · Opus 5.5) | Claude |
 | ❌ | D1–D4 | Dave's Modal visuals on the ropes and HUB75. *Blocked: waiting on Dave (OK to run `gallery/sync.py`; is `SITE_TOKEN` set?)* | D (bitcube · Opus 5.5) | Claude |
