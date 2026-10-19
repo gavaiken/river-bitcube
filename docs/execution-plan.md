@@ -30,7 +30,7 @@ title: Execution plan
 | ✅ | C2 | Status page never shows a broken image; live snapshot confirmed | C (bitcube · Opus 5.5) | Claude |
 | ✅ | C3 | Panels window covers the whole LED display in black (both show files) | C (bitcube · Opus 5.5) | Claude |
 | ✅ | I1 | **Interactive system documentation** ([progress](sessions/I.md)): every fact into `docs/system/system.json` | I (Mac mini · Opus 5.5) | Claude |
-| ➡️ | I2 | Validator with secret scanning (TDD) | I (Mac mini · Opus 5.5) | Claude |
+| ✅ | I2 | Validator with secret scanning (TDD) | I (Mac mini · Opus 5.5) | Claude |
 | ➡️ | I3 | Interactive page `docs/system/` (clickable diagram, API tab) | I (Mac mini · Opus 5.5) | Claude |
 | ➡️ | I4 | Generated `system.md` + `llms.txt` for agents | I (Mac mini · Opus 5.5) | Claude |
 | ➡️ | I5 | Verify in headless Chrome and on the published URLs | I (Mac mini · Opus 5.5) | Claude |
