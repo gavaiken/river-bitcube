@@ -12,3 +12,7 @@ Notes kept here while another session is editing the shared docs; folded into th
 - Lighting path unaffected by removing the "switch": Ethernet up at 100 Mbps, both PSAC10s (`2.0.0.10`/`.11`) reachable, TD 60 fps.
 - HUB75 rain is very dim: `panel_out` peaks at about 0.17 (panels Brightness 0.5, and the HUB75's camera-space region is mostly dark). Tuning item, not a fault.
 - Proposed next (awaiting Gavin): bitcube advertises only `10.0.7.76/32` (gallery cam) on Will's tailnet, approved in the console, so teammates reach the camera through bitcube.
+
+## 2026-10-18 17:55
+- **Gallery cam shared over Tailscale through bitcube:** `tailscale set --advertise-routes=10.0.7.76/32` on bitcube, approved by Gavin in Will's console (bitcube's `PrimaryRoutes` = `10.0.7.76/32`). Devices **on Will's tailnet** can now reach the cam at `10.0.7.76` (RTSP 554, PTZ HTTPS) via bitcube. Node *sharing* doesn't carry routes, so on Gavin's own tailnet it isn't visible; use the account switcher to Will's tailnet. At Gray Area, advertise the gallery cam's new address the same way (and remove this one).
+- **HUB75 brightened:** new `quad1_gain` Level TOP in `/project1/river_local` (`Panelgain` 3.0, `Panelgamma` 0.7 on the COMP's River page), panels `Brightness` 1.0, in `td/build/build_river_local.py` (19d8919); rebuilt and saved `river-local-oct-18.toe` (f5e7cee). Panel output went from a peak of 0.17 to 1.0 (mean 4–14%); the camera shows a bright blue-white wash crossing the HUB75 in step with the coils. Turn `Panelgain` down to about 2 if it's too strong in person.
