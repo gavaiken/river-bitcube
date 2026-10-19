@@ -45,6 +45,7 @@
   --shadow: 0 6px 28px rgba(0, 0, 0, .5);
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); padding-inline: 16px; padding-bottom: env(safe-area-inset-bottom, 0px); }
 a { color: var(--accent); }
@@ -543,12 +544,19 @@ body.panel-open footer { margin-right: 420px; }
     const q = S.query.trim();
     if (!q) { box.hidden = true; return; }
     const m = [...matches()].map((id) => byId[id]);
-    m.sort((a, b) => (a._t === b._t ? 0 : a._t === 'node' ? -1 : 1) || (nodeOrLinkVisible(b) - nodeOrLinkVisible(a)));
+    m.sort((a, b) => (rank(b, q) - rank(a, q)) || (a._t === b._t ? 0 : a._t === 'node' ? -1 : 1) || (nodeOrLinkVisible(b) - nodeOrLinkVisible(a)));
     box.textContent = '';
     if (!m.length) box.append(el('p', { text: `Nothing matches “${q}”.` }));
     m.slice(0, 12).forEach((it, i) => box.append(el('button', { type: 'button', class: i === activeResult ? 'active' : '', 'data-id': it.id,
       onclick: () => { hideResults(); open(it._t, it.id); } }, el('span', { text: it._t === 'node' ? it.name : (it.label || it.protocol) }), el('small', { text: why(it, q) }))));
     box.hidden = false;
+  }
+  function rank(it, q) {
+    // exact name, id, IP or hostname first; then any of those containing the query; then a match anywhere
+    q = q.toLowerCase();
+    const keys = [it.id, it.name, it.short, it.label, ...(it.hostnames || []), ...(it.interfaces || []).map((i) => i.ip && stripCidr(i.ip))]
+      .filter(Boolean).map((k) => String(k).toLowerCase());
+    return keys.includes(q) ? 2 : (keys.some((k) => k.includes(q)) ? 1 : 0);
   }
   function nodeOrLinkVisible(it) { return it._t === 'node' ? (nodeVisible(it) ? 1 : 0) : (linkVisible(it) ? 1 : 0); }
   function hideResults() { $('results').hidden = true; activeResult = -1; }

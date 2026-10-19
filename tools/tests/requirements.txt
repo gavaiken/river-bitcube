@@ -1,1 +1,2 @@
 pytest
+playwright  # optional, for test_system_page.py; drives the installed Google Chrome (no browser download)
