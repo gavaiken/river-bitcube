@@ -16,3 +16,4 @@ Steps:
 - **I6** Remove the camera-password hint, link the page from the status page and README, tick M, code review, Signal draft, summary.
 
 Progress:
+- 17:37 I1 ✅ `docs/system/system.json`: 6 places, 60 nodes (incl. 20 ropes with box/OUT/universes), 82 links, scenarios now/show, the Modal↔bitcube API with live 18 Oct examples, 13 secrets by name and location, 16 open questions, sources. Facts from the repo docs, river-agent a9cbd2c, read-only ssh to bitcube, both tailnets, and the live Modal site (SITE_TOKEN is not set). (commit pending)
