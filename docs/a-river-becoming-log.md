@@ -18,13 +18,12 @@ LED + AI art installation for **Gray Area** (SF) that should read as a river. 20
 ## 2. People
 | Who | Role |
 |---|---|
-| Casper | Lead / organiser, ordering |
+| Colin | Artist; lead / organiser, ordering |
 | Justine Sun Dela Cruz | Meeting notes, visual references, coordination |
 | Will Gardiner | Networking, cameras, Tailscale (tailnet owner), Windows box, rope-light app |
 | Dave (drocamor) | Agent + generated visuals on Modal; owns the `river-agent` repo |
 | Andi | HUB75 panels, Colorlight config (from their own Windows PC), TouchDesigner |
 | Lilian (Lily) | Rigging; Gray Area liaison with Seabrook |
-| Colin | Mentioned in meetings (connected Lily to Seabrook; "panels as high-res windows" idea) |
 | Gavin | Pixel mapping, TouchDesigner harness; built the Chromatik model + TD patch on Oct 7 |
 
 ## 3. System architecture (current understanding)

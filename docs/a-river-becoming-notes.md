@@ -36,7 +36,7 @@ Earlier the group leaned toward (b) for resilience: if the network flakes, the s
 Decision: "it just has to look good". Do the mapping if it's achievable, otherwise fall back to pools.
 
 ## Animation direction
-River-like and flowing, not literally a river. Earlier refs: Justine's cosmos.so board, the WLED effects list, Casper's fast→slow-mo flow and "breathing" (colour or intensity), high contrast on black (the panels don't ghost). Constraint: 2D canvas animations don't automatically translate to 1D/3D sculpture.
+River-like and flowing, not literally a river. Earlier refs: Justine's cosmos.so board, the WLED effects list, Colin's fast→slow-mo flow and "breathing" (colour or intensity), high contrast on black (the panels don't ghost). Constraint: 2D canvas animations don't automatically translate to 1D/3D sculpture.
 
 ## Sensing and the agent
 - **Will's angle (reservoir computing):** treat the ripples on the river's surface as state/memory. Decompose the video, e.g. PCA, high vs low frequency, ripple vs bulk flow, into roughly orthogonal vectors. Expose the analysis scripts to the agent as tool calls, maybe as an MCP server with "dials".

@@ -22,7 +22,7 @@ Updated 2026-10-18T18:10:00-07:00.
 
 ### Now: Agape (`now`, 18 Oct 2026)
 
-Prototype at Agape. bitcube runs the local rain checkpoint on 18 of 20 ropes and HUB75 quad 1, with no Modal input yet. The gallery cam is on Agape WiFi, and bitcube shares it on Will's tailnet (10.0.7.76/32). The GL.iNet router and the river cam left for the river with Casper on the evening of 18 Oct. Modal's agent ticks every 5 minutes, but nothing on bitcube reads it yet.
+Prototype at Agape. bitcube runs the local rain checkpoint on 18 of 20 ropes and HUB75 quad 1, with no Modal input yet. The gallery cam is on Agape WiFi, and bitcube shares it on Will's tailnet (10.0.7.76/32). The GL.iNet router and the river cam left for the river with Colin on the evening of 18 Oct. Modal's agent ticks every 5 minutes, but nothing on bitcube reads it yet.
 
 ```mermaid
 flowchart LR
@@ -268,7 +268,7 @@ Solid arrows are working; dotted arrows are planned, stopped, blocked or unknown
 
 | Place | Scenarios | Status | Summary |
 |---|---|---|---|
-| The River (`river`) | now, show | partial | The real river the agent watches. The GL.iNet router and the Reolink E1 Outdoor Pro went there with Casper on 18 Oct; Starlink and solar/battery power are expected there (unverified). Area: near Dobbins, California. |
+| The River (`river`) | now, show | partial | The real river the agent watches. The GL.iNet router and the Reolink E1 Outdoor Pro went there with Colin on 18 Oct; Starlink and solar/battery power are expected there (unverified). Area: near Dobbins, California. |
 | Agape (prototype) (`agape`) | now, show | working | Gavin's house in the Mission, SF, where everything is prototyped until the Gray Area install. Gavin's Mac mini stays here. Network: lan: 10.0.7.0/24; gateway: 10.0.7.1 (eero); wifi: Agape WiFi. |
 | Gray Area (show) (`grayarea`) | show | planned | The gallery. Install Wed 22 to Mon 27 Oct 2026. Network plan not settled (open questions to Will). Address: Gray Area, 2665 Mission St, San Francisco. |
 | Modal cloud (`modal`) | now, show | working | Dave's agent: one Modal app (tick, watch, web) plus model apps, in workspace to-be-a-river. |
@@ -283,7 +283,7 @@ Solid arrows are working; dotted arrows are planned, stopped, blocked or unknown
 
 *camera · unknown · confirmed · owner Will Gardiner · now: The River · show: The River*
 
-Reolink E1 Outdoor Pro behind the GL.iNet router. Left Agape for the river with Casper on the evening of 18 Oct (it used to sit on the rack controller here).
+Reolink E1 Outdoor Pro behind the GL.iNet router. Left Agape for the river with Colin on the evening of 18 Oct (it used to sit on the rack controller here).
 
 - **Specs:**
   - model: Reolink E1 Outdoor Pro
@@ -305,7 +305,7 @@ Reolink E1 Outdoor Pro behind the GL.iNet router. Left Agape for the river with 
 
 *router · unknown · confirmed · owner Will Gardiner · now: The River · show: The River*
 
-GL.iNet GL-AXT1800 (Slate AX) travel router running Tailscale: puts the river cam's subnet 192.168.8.0/24 on Will's tailnet. Left Agape for the river with Casper and the river cam on the evening of 18 Oct; offline at 17:50.
+GL.iNet GL-AXT1800 (Slate AX) travel router running Tailscale: puts the river cam's subnet 192.168.8.0/24 on Will's tailnet. Left Agape for the river with Colin and the river cam on the evening of 18 Oct; offline at 17:50.
 
 - **Specs:**
   - model: GL.iNet GL-AXT1800 (Slate AX)
@@ -488,7 +488,7 @@ About 30 HUB75 panels exist in total (the 'pools'); how many go into the show be
 
 ### PSAC10 box 1 (`psac10-1`)
 
-*led-controller · working · confirmed · owner Casper · now: Agape (prototype) · show: Gray Area (show)*
+*led-controller · working · confirmed · owner Colin · now: Agape (prototype) · show: Gray Area (show)*
 
 AoShow AS_PSAC10 Art-Net node and 1,750 W PSU. Ropes 1-10 on OUT1-OUT10.
 
@@ -507,7 +507,7 @@ AoShow AS_PSAC10 Art-Net node and 1,750 W PSU. Ropes 1-10 on OUT1-OUT10.
 
 ### PSAC10 box 2 (`psac10-2`)
 
-*led-controller · working · confirmed · owner Casper · now: Agape (prototype) · show: Gray Area (show)*
+*led-controller · working · confirmed · owner Colin · now: Agape (prototype) · show: Gray Area (show)*
 
 Second AS_PSAC10. Ropes 11-20 on OUT1-OUT10.
 
@@ -523,7 +523,7 @@ Second AS_PSAC10. Ropes 11-20 on OUT1-OUT10.
 
 ### Rack LED controller (`rack-controller`)
 
-*led-controller · standby · confirmed · owner Casper · now: Agape (prototype) · show: Gray Area (show)*
+*led-controller · standby · confirmed · owner Colin · now: Agape (prototype) · show: Gray Area (show)*
 
 AoShow 1U master player (AS_MSDMX). Plays its SD-card program (program 2 lights the ropes) only when no Art-Net arrives.
 
@@ -633,11 +633,11 @@ Gray Area's own Wi-Fi/internet. Planned: bitcube's internet uplink and the galle
 
 ### Lighting switch (`gallery-switch`)
 
-*network · planned · unverified · owner Casper · now: absent · show: Gray Area (show)*
+*network · planned · unverified · owner Colin · now: absent · show: Gray Area (show)*
 
 A dumb Ethernet switch on bitcube's lighting NIC (2.0.0.8) for the rack controller and both PSAC10s.
 
-- **Notes:** Casper offered a switch (16 Oct). The 17 Oct notes also put the gallery cam on this switch; the current plan puts it on the gallery Wi-Fi.
+- **Notes:** Colin offered a switch (16 Oct). The 17 Oct notes also put the gallery cam on this switch; the current plan puts it on the gallery Wi-Fi.
 - **Open questions:** Gallery network: the dual-NIC plan. (Reaching the gallery cam over Tailscale: bitcube advertises its address as a /32, as at Agape since 18 Oct.) (ask Will Gardiner)
 - **Sources:** The team's Signal thread (exported to 17 Oct on Gavin's mini; not public); docs/a-river-becoming-log.md (session history)
 
@@ -1451,13 +1451,12 @@ No values, ever. Ask the holder.
 
 | Who | Role | Accounts |
 |---|---|---|
-| Casper | Lead and organiser, ordering |  |
+| Colin | Artist; lead and organiser, ordering. Also: TouchDesigner as the single renderer, per-rope sample paths |  |
 | Justine Sun Dela Cruz | Meeting notes, visual references, coordination |  |
 | Will Gardiner | Networking, cameras, Tailscale (runs the project tailnet), Windows box, RopeLights app | Tailscale: itsriverbox@outlook.com (Project account Will created; owns tailnet tail03bc1a (shows as "River B")) |
 | Dave | The agent and its generated visuals on Modal; owns river-agent | GitHub: drocamor; Modal: workspace to-be-a-river (Workspace owner unverified) |
 | Andi Doud | HUB75 panels, Colorlight config, TouchDesigner | Tailscale: andixdoud@gmail.com (Member of Will's tailnet) |
 | Lilian (Lily) | Rigging; Gray Area liaison |  |
-| Colin | Advisor (per-rope sample paths, TD as single renderer) |  |
 | Gavin Aiken | Pixel mapping, TouchDesigner harness, this repo and its Claude sessions | GitHub: gavaiken; Tailscale: gav.aiken@gmail.com (Own tailnet tailddc624; Admin on Will's tailnet; bitcube is shared into his tailnet) |
 
 ## Sources

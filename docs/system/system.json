@@ -65,7 +65,7 @@
    "name": "Now: Agape",
    "when": "18 Oct 2026",
    "status": "working",
-   "summary": "Prototype at Agape. bitcube runs the local rain checkpoint on 18 of 20 ropes and HUB75 quad 1, with no Modal input yet. The gallery cam is on Agape WiFi, and bitcube shares it on Will's tailnet (10.0.7.76/32). The GL.iNet router and the river cam left for the river with Casper on the evening of 18 Oct. Modal's agent ticks every 5 minutes, but nothing on bitcube reads it yet."
+   "summary": "Prototype at Agape. bitcube runs the local rain checkpoint on 18 of 20 ropes and HUB75 quad 1, with no Modal input yet. The gallery cam is on Agape WiFi, and bitcube shares it on Will's tailnet (10.0.7.76/32). The GL.iNet router and the river cam left for the river with Colin on the evening of 18 Oct. Modal's agent ticks every 5 minutes, but nothing on bitcube reads it yet."
   },
   {
    "id": "show",
@@ -96,7 +96,7 @@
    ],
    "status": "partial",
    "verified": "unverified",
-   "summary": "The real river the agent watches. The GL.iNet router and the Reolink E1 Outdoor Pro went there with Casper on 18 Oct; Starlink and solar/battery power are expected there (unverified).",
+   "summary": "The real river the agent watches. The GL.iNet router and the Reolink E1 Outdoor Pro went there with Colin on 18 Oct; Starlink and solar/battery power are expected there (unverified).",
    "area": "near Dobbins, California",
    "notes": [
     "Location given as an area only, on purpose: the kit there is unattended."
@@ -608,7 +608,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "AoShow AS_PSAC10 Art-Net node and 1,750 W PSU. Ropes 1-10 on OUT1-OUT10.",
@@ -647,7 +647,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "Second AS_PSAC10. Ropes 11-20 on OUT1-OUT10.",
@@ -680,7 +680,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "standby",
    "verified": "confirmed",
    "summary": "AoShow 1U master player (AS_MSDMX). Plays its SD-card program (program 2 lights the ropes) only when no Art-Net arrives.",
@@ -707,7 +707,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 1 OUT1, universes 0-2.",
@@ -744,7 +744,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 1 OUT2, universes 4-6.",
@@ -781,7 +781,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 1 OUT3, universes 8-10.",
@@ -818,7 +818,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 1 OUT4, universes 12-14.",
@@ -855,7 +855,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 1 OUT5, universes 16-18.",
@@ -892,7 +892,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 1 OUT6, universes 20-22.",
@@ -929,7 +929,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 1 OUT7, universes 24-26.",
@@ -966,7 +966,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 1 OUT8, universes 28-30.",
@@ -1003,7 +1003,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "broken",
    "verified": "confirmed",
    "summary": "Never lights (box 1 OUT9); swap test deferred, carrying on with 18 ropes.",
@@ -1041,7 +1041,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 1 OUT10, universes 36-38.",
@@ -1078,7 +1078,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 2 OUT1, universes 40-42.",
@@ -1115,7 +1115,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 2 OUT2, universes 44-46.",
@@ -1152,7 +1152,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 2 OUT3, universes 48-50.",
@@ -1189,7 +1189,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 2 OUT4, universes 52-54.",
@@ -1226,7 +1226,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 2 OUT5, universes 56-58.",
@@ -1263,7 +1263,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 2 OUT6, universes 60-62.",
@@ -1300,7 +1300,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "broken",
    "verified": "confirmed",
    "summary": "Never lights (box 2 OUT7); swap test deferred, carrying on with 18 ropes.",
@@ -1338,7 +1338,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 2 OUT8, universes 68-70.",
@@ -1375,7 +1375,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 2 OUT9, universes 72-74.",
@@ -1412,7 +1412,7 @@
     "now": "agape",
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "working",
    "verified": "confirmed",
    "summary": "10 m LED rope on box 2 OUT10, universes 76-78.",
@@ -1514,7 +1514,7 @@
    "owner": "will",
    "status": "unknown",
    "verified": "confirmed",
-   "summary": "Reolink E1 Outdoor Pro behind the GL.iNet router. Left Agape for the river with Casper on the evening of 18 Oct (it used to sit on the rack controller here).",
+   "summary": "Reolink E1 Outdoor Pro behind the GL.iNet router. Left Agape for the river with Colin on the evening of 18 Oct (it used to sit on the rack controller here).",
    "specs": {
     "model": "Reolink E1 Outdoor Pro",
     "rtsp": "rtsp://admin:<password>@192.168.8.217:554/Preview_01_main",
@@ -1570,7 +1570,7 @@
    "owner": "will",
    "status": "unknown",
    "verified": "confirmed",
-   "summary": "GL.iNet GL-AXT1800 (Slate AX) travel router running Tailscale: puts the river cam's subnet 192.168.8.0/24 on Will's tailnet. Left Agape for the river with Casper and the river cam on the evening of 18 Oct; offline at 17:50.",
+   "summary": "GL.iNet GL-AXT1800 (Slate AX) travel router running Tailscale: puts the river cam's subnet 192.168.8.0/24 on Will's tailnet. Left Agape for the river with Colin and the river cam on the evening of 18 Oct; offline at 17:50.",
    "specs": {
     "model": "GL.iNet GL-AXT1800 (Slate AX)",
     "tailscale_routes": [
@@ -1683,12 +1683,12 @@
     "now": null,
     "show": "grayarea"
    },
-   "owner": "casper",
+   "owner": "colin",
    "status": "planned",
    "verified": "unverified",
    "summary": "A dumb Ethernet switch on bitcube's lighting NIC (2.0.0.8) for the rack controller and both PSAC10s.",
    "notes": [
-    "Casper offered a switch (16 Oct). The 17 Oct notes also put the gallery cam on this switch; the current plan puts it on the gallery Wi-Fi."
+    "Colin offered a switch (16 Oct). The 17 Oct notes also put the gallery cam on this switch; the current plan puts it on the gallery Wi-Fi."
    ],
    "open_questions": [
     "q-gallery-network"
@@ -4569,9 +4569,9 @@
  ],
  "people": [
   {
-   "id": "casper",
-   "name": "Casper",
-   "role": "Lead and organiser, ordering"
+   "id": "colin",
+   "name": "Colin",
+   "role": "Artist; lead and organiser, ordering. Also: TouchDesigner as the single renderer, per-rope sample paths"
   },
   {
    "id": "justine",
@@ -4622,11 +4622,6 @@
    "id": "lilian",
    "name": "Lilian (Lily)",
    "role": "Rigging; Gray Area liaison"
-  },
-  {
-   "id": "colin",
-   "name": "Colin",
-   "role": "Advisor (per-rope sample paths, TD as single renderer)"
   },
   {
    "id": "gavin",
