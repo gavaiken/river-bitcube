@@ -4,7 +4,7 @@ title: Execution plan
 
 # Execution plan: from today's hardware to the full Modal-driven show
 
-**Updated Sun 18 Oct 2026, 17:00, by session A (coordinator).**
+**Updated Sun 18 Oct 2026, 17:15, by session A (coordinator).**
 
 ## Status
 ✅ done · ➡️ next (in order) · ❌ blocked
@@ -29,6 +29,7 @@ title: Execution plan
 | ✅ | C1 | Gallery-cam snapshot every 15 min (08:00–02:00), force-pushed to orphan branch `snapshot` | C (bitcube · Opus 5.5) | Claude |
 | ✅ | C2 | Status page never shows a broken image; live snapshot confirmed | C (bitcube · Opus 5.5) | Claude |
 | ✅ | C3 | Panels window covers the whole LED display in black (both show files) | C (bitcube · Opus 5.5) | Claude |
+| ➡️ | I1–I6 | **Interactive system documentation:** clickable diagram of every node and link (the River, Agape, Gray Area, Modal cloud), IPs, usernames, the Modal↔bitcube API, plus `system.json` and `llms.txt` for agents | I (Mac mini · Opus 5.5) | Claude |
 | ❌ | D1–D4 | Dave's Modal visuals on the ropes and HUB75. *Blocked: waiting on Dave (OK to run `gallery/sync.py`; is `SITE_TOKEN` set?)* | D (bitcube · Opus 5.5) | Claude |
 | ❌ | E1–E3 | Cameras pushing clips to Dave's agent. *Blocked: needs `INGEST_TOKEN` and channel names from Dave* | E (bitcube · Opus 5.5) | Claude |
 | ❌ | P2 | Panel quad 2 connected. *Blocked: Andi (receive-card layout)* | Andi + Gavin, in person | Andi |
@@ -114,6 +115,36 @@ C1 A scheduled task (every 15 min, 08:00–02:00) that grabs a gallery-cam still
 C2 docs/index.md embeds raw.githubusercontent.com/gavaiken/river-bitcube/snapshot/gallery.jpg, which is broken until C1's first push. Make sure the page never shows a broken image (placeholder or latest calibration image until the branch exists), then confirm the live snapshot shows.
 C3 In td/build/build_panels.py, make the panels window cover the whole LED display (1920×1080) in black with the panel atlas at its top-left, so nothing else can ever appear on the HUB75. Rebuild and save in BOTH show files: td_save.ps1 saves whichever file is open, so open river-local-oct-18.toe, rebuild, save; then open river.toe, rebuild, save; then reopen whichever file the login autostart uses (see Start-River.cmd). Verify with a gallery-cam frame that only the panel atlas shows on the HUB75.
 Tick plan items G and B. Follow the Coordination contract in docs/execution-plan.md throughout (docs/sessions/C.md, Status table, push after every step, summary at the end).
+```
+
+## Session I: interactive system documentation (Mac mini · Opus 5.5 · plan mode)
+For Will, Andi, Dave and their agents: one public page that shows how everything connects.
+- **Skills:** `artifact-diagramming` and `artifact-design` (design guidance for the page), `mattpocock-skills:tdd` (the validator), `code-review`.
+- **Output:**
+  - `docs/system/system.json`: the single source of truth.
+  - `docs/system/index.html`: the interactive diagram. It's self-contained, and every node and link can be clicked.
+  - `docs/system/system.md` + `docs/llms.txt`: for agents.
+- **Rule (Gavin):** show everything except secrets. Names, hostnames, IPs, ports, usernames and account emails go in; passwords and token values never.
+
+**Steps:**
+- **I1:** facts → `system.json`.
+- **I2:** validator, including secret scanning (TDD).
+- **I3:** interactive page.
+- **I4:** generated `system.md` + `llms.txt`.
+- **I5:** verify in headless Chrome and on the published URLs.
+- **I6:** remove the password hint, link from the status page and README, code review, summary, and a Signal message to the team.
+
+**Prompt to paste:** (on the **Mac mini**, in a fresh `claude` conversation in `~/claude/Source/river-bitcube`)
+```
+You are session I (Mac mini · Opus 5.5). cd ~/claude/Source/river-bitcube && git pull; also git -C ~/claude/Source/river-agent pull. Read CLAUDE.md, docs/plan.md, docs/execution-plan.md (including the Coordination contract), docs/a-river-becoming-hardware.md and the log. Start in plan mode and show me the plan first; put the approved step list in docs/sessions/I.md and push before executing. Docs only: you may read bitcube over `ssh bitcube` but must not change anything there.
+Goal (plan item M): clear, interactive web documentation of the whole system for Will, Andi, Dave and their agents, on the public GitHub Pages site. Gavin's call: show everything except secrets — names, hostnames, LAN and Tailscale IPs, ports, device usernames and account emails yes; passwords and token values never.
+I1 Gather every fact (repo docs; river-agent's modal_deploy/app.py, gallery/sync.py, capture/capture.py, tools/site.py, web/canvas.js; bitcube read-only over ssh: NICs, monitors, C:\Users\user\RopeLights\config.local.json; tailscale status) into docs/system/system.json: places (The River, Agape now, Gray Area show, Modal cloud, Internet/Tailscale, GitHub), nodes (all machines, cameras, router, Starlink, PSAC10s, rack controller, 20 ropes with box/OUT/universe, Colorlight sender, receive card, HUB75 quads, M14, Modal app and its endpoints, repos, Gavin's mini) with ids, specs, IPs, hostnames, usernames, accounts, ports, access, owner, status; links (Art-Net, HDMI, RTSP, PTZ API, SSH/VNC/RDP/SMB over Tailscale, HTTPS to Modal, Starlink, GitHub pushes) with medium, protocol/port, direction, payload, auth by token NAME, rate, status; scenarios `now` (Agape) and `show` (Gray Area: gallery cam on the gallery Wi-Fi and added to bitcube's tailnet — planned, with open questions); api: the Modal↔bitcube contract (bitcube pulls /data/state.json, reflex.json, status.json every 3 s via the gallery/sync.py mirror on :8770; bitcube pushes camera clips to POST /ingest/{location}/{channel} with Bearer INGEST_TOKEN; schemas and examples), each item marked confirmed or awaiting Dave; secrets: where each lives, never values. Mark anything you couldn't verify as "unverified".
+I2 TDD a validator (pytest, tools/tests/test_system_json.py): link endpoints exist, every node placed per scenario, unique ids, valid statuses, NO secrets (regex for password/token-like strings, rtsp://user:pass@, Bearer values, and the real values from bitcube's secrets.local.json read over ssh at test time — never print them), system.md in sync.
+I3 docs/system/index.html — self-contained HTML/CSS/vanilla JS (no external scripts) that loads system.json and draws an SVG diagram: each place a labelled region, nodes inside, links coloured by medium; click any node or link for a side panel with all its fields; URL hash deep links (#node=bitcube, #link=artnet-box1); hover highlights connections; search by name/IP/hostname; legend; scenario toggle now/show; an API tab with the Modal↔bitcube contract and example JSON; light and dark themes; works on a phone; keyboard accessible. Load the artifact-diagramming and artifact-design skills for diagram/page design guidance.
+I4 tools/system_docs.py generates docs/system/system.md (full text + a Mermaid diagram) from system.json; add docs/llms.txt at the site root pointing agents to system.json, system.md, CLAUDE.md, plan.md and the log.
+I5 Verify: pytest green; headless Chrome renders the page with no console errors; every node and link opens a panel; scenario toggle and hash links work; check the published URLs after the Pages build.
+I6 Remove the public hint that the camera password equals bitcube's (CLAUDE.md, hardware doc). Link the page from docs/index.md's link bar and README.md. Tick plan item M, run code-review and fix findings, and draft a short Signal message asking Will, Andi and Dave to check the page and correct anything wrong.
+Follow the Coordination contract throughout (docs/sessions/I.md, Status table, push after every step, SESSION I SUMMARY at the end).
 ```
 
 ## Session D: Dave's visuals on the hardware (bitcube · Opus 5.5 · plan mode)
