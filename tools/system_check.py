@@ -200,6 +200,15 @@ def repo_files(repo):
     return sorted({Path(repo) / f for f in out.split("\0") if f and (Path(repo) / f).is_file()})
 
 
+def sibling_repo(repo, name):
+    """A checkout next to this one (River\\river-agent on bitcube, ~/claude/Source/river-agent on the mini),
+    found from the main checkout even when this runs in a git worktree."""
+    common = subprocess.run(["git", "-C", str(repo), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                            capture_output=True, text=True).stdout.strip()
+    main = Path(common).parent if common else Path(repo)
+    return main.parent / name
+
+
 def river_coordinates(agent_env):
     """WEATHER_LAT and WEATHER_LON from river-agent's agent.env, full and to two decimals, as Redacted."""
     vals = dict(line.split("=", 1) for line in agent_env.splitlines() if line.startswith(("WEATHER_LAT=", "WEATHER_LON=")))

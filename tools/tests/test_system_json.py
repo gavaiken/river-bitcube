@@ -249,7 +249,7 @@ def test_no_file_in_the_repo_holds_a_real_secret(real_secrets):
 
 
 def test_the_river_sites_coordinates_are_not_published():
-    env = REPO.parent / "river-agent" / "modal_deploy" / "agent.env"
+    env = sc.sibling_repo(REPO, "river-agent") / "modal_deploy" / "agent.env"
     if not env.exists():
         pytest.skip("river-agent checkout not found next to this repo")
     coords = sc.river_coordinates(env.read_text(encoding="utf-8"))

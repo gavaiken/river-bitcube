@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>River system map</title>
+<meta name="description" content="A River Becoming: every machine, device, service and connection, with IPs, ports, usernames and the Modal to bitcube API. No secrets.">
+<link rel="icon" href="data:,">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f2f5f6; --surface: #ffffff; --surface-2: #e9eef0; --place: #e6edef; --place-line: #c9d5da;
+  --ink: #13232c; --muted: #566a73; --line: #b9c7cd; --line-strong: #7d8f97;
+  --accent: #0b7a84; --accent-ink: #ffffff; --focus: #0b7a84;
+  --m-artnet: #cf5f0c; --m-ethernet: #8a5a2b; --m-xlr: #ad7f0a; --m-video: #7848c2; --m-lan: #2b8040;
+  --m-tailscale: #2460c4; --m-https: #b4306a; --m-git: #47525c; --m-starlink: #677c12; --m-internal: #8796a0;
+  --s-working: #2b8a3e; --s-partial: #b8860b; --s-standby: #5b7c99; --s-planned: #8a979e; --s-blocked: #c77700;
+  --s-broken: #c62828; --s-stopped: #6b7780; --s-unknown: #9aa6ac;
+  --shadow: 0 6px 24px rgba(19, 35, 44, .14);
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0c1418; --surface: #13202a; --surface-2: #1a2a34; --place: #111d24; --place-line: #2a3d47;
+    --ink: #e2ebee; --muted: #93a6ae; --line: #33474f; --line-strong: #6a8089;
+    --accent: #45c1cb; --accent-ink: #062b2f; --focus: #6fd6de;
+    --m-artnet: #f08a3c; --m-ethernet: #c79a6b; --m-xlr: #dfb54a; --m-video: #a98aee; --m-lan: #6cc47e;
+    --m-tailscale: #7aa8f7; --m-https: #ee7daa; --m-git: #a9b3bc; --m-starlink: #b5c952; --m-internal: #74858d;
+    --s-working: #5cc46f; --s-partial: #e0b54a; --s-standby: #8fb0cc; --s-planned: #7d8d94; --s-blocked: #f0a33c;
+    --s-broken: #ff6b61; --s-stopped: #8a979e; --s-unknown: #6b7a80;
+    --shadow: 0 6px 28px rgba(0, 0, 0, .5);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0c1418; --surface: #13202a; --surface-2: #1a2a34; --place: #111d24; --place-line: #2a3d47;
+  --ink: #e2ebee; --muted: #93a6ae; --line: #33474f; --line-strong: #6a8089;
+  --accent: #45c1cb; --accent-ink: #062b2f; --focus: #6fd6de;
+  --m-artnet: #f08a3c; --m-ethernet: #c79a6b; --m-xlr: #dfb54a; --m-video: #a98aee; --m-lan: #6cc47e;
+  --m-tailscale: #7aa8f7; --m-https: #ee7daa; --m-git: #a9b3bc; --m-starlink: #b5c952; --m-internal: #74858d;
+  --s-working: #5cc46f; --s-partial: #e0b54a; --s-standby: #8fb0cc; --s-planned: #7d8d94; --s-blocked: #f0a33c;
+  --s-broken: #ff6b61; --s-stopped: #8a979e; --s-unknown: #6b7a80;
+  --shadow: 0 6px 28px rgba(0, 0, 0, .5);
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); padding-inline: 16px; padding-bottom: env(safe-area-inset-bottom, 0px); }
+a { color: var(--accent); }
+code, .mono { font-family: var(--mono); font-size: .9em; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.2; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* header */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--bg); margin-inline: -16px; padding: 10px 16px 0; border-bottom: 1px solid var(--line); }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.brand { display: flex; flex-direction: column; margin-right: auto; min-width: 0; }
+.brand a { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); text-decoration: none; }
+.brand a:hover { color: var(--accent); }
+.brand h1 { margin: 0; font-size: 20px; font-weight: 650; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: transparent; padding: 6px 12px; cursor: pointer; font-size: 14px; white-space: nowrap; }
+.seg button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.search { position: relative; flex: 1 1 220px; max-width: 360px; }
+.search input { width: 100%; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; }
+.results { position: absolute; left: 0; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); max-height: 60vh; overflow: auto; z-index: 30; }
+.results button { display: flex; width: 100%; gap: 8px; justify-content: space-between; border: 0; background: none; padding: 7px 10px; text-align: left; cursor: pointer; font-size: 14px; }
+.results button:hover, .results button.active { background: var(--surface-2); }
+.results small { color: var(--muted); font-family: var(--mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.results p { margin: 0; padding: 8px 10px; color: var(--muted); font-size: 14px; }
+.icon-btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 14px; white-space: nowrap; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; margin-top: 8px; scrollbar-width: none; }
+.tabs button { border: 0; background: none; padding: 8px 12px; border-bottom: 2px solid transparent; cursor: pointer; color: var(--muted); white-space: nowrap; font-size: 14px; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+
+main { padding-block: 14px 40px; }
+body.panel-open main { margin-right: 420px; }
+.lede { margin: 0 0 10px; color: var(--muted); max-width: 80ch; }
+.lede strong { color: var(--ink); }
+
+/* map */
+.map-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.map-tools .hint { color: var(--muted); font-size: 13px; }
+.map-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); -webkit-overflow-scrolling: touch; }
+#map { display: block; width: 100%; height: auto; font-family: var(--sans); user-select: none; -webkit-user-select: none; }
+.place rect { fill: var(--place); stroke: var(--place-line); stroke-width: 1; }
+.place .pname { fill: var(--ink); font-size: 13px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.place .psub { fill: var(--muted); font-size: 11.5px; font-family: var(--mono); }
+.link { cursor: pointer; }
+.link .line { fill: none; stroke-width: 1.8; }
+.link .hit { fill: none; stroke: transparent; stroke-width: 14; }
+.link .head { stroke: none; }
+.link.dash .line { stroke-dasharray: 7 5; }
+.link.dot .line { stroke-dasharray: 2 4; stroke-linecap: round; }
+.link.m-internal .line { stroke-width: 1.2; }
+.link .lbl { font-size: 11.5px; fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; pointer-events: none; }
+.link .lbl.hover-only { display: none; }
+.link:hover .lbl.hover-only, .link.sel .lbl.hover-only, .link:focus-visible .lbl.hover-only { display: inline; }
+.link.hl .line, .link.sel .line { stroke-width: 3; }
+.link:focus { outline: none; }
+.link:focus-visible .line { stroke-width: 3.5; }
+.node { cursor: pointer; }
+.node:focus { outline: none; }
+.node .box { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.2; }
+.node.unverified .box { stroke-dasharray: 4 3; }
+.node .name { fill: var(--ink); font-size: 13px; font-weight: 600; pointer-events: none; }
+.node .sub { fill: var(--muted); font-size: 11px; font-family: var(--mono); pointer-events: none; }
+.node .dot { stroke: var(--surface); stroke-width: 1.5; }
+.node:hover .box, .node.hl .box { stroke: var(--accent); stroke-width: 2; }
+.node.sel .box { stroke: var(--accent); stroke-width: 2.6; fill: var(--surface-2); }
+.node:focus-visible .box { stroke: var(--focus); stroke-width: 3; }
+.node.rope .name { font-size: 11.5px; }
+.node.rope.broken .box { fill: var(--surface-2); }
+.node.rope.broken .name { fill: var(--muted); text-decoration: line-through; }
+#map .node, #map .link { transition: opacity .15s; }
+#map.focusing .node:not(.hl):not(.hl2):not(.sel), #map.focusing .link:not(.hl):not(.sel) { opacity: .22; }
+#map.searching .node:not(.match), #map.searching .link:not(.match) { opacity: .14; }
+#map.searching .node.match .box { stroke: var(--accent); stroke-width: 2.4; }
+@media (prefers-reduced-motion: reduce) { #map .node, #map .link { transition: none; } }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+.legend .group { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.legend .group > b { color: var(--ink); font-weight: 600; margin-right: 2px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.legend svg { flex: none; }
+
+/* panel */
+.panel { position: fixed; z-index: 25; right: 0; top: var(--top-h, 120px); bottom: 0; width: 420px; background: var(--surface); border-left: 1px solid var(--line); box-shadow: var(--shadow); display: flex; flex-direction: column; }
+.panel-head { display: flex; gap: 10px; align-items: flex-start; padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+.panel-head .kicker { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.panel-head h2 { margin: 2px 0 0; font-size: 19px; overflow-wrap: anywhere; }
+.panel-head .actions { margin-left: auto; display: flex; gap: 6px; flex: none; }
+.panel-body { overflow: auto; padding: 12px 16px 28px; overscroll-behavior: contain; }
+.panel-body > p.summary { margin: 0 0 12px; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); white-space: nowrap; }
+.pill i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.pill.warn { border-color: var(--s-blocked); }
+.sec { margin-top: 16px; }
+.sec h3 { font-size: 12px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+dl.kv { display: grid; grid-template-columns: minmax(90px, max-content) 1fr; gap: 4px 12px; margin: 0; }
+dl.kv dt { color: var(--muted); font-size: 13.5px; }
+dl.kv dd { margin: 0; overflow-wrap: anywhere; }
+dl.kv dl.kv { margin-top: 2px; }
+ul.plain { margin: 0; padding-left: 18px; }
+ul.plain li { margin: 2px 0; overflow-wrap: anywhere; }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+td { overflow-wrap: anywhere; }
+.conn { display: flex; flex-direction: column; gap: 4px; }
+.conn button, .xref { display: flex; gap: 8px; align-items: baseline; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 6px 9px; cursor: pointer; }
+.conn button:hover, .xref:hover { border-color: var(--accent); }
+.conn .sw { width: 14px; height: 3px; flex: none; border-radius: 2px; align-self: center; }
+.conn .what { flex: 1; min-width: 0; }
+.conn small { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.xref { display: inline-flex; width: auto; padding: 2px 8px; font-size: 14px; }
+.endpoints { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 4px 0 10px; }
+details.raw { margin-top: 18px; }
+details.raw summary { cursor: pointer; color: var(--muted); font-size: 13.5px; }
+pre { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow: auto; font: 12.5px/1.45 var(--mono); max-height: 420px; margin: 6px 0; }
+.copy { font-size: 12.5px; padding: 3px 9px; }
+.prewrap { position: relative; }
+.prewrap .copy { position: absolute; top: 6px; right: 6px; }
+
+/* other tabs */
+.doc { max-width: 1100px; }
+.doc h2 { font-size: 20px; margin: 24px 0 8px; }
+.doc h2:first-child { margin-top: 4px; }
+.doc h3 { font-size: 16px; margin: 18px 0 6px; }
+.doc p { max-width: 80ch; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 10px 0; }
+.method { font: 700 12px var(--mono); padding: 2px 7px; border-radius: 5px; background: var(--accent); color: var(--accent-ink); margin-right: 8px; }
+.ep-path { font-family: var(--mono); font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+tr.row { cursor: pointer; }
+tr.row:hover td, tr.row:focus-visible td { background: var(--surface-2); }
+tr.row:focus { outline: none; }
+tr.row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.callout { border: 1px solid var(--s-blocked); background: var(--surface); border-radius: 10px; padding: 10px 14px; max-width: 80ch; }
+.qgroup { margin-bottom: 18px; }
+.qgroup li { margin: 6px 0; }
+.qgroup .rel { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 6px; vertical-align: middle; }
+.qgroup .rel .xref { font-size: 12.5px; padding: 1px 7px; }
+footer { color: var(--muted); font-size: 13px; padding-block: 0 24px; max-width: 80ch; }
+body.panel-open footer { margin-right: 420px; }
+.err { padding: 20px; border: 1px solid var(--s-broken); border-radius: 10px; background: var(--surface); }
+
+@media (max-width: 900px) {
+  body.panel-open main, body.panel-open footer { margin-right: 0; }
+  .panel { top: auto; left: 0; width: auto; max-height: 72vh; border-left: 0; border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .brand h1 { font-size: 18px; }
+  .search { max-width: none; order: 3; flex-basis: 100%; }
+}
+</style>
+</head>
+<body>
+<header class="top" id="top">
+  <div class="bar">
+    <div class="brand"><a href="../">A River Becoming · status</a><h1>System map</h1></div>
+    <div class="seg" role="radiogroup" aria-label="Scenario">
+      <button type="button" role="radio" id="sc-now" data-scenario="now" aria-checked="true">Now: Agape</button>
+      <button type="button" role="radio" id="sc-show" data-scenario="show" aria-checked="false">Show: Gray Area</button>
+    </div>
+    <div class="search">
+      <label for="q" class="vh">Search by name, IP or hostname</label>
+      <input id="q" type="search" placeholder="Search name, IP, hostname ( / )" autocomplete="off" spellcheck="false" aria-controls="results">
+      <div class="results" id="results" hidden></div>
+    </div>
+    <button type="button" class="icon-btn" id="theme" title="Switch theme">Theme: auto</button>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button type="button" role="tab" id="t-map" data-tab="map" aria-selected="true" aria-controls="tab-map">Map</button>
+    <button type="button" role="tab" id="t-list" data-tab="list" aria-selected="false" aria-controls="tab-list">List</button>
+    <button type="button" role="tab" id="t-api" data-tab="api" aria-selected="false" aria-controls="tab-api">Modal ↔ bitcube API</button>
+    <button type="button" role="tab" id="t-secrets" data-tab="secrets" aria-selected="false" aria-controls="tab-secrets">Secrets</button>
+    <button type="button" role="tab" id="t-questions" data-tab="questions" aria-selected="false" aria-controls="tab-questions">Open questions</button>
+    <button type="button" role="tab" id="t-agents" data-tab="agents" aria-selected="false" aria-controls="tab-agents">For agents</button>
+  </nav>
+</header>
+
+<main id="main">
+  <section id="tab-map" role="tabpanel" aria-labelledby="t-map">
+    <p class="lede" id="scenario-lede">Loading the system map…</p>
+    <div class="map-tools">
+      <button type="button" class="icon-btn" id="zoom-out" aria-label="Zoom out">−</button>
+      <button type="button" class="icon-btn" id="zoom-fit">Fit</button>
+      <button type="button" class="icon-btn" id="zoom-in" aria-label="Zoom in">+</button>
+      <span class="hint">Click or tab to any box or line for its details. Hover to see what it connects to.</span>
+    </div>
+    <figure style="margin:0">
+      <div class="map-wrap" id="mapwrap">
+        <svg id="map" role="group" aria-label="System map: places as regions, devices and services as boxes, connections as lines coloured by medium" viewBox="0 0 1600 860"></svg>
+      </div>
+      <figcaption class="legend" id="legend"></figcaption>
+    </figure>
+  </section>
+  <section id="tab-list" role="tabpanel" aria-labelledby="t-list" class="doc" hidden></section>
+  <section id="tab-api" role="tabpanel" aria-labelledby="t-api" class="doc" hidden></section>
+  <section id="tab-secrets" role="tabpanel" aria-labelledby="t-secrets" class="doc" hidden></section>
+  <section id="tab-questions" role="tabpanel" aria-labelledby="t-questions" class="doc" hidden></section>
+  <section id="tab-agents" role="tabpanel" aria-labelledby="t-agents" class="doc" hidden></section>
+</main>
+
+<aside class="panel" id="panel" role="dialog" aria-modal="false" aria-labelledby="panel-title" hidden>
+  <div class="panel-head">
+    <div style="min-width:0">
+      <div class="kicker" id="panel-kicker"></div>
+      <h2 id="panel-title" tabindex="-1"></h2>
+    </div>
+    <div class="actions">
+      <button type="button" class="icon-btn copy" id="panel-copy">Copy link</button>
+      <button type="button" class="icon-btn" id="panel-close" aria-label="Close details">✕</button>
+    </div>
+  </div>
+  <div class="panel-body" id="panel-body"></div>
+</aside>
+
+<footer id="footer">Source of truth: <a href="system.json">system.json</a>. Text version: <a href="system.html">system.md</a>. No passwords or token values appear anywhere on this page.</footer>
+
+<script>
+'use strict';
+(function () {
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const $ = (id) => document.getElementById(id);
+  const svg = $('map');
+  const S = { doc: null, scenario: 'now', tab: 'map', sel: null, query: '', scale: null, hover: null };
+  let byId = {}, people = {}, places = {}, questions = {}, sources = {};
+
+  // ------------------------------------------------------------ helpers
+  function el(tag, attrs, ...kids) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v === null || v === undefined || v === false) continue;
+      if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v;
+      else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? '' : v);
+    }
+    for (const k of kids.flat()) if (k !== null && k !== undefined && k !== false) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+    return e;
+  }
+  function sv(tag, attrs, parent) {
+    const e = document.createElementNS(SVGNS, tag);
+    for (const [k, v] of Object.entries(attrs || {})) if (v !== null && v !== undefined) e.setAttribute(k, v);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  const human = (k) => k.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+  const short = (n) => n.short || n.name;
+  const nodeVisible = (n, s = S.scenario) => n.place && n.place[s] != null;
+  const linkVisible = (l, s = S.scenario) => l.scenarios.includes(s) && nodeVisible(byId[l.from], s) && nodeVisible(byId[l.to], s);
+  const statusColor = (s) => `var(--s-${s || 'unknown'})`;
+  const mediumColor = (m) => `var(--m-${m})`;
+  function personName(id) { return people[id] ? people[id].name : (id === 'team' ? 'The team' : id); }
+  function stripCidr(ip) { return String(ip).split('/')[0]; }
+  function subline(n) {
+    const ifs = (n.interfaces || []).filter((i) => i.ip && (!i.scenario || i.scenario === S.scenario));
+    const tsOnly = ifs.filter((i) => i.name !== 'Tailscale');
+    if (tsOnly.length) return stripCidr(tsOnly[0].ip);
+    if (ifs.length) return stripCidr(ifs[0].ip);
+    if (n.kind === 'endpoint') return 'to-be-a-river--river';
+    if (n.hostnames && n.hostnames.length) return n.hostnames[0];
+    if (n.specs && n.specs.model) return String(n.specs.model).slice(0, 24);
+    return n.kind;
+  }
+  function copyText(text, btn) {
+    const done = () => { const t = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = t; }, 1400); };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, () => fallback());
+    else fallback();
+    function fallback() { const t = el('textarea', {}); t.value = text; document.body.append(t); t.select(); try { document.execCommand('copy'); done(); } catch (e) { /* select is enough */ } t.remove(); }
+  }
+
+  // ------------------------------------------------------------ hash state
+  function readHash() {
+    const h = {};
+    location.hash.replace(/^#/, '').split('&').filter(Boolean).forEach((kv) => {
+      const [k, v] = kv.split('='); h[decodeURIComponent(k)] = decodeURIComponent(v || '');
+    });
+    return h;
+  }
+  function hashFor(sel, scenario = S.scenario, tab = S.tab) {
+    const parts = [];
+    if (scenario !== 'now') parts.push('scenario=' + scenario);
+    if (tab !== 'map') parts.push('tab=' + tab);
+    if (sel) parts.push(sel.type + '=' + encodeURIComponent(sel.id));
+    return parts.length ? '#' + parts.join('&') : '';
+  }
+  function writeHash() {
+    const h = hashFor(S.sel);
+    if (h !== location.hash && !(h === '' && location.hash === '')) history.replaceState(null, '', h || location.pathname + location.search);
+  }
+  function applyHash() {
+    const h = readHash();
+    const scen = h.scenario === 'show' ? 'show' : 'now';
+    let sel = null;
+    if (h.node && byId[h.node] && byId[h.node]._t === 'node') sel = { type: 'node', id: h.node };
+    if (h.link && byId[h.link] && byId[h.link]._t === 'link') sel = { type: 'link', id: h.link };
+    setScenario(scen, true);
+    setTab(['map', 'list', 'api', 'secrets', 'questions', 'agents'].includes(h.tab) ? h.tab : 'map', true);
+    if (sel) open(sel.type, sel.id, { fromHash: true }); else close(true);
+  }
+
+  // ------------------------------------------------------------ map
+  function ropePositions(L) {
+    const [rw, rh] = S.doc.layout.rope_size;
+    const pos = {};
+    const byBox = {};
+    S.doc.nodes.filter((n) => n.kind === 'rope').forEach((n) => { (byBox[n.parent] = byBox[n.parent] || []).push(n); });
+    for (const [box, ropes] of Object.entries(byBox)) {
+      const p = L.nodes[box];
+      if (!p) continue;
+      ropes.sort((a, b) => a.id.localeCompare(b.id));
+      ropes.forEach((r, i) => {
+        const col = i % 5, row = Math.floor(i / 5);
+        pos[r.id] = [p[0] + (col - 2) * (rw + 8), p[1] + 62 + row * (rh + 8)];
+      });
+    }
+    return pos;
+  }
+  function rectOf(id, pos) {
+    const n = byId[id];
+    const [w, h] = n.kind === 'rope' ? S.doc.layout.rope_size : S.doc.layout.node_size;
+    const [x, y] = pos[id];
+    return { x: x - w / 2, y: y - h / 2, w, h, cx: x, cy: y };
+  }
+  function clipToRect(r, dx, dy) {
+    // point where a ray from the rect centre in direction (dx,dy) leaves the rect
+    const tx = dx ? (r.w / 2 + 3) / Math.abs(dx) : Infinity, ty = dy ? (r.h / 2 + 3) / Math.abs(dy) : Infinity;
+    const t = Math.min(tx, ty);
+    return [r.cx + dx * t, r.cy + dy * t];
+  }
+  function segHitsRect(ax, ay, bx, by, r) {
+    for (let i = 1; i < 20; i++) {
+      const t = i / 20, x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
+      if (x > r.x - 4 && x < r.x + r.w + 4 && y > r.y - 4 && y < r.y + r.h + 4) return true;
+    }
+    return false;
+  }
+  function arrow(g, tip, from, color) {
+    const dx = tip[0] - from[0], dy = tip[1] - from[1], len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len, s = 8;
+    const pts = [tip, [tip[0] - ux * s - uy * s * .5, tip[1] - uy * s + ux * s * .5], [tip[0] - ux * s + uy * s * .5, tip[1] - uy * s - ux * s * .5]];
+    sv('polygon', { class: 'head', points: pts.map((p) => p.map((v) => v.toFixed(1)).join(',')).join(' '), fill: color }, g);
+  }
+
+  function renderMap() {
+    const doc = S.doc, L = doc.layout.scenarios[S.scenario];
+    svg.textContent = '';
+    const vb = doc.layout.viewbox;
+    svg.setAttribute('viewBox', vb.join(' '));
+    const pos = Object.assign({}, L.nodes, ropePositions(L));
+    const gPlaces = sv('g', { class: 'places' }, svg), gLinks = sv('g', { class: 'links' }, svg), gNodes = sv('g', { class: 'nodes' }, svg);
+
+    for (const p of doc.places) {
+      const r = L.places[p.id];
+      if (!p.scenarios.includes(S.scenario) || !r) continue;
+      const g = sv('g', { class: 'place', 'data-id': p.id }, gPlaces);
+      sv('rect', { x: r[0], y: r[1], width: r[2], height: r[3], rx: 12 }, g);
+      sv('text', { class: 'pname', x: r[0] + 14, y: r[1] + 22 }, g).textContent = p.name;
+      const sub = p.area || p.address || (p.network && p.network.lan ? p.network.lan + ' · ' + p.network.wifi : '') || '';
+      if (sub) sv('text', { class: 'psub', x: r[0] + 14, y: r[1] + 38 }, g).textContent = sub;
+    }
+
+    const vis = doc.nodes.filter((n) => nodeVisible(n) && pos[n.id]);
+    const rects = {};
+    vis.forEach((n) => { rects[n.id] = rectOf(n.id, pos); });
+    const links = doc.links.filter((l) => linkVisible(l) && rects[l.from] && rects[l.to]);
+    const pairCount = {}, pairIdx = {};
+    links.forEach((l) => { const k = [l.from, l.to].sort().join('|'); pairCount[k] = (pairCount[k] || 0) + 1; });
+
+    for (const l of links) {
+      const a = rects[l.from], b = rects[l.to];
+      const k = [l.from, l.to].sort().join('|');
+      const i = pairIdx[k] = (pairIdx[k] || 0) + 1;
+      const n = pairCount[k];
+      let off = (i - (n + 1) / 2) * 26;
+      if ([l.from, l.to].sort()[0] !== l.from) off = -off;
+      const dx = b.cx - a.cx, dy = b.cy - a.cy, len = Math.hypot(dx, dy) || 1;
+      const px = -dy / len, py = dx / len;
+      if (n === 1 && byId[l.from].kind !== 'rope' && byId[l.to].kind !== 'rope') {
+        const blocked = vis.some((o) => o.id !== l.from && o.id !== l.to && o.kind !== 'rope' && segHitsRect(a.cx, a.cy, b.cx, b.cy, rects[o.id]));
+        if (blocked) off = Math.min(90, 30 + len * .12);
+      }
+      const cx = (a.cx + b.cx) / 2 + px * off, cy = (a.cy + b.cy) / 2 + py * off;
+      const p0 = clipToRect(a, (cx - a.cx), (cy - a.cy)), p2 = clipToRect(b, (cx - b.cx), (cy - b.cy));
+      const d = `M${p0[0].toFixed(1)},${p0[1].toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+      const dash = ['working'].includes(l.status) ? '' : (['blocked', 'broken'].includes(l.status) ? ' dot' : ' dash');
+      const g = sv('g', { class: `link m-${l.medium}${dash}`, 'data-id': l.id, tabindex: 0, role: 'button',
+        'aria-label': `${l.label || l.protocol}: ${short(byId[l.from])} to ${short(byId[l.to])}, ${l.status}` }, gLinks);
+      sv('title', {}, g).textContent = `${l.label || l.protocol}\n${byId[l.from].name} → ${byId[l.to].name} (${l.status})`;
+      sv('path', { class: 'hit', d }, g);
+      sv('path', { class: 'line', d, stroke: mediumColor(l.medium) }, g);
+      const dir = String(l.direction || 'two-way');
+      if (dir.startsWith('one-way')) arrow(g, p2, [cx, cy], mediumColor(l.medium));
+      else if (dir.startsWith('two-way')) { arrow(g, p2, [cx, cy], mediumColor(l.medium)); arrow(g, p0, [cx, cy], mediumColor(l.medium)); }
+      if (byId[l.to].kind !== 'rope') {
+        const mx = .25 * p0[0] + .5 * cx + .25 * p2[0], my = .25 * p0[1] + .5 * cy + .25 * p2[1];
+        const t = sv('text', { class: 'lbl' + (l.label ? '' : ' hover-only'), x: mx.toFixed(1), y: (my - 4).toFixed(1), 'text-anchor': 'middle' }, g);
+        t.textContent = l.label || String(l.protocol).split(/[,(]/)[0].trim().slice(0, 32);
+      }
+    }
+
+    for (const n of vis) {
+      const r = rects[n.id];
+      const rope = n.kind === 'rope';
+      const g = sv('g', { class: `node${rope ? ' rope' : ''} ${n.status}${n.verified === 'confirmed' ? '' : ' unverified'}`, 'data-id': n.id, tabindex: 0, role: 'button',
+        'aria-label': `${n.name}, ${n.kind}, ${n.status}${n.verified === 'confirmed' ? '' : ', ' + n.verified}` }, gNodes);
+      sv('title', {}, g).textContent = `${n.name}\n${n.summary}`;
+      sv('rect', { class: 'box', x: r.x, y: r.y, width: r.w, height: r.h, rx: rope ? 5 : 7 }, g);
+      if (rope) {
+        sv('circle', { class: 'dot', cx: r.x + 9, cy: r.cy, r: 3.6, fill: statusColor(n.status) }, g);
+        sv('text', { class: 'name', x: r.cx + 5, y: r.cy + 4, 'text-anchor': 'middle' }, g).textContent = 'R' + Number(n.id.slice(5));
+      } else {
+        sv('circle', { class: 'dot', cx: r.x + r.w - 9, cy: r.y + 9, r: 4.2, fill: statusColor(n.status) }, g);
+        let name = short(n);
+        if (name.length > 21) name = name.slice(0, 20) + '…';
+        sv('text', { class: 'name', x: r.x + 9, y: r.y + 19 }, g).textContent = name;
+        let sub = subline(n);
+        if (sub.length > 24) sub = sub.slice(0, 23) + '…';
+        sv('text', { class: 'sub', x: r.x + 9, y: r.y + 35 }, g).textContent = sub;
+      }
+    }
+    applyMapClasses();
+    applyZoom();
+  }
+
+  function neighbours(sel) {
+    const nodes = new Set(), links = new Set();
+    if (!sel) return { nodes, links };
+    if (sel.type === 'node') {
+      nodes.add(sel.id);
+      S.doc.links.forEach((l) => { if (linkVisible(l) && (l.from === sel.id || l.to === sel.id)) { links.add(l.id); nodes.add(l.from); nodes.add(l.to); } });
+    } else { const l = byId[sel.id]; links.add(l.id); nodes.add(l.from); nodes.add(l.to); }
+    return { nodes, links };
+  }
+  function applyMapClasses() {
+    const focus = S.hover || (S.sel && S.tab === 'map' ? S.sel : null);
+    const nb = neighbours(focus), selN = neighbours(S.sel);
+    svg.classList.toggle('focusing', !!focus && !S.query);
+    svg.querySelectorAll('.node, .link').forEach((e) => {
+      const id = e.getAttribute('data-id');
+      const isLink = e.classList.contains('link');
+      e.classList.toggle('hl', isLink ? nb.links.has(id) : (focus && focus.id === id));
+      e.classList.toggle('hl2', !isLink && nb.nodes.has(id));
+      e.classList.toggle('sel', !!S.sel && S.sel.id === id);
+    });
+    const m = matches();
+    svg.classList.toggle('searching', !!S.query);
+    svg.querySelectorAll('.node, .link').forEach((e) => e.classList.toggle('match', m.has(e.getAttribute('data-id'))));
+    void selN;
+  }
+  function applyZoom() {
+    const vb = S.doc.layout.viewbox;
+    if (S.scale === null) { svg.style.width = '100%'; svg.style.minWidth = window.innerWidth < 700 ? '1100px' : '1200px'; }
+    else { svg.style.width = Math.round(vb[2] * S.scale) + 'px'; svg.style.minWidth = ''; }
+  }
+  function zoom(f) {
+    const vb = S.doc.layout.viewbox;
+    const cur = S.scale === null ? svg.getBoundingClientRect().width / vb[2] : S.scale;
+    S.scale = f === 0 ? null : Math.max(.4, Math.min(2.5, cur * f));
+    applyZoom();
+  }
+  function scrollToItem(id) {
+    const e = svg.querySelector(`[data-id="${CSS.escape(id)}"]`);
+    if (!e) return;
+    const wrap = $('mapwrap'), wr = wrap.getBoundingClientRect(), er = e.getBoundingClientRect();
+    if (er.left < wr.left || er.right > wr.right) wrap.scrollLeft += (er.left + er.width / 2) - (wr.left + wr.width / 2);
+  }
+
+  // ------------------------------------------------------------ search
+  function haystack(item) {
+    if (item._hay) return item._hay;
+    const bits = [item.id, item.name, item.short, item.label, item.kind, item.protocol, item.summary, item.medium];
+    (item.hostnames || []).forEach((h) => bits.push(h));
+    (item.interfaces || []).forEach((i) => bits.push(i.ip, i.name, i.mac));
+    (item.access || []).forEach((a) => bits.push(a.address, a.user, a.method));
+    (item.accounts || []).forEach((a) => bits.push(a.user, a.service));
+    (item.ports || []).forEach((p) => bits.push('port ' + p.port, p.service));
+    if (item._t === 'link') bits.push(byId[item.from].name, byId[item.to].name, item.path, item.auth, item.payload);
+    if (item.specs) Object.values(item.specs).forEach((v) => bits.push(typeof v === 'object' ? JSON.stringify(v) : v));
+    return (item._hay = bits.filter((b) => b !== undefined && b !== null).join(' ').toLowerCase());
+  }
+  function matches() {
+    const q = S.query.trim().toLowerCase();
+    const out = new Set();
+    if (!q) return out;
+    const terms = q.split(/\s+/);
+    [...S.doc.nodes, ...S.doc.links].forEach((it) => { if (terms.every((t) => haystack(it).includes(t))) out.add(it.id); });
+    return out;
+  }
+  function why(item, q) {
+    q = q.toLowerCase();
+    for (const i of item.interfaces || []) if (i.ip && String(i.ip).toLowerCase().includes(q)) return i.ip;
+    for (const h of item.hostnames || []) if (h.toLowerCase().includes(q)) return h;
+    if (item._t === 'link') return `${short(byId[item.from])} → ${short(byId[item.to])}`;
+    return subline(item);
+  }
+  let activeResult = -1;
+  function renderResults() {
+    const box = $('results');
+    const q = S.query.trim();
+    if (!q) { box.hidden = true; return; }
+    const m = [...matches()].map((id) => byId[id]);
+    m.sort((a, b) => (a._t === b._t ? 0 : a._t === 'node' ? -1 : 1) || (nodeOrLinkVisible(b) - nodeOrLinkVisible(a)));
+    box.textContent = '';
+    if (!m.length) box.append(el('p', { text: `Nothing matches “${q}”.` }));
+    m.slice(0, 12).forEach((it, i) => box.append(el('button', { type: 'button', class: i === activeResult ? 'active' : '', 'data-id': it.id,
+      onclick: () => { hideResults(); open(it._t, it.id); } }, el('span', { text: it._t === 'node' ? it.name : (it.label || it.protocol) }), el('small', { text: why(it, q) }))));
+    box.hidden = false;
+  }
+  function nodeOrLinkVisible(it) { return it._t === 'node' ? (nodeVisible(it) ? 1 : 0) : (linkVisible(it) ? 1 : 0); }
+  function hideResults() { $('results').hidden = true; activeResult = -1; }
+
+  // ------------------------------------------------------------ panel
+  function pill(text, color, cls) { return el('span', { class: 'pill' + (cls ? ' ' + cls : '') }, color ? el('i', { style: `background:${color}` }) : null, text); }
+  function verifiedPill(v) { return v === 'confirmed' ? pill('confirmed', 'var(--s-working)') : pill(v.replace(':', ' '), 'var(--s-blocked)', 'warn'); }
+  function valueNode(v, key) {
+    if (v === null || v === undefined) return el('span', { class: 'mono', text: 'none' });
+    if (Array.isArray(v)) {
+      if (!v.length) return el('span', { text: '—' });
+      if (v.every((x) => typeof x !== 'object' || x === null)) {
+        if (key === 'open_questions') return el('ul', { class: 'plain' }, v.map((q) => el('li', {}, questions[q] ? `${questions[q].question} (ask ${personName(questions[q].ask)})` : q)));
+        if (key === 'sources') return el('ul', { class: 'plain' }, v.map((s) => el('li', {}, sourceNode(s))));
+        return el('ul', { class: 'plain' }, v.map((x) => el('li', {}, valueNode(x))));
+      }
+      const keys = [...new Set(v.flatMap((o) => Object.keys(o)))];
+      if (keys.length <= 6) {
+        return el('div', { class: 'tbl' }, el('table', {}, el('thead', {}, el('tr', {}, keys.map((k) => el('th', { text: human(k) })))),
+          el('tbody', {}, v.map((o) => el('tr', {}, keys.map((k) => el('td', {}, o[k] === undefined ? '' : valueNode(o[k], k))))))));
+      }
+      return el('div', {}, v.map((o) => kv(o)));
+    }
+    if (typeof v === 'object') return kv(v);
+    const s = String(v);
+    if (/^https?:\/\/\S+$/.test(s) && !/[{}<>]/.test(s)) return el('a', { href: s, target: '_blank', rel: 'noopener', class: 'mono', text: s });
+    if (key === 'owner' || key === 'holder' || key === 'ask') return el('span', { text: personName(s) });
+    const techy = /^[\w.:/\\@<>{}?=&%-]+$/.test(s) && /[.:/\\]|\d/.test(s);
+    return el('span', { class: techy ? 'mono' : '', text: s });
+  }
+  function sourceNode(id) {
+    const s = sources[id];
+    if (!s) return el('span', { text: id });
+    const t = s.what + (s.when ? ` (${s.when})` : '');
+    return s.url ? el('a', { href: s.url, target: '_blank', rel: 'noopener', text: t }) : el('span', { text: t });
+  }
+  function kv(obj, skip = []) {
+    const dl = el('dl', { class: 'kv' });
+    for (const [k, v] of Object.entries(obj)) {
+      if (skip.includes(k) || k.startsWith('_')) continue;
+      dl.append(el('dt', { text: human(k) }), el('dd', {}, valueNode(v, k)));
+    }
+    return dl;
+  }
+  function section(title, ...kids) { return el('div', { class: 'sec' }, el('h3', { text: title }), ...kids); }
+  function xref(type, id, text) { return el('button', { type: 'button', class: 'xref', onclick: () => open(type, id) }, text || (byId[id] ? (byId[id].name || byId[id].label) : id)); }
+  function placeText(n) {
+    return S.doc.scenarios.map((s) => `${s.id === 'now' ? 'Now' : 'Show'}: ${n.place[s.id] ? places[n.place[s.id]].name : 'not there'}`).join(' · ');
+  }
+  function linkName(l) { return l.label || String(l.protocol).split(',')[0]; }
+
+  function open(type, id, opts = {}) {
+    const item = byId[id];
+    if (!item) return;
+    // a deep link to something that isn't in this scenario switches to one where it is
+    if (type === 'node' && !nodeVisible(item)) { const other = S.doc.scenarios.find((s) => nodeVisible(item, s.id)); if (other) setScenario(other.id, true); }
+    if (type === 'link' && !linkVisible(item)) { const other = S.doc.scenarios.find((s) => linkVisible(item, s.id)); if (other) setScenario(other.id, true); }
+    S.sel = { type, id };
+    const body = $('panel-body');
+    body.textContent = '';
+    if (type === 'node') {
+      $('panel-kicker').textContent = `${item.kind} · ${placeText(item)}`;
+      $('panel-title').textContent = item.name;
+      body.append(el('div', { class: 'pills' }, pill(item.status, statusColor(item.status)), verifiedPill(item.verified), item.owner ? pill('owner: ' + personName(item.owner)) : null));
+      body.append(el('p', { class: 'summary', text: item.summary }));
+      const conns = S.doc.links.filter((l) => (l.from === id || l.to === id));
+      const here = conns.filter((l) => linkVisible(l));
+      if (conns.length) {
+        body.append(section(`Connections (${here.length} in this scenario${conns.length > here.length ? `, ${conns.length - here.length} more in the other` : ''})`,
+          el('div', { class: 'conn' }, conns.sort((a, b) => linkVisible(b) - linkVisible(a)).map((l) => {
+            const other = l.from === id ? l.to : l.from;
+            const arrowTxt = l.from === id ? '→' : '←';
+            return el('button', { type: 'button', onclick: () => open('link', l.id), style: linkVisible(l) ? '' : 'opacity:.6' },
+              el('span', { class: 'sw', style: `background:${mediumColor(l.medium)}` }),
+              el('span', { class: 'what' }, `${arrowTxt} ${byId[other].name}`, el('br'), el('small', { text: `${linkName(l)} · ${l.status}` })));
+          }))));
+      }
+      if (item.kind === 'rope' || (S.doc.nodes.some((n) => n.parent === id))) {
+        const kids = S.doc.nodes.filter((n) => n.parent === id);
+        if (kids.length) body.append(section('Ropes on this box', el('div', { class: 'endpoints' }, kids.map((k) => xref('node', k.id, `${k.name}${k.status === 'broken' ? ' (dark)' : ''}`)))));
+      }
+      const order = ['specs', 'interfaces', 'hostnames', 'access', 'accounts', 'ports', 'services', 'paths', 'displays', 'notes', 'open_questions', 'sources'];
+      const shown = new Set(['id', 'name', 'short', 'kind', 'place', 'owner', 'status', 'verified', 'summary']);
+      for (const k of order) if (item[k] !== undefined) { body.append(section(human(k), valueNode(item[k], k))); shown.add(k); }
+      const rest = Object.fromEntries(Object.entries(item).filter(([k]) => !shown.has(k) && !k.startsWith('_')));
+      if (item.parent) rest.parent = byId[item.parent] ? byId[item.parent].name : item.parent;
+      if (Object.keys(rest).length) body.append(section('More', kv(rest)));
+    } else {
+      $('panel-kicker').textContent = `${item.medium} link · ${item.scenarios.map((s) => (s === 'now' ? 'Now' : 'Show')).join(' + ')}`;
+      $('panel-title').textContent = linkName(item);
+      body.append(el('div', { class: 'endpoints' }, xref('node', item.from), el('span', { text: String(item.direction || '').startsWith('two') ? '↔' : '→' }), xref('node', item.to)));
+      body.append(el('div', { class: 'pills' }, pill(item.status, statusColor(item.status)), verifiedPill(item.verified), pill(item.medium, mediumColor(item.medium))));
+      body.append(el('p', { class: 'summary', text: item.summary }));
+      const fields = {};
+      ['protocol', 'direction', 'payload', 'rate', 'auth', 'user', 'path'].forEach((k) => { if (item[k] !== undefined) fields[k] = item[k]; });
+      body.append(section('Details', kv(fields)));
+      if (item.api) {
+        const ep = S.doc.api.endpoints.find((e) => e.id === item.api);
+        body.append(section('API', el('button', { type: 'button', class: 'xref', onclick: () => { setTab('api'); setTimeout(() => { const t = $('ep-' + item.api); if (t) t.scrollIntoView({ block: 'start' }); }, 30); } },
+          ep ? `${ep.method} ${ep.path}` : item.api)));
+      }
+      ['open_questions', 'sources'].forEach((k) => { if (item[k]) body.append(section(human(k), valueNode(item[k], k))); });
+    }
+    const raw = Object.fromEntries(Object.entries(item).filter(([k]) => !k.startsWith('_')));
+    body.append(el('details', { class: 'raw' }, el('summary', { text: 'Raw JSON (from system.json)' }), el('pre', { text: JSON.stringify(raw, null, 2) })));
+    $('panel').hidden = false;
+    document.body.classList.add('panel-open');
+    body.scrollTop = 0;
+    if (S.tab === 'map') { applyMapClasses(); scrollToItem(id); }
+    writeHash();
+    if (!opts.fromHash) $('panel-title').focus({ preventScroll: true });
+  }
+  function close(silent) {
+    const prev = S.sel;
+    S.sel = null;
+    $('panel').hidden = true;
+    document.body.classList.remove('panel-open');
+    if (S.doc) applyMapClasses();
+    if (!silent) writeHash();
+    if (prev && !silent) { const e = svg.querySelector(`[data-id="${CSS.escape(prev.id)}"]`); if (e && S.tab === 'map') e.focus({ preventScroll: true }); }
+  }
+
+  // ------------------------------------------------------------ scenario / tabs
+  function setScenario(s, silent) {
+    if (!S.doc.scenarios.some((x) => x.id === s)) s = 'now';
+    S.scenario = s;
+    document.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.scenario === s)));
+    const sc = S.doc.scenarios.find((x) => x.id === s);
+    const lede = $('scenario-lede');
+    lede.textContent = '';
+    lede.append(el('strong', { text: `${sc.name} (${sc.when}). ` }), sc.summary);
+    renderMap();
+    renderList();
+    if (!silent) writeHash();
+  }
+  function setTab(t, silent) {
+    S.tab = t;
+    document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+    document.querySelectorAll('main > section').forEach((sec) => { sec.hidden = sec.id !== 'tab-' + t; });
+    if (S.doc) applyMapClasses();
+    if (!silent) writeHash();
+  }
+
+  // ------------------------------------------------------------ list tab
+  function renderList() {
+    const root = $('tab-list');
+    root.textContent = '';
+    const m = matches(), q = S.query.trim();
+    const sc = S.doc.scenarios.find((x) => x.id === S.scenario);
+    root.append(el('h2', { text: `Everything in “${sc.name}”` + (q ? `, matching “${q}”` : '') }),
+      el('p', { text: 'Every device, service and connection as a table. Select a row for its details. The search box filters both tables.' }));
+    const row = (type, id, cells) => el('tr', { class: 'row', tabindex: 0, 'data-id': id, onclick: () => open(type, id),
+      onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(type, id); } } }, cells.map((c) => el('td', {}, c)));
+    for (const p of S.doc.places.filter((p) => p.scenarios.includes(S.scenario))) {
+      const ns = S.doc.nodes.filter((n) => nodeVisible(n) && n.place[S.scenario] === p.id && (!q || m.has(n.id)));
+      if (!ns.length) continue;
+      root.append(el('h3', { text: p.name }), el('div', { class: 'tbl' }, el('table', {},
+        el('thead', {}, el('tr', {}, ['Name', 'Kind', 'Status', 'Address', 'Owner'].map((h) => el('th', { text: h })))),
+        el('tbody', {}, ns.map((n) => row('node', n.id, [n.name, n.kind, el('span', {}, el('span', { style: `color:${statusColor(n.status)}` }, '● '), n.status + (n.verified === 'confirmed' ? '' : ` (${n.verified})`)),
+          el('span', { class: 'mono', text: [...(n.interfaces || []).filter((i) => i.ip && (!i.scenario || i.scenario === S.scenario)).map((i) => stripCidr(i.ip)), ...(n.hostnames || []).slice(-1)].join(' · ') }),
+          personName(n.owner)]))))));
+    }
+    const ls = S.doc.links.filter((l) => linkVisible(l) && (!q || m.has(l.id)));
+    root.append(el('h3', { text: `Connections (${ls.length})` }), el('div', { class: 'tbl' }, el('table', {},
+      el('thead', {}, el('tr', {}, ['From', 'To', 'Medium', 'Protocol', 'Status'].map((h) => el('th', { text: h })))),
+      el('tbody', {}, ls.map((l) => row('link', l.id, [byId[l.from].name, byId[l.to].name,
+        el('span', {}, el('span', { style: `color:${mediumColor(l.medium)}` }, '■ '), l.medium), el('span', { class: 'mono', text: l.protocol }), l.status]))))));
+  }
+
+  // ------------------------------------------------------------ API tab
+  function preBlock(text) {
+    const b = el('button', { type: 'button', class: 'icon-btn copy' }, 'Copy');
+    b.addEventListener('click', () => copyText(text, b));
+    return el('div', { class: 'prewrap' }, el('pre', { text }), b);
+  }
+  function renderApi() {
+    const a = S.doc.api, root = $('tab-api');
+    root.append(el('h2', { text: 'Modal ↔ bitcube contract' }), el('p', { text: a.summary }),
+      el('p', {}, 'Base URL ', el('code', { text: a.base_url }), '. ', a.checked));
+    root.append(el('h3', { text: 'What each side does' }), el('div', { class: 'tbl' }, el('table', {},
+      el('thead', {}, el('tr', {}, ['Item', 'State', 'Note'].map((h) => el('th', { text: h })))),
+      el('tbody', {}, a.contract.map((c) => el('tr', { id: c.id }, el('td', { text: c.item }), el('td', {}, verifiedPill(c.state)), el('td', { text: c.note || '' })))))));
+    root.append(el('h2', { text: 'Endpoints' }));
+    for (const ep of a.endpoints) {
+      const card = el('div', { class: 'card', id: 'ep-' + ep.id },
+        el('div', {}, el('span', { class: 'method', text: ep.method }), el('span', { class: 'ep-path', text: ep.path }), ' ', verifiedPill(ep.state)),
+        el('p', {}, el('code', { text: a.base_url + ep.path.split('?')[0] })));
+      const fields = {};
+      ['auth', 'files', 'params', 'body', 'stores', 'used_by', 'note'].forEach((k) => { if (ep[k] !== undefined) fields[k] = ep[k]; });
+      card.append(kv(fields));
+      if (ep.responses) {
+        card.append(el('h3', { text: 'Responses' }), el('div', { class: 'tbl' }, el('table', {}, el('tbody', {}, Object.entries(ep.responses).map(([code, r]) =>
+          el('tr', {}, el('td', { class: 'mono', text: code }), el('td', {}, typeof r === 'string' ? r : el('code', { text: JSON.stringify(r) }))))))));
+      }
+      if (ep.example_curl) card.append(el('h3', { text: 'Example' }), preBlock(ep.example_curl));
+      if (ep.reference_client) card.append(el('h3', { text: 'Reference client' }), preBlock(ep.reference_client));
+      if (ep.json_reading_example) card.append(el('h3', { text: 'A JSON sensor reading' }), preBlock(JSON.stringify(ep.json_reading_example, null, 2)));
+      if (ep.node) card.append(el('p', {}, xref('node', ep.node, 'Show on the map')));
+      root.append(card);
+    }
+    root.append(el('h2', { text: 'The files under /data' }));
+    for (const f of a.files) {
+      root.append(el('div', { class: 'card', id: 'file-' + f.name.replace('.', '-') },
+        el('h3', { style: 'margin-top:0' }, el('code', { text: f.name })),
+        el('p', { text: `Written by ${f.written_by}. bitcube's mirror and canvas.html read it every ${f.poll}.` + (f.note ? ' ' + f.note : '') }),
+        el('div', { class: 'tbl' }, el('table', {}, el('thead', {}, el('tr', {}, el('th', { text: 'Field' }), el('th', { text: 'Meaning' }))),
+          el('tbody', {}, Object.entries(f.fields).map(([k, v]) => el('tr', {}, el('td', { class: 'mono', text: k }), el('td', { text: v })))))),
+        el('details', {}, el('summary', { text: 'Example (live, 18 Oct, trimmed)' }), preBlock(JSON.stringify(f.example, null, 2)))));
+    }
+    root.append(el('h2', { text: 'The local mirror on bitcube' }), el('div', { class: 'card' }, kv(a.mirror)));
+  }
+
+  // ------------------------------------------------------------ secrets, questions, agents
+  function renderSecrets() {
+    const root = $('tab-secrets');
+    root.append(el('h2', { text: 'Where the secrets live' }),
+      el('p', { class: 'callout', text: 'This page never shows a password or token value. It lists what each secret unlocks, where it is kept and who holds it, so you know whom to ask. Secrets on bitcube live only in the untracked secrets.local.json; the tests read it at test time to make sure no value ever reaches this repo.' }),
+      el('div', { class: 'tbl' }, el('table', {}, el('thead', {}, el('tr', {}, ['Secret', 'Unlocks', 'Lives in', 'Holder', 'Note'].map((h) => el('th', { text: h })))),
+        el('tbody', {}, S.doc.secrets.map((s) => el('tr', { id: 'secret-' + s.id }, el('td', {}, el('strong', { text: s.name })), el('td', { text: s.unlocks }),
+          el('td', {}, valueNode(s.lives_in)), el('td', { text: personName(s.holder) }), el('td', { text: [s.note, s.verified].filter(Boolean).join(' ') })))))));
+  }
+  function renderQuestions() {
+    const root = $('tab-questions');
+    root.append(el('h2', { text: 'Open questions' }), el('p', {}, 'Things this map can’t settle yet, grouped by who can answer. The ones marked “in plan” are also in ', el('a', { href: '../plan.html' }, 'plan.md'), '.'));
+    const related = {};
+    [...S.doc.nodes, ...S.doc.links].forEach((it) => (it.open_questions || []).forEach((q) => (related[q] = related[q] || []).push(it)));
+    const groups = {};
+    S.doc.open_questions.forEach((q) => (groups[q.ask] = groups[q.ask] || []).push(q));
+    for (const [who, qs] of Object.entries(groups)) {
+      root.append(el('div', { class: 'qgroup' }, el('h3', { text: 'Ask ' + personName(who) }), el('ul', { class: 'plain' }, qs.map((q) => el('li', { id: q.id }, q.question,
+        q.in_plan ? el('small', { style: 'color:var(--muted)', text: ' (in plan)' }) : null,
+        el('span', { class: 'rel' }, (related[q.id] || []).slice(0, 6).map((it) => xref(it._t, it.id, it._t === 'node' ? short(it) : linkName(it)))))))));
+    }
+  }
+  function renderAgents() {
+    const root = $('tab-agents'), B = 'https://gavaiken.github.io/river-bitcube/', R = 'https://raw.githubusercontent.com/gavaiken/river-bitcube/main/';
+    const files = [
+      ['system.json', B + 'system/system.json', 'The whole map as JSON: places, nodes, links, scenarios, the API, secrets by name, open questions, sources. Start here.'],
+      ['system.md', R + 'docs/system/system.md', 'The same facts as Markdown with a Mermaid diagram per scenario (generated by tools/system_docs.py).'],
+      ['llms.txt', B + 'llms.txt', 'Index of the docs for agents.'],
+      ['CLAUDE.md', R + 'CLAUDE.md', 'Rules and hard-won facts for working on bitcube.'],
+      ['plan.md', R + 'docs/plan.md', 'The shared checklist, decisions and open questions.'],
+      ['Log', R + 'docs/a-river-becoming-log.md', 'Everything done so far, session by session.'],
+    ];
+    root.append(el('h2', { text: 'For agents (and the people who run them)' }),
+      el('p', { text: 'Everything on this page comes from one file, system.json. Read that rather than scraping the page.' }),
+      el('div', { class: 'tbl' }, el('table', {}, el('tbody', {}, files.map(([n, u, d]) => el('tr', {}, el('td', {}, el('a', { href: u, class: 'mono', text: n })), el('td', { text: d })))))),
+      el('h3', { text: 'Rules' }), el('ul', { class: 'plain' }, S.doc.rules.map((r) => el('li', { text: r }))),
+      el('h3', { text: 'Changing a fact' }),
+      el('ol', {}, el('li', {}, 'Edit ', el('code', { text: 'docs/system/system.json' }), ' in ', el('a', { href: 'https://github.com/gavaiken/river-bitcube' }, 'gavaiken/river-bitcube'), '.'),
+        el('li', {}, 'Regenerate the text version: ', el('code', { text: 'python3 tools/system_docs.py' }), '.'),
+        el('li', {}, 'Run the checks: ', el('code', { text: '.venv/bin/pytest tools/tests' }), ' (structure, secret scan, and the real secrets read from bitcube).'),
+        el('li', {}, 'Commit and push to main; GitHub Pages republishes this page.')),
+      el('h3', { text: 'Fixed values' }), kv({ status: S.doc.enums.status, medium: S.doc.enums.medium, verified: S.doc.enums.verified.join(', ') }),
+      el('h3', { text: 'Deep links' }), el('p', {}, el('code', { text: '#node=bitcube' }), ', ', el('code', { text: '#link=artnet-box1' }), ', ', el('code', { text: '#scenario=show&node=gallery-net' }), ', ', el('code', { text: '#tab=api' }), '.'));
+  }
+
+  // ------------------------------------------------------------ legend
+  function renderLegend() {
+    const lg = $('legend');
+    const swatch = (color, dash) => { const s = document.createElementNS(SVGNS, 'svg'); s.setAttribute('width', '26'); s.setAttribute('height', '10'); s.setAttribute('aria-hidden', 'true');
+      sv('line', { x1: 1, y1: 5, x2: 25, y2: 5, stroke: color, 'stroke-width': 2.4, 'stroke-dasharray': dash || null, 'stroke-linecap': dash === '2 4' ? 'round' : null }, s); return s; };
+    const media = el('div', { class: 'group' }, el('b', { text: 'Line colour:' }), Object.entries(S.doc.enums.medium).map(([m, d]) => el('span', { title: d }, swatch(mediumColor(m)), m)));
+    const styles = el('div', { class: 'group' }, el('b', { text: 'Line style:' }), el('span', {}, swatch('var(--ink)'), 'working'), el('span', {}, swatch('var(--ink)', '7 5'), 'planned, stopped or unknown'),
+      el('span', {}, swatch('var(--ink)', '2 4'), 'blocked or broken'), el('span', {}, 'arrow = the side that starts it'));
+    const dot = (s) => el('span', {}, el('span', { style: `display:inline-block;width:9px;height:9px;border-radius:50%;background:${statusColor(s)}` }), s);
+    const boxes = el('div', { class: 'group' }, el('b', { text: 'Box:' }), ['working', 'planned', 'blocked', 'broken', 'stopped', 'standby', 'unknown'].map(dot),
+      el('span', {}, el('span', { style: 'display:inline-block;width:18px;height:11px;border:1.4px dashed var(--line-strong);border-radius:3px' }), 'dashed = unverified or awaiting someone'));
+    lg.append(media, styles, boxes);
+  }
+
+  // ------------------------------------------------------------ theme
+  const THEMES = ['auto', 'light', 'dark'];
+  function setTheme(t) {
+    if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+    $('theme').textContent = 'Theme: ' + t;
+    try { localStorage.setItem('river-system-theme', t); } catch (e) { /* storage off: fine */ }
+  }
+  let theme = 'auto';
+  try { theme = localStorage.getItem('river-system-theme') || 'auto'; } catch (e) { theme = 'auto'; }
+  if (!THEMES.includes(theme)) theme = 'auto';
+  setTheme(theme);
+  $('theme').addEventListener('click', () => { theme = THEMES[(THEMES.indexOf(theme) + 1) % 3]; setTheme(theme); });
+
+  // ------------------------------------------------------------ events
+  function itemFromEvent(e) { const g = e.target.closest && e.target.closest('.node, .link'); return g ? { type: g.classList.contains('node') ? 'node' : 'link', id: g.getAttribute('data-id') } : null; }
+  svg.addEventListener('click', (e) => { const it = itemFromEvent(e); if (it) open(it.type, it.id); });
+  svg.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { const it = itemFromEvent(e); if (it) { e.preventDefault(); open(it.type, it.id); } } });
+  svg.addEventListener('pointerover', (e) => { const it = itemFromEvent(e); const k = it ? it.id : null; if ((S.hover && S.hover.id) !== k) { S.hover = it; applyMapClasses(); } });
+  svg.addEventListener('pointerleave', () => { S.hover = null; applyMapClasses(); });
+  svg.addEventListener('focusin', (e) => { S.hover = itemFromEvent(e); applyMapClasses(); });
+  svg.addEventListener('focusout', () => { S.hover = null; applyMapClasses(); });
+  document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => setScenario(b.dataset.scenario)));
+  document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
+  $('zoom-in').addEventListener('click', () => zoom(1.25));
+  $('zoom-out').addEventListener('click', () => zoom(0.8));
+  $('zoom-fit').addEventListener('click', () => zoom(0));
+  $('panel-close').addEventListener('click', () => close());
+  $('panel-copy').addEventListener('click', (e) => copyText(location.href.split('#')[0] + hashFor(S.sel), e.currentTarget));
+  const q = $('q');
+  q.addEventListener('input', () => { S.query = q.value; activeResult = -1; renderResults(); applyMapClasses(); renderList(); });
+  q.addEventListener('keydown', (e) => {
+    const btns = [...$('results').querySelectorAll('button')];
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!btns.length) return; activeResult = (activeResult + (e.key === 'ArrowDown' ? 1 : -1) + btns.length) % btns.length; renderResults(); }
+    else if (e.key === 'Enter') { const b = btns[Math.max(0, activeResult)]; if (b) { e.preventDefault(); b.click(); } }
+    else if (e.key === 'Escape') { q.value = ''; S.query = ''; hideResults(); applyMapClasses(); renderList(); }
+  });
+  q.addEventListener('blur', () => setTimeout(hideResults, 150));
+  q.addEventListener('focus', () => { if (S.query) renderResults(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '/' && document.activeElement !== q && !/input|textarea/i.test(document.activeElement.tagName)) { e.preventDefault(); q.focus(); }
+    else if (e.key === 'Escape' && !$('panel').hidden && document.activeElement !== q) close();
+  });
+  window.addEventListener('hashchange', applyHash);
+  function setTopH() { document.documentElement.style.setProperty('--top-h', $('top').getBoundingClientRect().height + 'px'); }
+  window.addEventListener('resize', () => { setTopH(); if (S.doc) applyZoom(); });
+
+  // ------------------------------------------------------------ boot
+  fetch('system.json', { cache: 'no-cache' }).then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then((doc) => {
+    S.doc = doc;
+    doc.nodes.forEach((n) => { n._t = 'node'; byId[n.id] = n; });
+    doc.links.forEach((l) => { l._t = 'link'; byId[l.id] = l; });
+    doc.people.forEach((p) => { people[p.id] = p; });
+    doc.places.forEach((p) => { places[p.id] = p; });
+    doc.open_questions.forEach((x) => { questions[x.id] = x; });
+    doc.sources.forEach((x) => { sources[x.id] = x; });
+    $('footer').append(` Updated ${doc.updated.replace('T', ' ').slice(0, 16)} (Pacific).`);
+    renderLegend(); renderApi(); renderSecrets(); renderQuestions(); renderAgents();
+    setTopH();
+    applyHash();
+    window.__systemMapReady = true;
+  }).catch((err) => {
+    $('scenario-lede').replaceWith(el('div', { class: 'err' }, el('strong', { text: 'Couldn’t load system.json. ' }),
+      `${err.message}. Open this page over http(s): on GitHub Pages, or locally with python3 -m http.server in docs/ and http://localhost:8000/system/.`));
+  });
+})();
+</script>
+</body>
+</html>
