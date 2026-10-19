@@ -8,7 +8,7 @@ Related files:
 - `docs/a-river-becoming-notes.md`: design notes digested from the meetings.
 - The team's Signal group is exported to markdown on Gavin's Mac mini (not in this repo); Claude there refreshes it when asked.
 
-**This repo is public.** Never commit passwords, tokens, camera logins, private keys, personal emails or phone numbers. Secrets live only in untracked `secrets.local.json` on bitcube.
+**This repo is public.** Never commit passwords, tokens, camera logins, private keys or phone numbers. Names, hostnames, IPs, ports, device usernames and account emails may be published (Gavin, 18 Oct). Secrets live only in untracked `secrets.local.json` on bitcube.
 
 ---
 
@@ -300,3 +300,17 @@ The live checklist is `docs/plan.md` (items and open questions) and the session 
 - Fixed the dark-rope numbers in plan.md's Decisions (9 and **17**, not 12), the hardware doc's colour order (RGB, confirmed) and the gallery cam's address (`10.0.7.76` on Agape WiFi, aimed at the piles).
 - Docs only, made while session I runs on the Mac mini (Gavin's OK). The camera-password hint is left for session I's step I6.
 - 18:00: rewrote section 6 ("Open items / next steps"). The 17 Oct list was mostly done; it now lists who we are waiting on, next work (including session A's 17:50 Tailscale rule for Gray Area) and housekeeping, and points to `plan.md` as the live checklist.
+
+### 2026-10-18 17:28–18:25 (session I, Claude on the Mac mini): system map (plan item M)
+- **[System map](system/)** for Will, Andi, Dave and their agents, on the public site. Gavin's rule: everything except secrets. The river site appears as "near Dobbins, California" only, never its coordinates (Gavin's call: the kit there is unattended).
+  - `docs/system/system.json` is the source of truth: 6 places, 60 nodes (all 20 ropes with box, OUT and universes), 83 links, scenarios `now` (Agape) and `show` (Gray Area, planned), the Modal↔bitcube API with live examples, 13 secrets by name and location, 15 open questions, and the source of every fact. Anything not checked is marked `unverified` or `awaiting:<Name>`.
+  - `docs/system/index.html` is a self-contained page: SVG map, a details panel for every node and link, deep links (`#node=bitcube`, `#link=artnet-box1`, `#scenario=show`, `#tab=api`), search by name/IP/hostname, Now/Show switch, List, API, Secrets, Open questions and For agents tabs, light/dark, phone layout, keyboard access.
+  - `tools/system_docs.py` generates `docs/system/system.md` (text plus a Mermaid diagram per scenario). `docs/llms.txt` indexes the docs for agents.
+  - Tests (`.venv/bin/pytest tools/tests`, 62): structure (ids, link ends, placement per scenario, enums, Will's rope mapping, API states); a secret-pattern scan of the published files; every tracked file checked against the real values in bitcube's `secrets.local.json`, read over ssh at test time and never printed; system.md in sync; headless Chrome (Playwright with the installed Chrome) clicking every node and link. These checks caught two page bugs, both fixed.
+- **Facts gathered read-only:** bitcube over ssh (NICs, monitors, listening ports, services, tasks, firewall rules), both tailnets, Will's rope config, river-agent a9cbd2c, and the live Modal site. Findings:
+  - **`SITE_TOKEN` is not set on Modal:** `/data/*.json` answers without a token (17:21). Recorded in plan.md's open questions.
+  - The GL.iNet was advertising `10.0.7.0/24` (the Agape LAN) into Will's tailnet. Session A and Gavin fixed it at 17:47, and bitcube now shares the gallery cam as `10.0.7.76/32` (session A's notes).
+  - Something posted gallery and river camera/mic files to Modal until 15 Oct 22:22 UTC. Question for Dave.
+  - No device of Dave's was visible on Will's tailnet. TeamViewer still listens on bitcube (5938). The TD bridge binds `0.0.0.0:9980` but answers only localhost.
+- **Camera-password hint removed** from CLAUDE.md and the hardware doc. It's still in git history; that history was not rewritten. The "personal emails" rule in CLAUDE.md and above now matches Gavin's call: account emails and usernames may be published, passwords and tokens never. CLAUDE.md's gallery-cam line was updated for the `/32` route.
+- Session I worked in a git worktree (`.worktrees/session-i`) because session A was committing in the same checkout.

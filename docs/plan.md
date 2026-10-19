@@ -37,7 +37,7 @@ Session-by-session prompts, models and skills: **[execution plan](execution-plan
 | H | Panel quad 2 connected and checked (quad 1 verified 18 Oct: red/green/blue/yellow in the right places, marker top-left) | Andi + Gavin | todo |
 | J | **Per-rope sample paths (Colin's suggestion).** Replace the straight 20×400 crop with a list of UV sample points per rope that follows how each tube actually hangs (straight, curved, meandering on the floor). Sample with TOP to CHOP's UV input, then RGB ordering, then Art-Net. Source the paths from Gavin's Chromatik pixel map or by measuring the hung tubes with the camera. Add a calibration mode that steps one pixel along a rope, to confirm pixel order and the 170/340 universe boundaries | bitcube | todo (after E) |
 | L | **Local rain checkpoint:** new `river-local-oct-18.toe`, self-contained (no Modal). Camera structured-light pixel map of all ropes (`tools/pixelmap/`), with a rain/river field in camera space sampled onto the ropes and HUB75 quad 1 | bitcube (session B, Opus) | **done** 18 Oct 15:57. 18/18 working ropes mapped by Gray-code capture; field built from built-in TOPs only; verified by camera. [Still](img/rain-checkpoint-2026-10-18.jpg), [progress](sessions/B.md). Since 16:54 the login autostart opens it (session A, restart-tested) |
-| M | **Interactive system documentation** for the team and their agents: a diagram where every node and link can be clicked (places, IPs, usernames, connections, the Modal↔bitcube API), plus machine-readable `docs/system/system.json` and `llms.txt` | session I (Mac mini) | todo |
+| M | **Interactive system documentation** for the team and their agents: a diagram where every node and link can be clicked (places, IPs, usernames, connections, the Modal↔bitcube API), plus machine-readable `docs/system/system.json` and `llms.txt` | session I (Mac mini) | **done** 18 Oct 18:25. [System map](system/): 60 nodes and 83 links in two scenarios (Agape now, Gray Area planned), the API contract with live examples, secrets by name only. `system.json` is the source of truth; `tools/system_docs.py` generates `system.md`; `docs/llms.txt` for agents. 62 tests (`.venv/bin/pytest tools/tests`): structure, secret scan including bitcube's real secrets read over ssh, and headless Chrome. [Progress](sessions/I.md) |
 | K | Ropes 9 (box 1 OUT9) and 17 (box 2 OUT7) never light. **Still dark after Gavin tightened the cables (14:33 re-run).** Next: swap test (execution plan step P1) | Gavin | in progress |
 | I | Rope mapping fixes from the identification run (order, reversed ropes, colour order) | bitcube (Will OKs his config) | blocked on E |
 
@@ -50,7 +50,7 @@ Session-by-session prompts, models and skills: **[execution plan](execution-plan
 ## Open questions
 | Question | Ask | Asked | Answer |
 |---|---|---|---|
-| Is `SITE_TOKEN` set on Modal? Can bitcube get an `INGEST_TOKEN`? | Dave | | |
+| Is `SITE_TOKEN` set on Modal? Can bitcube get an `INGEST_TOKEN`? | Dave | | `SITE_TOKEN`: **not set** (session I, 18 Oct 17:21: `/data/*.json` answer without a token). `INGEST_TOKEN`: still needed |
 | What location/channel names and clip cadence should bitcube use for camera ingest? Is anything already pushing these cameras? | Dave | | |
 | Preferred canvas design size (`?w=&h=`) for 20×400 ropes + panels? OK to run `gallery/sync.py` on bitcube? | Dave | | |
 | Receive-card layout for quad 2? (Quad 1 is correct; the 'split' was a test-pattern bar.) Thread size for the panel mounts? | Andi | | |

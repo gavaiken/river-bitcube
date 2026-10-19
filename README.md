@@ -6,6 +6,8 @@ Show machine for **A River Becoming** (Gray Area, Oct 2026). Lives at `C:\Users\
 |---|---|
 | `CLAUDE.md` | Start here (humans and agents): current goal, key facts, rules |
 | `docs/` | Running log, hardware reference, design notes |
+| `docs/system/` | **System map:** `system.json` (every device, IP, port and connection; source of truth), the interactive page ([live](https://gavaiken.github.io/river-bitcube/system/)) and generated `system.md`. `docs/llms.txt` indexes the docs for agents |
+| `tools/system_docs.py`, `tools/system_check.py` | Generate `system.md`; validate `system.json` and scan for secrets (`.venv/bin/pytest tools/tests`) |
 | `river_masks/` | Andi's TouchDesigner project (web view → panel crops → HDMI) |
 | `td/bridge/` | Claude ↔ TouchDesigner bridge (WebServer DAT on localhost:9980) |
 | `tools/td.ps1` | Run Python inside the open TD project via the bridge |

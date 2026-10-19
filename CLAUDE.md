@@ -6,6 +6,7 @@ Read first:
 - `docs\a-river-becoming-log.md`: running log and handoff (people, architecture, access, what runs on this box, open items, session history). **Append your session's work to its "Session log" section.**
 - `docs\a-river-becoming-hardware.md`: verified hardware (LED ropes, PSAC10 Art-Net boxes, rack controller, HUB75 panels).
 - `docs\a-river-becoming-notes.md`: design notes from the team meetings.
+- `docs\system\system.json`: every machine, IP, port, account and connection ([interactive map](https://gavaiken.github.io/river-bitcube/system/)). When you change any of them, update it, run `python tools\system_docs.py` and the tests in `tools\tests`.
 
 `docs\` in this repo is the source of truth. Gavin's Mac mini pulls it, and a Claude session there can also SSH in (`ssh bitcube`).
 
@@ -28,9 +29,9 @@ TouchDesigner (TD) drives the 20 ropes over Art-Net **and** the HUB75 panels ove
 - **Will's RopeLights app** (scheduled task `RopeLights`, `Start/Stop-Rope-Lights.cmd`) also sends Art-Net. Stop it (with Gavin's OK) before TD drives the ropes. Never run both at once.
 - **Panels:** the single HDMI output (1920×1080) goes to the Colorlight sender, which samples the top-left region. A panel is 128×64; a quad is 256×128.
 - **Cameras** (from Will, 2026-10-18): Reolinks behind the GL.iNet router (subnet `192.168.8.0/24`, reached over Will's tailnet). Full URLs including the password are in `secrets.local.json` (untracked; never commit it). Grabbing frames shows you what the ropes and panels are actually doing.
-  - Gallery cam (E1 Pro): on **Agape WiFi at `10.0.7.76`** since 18 Oct 14:09 (it was on the GL.iNet router at `.103`, then `.189`). bitcube reaches it directly over the house network, not via Tailscale, so only devices on Agape WiFi can see it. At Gray Area it must join the gallery network or go back on the GL.iNet router. River cam (E1 Outdoor Pro): `192.168.8.217` on the GL.iNet router.
+  - Gallery cam (E1 Pro): on **Agape WiFi at `10.0.7.76`** since 18 Oct 14:09 (it was on the GL.iNet router at `.103`, then `.189`). bitcube reaches it directly over the house network, and since 18 Oct 17:55 advertises it on Will's tailnet as `10.0.7.76/32`, so devices on that tailnet reach it through bitcube. At Gray Area, advertise its new address the same way. River cam (E1 Outdoor Pro): `192.168.8.217` on the GL.iNet router; both went to the river on the evening of 18 Oct. Never advertise a site's own LAN as a Tailscale subnet from another device: the GL.iNet's `10.0.7.0/24` route took bitcube's house traffic with it when the router left.
   - Aim with `python tools/cameras/ptz.py <cam> Left|Right|Up|Down <seconds>`. Roughly 2,600 px/s of pan at 2880 px width, so nudge 0.1–0.4 s at a time and check with `cam_snap.ps1`. The gallery cam is aimed (18 Oct 13:59) at all the coil piles plus the HUB75 and PSAC10s.
-  - RTSP: `rtsp://admin:<password>@<ip>:554/Preview_01_main` (`-rtsp_transport tcp`). The password is the same as bitcube's login.
+  - RTSP: `rtsp://admin:<password>@<ip>:554/Preview_01_main` (`-rtsp_transport tcp`). The password is only in `secrets.local.json`.
   - Pan/tilt: HTTPS JSON API at `https://<ip>/cgi-bin/api.cgi` (self-signed cert): `Login` → token → `PtzCtrl` (`op` Left/Right/Up/Down/Stop, `speed`) → `Logout`. Always send `Stop`. Will's example: `tools/cameras/test_cam_move.py`.
 - **Dave's visuals:** web canvas `https://to-be-a-river--river.modal.run/canvas.html` (Web Render TOP).
 - **Remote viewing:** VNC (TightVNC :5900) shows the real console/HDMI; RDP blanks the panels.
@@ -51,7 +52,7 @@ TouchDesigner (TD) drives the 20 ropes over Art-Net **and** the HUB75 panels ove
 - **Booting (fixed and verified by a restart, 2026-10-18 12:27):** the UEFI boot order now puts Windows Boot Manager ahead of Ubuntu/GRUB (`bcdedit /set {fwbootmgr} displayorder {bootmgr} /addfirst`). Ubuntu is still installed and can be picked from the firmware boot menu. Auto-login uses Sysinternals Autologon: the password is stored as an LSA secret, not plain text in the registry, and Windows' Hello-only sign-in (`DevicePasswordLessBuildVersion`) is off. Tailscale runs unattended (connects before login), and sleep and hibernate on AC are both off. A restart takes about a minute end to end.
 
 ## Rules
-- **This repo is public** (status page: https://gavaiken.github.io/river-bitcube/). Never commit passwords, tokens, camera logins, private keys, personal emails or phone numbers. Secrets live only in untracked `secrets.local.json`.
+- **This repo is public** (status page: https://gavaiken.github.io/river-bitcube/). Never commit passwords, tokens, camera logins, private keys or phone numbers. Names, hostnames, IPs, ports, device usernames and account emails may be published (Gavin, 18 Oct; see `docs/system/`). Secrets live only in untracked `secrets.local.json`.
 - **Sessions:** you are one lettered session in `docs/execution-plan.md` (the prompt says which). Follow its **Coordination contract**: progress lines in `docs/sessions/<letter>.md` and the Status table updated and **pushed after every step**, decisions you need under `### Waiting on Gavin`, a SESSION SUMMARY at the end. Session A (Gavin's Mac mini) coordinates by pulling the repo.
 - **Coordination:** `docs/plan.md` is the shared checklist. `git pull` before starting. Only one Claude (this one or the Mac mini one) works at a time. When you finish an item, tick it in `docs/plan.md`, update `docs/index.md` (the public status page: keep it to one screen, refresh the "Status as of" line) and add a log entry, all in the same commit as the work.
 - It's a shared show machine. Ask Gavin before uninstalling anything, changing network/firewall/Tailscale settings, or touching Will's RopeLights setup.

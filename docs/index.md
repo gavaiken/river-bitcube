@@ -4,9 +4,9 @@ title: A River Becoming: show machine status
 
 # Welcome to bitcube
 
-**[Execution plan](execution-plan.md)** (status table and session prompts) · **[Plan & open questions](plan.md)** · **[Log](a-river-becoming-log.md)** · **[Hardware](a-river-becoming-hardware.md)**
+**[Execution plan](execution-plan.md)** (status table and session prompts) · **[Plan & open questions](plan.md)** · **[Log](a-river-becoming-log.md)** · **[Hardware](a-river-becoming-hardware.md)** · **[System map](system/)** (every device, IP and connection; [system.json](system/system.json) for agents)
 
-**Status as of Sun 18 Oct 2026, 17:35.** Gray Area install starts **Wed 22 Oct**.
+**Status as of Sun 18 Oct 2026, 18:25.** Gray Area install starts **Wed 22 Oct**.
 
 bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes over Art-Net, the HUB75 panels over HDMI, and the Reolink cameras. It runs TouchDesigner and a Claude Code session.
 
@@ -15,7 +15,8 @@ bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes ov
   - **Local rain checkpoint** (`river-local-oct-18.toe`, no Modal): one rain/river field in the camera's view, sampled onto every pixel of the 18 working ropes and onto HUB75 quad 1. Every rope pixel's position comes from a camera structured-light pixel map (`tools/pixelmap/`). About 70–200 W in total.
   - **HUB75:** TouchDesigner's window covers the whole LED display in black, with only the panel image at its top-left, so nothing else can show on the panels.
   - **Camera calibration:** 18 of 20 ropes located, colour order confirmed. **Ropes 9 and 17 never light** (swap test deferred).
-  - Both cameras are reachable. bitcube boots straight into the rain checkpoint (about 1 minute; restart-tested 16:54) and is on Tailscale.
+  - bitcube boots straight into the rain checkpoint (about 1 minute; restart-tested 16:54) and is on Tailscale. The gallery cam is reachable (also through bitcube on Will's tailnet); the river cam went to the river on the evening of 18 Oct.
+  - **[System map](system/):** a clickable diagram of every machine, device and connection (Agape now, Gray Area planned), with IPs, ports, usernames and the Modal↔bitcube API. No secrets.
 - **Next:**
   1. Feed Dave's Modal visuals into the ropes and panels through the same pixel map.
   2. Connect quad 2, and fix ropes 9 and 17.
