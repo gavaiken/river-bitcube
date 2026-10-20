@@ -8,7 +8,7 @@ title: A River Becoming: show machine status
 
 **[Execution plan](execution-plan.md)** (status table and session prompts) · **[Plan & open questions](plan.md)** · **[Log](a-river-becoming-log.md)** · **[Hardware](a-river-becoming-hardware.md)** · **[System map](system/)** (every device, IP and connection; [system.json](system/system.json) for agents)
 
-**Status as of Mon 19 Oct 2026, 17:50.** Gray Area install starts **Wed 22 Oct**.
+**Status as of Mon 19 Oct 2026, 18:05.** Gray Area install starts **Wed 22 Oct**.
 
 bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes over Art-Net, the HUB75 panels over HDMI, and the Reolink cameras. It runs TouchDesigner and a Claude Code session.
 
@@ -19,7 +19,7 @@ bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes ov
   - **Camera calibration:** 18 of 20 ropes located, colour order confirmed. **Ropes 9 and 17 never light** (swap test deferred).
   - bitcube boots straight into the rain checkpoint (about 1 minute; restart-tested 16:54) and is on Tailscale. The gallery cam is reachable (also through bitcube on Will's tailnet); the river cam went to the river on the evening of 18 Oct.
   - **[System map](system/):** a clickable diagram of every machine, device and connection (Agape now, Gray Area planned), with IPs, ports, usernames and the Modal↔bitcube API. No secrets.
-  - **Live river cam on the HUB75:** the camera at the river streams over Starlink and Tailscale to bitcube, onto panel quad 1 (10 fps). The ropes keep the rain. If the stream drops, the panels fall back to the rain by themselves.
+  - **Live river cam across the ropes and HUB75:** the camera at the river streams over Starlink and Tailscale to bitcube (10 fps). It replaces the rain as the image that both the ropes and the HUB75 sample, so the real river flows across the installation. If the stream drops for more than 10 s, it falls back to the rain by itself.
 - **Next:**
   1. Feed Dave's Modal visuals into the ropes and panels through the same pixel map.
   2. Connect quad 2, and fix ropes 9 and 17.
