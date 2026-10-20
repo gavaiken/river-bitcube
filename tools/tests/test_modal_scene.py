@@ -71,3 +71,10 @@ def test_glide_moves_linearly_and_restarts_from_where_it_is(ms):
 def test_keys_flatten_round_trip(ms):
     keys = ms.palette_keys(STATE['scene']['colors'])
     assert ms.unflatten_keys(ms.flatten_keys(keys)) == keys
+
+
+def test_dim_palette_is_lifted_to_full_range_keeping_ratios(ms):
+    keys = ms.palette_keys(['#18204a', '#607090'])            # brightest channel 0x90 = 0.565
+    top = keys[-1][1:4]
+    assert max(top) == pytest.approx(1.0)
+    assert top[0] / top[2] == pytest.approx(0x60 / 0x90)

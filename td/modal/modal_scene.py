@@ -8,7 +8,8 @@
 # The scene scales the look parameters on river_local's River page instead of replacing them, so the
 # hand-tuned look stays the centre and Modal Mix 0 gives it back exactly:
 #   speed -> flow + rain speed, density -> rain density, turbulence -> sparkle and a shorter memory,
-#   brightness -> overall gain (capped), colours -> the river palette (ramp_modal, crossed in by Modal Palette).
+#   brightness -> overall gain (capped), colours -> the river palette (ramp_modal, crossed in by Modal Palette;
+#   lifted so its brightest colour uses the LEDs' full range).
 # Flow and rain positions are integrated here (phase += speed * dt), so a changing speed never makes
 # the noise jump. If the files are missing or unreadable the look runs unmodulated.
 import json
@@ -22,6 +23,7 @@ STATE_DIR = pathlib.Path(r'C:\Users\user\River\gallery_state')
 READ_SECONDS = 2.0
 REFLEX_SMOOTH_SECONDS = 3.0
 GAIN_CAP = 1.25                     # never more than 1.25x the tuned gain (power)
+PALETTE_MAX_BOOST = 4.0             # how far a dim palette may be lifted to full LED range
 LIMITS = {'Memory': 3.3}            # the river memory's cache holds 200 frames = 3.33 s at 60 fps
 NEUTRAL = {'speed': 0.5, 'density': 0.5, 'brightness': 0.5, 'turbulence': 0.5}
 KNOBS = tuple(NEUTRAL)
@@ -52,6 +54,12 @@ def palette_keys(colors):
         return None
     if not rgbs:
         return None
+    # Dave's palettes are composed for a screen and often top out dim; on the LEDs that just loses light.
+    # Scale the whole palette (hues and ratios kept) so its brightest channel reaches 1. The agent's
+    # brightness knob still sets the overall level (Gain).
+    peak = max(max(c) for c in rgbs)
+    k = min(PALETTE_MAX_BOOST, 1 / peak) if peak > 0 else 1.0
+    rgbs = [tuple(min(1.0, v * k) for v in c) for c in rgbs]
     n = len(rgbs)
     return [[0.0, 0.0, 0.0, 0.0, 1.0]] + [[round((i + 1) / n, 4), *rgb, 1.0] for i, rgb in enumerate(rgbs)]
 
