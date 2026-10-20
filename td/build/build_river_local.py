@@ -55,6 +55,9 @@ LOOK = [  # name, label, default, min, max
     ('Camgain', 'River Cam Gain', 1.0, 0, 3),
     ('Camcontrast', 'River Cam Contrast (dark water to black)', 1.8, 0.5, 4),
     ('Campalette', 'River Cam in River Colours (0 = natural, 1 = palette)', 1.0, 0, 1),
+    ('Camfx', 'River Memory (0 = live, 1 = time-slice + sparkle)', 1.0, 0, 1),
+    ('Memory', 'River Memory Depth (s, top = now, bottom = past)', 3.0, 0.2, 3.3),
+    ('Sparkle', 'Sparkle on Moving Water', 1.0, 0, 3),
 ]
 pg = page(rl, 'River')
 for name, label, default, lo, hi in LOOK:
@@ -327,8 +330,48 @@ wire(mix, [pg_, cl])
 mix.par.cross.expr = "parent().par.Panelcam * (1 if op('river_cam_mod').module.fresh('river', 'sub') else 0)"
 # The river cam also fills the whole field, so it flows across the ropes and the HUB75's patch alike:
 # field_gain (rain) --cross--> river cam (fill 1280x720) -> field_blur -> field_out (sampled by both).
+# ---- "the river's memory": a vertical time-slice of the live river, plus sparkle where it moves ------
+# Top of the field = the river now; lower down = further back in time (up to Memory seconds), so foam
+# visibly pours down through the coils. Sparkle = |frame - frame ~0.1 s ago| (moving water) added as light.
+# Built-in TOPs only, small (320x180) so the cache stays light on the Iris Xe (200 frames ~ 46 MB).
+csm = get(fitTOP, 'cam_small', 1350, 900)
+csm.inputConnectors[0].connect(cam)
+csm.par.fit = 'fill'
+res(csm, 320, 180)
+cch = get(cacheTOP, 'cam_cache', 1425, 900)
+cch.inputConnectors[0].connect(csm)
+cch.par.cachesize = 200
+cch.par.active = True
+cch.par.alwayscook = True
+keys('cam_timemap_keys', [[0, 0, 0, 0, 1], [1, 1, 1, 1, 1]], 1350, 1050)   # bottom black (past) -> top white (now)
+ctm = get(rampTOP, 'cam_timemap', 1425, 1050)
+res(ctm, 320, 180)
+ctm.par.type = 'vertical'
+ctm.par.dat = 'cam_timemap_keys'
+cmem = get(timemachineTOP, 'cam_memory', 1500, 900)
+wire(cmem, [cch, ctm])
+cmem.par.blackoffsetunit = 'indices'
+cmem.par.blackoffset.expr = '-int(parent().par.Memory * 60)'   # TD runs at 60 fps
+cmem.par.whiteoffset = 0
+cprev = get(cacheselectTOP, 'cam_prev', 1500, 1050)
+cprev.par.cachetop = cch
+cprev.par.index = -6                                            # ~0.1 s = one camera frame ago
+cdif = get(compositeTOP, 'cam_motion', 1575, 1050)
+wire(cdif, [csm, cprev])
+cdif.par.operand = 'difference'
+csp = get(levelTOP, 'cam_sparkle', 1650, 1050)
+csp.inputConnectors[0].connect(cdif)
+csp.par.blacklevel = 0.06
+csp.par.brightness1.expr = 'parent().par.Sparkle * 4'
+csp.par.clamp = True
+cms = get(compositeTOP, 'cam_memory_sparkle', 1650, 900)
+wire(cms, [cmem, csp])
+cms.par.operand = 'add'
+cfx = get(crossTOP, 'cam_fx', 1725, 900)
+wire(cfx, [csm, cms])
+cfx.par.cross.expr = 'parent().par.Camfx'
 cfb = get(fitTOP, 'river_cam_field', 1350, 600)
-cfb.inputConnectors[0].connect(cam)
+cfb.inputConnectors[0].connect(cfx)
 cfb.par.fit = 'fill'
 res(cfb, FIELD_W, FIELD_H)
 clb = get(levelTOP, 'river_cam_field_level', 1425, 600)
