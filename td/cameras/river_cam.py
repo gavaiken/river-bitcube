@@ -212,9 +212,10 @@ def start(cam='river', stream='sub'):
     """TD side: make sure the relay process runs and the shared memory is mapped. Safe to call every frame."""
     import mmap
     h = _holder()
-    st = h.streams.setdefault((cam, stream), {'relay': None, 'mm': None, 'seen': 0, 'error': None,
-                                             'next_try': 0.0, 'dn': None, 'dn_n': 0, 'dn_t': None,
-                                             'colour': None})
+    st = h.streams.setdefault((cam, stream), {})
+    for k, v in {'relay': None, 'mm': None, 'seen': 0, 'error': None, 'next_try': 0.0,
+                 'dn': None, 'dn_n': 0, 'dn_t': None, 'colour': None}.items():
+        st.setdefault(k, v)                      # a live stream from an older version of this file gains new keys
     if st['mm'] is None:
         st['mm'] = mmap.mmap(-1, shm_size(), tagname=shm_name(cam, stream))
     relay_proc = st['relay']
