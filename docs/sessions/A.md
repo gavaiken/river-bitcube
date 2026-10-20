@@ -50,3 +50,5 @@ Notes kept here while another session is editing the shared docs; folded into th
 - 20 Oct 10:15: Dave answered (ingest token, names; no SITE_TOKEN). Modal link live: both cams posting clips, mirror running, Startup entry added. TD: `modal_scene.py` drives the look (plan O), show file saved (2627211, 0 secret hits after toeexpand). Fixed the river cam relay hanging on a dead link (11 h stale).
 
 - 20 Oct 10:40: auto day/night (plan P) and Dave's canvas layer (`modal_canvas`, Canvasmix 0.4; ~1.5% GPU, 60 fps) live; show file a7bbf28.
+
+- 20 Oct 11:10: live page https://gavaiken.github.io/river-bitcube/live.html (a gallery-cam still every minute, self-refreshing); the status page loads the newest still. RiverSnapshot now every minute (S4U), keeps 15 per-minute files on the snapshot branch.
