@@ -36,6 +36,7 @@ TouchDesigner (TD) drives the 20 ropes over Art-Net **and** the HUB75 panels ove
 - **Dave's visuals:** web canvas `https://to-be-a-river--river.modal.run/canvas.html` (Web Render TOP).
 - **Remote viewing:** VNC (TightVNC :5900) shows the real console/HDMI; RDP blanks the panels.
 - **See bitcube's screen: `tools\screenshot.ps1`** saves the whole desktop (every display, scaled to ≤1600 px; `-MaxWidth 0` for full size) as `frames\desktop-<time>.png` and prints the path. It works from SSH too (it hands the capture to the desktop session through a one-off scheduled task). From the Mac mini: `p=$(ssh bitcube 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\user\River\river-bitcube\tools\screenshot.ps1' | tr -d '\r' | tail -1); scp "bitcube:/${p//\\//}" .` then look at the PNG. Use it before clicking anything, to check a dialog, or to see what's on the panels' display.
+- **Drive bitcube's console from the Mac mini: VNC.** `~/claude/local/bitcube-vnc/vnc.py` (vncdotool, its own venv; TightVNC on bitcube :5900 over Tailscale; the password stays in an untracked file on the mini). `.venv/bin/python vnc.py shot a.png`, `click X Y`, `dclick X Y`, `drag X1 Y1 X2 Y2`, `type "text"`, `key ctrl-s`; chain actions with `--` in one connection. Coordinates are real console pixels (1920×1080 today). Unlike `screenshot.ps1` it also reaches UAC prompts and the lock screen. Always take a `shot` before and after clicking.
 - **Power:** a full-white box is ≈1.5 kW. Cap brightness in TD.
 
 ## TouchDesigner gotchas (learned the hard way)
