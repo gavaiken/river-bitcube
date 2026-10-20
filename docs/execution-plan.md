@@ -36,7 +36,7 @@ title: Execution plan
 | ✅ | I4 | Generated `system.md` + `llms.txt` for agents | I (Mac mini · Opus 5.5) | Claude |
 | ✅ | I5 | Verify in headless Chrome and on the published URLs | I (Mac mini · Opus 5.5) | Claude |
 | ✅ | I6 | Remove the password hint, links, code review, Signal draft, summary | I (Mac mini · Opus 5.5) | Claude |
-| ➡️ | D1–D4 | Dave's Modal visuals on the ropes and HUB75. *Mirror running (no `SITE_TOKEN`); the agent's scene now drives river_local's look and palette (A, 20 Oct, plan item O). Still to try: Web Render of `canvas.html` (Dave's own animations)* | D (bitcube · Opus 5.5) | Claude |
+| ✅ | D1–D4 | Dave's Modal visuals on the ropes and HUB75. *Done by A, 20 Oct: mirror running (no `SITE_TOKEN`); the agent's scene drives river_local's look and palette, and his `canvas.html` plays as a layer (plan item O)* | D (bitcube · Opus 5.5) | Claude |
 | ✅ | E1–E3 | Cameras pushing clips to Dave's agent. *Done by A, 20 Oct 10:05: `tools/modal/modal_link.py`, both cams, `gallery/video` and `river/video`* | E (bitcube · Opus 5.5) | Claude |
 | ❌ | P2 | Panel quad 2 connected. *Blocked: Andi (receive-card layout)* | Andi + Gavin, in person | Andi |
 | ❌ | G1–G3 | Remap the hung installation at Gray Area. *Blocked: install starts Wed 22 Oct* | G (bitcube · Opus 5.5) | Claude |

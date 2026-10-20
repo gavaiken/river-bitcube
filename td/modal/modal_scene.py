@@ -21,6 +21,7 @@ import types
 
 STATE_DIR = pathlib.Path(r'C:\Users\user\River\gallery_state')
 READ_SECONDS = 2.0
+CANVAS_RELOAD_AFTER = 30.0          # s after the project loads: reload Dave's canvas once (see frame())
 REFLEX_SMOOTH_SECONDS = 3.0
 GAIN_CAP = 1.25                     # never more than 1.25x the tuned gain (power)
 PALETTE_MAX_BOOST = 4.0             # how far a dim palette may be lifted to full LED range
@@ -159,7 +160,7 @@ def _state():
         h.st = {'knobs': Glide([NEUTRAL[k] for k in KNOBS]), 'keys': None, 'seq': None, 'name': '',
                 'reflex': {k: 0.0 for k in KNOBS}, 'reflex_target': {k: 0.0 for k in KNOBS},
                 'next_read': 0.0, 'last_frame': None, 'phase': {'river': 0.0, 'rain': 0.0},
-                'ok': False, 'error': None, 'scene_age': None}
+                'ok': False, 'error': None, 'scene_age': None, 'canvas_reloaded': False}
     return h.st
 
 
@@ -205,6 +206,12 @@ def frame(comp):
             st['error'] = None
         except Exception as e:                                    # noqa: BLE001 - never stop the show
             st['error'] = repr(e)
+    if not st.get('canvas_reloaded') and now > CANVAS_RELOAD_AFTER:
+        # At login TD can open Dave's canvas before modal_link's mirror serves it; reload it once.
+        st['canvas_reloaded'] = True
+        cv = comp.op('modal_canvas')
+        if cv is not None and cv.par.active:
+            cv.par.reload.pulse()
     a = 1 - math.exp(-dt / REFLEX_SMOOTH_SECONDS) if dt else 0.0
     for k in KNOBS:
         st['reflex'][k] += (st['reflex_target'][k] - st['reflex'][k]) * a

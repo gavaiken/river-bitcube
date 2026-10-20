@@ -20,11 +20,10 @@ bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes ov
   - bitcube boots straight into the rain checkpoint (about 1 minute; restart-tested 16:54) and is on Tailscale. The gallery cam is reachable (also through bitcube on Will's tailnet); the river cam went to the river on the evening of 18 Oct.
   - **[System map](system/):** a clickable diagram of every machine, device and connection (Agape now, Gray Area planned), with IPs, ports, usernames and the Modal↔bitcube API. No secrets.
   - **Live river cam across the ropes and HUB75:** the camera at the river streams over Starlink and Tailscale to bitcube (10 fps). It replaces the rain as the image that both the ropes and the HUB75 sample, so the real river flows across the installation. If the stream drops for more than 10 s, it falls back to the rain by itself.
-  - **Connected to Dave's Modal agent:** both cameras post 10 s clips to the agent, and the agent's scene (colours, speed, density, turbulence, brightness, every 5 min, plus fast camera reflexes) now shapes the look on the ropes and HUB75.
+  - **Connected to Dave's Modal agent:** both cameras post 10 s clips to the agent, and the agent's scene (colours, speed, density, turbulence, brightness, every 5 min, plus fast camera reflexes) now shapes the look on the ropes and HUB75, and Dave's own animation plays as a layer over the live river. The river cam's look switches between day and night (infrared) settings by itself.
 - **Next:**
-  1. Try Dave's own animations (his web canvas inside TouchDesigner) as a layer.
-  2. Connect quad 2, and fix ropes 9 and 17.
-  3. Re-map once the ropes are hung at Gray Area.
+  1. Connect quad 2, and fix ropes 9 and 17.
+  2. Re-map once the ropes are hung at Gray Area.
 
 ![Rain checkpoint on the coiled ropes and HUB75, 18 Oct 15:57](img/rain-checkpoint-2026-10-18.jpg)
 

@@ -48,3 +48,5 @@ Notes kept here while another session is editing the shared docs; folded into th
 - 19 Oct 22:20: added `tools/screenshot.ps1` (bitcube desktop screenshot, works over SSH via a one-off interactive task); documented in CLAUDE.md. Closed the TD panels window so Gavin could use the desktop; TD now sees a single 1920×1080 display (the M14 is unplugged or mirrored). Right Shift reads as held down in the desktop session (physical?).
 
 - 20 Oct 10:15: Dave answered (ingest token, names; no SITE_TOKEN). Modal link live: both cams posting clips, mirror running, Startup entry added. TD: `modal_scene.py` drives the look (plan O), show file saved (2627211, 0 secret hits after toeexpand). Fixed the river cam relay hanging on a dead link (11 h stale).
+
+- 20 Oct 10:40: auto day/night (plan P) and Dave's canvas layer (`modal_canvas`, Canvasmix 0.4; ~1.5% GPU, 60 fps) live; show file a7bbf28.
