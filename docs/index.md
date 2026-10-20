@@ -8,7 +8,7 @@ title: A River Becoming: show machine status
 
 **[Execution plan](execution-plan.md)** (status table and session prompts) · **[Plan & open questions](plan.md)** · **[Log](a-river-becoming-log.md)** · **[Hardware](a-river-becoming-hardware.md)** · **[System map](system/)** (every device, IP and connection; [system.json](system/system.json) for agents)
 
-**Status as of Mon 19 Oct 2026, 18:05.** Gray Area install starts **Wed 22 Oct**.
+**Status as of Tue 20 Oct 2026, 10:15.** Gray Area install starts **Wed 22 Oct**.
 
 bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes over Art-Net, the HUB75 panels over HDMI, and the Reolink cameras. It runs TouchDesigner and a Claude Code session.
 
@@ -20,11 +20,11 @@ bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes ov
   - bitcube boots straight into the rain checkpoint (about 1 minute; restart-tested 16:54) and is on Tailscale. The gallery cam is reachable (also through bitcube on Will's tailnet); the river cam went to the river on the evening of 18 Oct.
   - **[System map](system/):** a clickable diagram of every machine, device and connection (Agape now, Gray Area planned), with IPs, ports, usernames and the Modal↔bitcube API. No secrets.
   - **Live river cam across the ropes and HUB75:** the camera at the river streams over Starlink and Tailscale to bitcube (10 fps). It replaces the rain as the image that both the ropes and the HUB75 sample, so the real river flows across the installation. If the stream drops for more than 10 s, it falls back to the rain by itself.
+  - **Connected to Dave's Modal agent:** both cameras post 10 s clips to the agent, and the agent's scene (colours, speed, density, turbulence, brightness, every 5 min, plus fast camera reflexes) now shapes the look on the ropes and HUB75.
 - **Next:**
-  1. Feed Dave's Modal visuals into the ropes and panels through the same pixel map.
+  1. Try Dave's own animations (his web canvas inside TouchDesigner) as a layer.
   2. Connect quad 2, and fix ropes 9 and 17.
-  3. Push the cameras into Dave's agent.
-  4. Re-map once the ropes are hung at Gray Area.
+  3. Re-map once the ropes are hung at Gray Area.
 
 ![Rain checkpoint on the coiled ropes and HUB75, 18 Oct 15:57](img/rain-checkpoint-2026-10-18.jpg)
 
