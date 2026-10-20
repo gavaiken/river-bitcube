@@ -368,7 +368,7 @@ wire(cdif, [csm, cprev])
 cdif.par.operand = 'difference'
 csp = get(levelTOP, 'cam_sparkle', 1650, 1050)
 csp.inputConnectors[0].connect(cdif)
-csp.par.blacklevel = 0.06
+csp.par.blacklevel = 0.03          # low threshold: night IR video has subtle motion
 csp.par.brightness1.expr = 'parent().par.Sparkle * 4'
 csp.par.clamp = True
 cms = get(compositeTOP, 'cam_memory_sparkle', 1650, 900)
