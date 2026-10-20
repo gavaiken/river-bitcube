@@ -45,3 +45,14 @@ def test_array_is_a_contiguous_writable_copy(rc):
     a = asm.array()
     assert a.shape == (2, 1, 4) and a[0, 0, 0] == 10 and a[1, 0, 0] == 20
     assert a.flags['C_CONTIGUOUS'] and a.flags['WRITEABLE']        # a flipped view froze TD
+
+
+def test_shared_memory_header_round_trips(rc):
+    buf = bytearray(rc.shm_size(2, 2))
+    assert len(buf) == rc.HEADER.size + 16
+    buf[:rc.HEADER.size] = rc.pack_header(42, 1792300000.5)
+    assert rc.unpack_header(buf) == (42, 1792300000.5)
+
+
+def test_shared_memory_name_is_per_camera_and_stream(rc):
+    assert rc.shm_name('river', 'sub') != rc.shm_name('gallery', 'sub') != rc.shm_name('river', 'main')
