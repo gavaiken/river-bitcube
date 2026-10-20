@@ -12,7 +12,7 @@ $repeat = New-ScheduledTaskTrigger -Once -At '08:00' -RepetitionInterval (New-Ti
 $trigger.Repetition = $repeat.Repetition
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew `
     -ExecutionTimeLimit (New-TimeSpan -Minutes 2) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-$user = "$env:USERDOMAIN\$env:USERNAME"
+$user = "$env:COMPUTERNAME\$env:USERNAME"   # local account; USERDOMAIN is wrong in an SSH session
 $desc = 'A River Becoming: gallery-cam still to the snapshot branch for the status page (river-bitcube tools\snapshot.ps1).'
 try {
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Limited
