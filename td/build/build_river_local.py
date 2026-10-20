@@ -466,7 +466,7 @@ if cv is None:
     cv.par.active = False
 cv.nodeX, cv.nodeY = 1200, 450
 for p in cv.pars():                      # Andi's original binds url/resolution to its parent's parameters
-    if p.mode != ParMode.CONSTANT and not p.isPulse:
+    if p.mode != ParMode.CONSTANT:
         p.bindExpr = ''
         p.mode = ParMode.CONSTANT
 cv.par.url = 'http://127.0.0.1:8770/canvas.html?w=640&h=360'
