@@ -91,7 +91,8 @@ if not hasattr(rl.par, 'Uvtest'):
 
 # Dave's Modal agent (td/modal/modal_scene.py): its scene scales the look above and sets the palette.
 MPARS = [('Modalmix', 'Modal Agent Mix (0 = the tuned look, 1 = scaled by the agent\'s scene)', 1.0),
-         ('Modalpalette', 'Modal Palette (0 = river colours, 1 = the agent\'s colours)', 1.0)]
+         ('Modalpalette', 'Modal Palette (0 = river colours, 1 = the agent\'s colours)', 1.0),
+         ('Canvasmix', 'Dave\'s Canvas over the River (0 = off, 1 = only the canvas)', 0.4)]
 mpg = page(rl, 'Modal')
 for name, label, default in MPARS:
     if not hasattr(rl.par, name):
@@ -453,7 +454,31 @@ clk.par.cross.expr = 'parent().par.Campalette'
 fx = get(crossTOP, 'field_cam_mix', 1425, 150)
 wire(fx, [lo, clk])
 fx.par.cross.expr = "parent().par.Fieldcam * (1 if op('river_cam_mod').module.fresh('river', 'sub') else 0)"
-bl.inputConnectors[0].connect(fx)
+# ---- Dave's canvas (his own animations: flow, ripples, embers...) crossed over the river -------------
+# canvas.html from the local mirror (tools/modal/modal_link.py, 127.0.0.1:8770), so it keeps playing the last
+# scene when the internet drops. Rendered small (640x360, 30 fps) to spare the Iris Xe, then fitted to the
+# field. Copied from Andi's Web Render (switched off) rather than created through the bridge, and only
+# switched on a moment after the build returns (creating a Video Stream In through the bridge froze TD).
+cv = rl.op('modal_canvas')
+if cv is None:
+    src = proj.op('Mask_Panels/webrender1')
+    cv = rl.copy(src, name='modal_canvas') if src is not None else rl.create(webrenderTOP, 'modal_canvas')
+    cv.par.active = False
+cv.nodeX, cv.nodeY = 1200, 450
+cv.par.url = 'http://127.0.0.1:8770/canvas.html?w=640&h=360'
+res(cv, 640, 360)
+cv.par.maxrenderrate = 30
+cv.par.audio = 'off'
+cvf = get(fitTOP, 'modal_canvas_fit', 1275, 450)
+cvf.inputConnectors[0].connect(cv)
+cvf.par.fit = 'fill'
+res(cvf, FIELD_W, FIELD_H)
+cvm = get(crossTOP, 'canvas_mix', 1500, 300)
+wire(cvm, [fx, cvf])
+cvm.par.cross.expr = "parent().par.Canvasmix * (1 if op('modal_canvas').par.active and not op('modal_canvas').errors() else 0)"
+bl.inputConnectors[0].connect(cvm)
+if not cv.par.active:
+    run("op('/project1/river_local/modal_canvas').par.active = True", delayFrames=60)
 q1 = get(nullTOP, 'quad1_out', 2400, 150)
 q1.inputConnectors[0].connect(mix)
 q1.viewer = True
