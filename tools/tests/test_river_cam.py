@@ -57,3 +57,21 @@ def test_shared_memory_header_round_trips(rc):
 
 def test_shared_memory_name_is_per_camera_and_stream(rc):
     assert rc.shm_name('river', 'sub') != rc.shm_name('gallery', 'sub') != rc.shm_name('river', 'main')
+
+
+def test_colourfulness_is_zero_for_greyscale_and_positive_for_colour(rc):
+    grey = np.full((16, 16, 4), 120, np.uint8)
+    colour = grey.copy()
+    colour[..., 2] = 200                       # bluish
+    assert rc.colourfulness(grey) == 0.0
+    assert rc.colourfulness(colour) == pytest.approx(80 / 255)
+
+
+def test_daynight_hysteresis_and_glide(rc):
+    dn = rc.DayNight(night=False)
+    assert dn.measure(0.03) is False            # between thresholds: stays day
+    assert dn.measure(0.01) is True             # IR: night
+    assert dn.measure(0.03) is True             # dusk noise doesn't flip it back
+    assert dn.step(rc.DAYNIGHT_SECONDS / 2) == pytest.approx(0.5)
+    assert dn.step(rc.DAYNIGHT_SECONDS) == 1.0
+    assert dn.measure(0.06) is False and dn.step(1e9) == 0.0

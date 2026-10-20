@@ -34,6 +34,12 @@ RESTART_SECONDS = 5.0             # wait before restarting ffmpeg after it exits
 STALL_SECONDS = 20.0              # relay kills ffmpeg if no frame arrives for this long (a hung connection)
 RTSP_TIMEOUT_US = 10_000_000      # ffmpeg's socket timeout: a dead link ends ffmpeg instead of hanging it
 HEADER = struct.Struct('<Qd')     # shared memory: frame counter, unix time of that frame, then RGBA bytes
+# Day/night: at night the Reolink switches to infrared and sends greyscale. Colourfulness (mean of
+# max(rgb) - min(rgb), 0..1) is ~0.07 by day on the river and ~0 in IR. Hysteresis so dusk doesn't flicker.
+NIGHT_BELOW, DAY_ABOVE = 0.02, 0.035
+DAYNIGHT_SECONDS = 20.0           # how long the look takes to cross between its day and night settings
+DAYNIGHT_EVERY = 30               # measure every Nth new frame (~3 s at 10 fps)
+DAYNIGHT_PARS = {'Camgain': 'Camgainnight', 'Camcontrast': 'Camcontrastnight', 'Sparkle': 'Sparklenight'}
 PYTHONS = [str(REPO / '.venv' / 'Scripts' / 'python.exe'), r'C:\Program Files\Python313\python.exe']
 
 
@@ -95,6 +101,33 @@ class FrameAssembler:
         if self.latest is None:
             return None
         return np.array(np.frombuffer(self.latest, np.uint8).reshape(self.shape), copy=True, order='C')
+
+
+def colourfulness(frame):
+    """0 for greyscale (IR night video), ~0.05-0.1 for daylight water and rocks. frame: uint8 (h, w, >=3)."""
+    s = frame[::8, ::8, :3].astype(np.int16)
+    return float((s.max(axis=2) - s.min(axis=2)).mean()) / 255
+
+
+class DayNight:
+    """Night or day from colourfulness, with hysteresis; `nightness` glides 0 (day) .. 1 (night)."""
+
+    def __init__(self, night=False):
+        self.night = night
+        self.nightness = 1.0 if night else 0.0
+
+    def measure(self, c):
+        if self.night and c > DAY_ABOVE:
+            self.night = False
+        elif not self.night and c < NIGHT_BELOW:
+            self.night = True
+        return self.night
+
+    def step(self, dt):
+        target = 1.0 if self.night else 0.0
+        d = dt / DAYNIGHT_SECONDS
+        self.nightness = min(target, self.nightness + d) if target > self.nightness else max(target, self.nightness - d)
+        return self.nightness
 
 
 # ---- live stream (TD side + relay process) ------------------------------------------------------------------
@@ -180,7 +213,8 @@ def start(cam='river', stream='sub'):
     import mmap
     h = _holder()
     st = h.streams.setdefault((cam, stream), {'relay': None, 'mm': None, 'seen': 0, 'error': None,
-                                             'next_try': 0.0})
+                                             'next_try': 0.0, 'dn': None, 'dn_n': 0, 'dn_t': None,
+                                             'colour': None})
     if st['mm'] is None:
         st['mm'] = mmap.mmap(-1, shm_size(), tagname=shm_name(cam, stream))
     relay_proc = st['relay']
@@ -213,6 +247,25 @@ def _header(cam, stream):
     return st, count, when
 
 
+def nightness(cam='river', stream='sub'):
+    """0 = day look, 1 = night (IR) look; glides over DAYNIGHT_SECONDS (stepped in cook())."""
+    st = _holder().streams.get((cam, stream))
+    return 0.0 if not st or st['dn'] is None else st['dn'].nightness
+
+
+def daynight(comp, name, cam='river', stream='sub'):
+    """Look parameter `name` (Camgain, Camcontrast, Sparkle) between its day value (the parameter itself)
+    and its night twin (Camgainnight ...), when Auto Day/Night is on."""
+    day = getattr(comp.par, name).eval()
+    try:
+        if not comp.par.Autodaynight.eval():
+            return day
+        night = getattr(comp.par, DAYNIGHT_PARS[name]).eval()
+        return day + (night - day) * nightness(cam, stream)
+    except Exception:                                  # noqa: BLE001 - never break the look
+        return day
+
+
 def fresh(cam='river', stream='sub'):
     _, count, when = _header(cam, stream)
     return bool(count) and time.time() - when < STALE_SECONDS
@@ -224,17 +277,31 @@ def status(cam='river', stream='sub'):
         return {'running': False}
     return {'relay': bool(st['relay'] and st['relay'].poll() is None), 'frames': count,
             'last_frame_age_s': round(time.time() - when, 1) if count else None,
-            'fresh': fresh(cam, stream), 'error': st['error']}
+            'fresh': fresh(cam, stream), 'error': st['error'],
+            'colourfulness': None if st['colour'] is None else round(st['colour'], 4),
+            'night': None if st['dn'] is None else st['dn'].night,
+            'nightness': None if st['dn'] is None else round(st['dn'].nightness, 3)}
 
 
 def cook(scriptOp, cam='river', stream='sub'):
     """Script TOP onCook: copy the newest frame from shared memory (black until one arrives)."""
     st = start(cam, stream)
+    now = time.monotonic()
+    if st['dn'] is not None and st['dn_t'] is not None:
+        st['dn'].step(min(1.0, now - st['dn_t']))
+    st['dn_t'] = now
     count, _ = unpack_header(st['mm'])
     if count and (count != st['seen'] or scriptOp.width != WIDTH):
         st['seen'] = count
         frame = np.frombuffer(st['mm'], np.uint8, count=WIDTH * HEIGHT * 4, offset=HEADER.size)
-        scriptOp.copyNumpyArray(np.array(frame.reshape(HEIGHT, WIDTH, 4), copy=True, order='C'))
+        img = np.array(frame.reshape(HEIGHT, WIDTH, 4), copy=True, order='C')
+        scriptOp.copyNumpyArray(img)
+        st['dn_n'] += 1
+        if st['dn'] is None or st['dn_n'] % DAYNIGHT_EVERY == 0:
+            st['colour'] = colourfulness(img)
+            if st['dn'] is None:
+                st['dn'] = DayNight(night=st['colour'] < NIGHT_BELOW)   # start in the right state, no fade
+            st['dn'].measure(st['colour'])
     elif not count:
         scriptOp.copyNumpyArray(np.zeros((HEIGHT, WIDTH, 4), np.uint8))
 

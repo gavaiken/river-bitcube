@@ -66,6 +66,23 @@ for name, label, default, lo, hi in LOOK:
         p.val = default
     p = getattr(rl.par, name)
     p.normMin, p.normMax, p.default = lo, hi, default
+# Auto day/night (td/cameras/river_cam.py): Camgain, Camcontrast and Sparkle above are the *day* values;
+# at night (the river cam in infrared = greyscale) the look glides to these twins over 20 s.
+NIGHT = [('Camgainnight', 'River Cam Gain at Night (IR)', 0.7, 0, 3),
+         ('Camcontrastnight', 'River Cam Contrast at Night (IR)', 2.2, 0.5, 4),
+         ('Sparklenight', 'Sparkle at Night (IR)', 3.0, 0, 3)]
+for name, label, default, lo, hi in NIGHT:
+    if not hasattr(rl.par, name):
+        p = pg.appendFloat(name, label=label)[0]
+        p.val = default
+        day = {'Camgainnight': 'Camgain', 'Camcontrastnight': 'Camcontrast', 'Sparklenight': 'Sparkle'}[name]
+        getattr(rl.par, day).val = getattr(rl.par, day).default        # the live values were night-tuned
+    p = getattr(rl.par, name)
+    p.normMin, p.normMax, p.default = lo, hi, default
+if not hasattr(rl.par, 'Autodaynight'):
+    p = pg.appendToggle('Autodaynight', label='Auto Day/Night (from the river cam)')[0]
+    p.default = True
+    p.val = True
 if not hasattr(rl.par, 'Uvtest'):
     p = pg.appendToggle('Uvtest', label='UV Test Field (R=u, G=v)')[0]
     p.default = False
@@ -360,7 +377,7 @@ cf.par.fit = 'fill'
 res(cf, 256, 128)
 cl = get(levelTOP, 'river_cam_level', 2325, 450)
 cl.inputConnectors[0].connect(cf)
-cl.par.brightness1.expr = 'parent().par.Camgain'
+cl.par.brightness1.expr = f"op('river_cam_mod').module.daynight(parent(), 'Camgain'){T}"
 mix = get(crossTOP, 'panel_mix', 2325, 150)
 wire(mix, [pg_, cl])
 # Show the cam only while frames are arriving; otherwise the panels fall back to the rain.
@@ -420,8 +437,8 @@ cfb.par.fit = 'fill'
 res(cfb, FIELD_W, FIELD_H)
 clb = get(levelTOP, 'river_cam_field_level', 1425, 600)
 clb.inputConnectors[0].connect(cfb)
-clb.par.brightness1.expr = 'parent().par.Camgain'
-clb.par.contrast.expr = 'parent().par.Camcontrast'
+clb.par.brightness1.expr = f"op('river_cam_mod').module.daynight(parent(), 'Camgain'){T}"
+clb.par.contrast.expr = f"op('river_cam_mod').module.daynight(parent(), 'Camcontrast'){T}"
 clb.par.clamp = True
 # Read the river through the installation's own palette: brightness -> black, deep blue, teal, white
 # (the same ramp as the rain's river), so foam glows and dark water goes dark on the ropes.

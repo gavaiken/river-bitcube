@@ -229,6 +229,8 @@ def eff(comp, name):
     """The value of look parameter `name` after Modal: used by river_local's expressions."""
     base = getattr(comp.par, name).eval()
     try:
+        if name == 'Sparkle':                                     # day/night first (river_cam.daynight)
+            base = comp.op('river_cam_mod').module.daynight(comp, name)
         st = _state()
         if not st['ok']:
             return base
