@@ -465,6 +465,10 @@ if cv is None:
     cv = rl.copy(src, name='modal_canvas') if src is not None else rl.create(webrenderTOP, 'modal_canvas')
     cv.par.active = False
 cv.nodeX, cv.nodeY = 1200, 450
+for p in cv.pars():                      # Andi's original binds url/resolution to its parent's parameters
+    if p.mode != ParMode.CONSTANT and not p.isPulse:
+        p.bindExpr = ''
+        p.mode = ParMode.CONSTANT
 cv.par.url = 'http://127.0.0.1:8770/canvas.html?w=640&h=360'
 res(cv, 640, 360)
 cv.par.maxrenderrate = 30
