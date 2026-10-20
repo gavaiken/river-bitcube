@@ -28,7 +28,7 @@ def test_ffmpeg_args_decode_to_raw_rgba_over_tcp(rc):
     args = rc.ffmpeg_args('ffmpeg', 'rtsp://x/Preview_01_sub', 640, 360)
     assert args[args.index('-rtsp_transport') + 1] == 'tcp'
     assert args[args.index('-pix_fmt') + 1] == 'rgba'
-    assert args[-1] == 'pipe:1' and 'scale=640:360' in args
+    assert args[-1] == 'pipe:1' and 'scale=640:360,vflip' in args   # ffmpeg flips for TD
 
 
 def test_assembler_keeps_only_newest_whole_frame(rc):
@@ -39,8 +39,9 @@ def test_assembler_keeps_only_newest_whole_frame(rc):
     assert asm.latest == f2 and asm.count == 2 and len(asm.buf) == 5
 
 
-def test_array_is_flipped_for_td(rc):
-    asm = rc.FrameAssembler(1, 2)                    # one column, two rows
-    asm.feed(bytes([10, 10, 10, 255, 20, 20, 20, 255]))   # top row 10, bottom row 20
+def test_array_is_a_contiguous_writable_copy(rc):
+    asm = rc.FrameAssembler(1, 2)                    # one column, two rows (already flipped by ffmpeg)
+    asm.feed(bytes([10, 10, 10, 255, 20, 20, 20, 255]))
     a = asm.array()
-    assert a.shape == (2, 1, 4) and a[0, 0, 0] == 20 and a[1, 0, 0] == 10
+    assert a.shape == (2, 1, 4) and a[0, 0, 0] == 10 and a[1, 0, 0] == 20
+    assert a.flags['C_CONTIGUOUS'] and a.flags['WRITEABLE']        # a flipped view froze TD

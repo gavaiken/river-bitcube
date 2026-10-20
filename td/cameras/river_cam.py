@@ -2,9 +2,11 @@
 # Synced into /project1/river_local/river_cam_mod (edit here, not in TD).
 #
 # Why not Video Stream In: creating one through the bridge froze TD's main thread on bitcube (19 Oct).
-# Instead an ffmpeg child process decodes the camera's RTSP stream to raw RGBA frames on stdout; a
-# background thread keeps only the newest frame, and a Script TOP copies it in onCook. Nothing in TD's
-# main thread ever waits on the network. ffmpeg is restarted with a back-off if the stream drops
+# Instead an ffmpeg child process decodes the camera's RTSP stream to raw RGBA frames on stdout, already
+# flipped vertically (TD's row 0 is the bottom); a background thread reads one whole frame per call (few
+# GIL handoffs, so it keeps up inside TD), and a Script TOP copies the newest frame in onCook. Nothing in
+# TD's main thread ever waits on the network. Never hand copyNumpyArray a non-contiguous view (e.g.
+# np.flipud): that froze TD on 19 Oct. ffmpeg is restarted with a back-off if the stream drops
 # (the river cam is on Starlink, relayed over Tailscale).
 #
 # The camera URL (with its password) is read from the untracked secrets.local.json when the stream
@@ -41,7 +43,7 @@ def stream_url(secrets, cam, stream='sub'):
 
 def ffmpeg_args(ffmpeg, url, width=WIDTH, height=HEIGHT):
     return [ffmpeg, '-hide_banner', '-loglevel', 'error', '-rtsp_transport', 'tcp', '-i', url,
-            '-an', '-vf', f'scale={width}:{height}', '-pix_fmt', 'rgba', '-f', 'rawvideo', 'pipe:1']
+            '-an', '-vf', f'scale={width}:{height},vflip', '-pix_fmt', 'rgba', '-f', 'rawvideo', 'pipe:1']
 
 
 class FrameAssembler:
@@ -65,10 +67,11 @@ class FrameAssembler:
         return n
 
     def array(self):
-        """Newest frame as uint8 (h, w, 4), flipped so row 0 is the bottom (TD's convention)."""
+        """Newest frame as a contiguous, writable uint8 (h, w, 4) copy, in the order ffmpeg sent it
+        (ffmpeg already flipped it for TD). Contiguous matters: a flipped view froze TD."""
         if self.latest is None:
             return None
-        return np.flipud(np.frombuffer(self.latest, np.uint8).reshape(self.shape))
+        return np.array(np.frombuffer(self.latest, np.uint8).reshape(self.shape), copy=True, order='C')
 
 
 # ---- live stream (TD side) --------------------------------------------------------------------
@@ -99,7 +102,7 @@ def _run(state):
             state['error'] = None
             asm = state['asm']
             while not state['stop']:
-                chunk = proc.stdout.read(65536)
+                chunk = proc.stdout.read(asm.size)       # one whole frame per call: few GIL handoffs
                 if not chunk:
                     break
                 if asm.feed(chunk):
