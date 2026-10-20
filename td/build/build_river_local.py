@@ -348,8 +348,15 @@ ctm = get(rampTOP, 'cam_timemap', 1425, 1050)
 res(ctm, 320, 180)
 ctm.par.type = 'vertical'
 ctm.par.dat = 'cam_timemap_keys'
+# Time Machine needs a 3D texture / 2D array (Texture 3D TOP), not a Cache TOP; the Cache TOP above
+# only feeds the sparkle's Cache Select.
+ct3 = get(texture3dTOP, 'cam_t3d', 1425, 750)
+ct3.inputConnectors[0].connect(csm)
+ct3.par.type = 'texture2darray'
+ct3.par.cachesize = 200
+ct3.par.active = True
 cmem = get(timemachineTOP, 'cam_memory', 1500, 900)
-wire(cmem, [cch, ctm])
+wire(cmem, [ct3, ctm])
 cmem.par.blackoffsetunit = 'indices'
 cmem.par.blackoffset.expr = '-int(parent().par.Memory * 60)'   # TD runs at 60 fps
 cmem.par.whiteoffset = 0
