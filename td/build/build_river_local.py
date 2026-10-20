@@ -53,6 +53,8 @@ LOOK = [  # name, label, default, min, max
     ('Fieldcam', 'Field: River Cam Mix (0 = rain, 1 = cam; ropes + HUB75)', 1.0, 0, 1),
     ('Panelcam', 'HUB75: Whole River Frame (0 = its patch of the field, 1 = full frame)', 0.0, 0, 1),
     ('Camgain', 'River Cam Gain', 1.0, 0, 3),
+    ('Camcontrast', 'River Cam Contrast (dark water to black)', 1.8, 0.5, 4),
+    ('Campalette', 'River Cam in River Colours (0 = natural, 1 = palette)', 1.0, 0, 1),
 ]
 pg = page(rl, 'River')
 for name, label, default, lo, hi in LOOK:
@@ -332,8 +334,20 @@ res(cfb, FIELD_W, FIELD_H)
 clb = get(levelTOP, 'river_cam_field_level', 1425, 600)
 clb.inputConnectors[0].connect(cfb)
 clb.par.brightness1.expr = 'parent().par.Camgain'
+clb.par.contrast.expr = 'parent().par.Camcontrast'
+clb.par.clamp = True
+# Read the river through the installation's own palette: brightness -> black, deep blue, teal, white
+# (the same ramp as the rain's river), so foam glows and dark water goes dark on the ropes.
+cmo = get(monochromeTOP, 'river_cam_mono', 1500, 600)
+cmo.inputConnectors[0].connect(clb)
+cpl = get(lookupTOP, 'river_cam_palette', 1575, 600)
+wire(cpl, [cmo, rr])
+cpl.par.channel = 'luminance'
+clk = get(crossTOP, 'river_cam_look', 1575, 450)
+wire(clk, [clb, cpl])
+clk.par.cross.expr = 'parent().par.Campalette'
 fx = get(crossTOP, 'field_cam_mix', 1425, 150)
-wire(fx, [lo, clb])
+wire(fx, [lo, clk])
 fx.par.cross.expr = "parent().par.Fieldcam * (1 if op('river_cam_mod').module.fresh('river', 'sub') else 0)"
 bl.inputConnectors[0].connect(fx)
 q1 = get(nullTOP, 'quad1_out', 2400, 150)
