@@ -1,8 +1,12 @@
-# Gallery-cam snapshot for the status page (plan item G).
-# Grabs one ~640 px wide still and force-pushes it as gallery.jpg to the orphan branch `snapshot`
-# (always a single parentless commit, so the branch never grows history). The status page shows
-#   https://raw.githubusercontent.com/gavaiken/river-bitcube/snapshot/gallery.jpg
-# Run by the scheduled task RiverSnapshot (every 15 min, 08:00-02:00; tools\snapshot_task.ps1 registers it).
+# Gallery-cam snapshot for the status page and the live page (plan item G).
+# Grabs one ~640 px wide still and force-pushes it to the orphan branch `snapshot` (always a single
+# parentless commit, so the branch never grows history) as
+#   gallery.jpg                 the newest still
+#   m/<UTC yyyyMMdd-HHmm>.jpg   one per minute, the last $Keep minutes
+# raw.githubusercontent.com caches every path for 5 minutes and ignores query strings, so gallery.jpg can
+# look 5 minutes old; a per-minute name is a new path, so docs/assets/snapshot.js loads the newest minute
+# that exists and is never stale. Run by the scheduled task RiverSnapshot (every minute, 08:00-02:00;
+# tools\snapshot_task.ps1 registers it).
 #   powershell -ExecutionPolicy Bypass -File tools\snapshot.ps1          # take and push one now
 #   powershell -ExecutionPolicy Bypass -File tools\snapshot.ps1 -NoPush  # just grab the still
 #   . .\tools\snapshot.ps1                                               # just load the functions (tests)
@@ -12,6 +16,7 @@ param(
     [string]$Camera = 'gallery',
     [int]$Width = 640,
     [switch]$NoPush,
+    [int]$Keep = 15,  # per-minute stills kept on the branch
     [switch]$Force   # ignore the 08:00-02:00 window
 )
 
@@ -35,6 +40,16 @@ function Get-SnapshotCacheInfo([string]$BlobSha, [string]$Name = 'gallery.jpg') 
     return "100644,$BlobSha,$Name"
 }
 
+function Get-MinuteName([datetime]$Utc) {
+    # Path of one minute's still on the branch; docs/assets/snapshot.js builds the same name.
+    return 'm/' + $Utc.ToString('yyyyMMdd-HHmm', [Globalization.CultureInfo]::InvariantCulture) + '.jpg'
+}
+
+function Select-KeptMinutes([string[]]$Names, [int]$Keep) {
+    # The newest $Keep per-minute names (they sort by time).
+    return @($Names | Sort-Object -Descending | Select-Object -First $Keep)
+}
+
 function Get-SnapshotMessage([datetime]$Time) {
     return 'Gallery snapshot ' + $Time.ToString('yyyy-MM-dd HH:mm')
 }
@@ -51,19 +66,24 @@ function Invoke-Git([string]$GitDir, [string[]]$GitArgs) {
     return ($out | Out-String).Trim()
 }
 
-function Publish-Snapshot([string]$Jpeg, [string]$GitDir, [datetime]$Time) {
+function Publish-Snapshot([hashtable]$Files, [string]$GitDir, [datetime]$Time) {
+    # $Files: branch path -> local file. The previous commit stays referenced locally, so a push only
+    # uploads the new still (the remote already has the rest).
     if (-not (Test-Path (Join-Path $GitDir 'HEAD'))) { & git init -q --bare $GitDir | Out-Null }
     $env:GIT_SSH_COMMAND = "ssh -i $SnapshotKey -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
     $env:GIT_AUTHOR_NAME = 'bitcube snapshot'; $env:GIT_AUTHOR_EMAIL = 'snapshot@bitcube.invalid'
     $env:GIT_COMMITTER_NAME = $env:GIT_AUTHOR_NAME; $env:GIT_COMMITTER_EMAIL = $env:GIT_AUTHOR_EMAIL
     $env:GIT_INDEX_FILE = Join-Path $GitDir 'snapshot.index'
     Remove-Item $env:GIT_INDEX_FILE -ErrorAction SilentlyContinue
-    $blob = Invoke-Git $GitDir @('hash-object', '-w', '--', $Jpeg)
-    Invoke-Git $GitDir @('update-index', '--add', '--cacheinfo', (Get-SnapshotCacheInfo $blob)) | Out-Null
+    foreach ($name in $Files.Keys) {
+        $blob = Invoke-Git $GitDir @('hash-object', '-w', '--', $Files[$name])
+        Invoke-Git $GitDir @('update-index', '--add', '--cacheinfo', (Get-SnapshotCacheInfo $blob $name)) | Out-Null
+    }
     $tree = Invoke-Git $GitDir @('write-tree')
     $commit = Invoke-Git $GitDir @('commit-tree', $tree, '-m', (Get-SnapshotMessage $Time))
     Invoke-Git $GitDir @('push', '-q', '--force', $SnapshotRemote, "${commit}:refs/heads/$SnapshotBranch") | Out-Null
-    # Nothing local refers to these objects; drop them so the bare repo stays tiny.
+    Invoke-Git $GitDir @('update-ref', "refs/heads/$SnapshotBranch", $commit) | Out-Null
+    # Older commits and stills nothing refers to any more: drop them so the bare repo stays small.
     Invoke-Git $GitDir @('prune', '--expire=now') | Out-Null
     return $commit
 }
@@ -91,8 +111,17 @@ if ($MyInvocation.InvocationName -ne '.') {
         $ErrorActionPreference = 'Stop'
         $size = (Get-Item $jpeg).Length
         if ($NoPush) { Write-Log "grabbed $jpeg ($size bytes), not pushed"; exit 0 }
-        $commit = Publish-Snapshot $jpeg (Join-Path $work 'repo.git') $now
-        Write-Log "pushed $size bytes as $commit"
+        $minutes = Join-Path $work 'm'
+        New-Item -ItemType Directory -Force $minutes | Out-Null
+        $name = Get-MinuteName $now.ToUniversalTime()
+        Copy-Item $jpeg (Join-Path $work $name) -Force
+        $all = @(Get-ChildItem $minutes -Filter '*.jpg' | ForEach-Object { 'm/' + $_.Name })
+        $kept = Select-KeptMinutes $all $Keep
+        foreach ($old in $all) { if ($kept -notcontains $old) { Remove-Item (Join-Path $work $old) } }
+        $files = @{ 'gallery.jpg' = $jpeg }
+        foreach ($k in $kept) { $files[$k] = Join-Path $work $k }
+        $commit = Publish-Snapshot $files (Join-Path $work 'repo.git') $now
+        Write-Log "pushed $size bytes as $name ($($kept.Count) minutes kept), $commit"
     } catch {
         Write-Log "ERROR $($_.Exception.Message)"
         exit 1

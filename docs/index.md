@@ -30,23 +30,16 @@ bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes ov
 How we'll get there, session by session: **[execution plan](execution-plan.md)**. Full checklist and **open questions** (some are waiting on Dave, Andi and Will): **[plan](plan.md)**.
 
 ## Latest camera snapshot
-<!-- The snapshot branch is force-pushed by tools/snapshot.ps1. If the image can't load, fall back to the checkpoint still, never a broken image. -->
+<!-- docs/assets/snapshot.js loads the newest per-minute still from the snapshot branch (tools/snapshot.ps1). If nothing loads, the checkpoint still stays, never a broken image. -->
 <img id="snap" src="img/rain-checkpoint-2026-10-18.jpg" alt="Latest gallery-cam snapshot" width="640">
+<script src="assets/snapshot.js"></script>
 <script>
-(function () {
-  var img = document.getElementById('snap');
-  var live = 'https://raw.githubusercontent.com/gavaiken/river-bitcube/snapshot/gallery.jpg?t=' + Math.floor(Date.now() / 300000);
-  var probe = new Image();
-  probe.onload = function () { img.src = live; };
-  probe.onerror = function () { document.getElementById('snap-note').textContent = 'The live snapshot is unavailable, so this is the 18 Oct rain checkpoint still.'; };
-  probe.src = live;
-  fetch('https://api.github.com/repos/gavaiken/river-bitcube/commits/snapshot').then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (c) { if (c) document.getElementById('snap-time').textContent = 'Taken ' + new Date(c.commit.committer.date).toLocaleString() + '. '; })
-    .catch(function () {});
-})();
+riverSnapshot({ img: document.getElementById('snap'), time: document.getElementById('snap-time'),
+                note: document.getElementById('snap-note'),
+                failText: 'The live snapshot is unavailable, so this is the 18 Oct rain checkpoint still.' });
 </script>
 
-<span id="snap-time"></span><span id="snap-note">Every 15 minutes, 08:00–02:00 Pacific. People in the room may appear.</span>
+<span id="snap-time"></span> <span id="snap-note">A new still every minute, 08:00–02:00 Pacific; the <a href="live.html"><b>live page</b></a> keeps refreshing. People in the room may appear.</span>
 
 ## Using bitcube
 - **Look at it:** VNC to `bitcube.tail03bc1a.ts.net` (needs access to Will's Tailscale network). VNC shows the real screens; avoid RDP, which blanks the panels.

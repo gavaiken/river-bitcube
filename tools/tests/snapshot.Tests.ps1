@@ -30,6 +30,23 @@ Describe 'Get-SnapshotCacheInfo' {
     }
 }
 
+Describe 'Get-SnapshotCacheInfo for a minute still' {
+    It 'can name a path in m/' { Get-SnapshotCacheInfo 'abc' 'm/20261020-1741.jpg' | Should Be '100644,abc,m/20261020-1741.jpg' }
+}
+
+Describe 'Get-MinuteName' {
+    It 'names the UTC minute, as docs/assets/snapshot.js does' {
+        Get-MinuteName ([datetime]'2026-10-20 17:41:59') | Should Be 'm/20261020-1741.jpg'
+    }
+}
+
+Describe 'Select-KeptMinutes' {
+    It 'keeps the newest' {
+        $k = Select-KeptMinutes @('m/20261020-1740.jpg', 'm/20261020-1742.jpg', 'm/20261020-1741.jpg') 2
+        ($k -join ',') | Should Be 'm/20261020-1742.jpg,m/20261020-1741.jpg'
+    }
+}
+
 Describe 'Get-SnapshotMessage' {
     It 'names the time to the minute' {
         Get-SnapshotMessage ([datetime]'2026-10-18 16:45:12') | Should Be 'Gallery snapshot 2026-10-18 16:45'

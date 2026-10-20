@@ -1,4 +1,4 @@
-# Register (or re-register) the scheduled task RiverSnapshot: tools\snapshot.ps1 every 15 min from 08:00 to 02:00.
+# Register (or re-register) the scheduled task RiverSnapshot: tools\snapshot.ps1 every minute from 08:00 to 02:00.
 #   powershell -ExecutionPolicy Bypass -File tools\snapshot_task.ps1
 # Runs as this user without a window (S4U, like RopeLights), so nothing flashes up on the screens.
 # If S4U isn't allowed (needs an elevated shell), it falls back to an interactive task, still windowless.
@@ -6,12 +6,12 @@ $script = Join-Path $PSScriptRoot 'snapshot.ps1'
 # conhost --headless gives powershell no console window at all (-WindowStyle Hidden still flashes one).
 $action = New-ScheduledTaskAction -Execute 'conhost.exe' `
     -Argument "--headless powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$script`""
-# Daily at 08:00, repeating every 15 min for 18 h (last run 01:45). snapshot.ps1 also skips 02:00-07:59 itself.
+# Daily at 08:00, repeating every minute for 18 h (last run 01:59). snapshot.ps1 also skips 02:00-07:59 itself.
 $trigger = New-ScheduledTaskTrigger -Daily -At '08:00'
-$repeat = New-ScheduledTaskTrigger -Once -At '08:00' -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration (New-TimeSpan -Hours 18)
+$repeat = New-ScheduledTaskTrigger -Once -At '08:00' -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Hours 18)
 $trigger.Repetition = $repeat.Repetition
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew `
-    -ExecutionTimeLimit (New-TimeSpan -Minutes 5) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    -ExecutionTimeLimit (New-TimeSpan -Minutes 2) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 $user = "$env:USERDOMAIN\$env:USERNAME"
 $desc = 'A River Becoming: gallery-cam still to the snapshot branch for the status page (river-bitcube tools\snapshot.ps1).'
 try {
