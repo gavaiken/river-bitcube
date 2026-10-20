@@ -34,9 +34,11 @@ How we'll get there, session by session: **[execution plan](execution-plan.md)**
 <img id="snap" src="img/rain-checkpoint-2026-10-18.jpg" alt="Latest gallery-cam snapshot" width="640">
 <script src="assets/snapshot.js"></script>
 <script>
-riverSnapshot({ img: document.getElementById('snap'), time: document.getElementById('snap-time'),
-                note: document.getElementById('snap-note'),
-                failText: 'The live snapshot is unavailable, so this is the 18 Oct rain checkpoint still.' });
+document.addEventListener('DOMContentLoaded', function () {   // the time and note spans come after this script
+  riverSnapshot({ img: document.getElementById('snap'), time: document.getElementById('snap-time'),
+                  note: document.getElementById('snap-note'),
+                  failText: 'The live snapshot is unavailable, so this is the 18 Oct rain checkpoint still.' });
+});
 </script>
 
 <span id="snap-time"></span> <span id="snap-note">A new still every minute, 08:00–02:00 Pacific; the <a href="live.html"><b>live page</b></a> keeps refreshing. People in the room may appear.</span>
