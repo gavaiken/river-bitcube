@@ -15,3 +15,6 @@ frames/
 # Python venv for tools/pixelmap
 .venv/
 __pycache__/
+
+# TouchDesigner crash autosaves (left behind when TD is killed)
+CrashAutoSave.*

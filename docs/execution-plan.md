@@ -4,7 +4,7 @@ title: Execution plan
 
 # Execution plan: from today's hardware to the full Modal-driven show
 
-**Updated Sun 18 Oct 2026, 17:15, by session A (coordinator).**
+**Updated Mon 19 Oct 2026, 17:50, by session A (coordinator).**
 
 ## Status
 ✅ done · ➡️ next (in order) · ❌ blocked
@@ -17,6 +17,7 @@ title: Execution plan
 | ✅ | A4 | This execution plan | A (Mac mini · Opus 5.5) | Claude |
 | ✅ | A5 | Recheck ropes 9 and 17 after cables were tightened: **still dark** (14:33 run) | A (Mac mini · Opus 5.5) | Claude |
 | ✅ | A6 | Login autostart now opens the rain checkpoint `river-local-oct-18.toe`. Verified with a restart at 16:54: back in 50 s, rain on the ropes and HUB75 by itself | A (Mac mini · Opus 5.5) | Claude |
+| ✅ | A7 | Live river cam on HUB75 quad 1 (relay process + shared memory, 10 fps, falls back to rain); rope sender retries when the lights are off | A (Mac mini · Opus 5.5) | Claude |
 | ❌ | P1 | Swap test for ropes 9 and 17. *Deferred by Gavin (18 Oct): carry on with 18 ropes* | Gavin, in person | Gavin |
 | ✅ | B1 | **Checkpoint** ([plan](sessions/B-plan.md), [progress](sessions/B.md)): structured-light capture of all ropes with the gallery cam | B (bitcube · Opus 5.5) | Claude |
 | ✅ | B2 | Decoder + pixel map `tools/pixelmap/pixelmap-2026-10-18.json` (TDD) | B (bitcube · Opus 5.5) | Claude |
