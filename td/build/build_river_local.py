@@ -50,7 +50,8 @@ LOOK = [  # name, label, default, min, max
     ('Blur', 'Field Blur (px)', 6.0, 0, 30),
     ('Panelgain', 'HUB75 Gain', 3.0, 0, 6),
     ('Panelgamma', 'HUB75 Gamma (lifts dim rain)', 0.7, 0.3, 1.5),
-    ('Panelcam', 'HUB75: River Cam Mix (0 = rain, 1 = cam)', 1.0, 0, 1),
+    ('Fieldcam', 'Field: River Cam Mix (0 = rain, 1 = cam; ropes + HUB75)', 1.0, 0, 1),
+    ('Panelcam', 'HUB75: Whole River Frame (0 = its patch of the field, 1 = full frame)', 0.0, 0, 1),
     ('Camgain', 'River Cam Gain', 1.0, 0, 3),
 ]
 pg = page(rl, 'River')
@@ -320,6 +321,19 @@ mix = get(crossTOP, 'panel_mix', 2325, 150)
 wire(mix, [pg_, cl])
 # Show the cam only while frames are arriving; otherwise the panels fall back to the rain.
 mix.par.cross.expr = "parent().par.Panelcam * (1 if op('river_cam_mod').module.fresh('river', 'sub') else 0)"
+# The river cam also fills the whole field, so it flows across the ropes and the HUB75's patch alike:
+# field_gain (rain) --cross--> river cam (fill 1280x720) -> field_blur -> field_out (sampled by both).
+cfb = get(fitTOP, 'river_cam_field', 1350, 600)
+cfb.inputConnectors[0].connect(cam)
+cfb.par.fit = 'fill'
+res(cfb, FIELD_W, FIELD_H)
+clb = get(levelTOP, 'river_cam_field_level', 1425, 600)
+clb.inputConnectors[0].connect(cfb)
+clb.par.brightness1.expr = 'parent().par.Camgain'
+fx = get(crossTOP, 'field_cam_mix', 1425, 150)
+wire(fx, [lo, clb])
+fx.par.cross.expr = "parent().par.Fieldcam * (1 if op('river_cam_mod').module.fresh('river', 'sub') else 0)"
+bl.inputConnectors[0].connect(fx)
 q1 = get(nullTOP, 'quad1_out', 2400, 150)
 q1.inputConnectors[0].connect(mix)
 q1.viewer = True
