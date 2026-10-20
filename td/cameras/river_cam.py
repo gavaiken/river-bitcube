@@ -7,8 +7,8 @@
 # already flipped for TD (row 0 = bottom), and writes each newest frame into named shared memory. A Script
 # TOP copies it from there in onCook: one memcpy, no network, no Python thread competing with TD (a reader
 # thread inside TD only managed ~2 fps of the camera's 10). Never hand copyNumpyArray a non-contiguous view
-# (e.g. np.flipud): that froze TD on 19 Oct. The relay exits when TD does. ffmpeg is restarted with a back-off if the stream drops
-# (the river cam is on Starlink, relayed over Tailscale).
+# (e.g. np.flipud): that froze TD on 19 Oct. The relay exits when TD does. ffmpeg is restarted with a back-off if the stream drops,
+# and killed if it stalls (no frame for 20 s) (the river cam is on Starlink, relayed over Tailscale).
 #
 # The camera URL (with its password) is read from the untracked secrets.local.json when the stream
 # starts and is never written into a parameter, so it can't end up in the public .toe.
@@ -31,6 +31,8 @@ FFMPEG_CANDIDATES = [r'C:\Program Files\WinGet\Links\ffmpeg.exe', 'ffmpeg']
 WIDTH, HEIGHT = 640, 360          # the Reolink sub-stream (Preview_01_sub)
 STALE_SECONDS = 10.0              # no new frame for this long -> fresh() is False (panels fall back to rain)
 RESTART_SECONDS = 5.0             # wait before restarting ffmpeg after it exits
+STALL_SECONDS = 20.0              # relay kills ffmpeg if no frame arrives for this long (a hung connection)
+RTSP_TIMEOUT_US = 10_000_000      # ffmpeg's socket timeout: a dead link ends ffmpeg instead of hanging it
 HEADER = struct.Struct('<Qd')     # shared memory: frame counter, unix time of that frame, then RGBA bytes
 PYTHONS = [str(REPO / '.venv' / 'Scripts' / 'python.exe'), r'C:\Program Files\Python313\python.exe']
 
@@ -46,7 +48,8 @@ def stream_url(secrets, cam, stream='sub'):
 
 
 def ffmpeg_args(ffmpeg, url, width=WIDTH, height=HEIGHT):
-    return [ffmpeg, '-hide_banner', '-loglevel', 'error', '-rtsp_transport', 'tcp', '-i', url,
+    return [ffmpeg, '-hide_banner', '-loglevel', 'error', '-rtsp_transport', 'tcp',
+            '-timeout', str(RTSP_TIMEOUT_US), '-i', url,
             '-an', '-vf', f'scale={width}:{height},vflip', '-pix_fmt', 'rgba', '-f', 'rawvideo', 'pipe:1']
 
 
@@ -122,11 +125,16 @@ def relay(cam, stream, parent_pid):
     """Relay process main: ffmpeg -> newest frame into shared memory, until the parent (TD) exits."""
     import mmap
     mm = mmap.mmap(-1, shm_size(), tagname=shm_name(cam, stream))
-    state = {'proc': None, 'stop': False}
+    state = {'proc': None, 'stop': False, 'started': time.monotonic(), 'last': time.monotonic()}
 
     def watchdog():
+        # Two jobs: exit with TD, and end a stalled ffmpeg (the river cam went offline overnight on
+        # 19 Oct; ffmpeg sat on the dead TCP connection for 11 h and the field stayed on the rain).
         while _parent_alive(parent_pid):
             time.sleep(2)
+            p = state['proc']
+            if p and p.poll() is None and time.monotonic() - max(state['last'], state['started']) > STALL_SECONDS:
+                p.kill()
         state['stop'] = True
         if state['proc']:
             state['proc'].kill()
@@ -140,12 +148,13 @@ def relay(cam, stream, parent_pid):
             args = ffmpeg_args(_find_ffmpeg(), stream_url(secrets, cam, stream))
             proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                     stdin=subprocess.DEVNULL, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-            state['proc'] = proc
+            state['proc'], state['started'] = proc, time.monotonic()
             while not state['stop']:
                 frame = proc.stdout.read(size)
                 if len(frame) < size:
                     break
                 count += 1
+                state['last'] = time.monotonic()
                 mm[HEADER.size:HEADER.size + size] = frame
                 mm[:HEADER.size] = pack_header(count, time.time())   # header last: readers see whole frames
             proc.kill()

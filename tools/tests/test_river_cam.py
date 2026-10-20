@@ -29,6 +29,7 @@ def test_ffmpeg_args_decode_to_raw_rgba_over_tcp(rc):
     assert args[args.index('-rtsp_transport') + 1] == 'tcp'
     assert args[args.index('-pix_fmt') + 1] == 'rgba'
     assert args[-1] == 'pipe:1' and 'scale=640:360,vflip' in args   # ffmpeg flips for TD
+    assert args.index('-timeout') < args.index('-i')                 # a dead link ends ffmpeg, not hangs it
 
 
 def test_assembler_keeps_only_newest_whole_frame(rc):

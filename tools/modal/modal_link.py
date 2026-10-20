@@ -13,7 +13,7 @@ Children (each logs to C:/Users/user/River/logs/modal-<name>.log):
 
 Started at login by Start-Modal.cmd (Startup folder). Dave's scripts are used unmodified from
 C:/Users/user/River/river-agent; this file only adds the camera URLs and the token, read from the untracked
-secrets.local.json (cameras.<name>, modal.ingest_token, modal.site). Neither is put on a command line: the
+secrets.local.json (cameras.<name>, modal.ingest_token). Neither is put on a command line: the
 child reads them itself, so they never show in a process list or a log.
 """
 import json
@@ -30,6 +30,7 @@ RIVER = REPO.parent
 AGENT = RIVER / 'river-agent'
 LOGS = RIVER / 'logs'
 STATE_DIR = RIVER / 'gallery_state'
+SITE = 'https://to-be-a-river--river.modal.run'   # Dave's Modal app (public URL; not a secret)
 PORT = 8770                              # 8765 is RopeLights
 FFMPEG_DIRS = [r'C:\Program Files\WinGet\Links']
 CHILDREN = ('sync', 'gallery', 'river')
@@ -83,9 +84,8 @@ def die_with_parent():
 
 
 def run_sync():
-    s = secrets()['modal']
     sys.path.insert(0, str(AGENT))
-    sys.argv = ['sync.py', '--site', s['site'], '--dir', str(STATE_DIR), '--port', str(PORT)]
+    sys.argv = ['sync.py', '--site', SITE, '--dir', str(STATE_DIR), '--port', str(PORT)]
     import runpy
     runpy.run_path(str(AGENT / 'gallery' / 'sync.py'), run_name='__main__')
 
@@ -102,7 +102,7 @@ def run_capture(cam):
         return ['-rtsp_transport', 'tcp'] + args if spec.startswith('rtsp://') else args
 
     capture.split_device = split_device
-    os.environ['RIVER_SITE_URL'] = s['modal']['site']
+    os.environ['RIVER_SITE_URL'] = SITE
     os.environ['INGEST_TOKEN'] = s['modal']['ingest_token']
     sys.argv = ['capture.py', '--location', cam, '--video', sub_stream(s['cameras'][cam])]
     sys.exit(capture.main())
