@@ -289,8 +289,10 @@ cp.par.extend = 'zero'
 # The HUB75's region of the field is mostly dark sky, so lift and brighten it to read next to the ropes.
 pg_ = get(levelTOP, 'quad1_gain', 2175, 150)
 pg_.inputConnectors[0].connect(cp)
-pg_.par.brightness1.expr = 'parent().par.Panelgain'
-pg_.par.gamma1.expr = 'parent().par.Panelgamma'
+# The boost is for the dark rain; fade it out as the (bright) river cam takes over the field.
+_cam = "op('field_cam_mix').par.cross.eval()"
+pg_.par.brightness1.expr = f"parent().par.Panelgain + (1 - parent().par.Panelgain) * {_cam}"
+pg_.par.gamma1.expr = f"parent().par.Panelgamma + (1 - parent().par.Panelgamma) * {_cam}"
 # ---- river cam on the HUB75 (live from the river over Starlink + Tailscale) ----------------------
 # No Video Stream In TOP (creating one froze TD on 19 Oct): td/cameras/river_cam.py runs ffmpeg in a
 # background process and a Script TOP copies the newest frame. The RTSP URL (with password) is read from
