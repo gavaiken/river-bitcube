@@ -19,6 +19,7 @@ child reads them itself, so they never show in a process list or a log.
 import json
 import os
 import pathlib
+import re
 import socket
 import subprocess
 import sys
@@ -36,6 +37,12 @@ FFMPEG_DIRS = [r'C:\Program Files\WinGet\Links']
 CHILDREN = ('sync', 'gallery', 'river')
 RESTART_SECONDS = 15
 LOCK_PORT = 8771                         # held by the running supervisor, so a second one exits at once
+
+
+def mask(text):
+    """Camera URLs carry the login: never let one reach a log (Dave's capture.py logs ffmpeg's full
+    command line when a clip fails, and River\\logs is on the \\\\bitcube\\River share)."""
+    return re.sub(r'(rtsp://)[^@/\s]*@', r'\1***@', text)
 
 
 def secrets():
@@ -111,13 +118,22 @@ def run_capture(cam):
 # ---- supervisor ------------------------------------------------------------------------------------------
 
 def spawn(name):
+    """Start a child; its output goes through mask() into the log, line by line."""
     LOGS.mkdir(parents=True, exist_ok=True)
     log = open(LOGS / f'modal-{name}.log', 'a', encoding='utf-8', buffering=1)
     log.write(f'\n==== {time.strftime("%Y-%m-%d %H:%M:%S")} start {name}\n')
     py = sys.executable.replace('pythonw.exe', 'python.exe')
-    return subprocess.Popen([py, __file__, name], stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                            env=child_env(), cwd=str(AGENT),
-                            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+    p = subprocess.Popen([py, __file__, name], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                         stdin=subprocess.DEVNULL, env=child_env(), cwd=str(AGENT),
+                         creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+
+    def pump():
+        with log:
+            for raw in p.stdout:
+                log.write(mask(raw.decode('utf-8', errors='replace')))
+
+    threading.Thread(target=pump, daemon=True).start()
+    return p
 
 
 def supervise():
