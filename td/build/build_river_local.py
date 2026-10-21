@@ -58,6 +58,8 @@ LOOK = [  # name, label, default, min, max
     ('Camfx', 'River Memory (0 = live, 1 = time-slice + sparkle)', 1.0, 0, 1),
     ('Memory', 'River Memory Depth (s, top = now, bottom = past)', 3.0, 0.2, 3.3),
     ('Sparkle', 'Sparkle on Moving Water', 1.0, 0, 3),
+    ('Rainmemory', 'Memory of Rain (rain trails coloured by the river, over it)', 0.0, 0, 1),
+    ('Rainmemorydecay', 'Memory of Rain: Trail Length (per-frame fade)', 0.975, 0.8, 0.995),
 ]
 pg = page(rl, 'River')
 for name, label, default, lo, hi in LOOK:
@@ -480,7 +482,40 @@ res(cvf, FIELD_W, FIELD_H)
 cvm = get(crossTOP, 'canvas_mix', 1500, 300)
 wire(cvm, [fx, cvf])
 cvm.par.cross.expr = "parent().par.Canvasmix * (1 if op('modal_canvas').par.active and not op('modal_canvas').errors() else 0)"
-bl.inputConnectors[0].connect(cvm)
+# ---- "memory of rain": the rain's drops fall with long trails that take the river's colours -------------
+# A second feedback loop on the same drops, fading slowly (Rainmemorydecay), multiplied by the river cam look,
+# so each streak carries the water it fell through; added over the river, which dims a little to let it read.
+rmfb = get(feedbackTOP, 'rainmem_feedback', 300, -300)
+rmfb.inputConnectors[0].connect(seed_up)
+rmfb.par.top = 'rainmem_sum'
+rmmv = get(transformTOP, 'rainmem_fall', 450, -300)
+rmmv.inputConnectors[0].connect(rmfb)
+rmmv.par.tunit = 'fraction'
+rmmv.par.ty.expr = f"-{M}.eff(parent(), 'Rainspeed') / max(1, project.cookRate){T}"
+rmmv.par.extend = 'zero'
+rmdk = get(levelTOP, 'rainmem_decay', 600, -300)
+rmdk.inputConnectors[0].connect(rmmv)
+rmdk.par.brightness1.expr = 'parent().par.Rainmemorydecay'
+rmsum = get(compositeTOP, 'rainmem_sum', 750, -300)
+wire(rmsum, [rmdk, seed_up])
+rmsum.par.operand = 'maximum'                 # trails never pile up past a fresh drop
+res(rmsum, 640, 360, 'rgba16float')
+rmcol = get(compositeTOP, 'rainmem_colour', 1575, 300)
+wire(rmcol, [rmsum, clk])
+rmcol.par.operand = 'multiply'
+rmcol.par.prefit = 'fill'
+res(rmcol, FIELD_W, FIELD_H, 'rgba16float')
+rmlv = get(levelTOP, 'rainmem_level', 1650, 300)
+rmlv.inputConnectors[0].connect(rmcol)
+rmlv.par.brightness1.expr = 'parent().par.Rainmemory * 3'
+rmbase = get(levelTOP, 'rainmem_base', 1575, 225)
+rmbase.inputConnectors[0].connect(cvm)
+rmbase.par.brightness1.expr = '1 - 0.45 * parent().par.Rainmemory'
+rmx = get(compositeTOP, 'rainmem_mix', 1650, 225)
+wire(rmx, [rmbase, rmlv])
+rmx.par.operand = 'add'
+res(rmx, FIELD_W, FIELD_H)
+bl.inputConnectors[0].connect(rmx)
 if not cv.par.active:
     run("op('/project1/river_local/modal_canvas').par.active = True", delayFrames=60)
 q1 = get(nullTOP, 'quad1_out', 2400, 150)
