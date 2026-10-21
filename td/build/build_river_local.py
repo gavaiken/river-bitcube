@@ -59,7 +59,8 @@ LOOK = [  # name, label, default, min, max
     ('Memory', 'River Memory Depth (s, top = now, bottom = past)', 3.0, 0.2, 3.3),
     ('Sparkle', 'Sparkle on Moving Water', 1.0, 0, 3),
     ('Rainmemory', 'Memory of Rain (rain trails coloured by the river, over it)', 0.0, 0, 1),
-    ('Rainmemorydecay', 'Memory of Rain: Trail Length (per-frame fade)', 0.975, 0.8, 0.995),
+    ('Rainmemorydecay', 'Memory of Rain: Trail Length (per-frame fade)', 0.99, 0.8, 0.998),
+    ('Camhold', 'Hold the Last River Frame when the Stream Drops (0 = fall back to rain)', 0.0, 0, 1),
 ]
 pg = page(rl, 'River')
 for name, label, default, lo, hi in LOOK:
@@ -384,7 +385,8 @@ cl.par.brightness1.expr = f"op('river_cam_mod').module.daynight(parent(), 'Camga
 mix = get(crossTOP, 'panel_mix', 2325, 150)
 wire(mix, [pg_, cl])
 # Show the cam only while frames are arriving; otherwise the panels fall back to the rain.
-mix.par.cross.expr = "parent().par.Panelcam * (1 if op('river_cam_mod').module.fresh('river', 'sub') else 0)"
+mix.par.cross.expr = ("parent().par.Panelcam * (1 if op('river_cam_mod').module.fresh('river', 'sub') "
+                      "or parent().par.Camhold else 0)")
 # The river cam also fills the whole field, so it flows across the ropes and the HUB75's patch alike:
 # field_gain (rain) --cross--> river cam (fill 1280x720) -> field_blur -> field_out (sampled by both).
 # ---- "the river's memory": a vertical time-slice of the live river, plus sparkle where it moves ------
@@ -455,7 +457,8 @@ wire(clk, [clb, cpl])
 clk.par.cross.expr = 'parent().par.Campalette'
 fx = get(crossTOP, 'field_cam_mix', 1425, 150)
 wire(fx, [lo, clk])
-fx.par.cross.expr = "parent().par.Fieldcam * (1 if op('river_cam_mod').module.fresh('river', 'sub') else 0)"
+fx.par.cross.expr = ("parent().par.Fieldcam * (1 if op('river_cam_mod').module.fresh('river', 'sub') "
+                     "or parent().par.Camhold else 0)")
 # ---- Dave's canvas (his own animations: flow, ripples, embers...) crossed over the river -------------
 # canvas.html from the local mirror (tools/modal/modal_link.py, 127.0.0.1:8770), so it keeps playing the last
 # scene when the internet drops. Rendered small (640x360, 30 fps) to spare the Iris Xe, then fitted to the
@@ -484,7 +487,8 @@ wire(cvm, [fx, cvf])
 cvm.par.cross.expr = "parent().par.Canvasmix * (1 if op('modal_canvas').par.active and not op('modal_canvas').errors() else 0)"
 # ---- "memory of rain": the rain's drops fall with long trails that take the river's colours -------------
 # A second feedback loop on the same drops, fading slowly (Rainmemorydecay), multiplied by the river cam look,
-# so each streak carries the water it fell through; added over the river, which dims a little to let it read.
+# so each streak carries the water it fell through (its natural colours); added over the river, which dims a
+# little to let it read.
 rmfb = get(feedbackTOP, 'rainmem_feedback', 300, -300)
 rmfb.inputConnectors[0].connect(seed_up)
 rmfb.par.top = 'rainmem_sum'
@@ -501,13 +505,13 @@ wire(rmsum, [rmdk, seed_up])
 rmsum.par.operand = 'maximum'                 # trails never pile up past a fresh drop
 res(rmsum, 640, 360, 'rgba16float')
 rmcol = get(compositeTOP, 'rainmem_colour', 1575, 300)
-wire(rmcol, [rmsum, clk])
+wire(rmcol, [rmsum, clb])          # the river's own colours (before the palette)
 rmcol.par.operand = 'multiply'
 rmcol.par.prefit = 'fill'
 res(rmcol, FIELD_W, FIELD_H, 'rgba16float')
 rmlv = get(levelTOP, 'rainmem_level', 1650, 300)
 rmlv.inputConnectors[0].connect(rmcol)
-rmlv.par.brightness1.expr = 'parent().par.Rainmemory * 3'
+rmlv.par.brightness1.expr = 'parent().par.Rainmemory * 6'
 rmbase = get(levelTOP, 'rainmem_base', 1575, 225)
 rmbase.inputConnectors[0].connect(cvm)
 rmbase.par.brightness1.expr = '1 - 0.45 * parent().par.Rainmemory'
