@@ -54,3 +54,5 @@ Notes kept here while another session is editing the shared docs; folded into th
 - 20 Oct 11:10: live page https://gavaiken.github.io/river-bitcube/live.html (a gallery-cam still every minute, self-refreshing); the status page loads the newest still. RiverSnapshot now every minute (S4U), keeps 15 per-minute files on the snapshot branch.
 
 - 20 Oct 19:36: "memory of rain" layer (Rainmemory; rain trails in the river's natural colours) and Camhold (show the last river frame when the stream drops). River cam offline since ~18:11. Show file saved with Camhold 0; it is 1 live for the visual. Preview window /project1/preview_window open on the screen. Masked camera logins in modal_link logs (capture.py logged ffmpeg command lines); scrubbed old logs. VNC shot: docs/img/memory-of-rain-2026-10-20.jpg.
+
+- 20 Oct 21:57: bitcube's River\river-agent fast-forwarded a9cbd2c → d25b52f (Dave's ETag sync, PR #5/#6) via a git bundle from the mini; mirror restarted, unchanged files now come back 304 with no body. Opened drocamor/river-agent#7 (redact camera logins in capture.py logs).
