@@ -9,15 +9,14 @@ For Seabrook and the Gray Area team. What we plug in, what it needs from the bui
 **Detailed map of every device, address and connection:** [system map](system/) (interactive; tap any box or line).
 
 ## What we need from Gray Area
-- **One wired Ethernet drop** near the rack, with DHCP and internet.
-- **Outbound only:** HTTPS (TCP 443), plus UDP 41641 and 3478 if possible (Tailscale, for remote maintenance). **No inbound ports, port forwarding or static IP.**
-- **Wi-Fi:** nothing. Client isolation can stay at your default.
-- **Bandwidth:** about 1–3 Mbps up and 1–2 Mbps down, steady (roughly 10–30 GB a day). Upload matters most.
-- **Power: three separate 15–20 A circuits near the rack:**
-  - **LED rope box 1** and **LED rope box 2**, one circuit each (each up to ~600 W as we cap it in software, ~1.5 kW at full white).
-  - **The HUB75 panel power board:** one power strip feeding **four 5 V 350 W supplies** (one per panel group) and the panels' receive card, so up to ~1.4 kW rated. The real draw is lower, and we cap brightness too.
-
-- **Plus a normal outlet** for the computer and router (well under 200 W).
+- **Network:**
+  - **One wired Ethernet drop** near the rack that gives a normal internet connection (DHCP). We put our own small router behind it, so nothing of ours goes on your Wi-Fi, and whether devices on your Wi-Fi can see each other doesn't matter to us.
+  - **Protocols:** normal web traffic (HTTPS), plus UDP ports 41641 and 3478 if you can. Those two are for remote maintenance (Tailscale); it works without them, just slower.
+  - **Nothing needs to reach in from outside.** Our computer starts every connection itself: it fetches the AI's updates, sends camera clips and keeps its own maintenance link open, and the replies come back over those same connections. So you don't need to open any ports, forward anything to us or give us a fixed IP address.
+  - **Bandwidth:** about 1–3 Mbps up and 1–2 Mbps down, steady (roughly 10–30 GB a day). Upload matters most.
+- **Power:**
+  - **Three separate 15–20 A circuits near the rack:** one for each LED rope box (each up to ~600 W as we cap it in software, ~1.5 kW at full white), and one for the HUB75 panel power board (four 5 V 350 W supplies, up to ~1.4 kW rated; the real draw is lower, and we cap brightness too).
+  - **Plus a normal outlet** for the computer and router (well under 200 W).
 
 ### The HUB75 panel power board
 One AC input to a power strip on a board, feeding four 5 V 350 W supplies (one per panel group, ~6 ft runs of 14-gauge wire to the panels) and the receive card, which drives the panels over 8 ribbon cables.
@@ -36,7 +35,7 @@ One AC input to a power strip on a board, feeding four 5 V 350 W supplies (one p
   <text class="s" x="380" y="53" text-anchor="middle">AI on Modal (HTTPS) · Tailscale · river camera</text>
   <rect class="b" x="250" y="100" width="260" height="50" rx="8"/>
   <text class="t" x="380" y="122" text-anchor="middle">Gray Area wired drop</text>
-  <text class="s" x="380" y="140" text-anchor="middle">DHCP + internet, outbound only</text>
+  <text class="s" x="380" y="140" text-anchor="middle">normal internet connection (DHCP)</text>
   <path class="w" d="M380,100 V66" marker-end="url(#a)"/>
   <rect class="g" x="250" y="185" width="260" height="56" rx="8"/>
   <text class="t" x="380" y="208" text-anchor="middle">Our router (GL.iNet)</text>
