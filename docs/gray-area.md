@@ -4,7 +4,9 @@ title: "A River Becoming: network and power at Gray Area"
 
 # A River Becoming at Gray Area: network and power
 
-For Seabrook and the Gray Area team. What we plug in, what it needs from the building, and how it connects. (Updated 21 Oct 2026.)
+For Seabrook and the Gray Area team. What we plug in, what it needs from the building, and how it connects. (Updated 22 Oct 2026.)
+
+**Detailed map of every device, address and connection:** [system map](system/) (interactive; tap any box or line).
 
 ## What we need from Gray Area
 - **One wired Ethernet drop** near the rack, with DHCP and internet.
@@ -16,6 +18,13 @@ For Seabrook and the Gray Area team. What we plug in, what it needs from the bui
   - **The HUB75 panel power board:** one power strip feeding **four 5 V 350 W supplies** (one per panel group) and the panels' receive card, so up to ~1.4 kW rated. The real draw is lower, and we cap brightness too.
 
 - **Plus a normal outlet** for the computer and router (well under 200 W).
+
+### The HUB75 panel power board
+One AC input to a power strip on a board, feeding four 5 V 350 W supplies (one per panel group, ~6 ft runs of 14-gauge wire to the panels) and the receive card, which drives the panels over 8 ribbon cables.
+
+<img src="img/hub75-power-board.jpg" alt="HUB75 power board: power strip, four 5 V 350 W supplies, receive card and ribbon cables on a plywood board" style="width:100%;max-width:760px;height:auto">
+
+*Planned layout (illustration). Our receive card is a Colorlight 5A-75B.*
 
 ## How it connects
 
@@ -61,4 +70,4 @@ For Seabrook and the Gray Area team. What we plug in, what it needs from the bui
 - **Blue** devices are on our own router, behind your wired drop. **Orange** is the lighting, cabled straight from the show computer and never on your network.
 - The show keeps running if the internet drops: everything it needs to draw is on the computer. The internet brings in the AI's scene changes, the live river camera and remote maintenance.
 
-Full map of every device and connection (all locations): [system map](system/). Project status: [status page](./).
+Full map of every device and connection (all locations): [system map](system/). Project status: [status page](./). Live camera view: [live page](live.html).
