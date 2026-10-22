@@ -11,11 +11,15 @@ For Seabrook and the Gray Area team. What we plug in, what it needs from the bui
 - **Outbound only:** HTTPS (TCP 443), plus UDP 41641 and 3478 if possible (Tailscale, for remote maintenance). **No inbound ports, port forwarding or static IP.**
 - **Wi-Fi:** nothing. Client isolation can stay at your default.
 - **Bandwidth:** about 1–3 Mbps up and 1–2 Mbps down, steady (roughly 10–30 GB a day). Upload matters most.
-- **Power:** two separate 15–20 A circuits near the rack, one per LED power box (each can draw up to ~600 W as we cap it, more at full white), plus normal outlets for the computer, router and HUB75 panel power supplies.
+- **Power: three separate 15–20 A circuits near the rack,** one each for:
+  1. **LED rope box 1** and 2. **LED rope box 2** (each up to ~600 W as we cap it in software, ~1.5 kW at full white);
+  3. **the HUB75 panel power board:** one power strip feeding **four 5 V 350 W supplies** (one per panel group) and the panels' receive card, so up to ~1.4 kW rated (real draw is lower; we also cap brightness).
+
+  Plus a normal outlet for the computer and router (well under 200 W).
 
 ## How it connects
 
-<svg viewBox="0 0 760 470" width="100%" style="max-width:760px;font-family:system-ui,sans-serif;font-size:14px" role="img" aria-label="Network diagram">
+<svg viewBox="0 0 760 560" width="100%" style="max-width:760px;font-family:system-ui,sans-serif;font-size:14px" role="img" aria-label="Network diagram">
   <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker></defs>
   <style>.b{fill:#fff;stroke:#333;stroke-width:1.5}.g{fill:#eef6ff;stroke:#2a6fb0;stroke-width:1.5}.l{fill:#fff4e6;stroke:#c77b1a;stroke-width:1.5}.c{fill:#f3f3f3;stroke:#888;stroke-width:1.5;stroke-dasharray:5 4}.t{fill:#222}.s{fill:#666;font-size:12px}.w{stroke:#555;stroke-width:1.6;fill:none}</style>
   <rect class="c" x="215" y="10" width="330" height="56" rx="8"/>
@@ -43,10 +47,15 @@ For Seabrook and the Gray Area team. What we plug in, what it needs from the bui
   <text class="s" x="407" y="451" text-anchor="middle">separate cable, no internet</text>
   <path class="w" d="M520,346 L450,395"/>
   <rect class="l" x="545" y="395" width="200" height="62" rx="8"/>
-  <text class="t" x="645" y="418" text-anchor="middle">HUB75 panel sender</text>
+  <text class="t" x="645" y="418" text-anchor="middle">HUB75 sender</text>
   <text class="s" x="645" y="437" text-anchor="middle">HDMI from bitcube</text>
-  <text class="s" x="645" y="451" text-anchor="middle">→ LED panels</text>
+  <text class="s" x="645" y="451" text-anchor="middle">→ Ethernet → receive card</text>
   <path class="w" d="M620,346 L645,395"/>
+  <rect class="l" x="480" y="485" width="270" height="62" rx="8"/>
+  <text class="t" x="615" y="508" text-anchor="middle">8 ribbon cables → 4 panel groups</text>
+  <text class="s" x="615" y="527" text-anchor="middle">power board: strip → 4 × 5 V 350 W supplies</text>
+  <text class="s" x="615" y="541" text-anchor="middle">(one per group) + receive card</text>
+  <path class="w" d="M645,457 L630,485"/>
 </svg>
 
 - **Blue** devices are on our own router, behind your wired drop. **Orange** is the lighting, cabled straight from the show computer and never on your network.
