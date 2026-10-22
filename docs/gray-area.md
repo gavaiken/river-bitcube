@@ -18,7 +18,7 @@ For Seabrook and the Gray Area team. What we plug in, what it needs from the bui
 <svg viewBox="0 0 760 470" width="100%" style="max-width:760px;font-family:system-ui,sans-serif;font-size:14px" role="img" aria-label="Network diagram">
   <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker></defs>
   <style>.b{fill:#fff;stroke:#333;stroke-width:1.5}.g{fill:#eef6ff;stroke:#2a6fb0;stroke-width:1.5}.l{fill:#fff4e6;stroke:#c77b1a;stroke-width:1.5}.c{fill:#f3f3f3;stroke:#888;stroke-width:1.5;stroke-dasharray:5 4}.t{fill:#222}.s{fill:#666;font-size:12px}.w{stroke:#555;stroke-width:1.6;fill:none}</style>
-  <rect class="c" x="250" y="10" width="260" height="56" rx="8"/>
+  <rect class="c" x="215" y="10" width="330" height="56" rx="8"/>
   <text class="t" x="380" y="34" text-anchor="middle">Internet</text>
   <text class="s" x="380" y="53" text-anchor="middle">AI on Modal (HTTPS) · Tailscale · river camera</text>
   <rect class="b" x="250" y="100" width="260" height="50" rx="8"/>
