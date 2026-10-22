@@ -11,11 +11,11 @@ For Seabrook and the Gray Area team. What we plug in, what it needs from the bui
 - **Outbound only:** HTTPS (TCP 443), plus UDP 41641 and 3478 if possible (Tailscale, for remote maintenance). **No inbound ports, port forwarding or static IP.**
 - **Wi-Fi:** nothing. Client isolation can stay at your default.
 - **Bandwidth:** about 1–3 Mbps up and 1–2 Mbps down, steady (roughly 10–30 GB a day). Upload matters most.
-- **Power: three separate 15–20 A circuits near the rack,** one each for:
-  1. **LED rope box 1** and 2. **LED rope box 2** (each up to ~600 W as we cap it in software, ~1.5 kW at full white);
-  3. **the HUB75 panel power board:** one power strip feeding **four 5 V 350 W supplies** (one per panel group) and the panels' receive card, so up to ~1.4 kW rated (real draw is lower; we also cap brightness).
+- **Power: three separate 15–20 A circuits near the rack:**
+  - **LED rope box 1** and **LED rope box 2**, one circuit each (each up to ~600 W as we cap it in software, ~1.5 kW at full white).
+  - **The HUB75 panel power board:** one power strip feeding **four 5 V 350 W supplies** (one per panel group) and the panels' receive card, so up to ~1.4 kW rated. The real draw is lower, and we cap brightness too.
 
-  Plus a normal outlet for the computer and router (well under 200 W).
+- **Plus a normal outlet** for the computer and router (well under 200 W).
 
 ## How it connects
 
