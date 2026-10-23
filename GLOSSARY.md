@@ -19,3 +19,7 @@
 **Usual presence**: What presence has typically been lately: the median over a rolling window of the last few minutes. It lets the piece adapt to the night, whether a busy moment means 4 people or 100.
 
 **Relative presence**: Presence compared with usual presence: busier than usual, about as usual, or quieter than usual. This, not the raw count, is what warms or cools the river. An empty room is always winter.
+
+**Mode**: Who is steering the year. **Automatic**: the season cycle, one season a minute. **Dynamic**: relative presence steers it, a closed loop that people can watch but not touch. **Manual**: someone picks a target season and an intensity, and the year travels forward to it quickly. In every mode the year only turns forward.
+
+**Intensity (in manual)**: Set directly on a scale from **stillness** (0) to **turbulence** (1), instead of following the season.
