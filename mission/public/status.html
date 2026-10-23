@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>System status</title><link rel="stylesheet" href="/app.css"></head>
+<body>
+<main>
+  <section class="panel"><div class="summary"><span class="big" id="sum">checking…</span><span class="dim" id="sumsub"></span></div></section>
+
+  <section class="panel"><h2>Equipment</h2>
+    <table class="eq"><tbody id="eq"></tbody></table>
+    <div class="dim" style="margin-top:8px">Addresses behind bitcube (router, cameras, rope boxes) are checked <i>from</i> bitcube, about once a minute. Links to bitcube, its seasons page, VNC and the router work from devices on Tailscale.</div>
+  </section>
+
+  <section class="panel"><h2>Cameras</h2>
+    <div class="cams">
+      <div><img id="cam-gallery" alt="Gallery camera"><div class="dim">Gallery · <span id="t-gallery">–</span></div></div>
+      <div><img id="cam-river" alt="River camera"><div class="dim">River · <span id="t-river">–</span></div></div>
+    </div>
+  </section>
+
+  <div class="grid">
+    <section class="panel"><h2>The river's year</h2>
+      <div class="big" id="season">–</div><div class="dim" id="seasonsub"></div>
+      <div style="height:8px"></div><div class="dim">Intensity</div>
+      <input type="range" id="ibar" min="0" max="1" step="0.01" disabled>
+      <div class="row dim" style="justify-content:space-between"><span>stillness</span><span>turbulence</span></div>
+      <div class="kv" id="preskv" style="margin-top:6px"></div>
+      <div class="dim" style="margin-top:8px"><a href="/mission">Steer it in mission control →</a></div></section>
+    <section class="panel"><h2>Dave's agent (Modal)</h2>
+      <div class="big" id="modal">–</div><div class="kv" id="modalkv"></div></section>
+  </div>
+  <div style="height:14px"></div>
+  <section class="panel"><h2>System map</h2>
+    <iframe class="map" src="https://gavaiken.github.io/river-bitcube/system/" loading="lazy" title="System map"></iframe></section>
+</main>
+<script type="module">
+import { api, esc, header, ago } from '/app.js';
+header('status');
+const $ = (id) => document.getElementById(id);
+const kv = (o) => Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => `<span>${esc(k)}</span><span>${esc(v)}</span>`).join('');
+const dot = (ok) => `<span class="dot ${ok === true ? 'ok' : ok === false ? 'bad' : 'warn'}"></span>`;
+const link = (href, label) => `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(label)}</a>`;
+const PAGES = 'https://gavaiken.github.io/river-bitcube/';
+
+function rows(s) {
+  const bc = s.bitcube?.value?.online, pr = s.probe?.value, td = pr?.td, dv = pr?.devices ?? {};
+  const known = !!pr;           // the probe answered: device checks are real
+  const chk = (v) => (known ? !!v : undefined);
+  const addr = (pr?.addresses ?? []).map((a) => `${a.nic} ${a.ip}`).join(' · ');
+  const led = (pr?.displays ?? []).some((d) => /^LED/i.test(d));
+  const y = s.seasons?.value, md = s.modal?.value, link_ = pr?.modal_link;
+  return [
+    ['Mission control (Mac mini)', true, 'gav-m1-mini · 100.126.113.14', link('https://gav-m1-mini.tailddc624.ts.net', 'this site'), 'serving this page'],
+    ['bitcube (show PC)', bc === undefined ? undefined : bc && known, addr || '100.73.68.60 (Tailscale)',
+      link('vnc://bitcube.tail03bc1a.ts.net', 'VNC'), bc === false ? 'not reachable' : !known ? (s.probe?.error || 'checking…') : `up ${pr.uptime_h} h · ${pr.disk_free_gb} GB free`],
+    ['TouchDesigner', td ? td.ok !== false && !!td.file : chk(false), '', '',
+      td?.file ? `${td.file}${td.fps ? ` · ${td.fps} fps` : ''}${td.errors ? ` · ${td.errors} errors` : ''}` : (td?.error || '')],
+    ['Seasons control page', y ? true : chk(dv.seasons_page), 'bitcube :9981', link('http://bitcube.tail03bc1a.ts.net:9981', 'open'),
+      y ? `${y.season} · ${y.mode}` : (s.seasons?.error ? 'not running (seasons file not deployed yet?)' : '')],
+    ['Internet at Gray Area', chk(dv.internet), '', '', known ? (dv.internet ? 'bitcube reaches the internet' : 'no internet from bitcube') : ''],
+    ['Install router (GL.iNet)', chk(dv.router), '192.168.9.1 · Wi-Fi gray-river', link('http://192.168.9.1', 'admin'), ''],
+    ['Gallery camera', chk(dv.gallery_cam), '192.168.9.76', '', ''],
+    ['Rope box 1 (ropes 1–10)', chk(dv.psac10_1), '2.0.0.10', '', td?.ropes ? `${td.ropes.source === 'black' ? 'dark' : 'showing the river'}` : ''],
+    ['Rope box 2 (ropes 11–20)', chk(dv.psac10_2), '2.0.0.11', '', td?.ropes?.status?.watts ? `${td.ropes.status.watts.join(' + ')} W (cap ${td.ropes.box_watts_cap} W/box)` : ''],
+    ['HUB75 panels (sender)', known ? led : undefined, 'HDMI from bitcube', '', known ? (led ? `LED display connected${td?.hub75 ? ` · brightness ${td.hub75.brightness}` : ''}` : 'no LED display on bitcube') : ''],
+    ['River camera', chk(dv.river_cam), '192.168.8.217 · Starlink', '', known && !dv.river_cam ? 'river site down (solar / Starlink)' : ''],
+    ["Dave's agent (Modal)", md ? md.ok : s.modal?.error ? false : undefined, 'to-be-a-river--river.modal.run', link('https://to-be-a-river--river.modal.run/', 'journal'),
+      md ? `tick ${md.tick} · ${md.mood}` : (s.modal?.error || '')],
+    ['Cameras → Modal link', link_ ? link_.processes > 0 : undefined, 'on bitcube', '', link_ ? (link_.gallery?.last || '').replace(/^\S+\s+INFO\s+/, '') : ''],
+    ['River recorder', pr?.recorder ? true : undefined, 'on bitcube', '', pr?.recorder ? `${pr.recorder.clips} clips` : ''],
+    ['Project site', true, 'GitHub Pages', link(PAGES, 'status') + link(PAGES + 'show-files.html', 'show files') + link(PAGES + 'execution-plan.html', 'plan'), ''],
+  ];
+}
+function render(s) {
+  const r = rows(s);
+  $('eq').innerHTML = r.map(([name, ok, addr, links, detail]) => `<tr><td>${dot(ok)}${esc(name)}</td><td class="addr">${esc(addr)}</td><td>${links}</td><td>${esc(detail)}</td></tr>`).join('');
+  const bad = r.filter((x) => x[1] === false).map((x) => x[0]), unknown = r.filter((x) => x[1] === undefined).length;
+  $('sum').innerHTML = bad.length ? `${dot(false)}${bad.length} need${bad.length === 1 ? 's' : ''} attention` : unknown ? `${dot()}checking…` : `${dot(true)}everything is up`;
+  $('sumsub').textContent = bad.join(' · ') + (s.probe ? ` · bitcube checked ${ago(s.probe.age_s)}` : '');
+  const y = s.seasons?.value;
+  if (y) {
+    $('season').textContent = y.season[0].toUpperCase() + y.season.slice(1);
+    $('seasonsub').textContent = `${y.mode}${y.effective_mode !== y.mode ? ` (running ${y.effective_mode})` : ''}` + (y.target ? ` · heading for ${y.target}` : '');
+    $('ibar').value = y.intensity;
+    const p = y.presence || {};
+    $('preskv').innerHTML = kv(p.available ? { 'people now': p.now, usual: p.usual, relative: `${p.relative}×` } : { presence: 'people counter not running yet' });
+  } else { $('season').textContent = '–'; $('seasonsub').textContent = 'the seasons file isn’t running yet'; }
+  const md = s.modal?.value;
+  $('modal').innerHTML = dot(md?.ok) + (md?.scene ? esc(`${md.scene.animation} / ${md.scene.palette}`) : (s.modal?.error ? 'unreachable' : '–'));
+  $('modalkv').innerHTML = kv({ mood: md?.mood, tick: md?.tick, 'scene set': md?.set_at?.replace('T', ' ').slice(0, 16) })
+    + (md?.scene?.colors ? `<span>palette</span><span>${md.scene.colors.map((c) => `<i class="swatch" style="background:${esc(c)}"></i>`).join('')}</span>` : '');
+}
+async function cams() {
+  for (const cam of ['gallery', 'river']) {
+    try {
+      const r = await fetch(`/api/camera/${cam}.jpg`);
+      if (!r.ok) { $(`t-${cam}`).textContent = (await r.json().catch(() => ({}))).error || 'no picture'; continue; }
+      const taken = r.headers.get('x-taken');
+      $(`cam-${cam}`).src = URL.createObjectURL(await r.blob());
+      $(`t-${cam}`).textContent = taken ? `taken ${new Date(taken).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '';
+    } catch { $(`t-${cam}`).textContent = 'no picture'; }
+  }
+}
+async function poll() { try { render(await api('/api/status')); } catch { /* next time */ } }
+poll(); setInterval(poll, 5000); cams(); setInterval(cams, 60_000);
+</script>
+</body></html>

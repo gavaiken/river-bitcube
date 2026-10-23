@@ -7,7 +7,9 @@
 //   MISSION_REPO            the studio agent's working folder (its clone of river-bitcube)
 //   MISSION_FAKE_AGENT=1    a pretend agent, for testing the pages without spending tokens
 import { createServer } from 'node:http';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { userInfo } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Auth, readPasswordFile, parseCookies, SESSION_MAX_AGE_S } from './lib/auth.mjs';
@@ -20,6 +22,25 @@ const PORT = Number(env.MISSION_PORT || 8790);
 const STATE = env.MISSION_STATE_DIR || join(HERE, '..', '..', 'mission-state');
 const REPO = env.MISSION_REPO || join(HERE, '..');
 const COOKIE = 'mc';
+
+// Running as river: keep its Claude user files in step with the repo (no sudo needed: it's river's own home).
+if (userInfo().username === 'river') {
+  const home = userInfo().homedir;
+  mkdirSync(join(home, '.claude'), { recursive: true, mode: 0o700 });
+  copyFileSync(join(HERE, 'setup', 'river-CLAUDE.md'), join(home, '.claude', 'CLAUDE.md'));
+  copyFileSync(join(HERE, 'setup', 'river-claude-settings.json'), join(home, '.claude', 'settings.json'));
+}
+
+// Self-update: when a pull brings new mission/ code, restart (launchd starts us again) as soon as the chat is idle.
+const missionTree = () => { try { return execFileSync('git', ['-C', REPO, 'rev-parse', 'HEAD:mission'], { encoding: 'utf8' }).trim(); } catch { return null; } };
+const BOOT_TREE = missionTree();
+let restartPending = false;
+function checkForUpdate() {
+  if (!restartPending && BOOT_TREE && missionTree() && missionTree() !== BOOT_TREE) {
+    restartPending = true;
+    console.log('mission/ changed in the repo: restarting when the chat is idle');
+  }
+}
 
 const auth = new Auth({ password: readPasswordFile(env.MISSION_PASSWORD_FILE), sessionsFile: join(STATE, 'sessions.json') });
 
@@ -44,15 +65,24 @@ async function makeRunner() {
   }
   const { agentRunner } = await import('./lib/agent.mjs');
   return agentRunner({ cwd: REPO, appendPrompt: readFileSync(join(HERE, 'STUDIO.md'), 'utf8'),
-                       token: readFileSync(tokenFile, 'utf8').trim(), model: env.MISSION_MODEL || undefined });
+                       token: readFileSync(tokenFile, 'utf8').trim(), model: env.MISSION_MODEL || undefined,
+                       onSynced: checkForUpdate });
 }
 
 const studio = new Studio({ runner: await makeRunner(), dir: STATE });
 const mission = new Mission();
 mission.start();
+studio.on('status', (st) => { if (restartPending && !st.running && !st.queue.length) { console.log('restarting for new code'); process.exit(0); } });
+setInterval(async () => {
+  if (studio.status().running || env.MISSION_FAKE_AGENT) return;
+  const { syncRepo } = await import('./lib/agent.mjs');
+  await syncRepo(REPO);
+  checkForUpdate();
+  if (restartPending && !studio.status().running && !studio.status().queue.length) { console.log('restarting for new code'); process.exit(0); }
+}, 5 * 60_000).unref();
 
 // ---- helpers ---------------------------------------------------------------------------------------------
-const PAGES = { '/chat': 'chat.html', '/mission': 'mission.html', '/login': 'login.html' };
+const PAGES = { '/status': 'status.html', '/chat': 'chat.html', '/mission': 'mission.html', '/login': 'login.html' };
 const STATIC = { '/app.css': ['app.css', 'text/css'], '/app.js': ['app.js', 'text/javascript'] };
 const page = (name) => readFileSync(join(HERE, 'public', name));
 
@@ -112,7 +142,7 @@ const server = createServer(async (req, res) => {
       auth.logout(token);
       return send(res, 200, { ok: true }, 'application/json', { 'set-cookie': `${COOKIE}=; Path=/; Max-Age=0` });
     }
-    if (path === '/') return send(res, 302, '', 'text/plain', { location: '/chat' });
+    if (path === '/') return send(res, 302, '', 'text/plain', { location: '/status' });
     if (PAGES[path]) return send(res, 200, page(PAGES[path]), 'text/html; charset=utf-8');
 
     // studio chat
@@ -138,6 +168,12 @@ const server = createServer(async (req, res) => {
 
     // mission control
     if (path === '/api/status') return send(res, 200, { ...mission.snapshot(), studio: studio.status() });
+    const cam = path.match(/^\/api\/camera\/([a-z]+)\.jpg$/);
+    if (cam) {
+      const c = await mission.camera(cam[1]);
+      if (!c.jpeg) return send(res, 503, { error: 'no picture from that camera right now' });
+      return send(res, 200, c.jpeg, 'image/jpeg', { 'x-taken': new Date(c.at).toISOString() });
+    }
     const m = path.match(/^\/api\/control\/([a-z0-9-]+)$/);
     if (m && req.method === 'POST') {
       try { return send(res, 200, await mission.control(m[1], await body(req))); }

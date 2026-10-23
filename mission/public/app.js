@@ -25,10 +25,10 @@ export function md(src) {
 }
 export function header(active) {
   const h = document.createElement('header');
-  h.innerHTML = `<div class="in"><b>A River Becoming · mission control</b><nav>
-    <a href="/chat" class="${active === 'chat' ? 'on' : ''}">Studio chat</a>
-    <a href="/mission" class="${active === 'mission' ? 'on' : ''}">Mission control</a></nav>
-    <button id="logout" title="Log out">⎋</button></div>`;
+  const tab = (href, key, label) => `<a href="${href}" class="${active === key ? 'on' : ''}">${label}</a>`;
+  h.innerHTML = `<div class="in"><b>A River Becoming</b><nav>
+    ${tab('/status', 'status', 'System status')}${tab('/mission', 'mission', 'Mission control')}${tab('/chat', 'chat', 'Studio chat')}</nav>
+    <button id="logout" title="Log out">Log out</button></div>`;
   document.body.prepend(h);
   h.querySelector('#logout').onclick = async () => { await fetch('/logout', { method: 'POST' }); location.href = '/login'; };
 }

@@ -2,6 +2,16 @@
 // Runs as the macOS user `river` (MD6), so the operating system keeps it out of Gavin's files; the rules
 // below are a second fence, and mission/STUDIO.md tells it who it serves and what it may do (MD8).
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import { execFile } from 'node:child_process';
+
+/** Bring the agent's clone to the latest main before every request (as the bitcube Claude is told to). */
+export function syncRepo(cwd) {
+  return new Promise((resolve) => {
+    execFile('git', ['-C', cwd, 'pull', '--rebase', '--autostash', '-q'], { timeout: 60_000 }, (err, _o, stderr) => {
+      execFile('git', ['-C', cwd, 'log', '-1', '--format=%h %s'], (_e, out) => resolve({ ok: !err, head: String(out).trim(), error: err ? String(stderr || err.message).trim().slice(0, 200) : null }));
+    });
+  });
+}
 
 // Tools it may use without asking (nobody is at a terminal to answer a prompt).
 export const ALLOWED = ['Bash', 'Read', 'Edit', 'Write', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'TodoWrite', 'Agent'];
@@ -33,10 +43,13 @@ export function describeTool(block) {
 }
 
 /** Build the runner the Studio drives. */
-export function agentRunner({ cwd, appendPrompt, token, model, executable }) {
+export function agentRunner({ cwd, appendPrompt, token, model, executable, onSynced }) {
   return async function* run({ text, resume, signal }) {
     const ac = new AbortController();
     if (signal.aborted) return;
+    const sync = await syncRepo(cwd);
+    yield { kind: 'activity', text: sync.ok ? `synced the repo: ${sync.head.slice(0, 70)}` : `couldn't sync the repo (${sync.error}); working from ${sync.head.slice(0, 40)}` };
+    if (onSynced) onSynced(sync);
     signal.addEventListener('abort', () => ac.abort(), { once: true });
     const env = { ...process.env };
     if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;

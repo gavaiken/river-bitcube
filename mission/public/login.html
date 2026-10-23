@@ -15,7 +15,7 @@ document.getElementById('f').onsubmit = async (e) => {
   const err = document.getElementById('err'); err.textContent = '';
   const r = await fetch('/login', { method: 'POST', headers: { 'content-type': 'application/json' },
                                    body: JSON.stringify({ password: e.target.password.value }) });
-  if (r.ok) return location.href = '/chat';
+  if (r.ok) return location.href = '/status';
   const j = await r.json().catch(() => ({}));
   err.textContent = (j.error || 'Could not log in') + (j.wait_ms ? ` · try again in ${Math.ceil(j.wait_ms / 1000)} s` : '');
 };

@@ -63,3 +63,4 @@ Notes kept here while another session is editing the shared docs; folded into th
   3. `td_save.ps1 -Target river-local-oct-22-seasons.toe`, then `td.ps1 -File td\build\build_seasons_local.py`; check errors, fps 60, screenshots of field_out, quads, rope_canvas.
   4. Firewall: allow TD inbound on 9981 for Private + Tailscale (Gavin OK'd the service); check http://bitcube:9981 from the mini.
   5. Save, toeexpand secret check, commit; `Start-River.cmd` → seasons file; restart TD via the interactive task and confirm it comes up on its own.
+- 22 Oct 22:50 (session A): bitcube online at Gray Area. Added river@gav-m1-mini (mission control) to bitcube administrators_authorized_keys, pulled the repo on bitcube (autostash), ran the read-only mission probe. Not touching devices: session N owns bitcube tonight.

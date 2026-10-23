@@ -36,13 +36,21 @@ test('controls are fixed actions with checked arguments', async () => {
 
 test('status: seasons state and probe results land in the snapshot with ages', async () => {
   const { srv, url } = await fakeSeasons();
-  const m = new Mission({ seasonsUrl: url, bitcubeHost: '127.0.0.1', riverCam: { host: '127.0.0.1', port: 1 },
+  const m = new Mission({ seasonsUrl: url, bitcubeHost: '127.0.0.1',
                           probe: async () => ({ ok: true, td: { file: 'river-local-oct-22-seasons.toe', fps: 60 } }) });
   await m.pollFast(); await m.pollProbe();
   const s = m.snapshot();
   assert.equal(s.seasons.value.season, 'winter');
   assert.equal(s.probe.value.td.fps, 60);
-  assert.equal(s.river_cam.value.online, false);
   assert.equal(typeof s.seasons.age_s, 'number');
   srv.close();
+});
+
+test('camera stills are cached and fetched one at a time', async () => {
+  let calls = 0;
+  const m = new Mission({ snap: async () => { calls++; await new Promise((r) => setTimeout(r, 20)); return Buffer.from('jpeg'); } });
+  const [a, b] = await Promise.all([m.camera('gallery'), m.camera('gallery')]);
+  assert.equal(calls, 1); assert.equal(a.jpeg.toString(), 'jpeg'); assert.equal(b.jpeg.toString(), 'jpeg');
+  await m.camera('gallery'); assert.equal(calls, 1);
+  await assert.rejects(m.camera('../etc'), (e) => e.status === 400);
 });

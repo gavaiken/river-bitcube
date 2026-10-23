@@ -49,6 +49,25 @@ $out.recorder = [ordered]@{
     clips = @(Get-ChildItem (Join-Path $river 'recordings\river') -Filter '*.mp4' -ErrorAction SilentlyContinue).Count
     last = $(if (Test-Path $rlog) { $l = Get-Content $rlog -Tail 1; $l.Substring(0, [Math]::Min(120, $l.Length)) } else { $null })
 }
+# Network: what bitcube can reach (the mini can't see the install LAN or the river router directly)
+function Tcp([string]$h, [int]$p) {
+    try { $c = New-Object Net.Sockets.TcpClient; $ok = $c.ConnectAsync($h, $p).Wait(1500) -and $c.Connected; $c.Close(); return $ok } catch { return $false }
+}
+function Ping([string]$h) { try { return ((New-Object Net.NetworkInformation.Ping).Send($h, 1000).Status -eq 'Success') } catch { return $false } }
+$out.devices = [ordered]@{
+    internet     = Tcp '1.1.1.1' 443
+    router       = Tcp '192.168.9.1' 80          # our GL.iNet at Gray Area
+    gallery_cam  = Tcp '192.168.9.76' 554
+    river_cam    = Tcp '192.168.8.217' 554       # at the river, over Starlink + Will's tailnet
+    psac10_1     = Ping '2.0.0.10'                # rope box 1 (ropes 1-10)
+    psac10_2     = Ping '2.0.0.11'                # rope box 2 (ropes 11-20)
+    seasons_page = Tcp '127.0.0.1' 9981
+}
+$out.addresses = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } |
+    ForEach-Object { [ordered]@{ nic = $_.InterfaceAlias; ip = $_.IPAddress } })
+$out.displays = @(Get-CimInstance -Namespace root\wmi -ClassName WmiMonitorID -ErrorAction SilentlyContinue |
+    ForEach-Object { (($_.UserFriendlyName | Where-Object { $_ -ne 0 }) | ForEach-Object { [char]$_ }) -join '' })
 $out.disk_free_gb = [math]::Round((Get-PSDrive C).Free / 1GB, 1)
 $out.uptime_h = [math]::Round(((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalHours, 1)
 $out | ConvertTo-Json -Compress -Depth 8

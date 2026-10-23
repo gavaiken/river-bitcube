@@ -3,21 +3,7 @@
 <title>Mission control</title><link rel="stylesheet" href="/app.css"></head>
 <body>
 <main>
-  <div class="grid">
-    <section class="panel"><h2>Show machine (bitcube)</h2>
-      <div class="big" id="bc">–</div><div class="kv" id="bckv"></div></section>
-    <section class="panel"><h2>The river's year</h2>
-      <div class="big" id="season">–</div><div class="dim" id="seasonsub"></div>
-      <div style="height:8px"></div><div class="dim">Intensity</div>
-      <input type="range" id="ibar" min="0" max="1" step="0.01" disabled>
-      <div class="row dim" style="justify-content:space-between"><span>stillness</span><span>turbulence</span></div>
-      <div class="kv" id="preskv" style="margin-top:6px"></div></section>
-    <section class="panel"><h2>River</h2>
-      <div class="big" id="river">–</div><div class="kv" id="riverkv"></div></section>
-    <section class="panel"><h2>Dave's agent (Modal)</h2>
-      <div class="big" id="modal">–</div><div class="kv" id="modalkv"></div></section>
-  </div>
-  <div style="height:14px"></div>
+  <section class="panel"><h2>Now</h2><div class="kv" id="now"></div></section>
 
   <section class="panel"><h2>Steer the seasons</h2>
     <div class="row" id="modes">
@@ -43,22 +29,7 @@
     <div class="err" id="lerr"></div>
   </section>
 
-  <div class="grid">
-    <section class="panel"><h2>Camera</h2>
-      <img id="snap" alt="Latest gallery-cam still" style="width:100%;border-radius:8px">
-      <div class="dim"><span id="snap-time"></span> <span id="snap-note"></span></div></section>
-    <section class="panel"><h2>Links</h2>
-      <div class="kv"><span>Show files</span><a href="https://gavaiken.github.io/river-bitcube/show-files.html" target="_blank">what the piece is doing</a>
-        <span>Plan</span><a href="https://gavaiken.github.io/river-bitcube/execution-plan.html" target="_blank">execution plan</a>
-        <span>Live</span><a href="https://gavaiken.github.io/river-bitcube/live.html" target="_blank">camera page</a>
-        <span>Gallery card</span><a href="https://gavaiken.github.io/river-bitcube/card/seasons.html" target="_blank">iPad card</a>
-        <span>Gray Area</span><a href="https://gavaiken.github.io/river-bitcube/gray-area.html" target="_blank">network and power</a></div></section>
-  </div>
-  <div style="height:14px"></div>
-  <section class="panel"><h2>System map</h2>
-    <iframe class="map" src="https://gavaiken.github.io/river-bitcube/system/" loading="lazy" title="System map"></iframe></section>
 </main>
-<script src="https://gavaiken.github.io/river-bitcube/assets/snapshot.js"></script>
 <script type="module">
 import { api, esc, header, ago } from '/app.js';
 header('mission');
@@ -68,38 +39,21 @@ const dot = (ok) => `<span class="dot ${ok === true ? 'ok' : ok === false ? 'bad
 let rulesDrawn = false, dragging = false;
 
 function render(s) {
-  const bc = s.bitcube?.value, pr = s.probe?.value, td = pr?.td;
-  $('bc').innerHTML = dot(bc?.online) + (bc?.online ? 'online' : bc ? 'offline' : '–');
-  $('bckv').innerHTML = kv({ 'show file': td?.file, 'frame rate': td?.fps ? `${td.fps} fps` : undefined,
-    'ropes': td?.ropes ? `${td.ropes.active ? 'sending' : 'off'} · ${td.ropes.source}` + (td.ropes.status?.watts ? ` · ${td.ropes.status.watts.join(' + ')} W` : '') : undefined,
-    'HUB75': td?.hub75 ? `brightness ${td.hub75.brightness}` : undefined, 'TD errors': td?.errors,
-    'boot file': pr?.boot_file, 'uptime': pr?.uptime_h != null ? `${pr.uptime_h} h` : undefined,
-    'disk free': pr?.disk_free_gb != null ? `${pr.disk_free_gb} GB` : undefined,
-    'checked': s.probe ? ago(s.probe.age_s) : undefined, 'problem': s.probe?.error || td?.error });
+  const pr = s.probe?.value, td = pr?.td;
   const y = s.seasons?.value;
   if (y) {
-    $('season').textContent = y.season[0].toUpperCase() + y.season.slice(1);
-    $('seasonsub').textContent = `${y.mode}${y.effective_mode !== y.mode ? ` (running ${y.effective_mode})` : ''}` + (y.target ? ` · heading for ${y.target}` : '');
-    $('ibar').value = y.intensity;
-    const p = y.presence || {};
-    $('preskv').innerHTML = kv(p.available ? { 'people now': p.now, 'usual': p.usual, 'relative': `${p.relative}×` } : { presence: 'people counter not running' });
     document.querySelectorAll('[data-mode]').forEach((b) => { b.classList.toggle('on', b.dataset.mode === y.mode); if (b.dataset.mode === 'dynamic') b.disabled = !y.counter_available; });
     $('modenote').textContent = !y.counter_available ? 'dynamic needs the people counter' : (y.mode === 'dynamic' ? 'people are steering it' : '');
     document.querySelectorAll('[data-season]').forEach((b) => b.classList.toggle('on', y.mode === 'manual' && b.dataset.season === y.manual?.season));
     if (!dragging && y.manual) { $('tint').value = y.manual.intensity; $('tival').textContent = (+y.manual.intensity).toFixed(2); }
     if (!rulesDrawn && y.rules) { drawRules(y.rules); rulesDrawn = true; }
-  } else {
-    $('season').textContent = '–'; $('seasonsub').textContent = s.seasons?.error ? `seasons file not reachable (${s.seasons.error})` : '';
   }
-  const rc = s.river_cam?.value;
-  $('river').innerHTML = dot(rc?.online) + (rc?.online ? 'river cam online' : rc ? 'river cam offline' : '–');
-  $('riverkv').innerHTML = kv({ 'recordings': pr?.recorder?.clips, 'recorder': pr?.recorder?.last });
-  const md = s.modal?.value;
-  $('modal').innerHTML = dot(md?.ok) + (md?.scene ? esc(`${md.scene.animation} / ${md.scene.palette}`) : (s.modal?.error ? 'unreachable' : '–'));
-  $('modalkv').innerHTML = kv({ 'mood': md?.mood, 'tick': md?.tick, 'scene set': md?.set_at,
-    'link': pr?.modal_link ? `${pr.modal_link.processes ? 'running' : 'stopped'}` : undefined,
-    'gallery clips': pr?.modal_link?.gallery?.last, 'river clips': pr?.modal_link?.river?.last })
-    + (md?.scene?.colors ? `<span>palette</span><span>${md.scene.colors.map((c) => `<i class="swatch" style="background:${esc(c)}"></i>`).join('')}</span>` : '');
+  $('now').innerHTML = kv({
+    'show file': td?.file || (s.bitcube?.value?.online === false ? 'bitcube offline' : '–'),
+    'season': y ? `${y.season} · ${y.mode}${y.target ? ` → ${y.target}` : ''} · intensity ${y.intensity.toFixed(2)}` : 'seasons file not running yet',
+    'ropes': td?.ropes ? (td.ropes.source === 'black' ? 'dark (sending black)' : 'showing the river') : undefined,
+    'HUB75 brightness': td?.hub75?.brightness, 'opens at boot': pr?.boot_file,
+    'checked': s.probe ? ago(s.probe.age_s) : undefined });
   if (td?.hub75 && document.activeElement !== $('hub')) { $('hub').value = td.hub75.brightness; $('hubval').textContent = td.hub75.brightness; }
   $('ropesnote').textContent = td?.ropes ? (td.ropes.source === 'black' ? 'dark now' : 'showing the river') : '';
   $('bootnote').textContent = pr?.boot_file ? `now: ${pr.boot_file}` : '';
@@ -126,6 +80,5 @@ $('hub').onchange = () => act('/api/control/hub75', { brightness: +$('hub').valu
 $('bootset').onclick = () => act('/api/control/bootfile', { file: $('boot').value }, 'lerr');
 async function poll() { try { render(await api('/api/status')); } catch { /* shown next time */ } }
 poll(); setInterval(poll, 3000);
-if (window.riverSnapshot) riverSnapshot({ img: $('snap'), time: $('snap-time'), note: $('snap-note'), every: 60 });
 </script>
 </body></html>
