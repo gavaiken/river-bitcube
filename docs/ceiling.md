@@ -16,6 +16,8 @@ bitcube HDMI ──► Colorlight sender ──(its own cable)──► receive 
 bitcube DisplayPort ◄── dummy display plug (recommended: a desktop VNC can use)
 ```
 
+**The lights go into bitcube's LIGHTS port, not the router** (D25): the show then keeps running if the router restarts or the Wi-Fi has trouble. If that's ever impossible, the lighting switch can go into a spare router port and Claude moves the lighting address over remotely.
+
 **Never plug in:**
 - the lighting switch to the router;
 - the Colorlight sender's cable to the router or the lighting switch.
