@@ -162,6 +162,8 @@ for k, (name, f) in enumerate((('river_slow', 'river-slow.mp4'), ('river_normal'
         menu(mv.par.extendright, 'loop', 'cycle')
     if hasattr(mv.par, 'play'):
         mv.par.play = True
+    if hasattr(mv.par, 'hwdecode'):
+        mv.par.hwdecode = False          # hardware decoding needs an NVIDIA GPU; bitcube has Intel Iris Xe
     if hasattr(mv.par, 'audio'):
         try:
             menu(mv.par.audio, 'off')
