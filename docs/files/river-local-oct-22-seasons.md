@@ -15,7 +15,7 @@ A river in the Sierra foothills flows through the room, slowed and quickened and
   - Crossfades the slow, normal and fast copies by **intensity**: winter plays it 4× slower (with generated in-between frames, since the camera only gives 16 fps), summer 2× faster.
   - Grades the river through the current seasons' blended palette, with some natural colour kept so it reads as a real river.
   - Overlays: torrent streaks on the bright water (grow with intensity), glints (ice in winter, sun in summer), autumn leaf flecks, spring rain.
-  - Samples the result onto the ropes through the camera pixel map, and onto the four HUB75 quads.
+  - Samples the result onto the ropes through the camera pixel map, and onto the four HUB75 quads. Ropes the map is missing (9 and 17, dark when it was captured on 18 Oct) borrow the positions of their neighbour (8 and 16), shifted slightly, until the Gray Area re-map (`tools/pixelmap/fill.py`; fixed 23 Oct: before that they were sent black).
 - **Modes:** automatic (4-minute year), dynamic (people steer it; needs the counter), manual (targets). After a restart: dynamic if the counter is running, otherwise automatic; never manual.
 - **Controls:** the control page (port 9981), or in TD `/project1/seasons` (Look page: gain, river brightness and contrast, natural colour, overlays, blur, HUB75 gain and gamma). Rules are saved in `River\seasons-rules.json`.
 - **Outputs:** 20 ropes over Art-Net (capped at 600 W per box); HUB75 quads 1–4 in a row along the top of the HDMI output (x = 0, 256, 512, 768) until the Gray Area re-map places them.

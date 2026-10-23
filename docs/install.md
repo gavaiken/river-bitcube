@@ -72,7 +72,7 @@ Three separate circuits if you can (ask Gray Area which outlets are on which bre
 1. **Wait 2 minutes.**
 2. **Ropes:** they should show the river (slow, blue-white in winter, then green, gold, rust as the 4-minute year turns).
    - If they **cycle through bright colours by themselves**, the boxes aren't getting bitcube's signal: check the **white** cable runs from bitcube's white port into the rack controller's **NET1**, then NET2 → box 1 NET1 → box 1 NET2 → box 2 NET1.
-   - If one rope is dark, swap its plug to a free OUT to tell a dead rope from a dead port (ropes 9 and 17 have been dark since 18 Oct).
+   - If one rope is dark, swap its plug to a free OUT to tell a dead rope from a dead port (ropes 9 and 17 were black in the show file until 23 Oct: the 18 Oct pixel map was missing them; fixed).
 3. **Panels:** the river, in four blocks. Black: check the HDMI, the sender's power and its long cable to the receive card, and the panel power board.
 4. **On a phone** (any internet): open **[mission control](https://gav-m1-mini.tailddc624.ts.net)**, log in with the team password. **System status** should show green for bitcube, TouchDesigner, the router, the gallery camera, both rope boxes and the HUB75 sender. Red is the thing to fix; the **System map** tab shows where it sits.
 5. **Ask the studio chat** (mission control → Studio chat): "The ceiling install is done, check everything." It can see bitcube, the router and the cameras, and says what's wrong.
