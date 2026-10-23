@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mission control: log in</title><link rel="stylesheet" href="/app.css"></head>
+<body>
+<form class="login panel" id="f">
+  <div class="big">A River Becoming</div>
+  <div class="dim">Mission control and the studio chat. Team only.</div>
+  <input type="password" name="password" placeholder="Team password" autocomplete="current-password" autofocus required>
+  <button class="primary" style="width:100%">Log in</button>
+  <div class="err" id="err"></div>
+</form>
+<script>
+document.getElementById('f').onsubmit = async (e) => {
+  e.preventDefault();
+  const err = document.getElementById('err'); err.textContent = '';
+  const r = await fetch('/login', { method: 'POST', headers: { 'content-type': 'application/json' },
+                                   body: JSON.stringify({ password: e.target.password.value }) });
+  if (r.ok) return location.href = '/chat';
+  const j = await r.json().catch(() => ({}));
+  err.textContent = (j.error || 'Could not log in') + (j.wait_ms ? ` · try again in ${Math.ceil(j.wait_ms / 1000)} s` : '');
+};
+</script>
+</body></html>

@@ -49,7 +49,7 @@ export class Auth {
   /** Try a login. Returns {ok, token?, wait?}. */
   login(client, password) {
     const wait = this.delayFor(client);
-    if (wait > 0) return { ok: false, wait };
+    if (wait > 0) return { ok: false, wait, throttled: true };
     if (!this.check(password)) {
       const f = this.failures.get(client) ?? { count: 0, last: 0 };
       f.count += 1; f.last = this.now();

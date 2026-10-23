@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio chat</title><link rel="stylesheet" href="/app.css"></head>
+<body>
+<div class="chat">
+  <div class="log" id="log"><div class="in" id="msgs"></div></div>
+  <div class="composer"><div class="in">
+    <textarea id="text" placeholder="Ask the studio agent… (Enter to send, Shift+Enter for a new line)"></textarea>
+    <div class="row"><span class="dim" id="state">connecting…</span>
+      <span class="row"><button id="stop" disabled>Stop</button><button id="send" class="primary">Send</button></span></div>
+    <div class="err" id="err"></div>
+  </div></div>
+</div>
+<script type="module">
+import { api, md, esc, header } from '/app.js';
+header('chat');
+const msgs = document.getElementById('msgs'), log = document.getElementById('log');
+const seen = new Set();
+function atBottom() { return log.scrollHeight - log.scrollTop - log.clientHeight < 120; }
+function add(e) {
+  const key = `${e.t}|${e.kind}|${e.id}|${(e.text || '').length}`;
+  if (seen.has(key)) return; seen.add(key);
+  if (e.kind === 'started' || e.kind === 'session') return;
+  const stick = atBottom();
+  const d = document.createElement('div');
+  d.className = 'msg ' + e.kind;
+  if (e.kind === 'user') d.innerHTML = esc(e.text);
+  else if (e.kind === 'text') d.innerHTML = md(e.text);
+  else if (e.kind === 'result') d.textContent = e.ok ? 'done' + (e.turns ? ` · ${e.turns} step${e.turns > 1 ? 's' : ''}` : '') : `finished with a problem: ${e.text}`;
+  else if (e.kind === 'stopped') d.textContent = 'stopped';
+  else d.textContent = e.text;
+  msgs.appendChild(d);
+  if (stick) log.scrollTop = log.scrollHeight;
+}
+function status(s) {
+  document.getElementById('stop').disabled = !s.running;
+  document.getElementById('state').textContent = s.running
+    ? `working on: “${s.current.text.slice(0, 60)}${s.current.text.length > 60 ? '…' : ''}”` + (s.queue.length ? ` · ${s.queue.length} waiting` : '')
+    : (s.queue.length ? `${s.queue.length} waiting` : 'ready');
+}
+const h = await api('/api/chat/history');
+h.events.forEach(add); status(h.status); log.scrollTop = log.scrollHeight;
+const es = new EventSource('/api/chat/events');
+es.addEventListener('chat', (m) => add(JSON.parse(m.data)));
+es.addEventListener('status', (m) => status(JSON.parse(m.data)));
+es.onerror = () => { document.getElementById('state').textContent = 'reconnecting…'; };
+const text = document.getElementById('text');
+async function send() {
+  const t = text.value.trim(); if (!t) return;
+  try { await api('/api/chat/send', { text: t }); text.value = ''; document.getElementById('err').textContent = ''; }
+  catch (e) { document.getElementById('err').textContent = e.message; }
+}
+document.getElementById('send').onclick = send;
+text.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } };
+document.getElementById('stop').onclick = () => api('/api/chat/stop', {});
+</script>
+</body></html>
