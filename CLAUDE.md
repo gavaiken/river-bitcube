@@ -39,6 +39,11 @@ TouchDesigner (TD) drives the 20 ropes over Art-Net **and** the HUB75 panels ove
 - **Drive bitcube's console from the Mac mini: VNC.** `~/claude/local/bitcube-vnc/vnc.py` (vncdotool, its own venv; TightVNC on bitcube :5900 over Tailscale; the password stays in an untracked file on the mini). `.venv/bin/python vnc.py shot a.png`, `click X Y`, `dclick X Y`, `drag X1 Y1 X2 Y2`, `type "text"`, `key ctrl-s`; chain actions with `--` in one connection. Coordinates are real console pixels (1920×1080 today). Unlike `screenshot.ps1` it also reaches UAC prompts and the lock screen. Always take a `shot` before and after clicking.
 - **Power:** a full-white box is ≈1.5 kW. Cap brightness in TD.
 
+## Show files and their pages
+- Show files (TouchDesigner files that run the whole piece) are named for their kind and the date of their last real change: `river-online-oct-20.toe` (live river + Dave's Modal agent), `river-local-oct-22-seasons.toe` (the river's year, local-only, **the boot file**). When a show file changes meaningfully, give it the new date (`td_save.ps1 -Target`), keep the previous one as a fallback, and update `Start-River.cmd`, the build script's guard and the docs in the same commit.
+- **Every show file has a page:** `docs/files/<name>.md`, listed in `docs/show-files.md` (for Colin and Justine) with a gallery card for the iPad (`docs/card/`). **Change a show file → update its page in the same commit.** Terms are in `GLOSSARY.md`; use them.
+- The seasons file's control page is served by TD on port 9981 (`td/seasons/seasons_td.py`; private networks and the tailnet only).
+
 ## TouchDesigner gotchas (learned the hard way)
 - **Anything modal in TD freezes the bridge.** A dialog blocks TD's main thread, so `td.ps1` calls hang. `td.ps1` times out after 20 s and names the blocking dialog. Someone then has to answer it on the console (VNC), or Claude clicks it after taking a screenshot.
 - **Two show files:** `river.toe` (the general show file, for Dave's visuals) and the local rain checkpoint `river-local-oct-18.toe` (opened at login since 18 Oct 16:54; pixel-mapped rain on the ropes and HUB75; `td/build/build_river_local.py`, map from `tools/pixelmap/`). `td_save.ps1` saves whichever file is open; `-Target x.toe` does a Save As.

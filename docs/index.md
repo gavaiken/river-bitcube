@@ -6,7 +6,7 @@ title: A River Becoming: show machine status
 
 **A River Becoming** is an installation by **Colin, Justine, Will, Dave and Gavin**, with Andi and Lilian, for Gray Area, San Francisco (October 2026). This site is the team's working notes for bitcube, the show machine.
 
-**[Execution plan](execution-plan.md)** (status table and session prompts) · **[Plan & open questions](plan.md)** · **[Log](a-river-becoming-log.md)** · **[Hardware](a-river-becoming-hardware.md)** · **[System map](system/)** (every device, IP and connection; [system.json](system/system.json) for agents)
+**[Show files](show-files.md)** (what the piece is doing) · **[Execution plan](execution-plan.md)** (status table and session prompts) · **[Plan & open questions](plan.md)** · **[Log](a-river-becoming-log.md)** · **[Hardware](a-river-becoming-hardware.md)** · **[System map](system/)** (every device, IP and connection; [system.json](system/system.json) for agents)
 
 **Status as of Tue 20 Oct 2026, 10:15.** Gray Area install starts **Wed 22 Oct**.
 

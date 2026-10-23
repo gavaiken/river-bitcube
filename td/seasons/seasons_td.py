@@ -26,6 +26,9 @@ CONTROL_HTML = REPO / 'td' / 'seasons' / 'control.html'
 HISTORY_EVERY = 10.0              # s between points on the control page's 30-minute graph
 HISTORY_POINTS = 180
 PRESENCE_READ = 0.5               # s between reads of presence.json
+# Overlay motion, integrated (position += speed * dt) so a changing intensity never makes the noise jump.
+# name: (speed at stillness, speed at turbulence), in noise units per second
+PHASES = {'torrent': (0.15, 2.6), 'rain': (0.25, 0.9), 'leaves': (0.04, 0.12), 'glint': (0.2, 1.2), 'drift': (0.01, 0.06)}
 
 # name: (engine constant, label, default, min, max, unit)
 RULES = {
@@ -97,6 +100,7 @@ def state():
         if old:
             year.intensity, year.manual_season, year.manual_intensity = old.intensity, old.manual_season, old.manual_intensity
         st = h.st = {'engine': eng, 'year': year, 'rules': rules, 'history': [], 'next_hist': 0.0,
+                     'phases': dict(st['phases']) if st else {k: 0.0 for k in PHASES}, 'last': None,
                      'next_read': 0.0, 'presence_mtime': None, 'auto_default': not old and not counter,
                      'counter': counter}
     return st
@@ -127,6 +131,10 @@ def frame(comp):
         y.set_mode('dynamic')            # the counter came up after boot: hand the year to it
         st['auto_default'] = False
     y.step(now)
+    dt = 0.0 if st['last'] is None else max(0.0, min(0.25, now - st['last']))
+    st['last'] = now
+    for k, (lo, hi) in PHASES.items():
+        st['phases'][k] = (st['phases'][k] + (lo + (hi - lo) * y.intensity) * dt) % 10000.0
     if now >= st['next_hist']:
         st['next_hist'] = now + HISTORY_EVERY
         p = y.presence.stats(now)
@@ -143,6 +151,11 @@ def w(k):
 
 def intensity():
     return state()['year'].intensity
+
+
+def ph(name):
+    """Integrated overlay position (see PHASES)."""
+    return state()['phases'][name]
 
 
 def tint(ch, table='tint'):

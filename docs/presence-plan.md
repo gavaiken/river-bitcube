@@ -1,0 +1,34 @@
+---
+title: "A River Becoming: the people counter (plan)"
+---
+
+# The people counter: plan
+
+Not built yet. It is what turns on **dynamic** mode in [river-local-oct-22-seasons](files/river-local-oct-22-seasons.html). Terms as in the [glossary](https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md). Decided 22 Oct 2026 with Gavin.
+
+## What it must produce
+Every half second, a line in `C:\Users\user\River\presence.json`: `{"t": <unix time>, "count": <people in the foreground>}`. That's the whole contract with the show file (`td/seasons/seasons_td.py` reads it). If the file stops changing for 30 s, the show falls back to automatic by itself; when it comes back, the show returns to dynamic by itself (unless someone picked a mode on the control page).
+
+## How it counts (local-only)
+- **Input:** the gallery cam's low-res stream (640×360) on our own network. No internet, no Modal.
+- **Detector:** a small person detector (YOLO "nano" class model, ONNX, CPU) on bitcube, about 2 frames a second. The Iris Xe CPU can do that without disturbing TouchDesigner; we'd check its frame rate stays at 60.
+- **Foreground only:** count people whose box is taller than about a quarter of the frame (near the piece), not people far across the gallery. Tune on site by looking at what the camera sees.
+- **No tracking:** count per frame. The medians below already turn flicker into a steady number, and it keeps the counter simple and fast. Nobody is identified or recorded; only the count leaves the process.
+- **Fallback:** if the detector isn't installed or crashes, a motion measure (how much of the frame changed) stands in as a rough count, so the piece still responds.
+- **Runs as:** a process started at login by the same supervisor pattern as the Modal link (`tools/modal/modal_link.py`), restarted if it dies, logging to `River\logs\presence.log`.
+
+## How the show uses the count (already built)
+- **Presence now** = median of the last 30 s; **usual presence** = median of the last 10 min (never below 0.75, so one person in an empty gallery counts).
+- **Relative presence** = now ÷ usual: above 1.3× warms the year toward summer, below 0.7× cools it toward winter, in between holds; nobody for a minute = winter. Summer's strength rises from 1.3× to full torrent at 2×.
+- The year only turns forward; warming takes about a minute, freezing about three.
+- All of these are **rules**, adjustable live on the control page.
+
+## Steps when we build it
+1. Install `onnxruntime` and `opencv-python` into bitcube's `.venv`; download the detector model.
+2. `tools/presence/counter.py`: RTSP (sub-stream, from `secrets.local.json`) → frames at 2 fps → count → `presence.json`; motion fallback.
+3. Add it to the login supervisor; check TouchDesigner still runs at 60 fps.
+4. On site: aim and fix the camera, tune the "near the piece" size threshold, watch the control page's graph through an evening, adjust the rules.
+
+## Back burner
+- AI-enhanced river footage via Modal: upscaling, smoother generated slow motion, longer generated clips.
+- Cross-checking the count with Dave's agent, which already asks "about how many people are present?" every ~15 s.
