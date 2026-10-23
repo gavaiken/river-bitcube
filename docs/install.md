@@ -13,6 +13,7 @@ For whoever goes up the lift (Gavin, Lilian, the Gray Area crew). Everything tha
 - **Point 3:** the lowest point the ropes hang to.
 
 ## 1. Take up
+
 | Item | Notes |
 |---|---|
 | **bitcube** + its power supply | Two Ethernet ports, taped: **blue = ROUTER**, **white = LIGHTS** |
@@ -35,18 +36,13 @@ For whoever goes up the lift (Gavin, Lilian, the Gray Area crew). Everything tha
 5. Leave **slack** in every cable, and strain-relieve the heavy ones (the powerCON leads, the ropes).
 
 ## 3. Cable (in this order)
-**Network (internet and remote access):**
-1. **Gray Area's drop → router WAN.** (If there's no drop yet, skip it: the router uses Gray Area's staff Wi-Fi by itself.)
-2. **Blue cable: bitcube's blue ROUTER port → the router port taped blue (LAN2).** Not LAN1: that port is switched off since 23 Oct (the studio chat can switch it back on once the camera's old cable is out).
-
-**Lights (a separate network: never into the router):**
-3. **White: bitcube's white LIGHTS port → lighting switch.**
-4. **Lighting switch → rack controller NET1, → PSAC10 box 1 NET1, → PSAC10 box 2 NET1.**
-5. **Ropes:** each rope's **male round plug is its input** (the female end stays unused). Box 1 OUT1–OUT10 = ropes 1–10, box 2 OUT1–OUT10 = ropes 11–20, through the XLR adapters. (Order doesn't have to be perfect: we re-map the ropes by camera after the hang.)
-
-**Panels:**
-6. **HDMI: bitcube → Colorlight sender.** No monitor on bitcube.
-7. **Long Ethernet: Colorlight sender → the receive card at point 2.** Not into the router or the lighting switch.
+1. **Network:** Gray Area's drop → router **WAN**. (No drop yet? Skip it: the router uses Gray Area's staff Wi-Fi by itself.)
+2. **Network:** the **blue** cable from bitcube's blue ROUTER port → the router port taped blue (**LAN2**). Not LAN1: that port is switched off since 23 Oct (the studio chat can switch it back on once the camera's old cable is out).
+3. **Lights** (a separate network, never into the router): the **white** cable from bitcube's white LIGHTS port → the lighting switch.
+4. **Lights:** lighting switch → rack controller **NET1**, → PSAC10 box 1 **NET1**, → PSAC10 box 2 **NET1**.
+5. **Ropes:** each rope's **male round plug is its input** (the female end stays unused). Box 1 OUT1–OUT10 = ropes 1–10, box 2 OUT1–OUT10 = ropes 11–20, through the XLR adapters. The order doesn't have to be perfect: we re-map the ropes by camera after the hang.
+6. **Panels:** HDMI from bitcube → the Colorlight sender. No monitor on bitcube.
+7. **Panels:** the long Ethernet from the Colorlight sender → the receive card at point 2. Not into the router or the lighting switch.
 
 **Never:**
 - the lighting switch into the router;
@@ -55,6 +51,7 @@ For whoever goes up the lift (Gavin, Lilian, the Gray Area crew). Everything tha
 
 ## 4. Power
 Three separate circuits if you can (ask Gray Area which outlets are on which breaker):
+
 | Circuit | What |
 |---|---|
 | A | PSAC10 box 1 |
@@ -75,6 +72,7 @@ Three separate circuits if you can (ask Gray Area which outlets are on which bre
 5. **Ask the studio chat** (mission control → Studio chat): "The ceiling install is done, check everything." It can see bitcube, the router and the cameras, and says what's wrong.
 
 ## If something's off
+
 | You see | Likely | Fix |
 |---|---|---|
 | Ropes cycle colours by themselves | bitcube's signal isn't reaching the boxes | White cable in bitcube's **white** port; lighting switch powered; switch → box NET1 cables in |
