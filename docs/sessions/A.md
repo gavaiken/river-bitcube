@@ -56,3 +56,10 @@ Notes kept here while another session is editing the shared docs; folded into th
 - 20 Oct 19:36: "memory of rain" layer (Rainmemory; rain trails in the river's natural colours) and Camhold (show the last river frame when the stream drops). River cam offline since ~18:11. Show file saved with Camhold 0; it is 1 live for the visual. Preview window /project1/preview_window open on the screen. Masked camera logins in modal_link logs (capture.py logged ffmpeg command lines); scrubbed old logs. VNC shot: docs/img/memory-of-rain-2026-10-20.jpg.
 
 - 20 Oct 21:57: bitcube's River\river-agent fast-forwarded a9cbd2c → d25b52f (Dave's ETag sync, PR #5/#6) via a git bundle from the mini; mirror restarted, unchanged files now come back 304 with no body. Opened drocamor/river-agent#7 (redact camera logins in capture.py logs).
+
+- 22 Oct: seasons show file designed with Gavin (grill session; GLOSSARY.md started). Built offline while bitcube is packed for the move: `td/seasons/seasons.py` (+ tests), `seasons_td.py`, `control.html` (tested against a mock), `td/build/build_seasons_local.py`, four-quad panels, `tools/seasons/prerender.py` (tested), pages (`docs/show-files.md`, `docs/files/*`, `docs/card/seasons.html`, `docs/presence-plan.md`), CLAUDE.md rule. **Deploy when bitcube is online** (in order):
+  1. `git pull` on bitcube; `tools\td_save.ps1`, then `td_save.ps1 -Target river-online-oct-20.toe`; `git rm river-local-oct-18.toe`, commit the new name.
+  2. `python tools\seasons\prerender.py` (river library speeds).
+  3. `td_save.ps1 -Target river-local-oct-22-seasons.toe`, then `td.ps1 -File td\build\build_seasons_local.py`; check errors, fps 60, screenshots of field_out, quads, rope_canvas.
+  4. Firewall: allow TD inbound on 9981 for Private + Tailscale (Gavin OK'd the service); check http://bitcube:9981 from the mini.
+  5. Save, toeexpand secret check, commit; `Start-River.cmd` → seasons file; restart TD via the interactive task and confirm it comes up on its own.
