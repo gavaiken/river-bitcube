@@ -102,6 +102,11 @@ function Publish-Snapshot([hashtable]$Files, [string]$GitDir, [datetime]$Time) {
     $tree = Invoke-Git $GitDir @('write-tree')
     $commit = Invoke-Git $GitDir @('commit-tree', $tree, '-m', (Get-SnapshotMessage $Time))
     Invoke-Git $GitDir @('push', '-q', '--force', $SnapshotRemote, "${commit}:refs/heads/$SnapshotBranch") | Out-Null
+    # The local ref is only bookkeeping (the push above is what counts). A power cut can leave it broken
+    # (22 Oct 23:53: "reference broken" on every run since); drop it so update-ref can write it fresh.
+    $ref = Join-Path $GitDir "refs/heads/$SnapshotBranch"
+    try { Invoke-Git $GitDir @('rev-parse', '--verify', '-q', "refs/heads/$SnapshotBranch") | Out-Null }
+    catch { Remove-Item $ref -Force -ErrorAction SilentlyContinue }
     Invoke-Git $GitDir @('update-ref', "refs/heads/$SnapshotBranch", $commit) | Out-Null
     # Older commits and stills nothing refers to any more: drop them so the bare repo stays small.
     Invoke-Git $GitDir @('prune', '--expire=now') | Out-Null
