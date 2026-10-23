@@ -112,5 +112,4 @@ echo "   (this script can't read gh's login; the public key is: $(cat $RH/.ssh/r
 echo "b) bitcube: add this line to C:\\Users\\user\\.ssh\\authorized_keys (or administrators_authorized_keys):"
 echo "   $(cat $RH/.ssh/id_ed25519.pub)"
 echo "c) Funnel (OK'd, MD9):   /Applications/Tailscale.app/Contents/MacOS/Tailscale funnel --bg 8790"
-echo "d) If the token isn't installed yet: claude setup-token, save it to $TOKEN_SRC (chmod 600), then"
-echo "   sudo bash $RH/river-bitcube/mission/setup/install-token.sh"
+echo "d) Token (M7), one command:   bash /Users/$GAV/claude/Source/river-bitcube/mission/setup/get-token.sh"

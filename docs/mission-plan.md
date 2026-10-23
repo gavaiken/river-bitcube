@@ -44,7 +44,7 @@ All in `mission/setup/`. Each script explains itself at the top and is safe to r
 1. **`sudo bash ~/claude/Source/river-bitcube/mission/setup/setup-river.sh`** (needs your password once): creates the hidden standard user `river`, locks `/Users/gav` to you, copies the site password (your VNC file, `~/claude/local/secrets/bitcube-vnc`, the same bitcube password), makes river's SSH keys, clones the repo for river, installs the app, writes river's Claude settings (`river-claude-settings.json`, the deny fence), installs and starts the service. It prints the next steps.
 2. **Deploy key** (a Claude session can do this as you): `gh repo deploy-key add /Users/river/.ssh/river_bitcube_deploy.pub --allow-write -R gavaiken/river-bitcube -t 'river studio agent (mini)'`. *Needs river's public key, which step 1 creates; a session can read the `.pub` only via the script's output, since `/Users/river` is private.*
 3. **bitcube**: add river's bitcube public key (printed by step 1) to bitcube's authorized keys (a session does this over SSH when bitcube is online).
-4. **Token (M7)**: run `claude setup-token` (browser login), paste the token into `~/claude/local/secrets/claude-token` (`chmod 600`), then `sudo bash /Users/river/river-bitcube/mission/setup/install-token.sh`.
+4. **Token (M7)**, one command: `bash ~/claude/Source/river-bitcube/mission/setup/get-token.sh` (runs `claude setup-token`, asks you to paste the token, saves it privately, installs it for river, restarts the service).
 5. **Funnel (M8)**: `/Applications/Tailscale.app/Contents/MacOS/Tailscale funnel --bg 8790`.
 6. **Check**: `bash ~/claude/Source/river-bitcube/mission/setup/check.sh` (read-only).
 
@@ -67,3 +67,4 @@ Newest last. One line per step: date, step, what changed, commit.
 - 22 Oct: M6 written: `mission/setup/setup-river.sh` (user, home lock, secrets, keys, clone, npm ci, settings, LaunchDaemon), `com.agape.river-mission.plist`, `river-claude-settings.json`, `install-token.sh`, `check.sh`. **Waiting on Gavin to run step 1 (sudo).**
 - 22 Oct: real SDK runner dry-run with no login (empty config): launches, options accepted, reports "Not logged in" cleanly. Next: Gavin runs install steps 1, 4, 5; a session does 2 (deploy key) and 3 (bitcube key, when online), then M9 checks.
 - 22 Oct: first run of setup-river.sh stopped at step 5 (river inherited a cwd inside the now-locked /Users/gav); fixed with `cd /`. Steps 1-4 had completed (user 502, home locked, password copied, keys).
+- 22 Oct: setup-river.sh completed (service running as river, home locked). Deploy key added on GitHub (session A). **Funnel on**: https://gav-m1-mini.tailddc624.ts.net → 127.0.0.1:8790. Added `get-token.sh` (one command for M7). Pending: token (Gavin), river's key on bitcube (when online).
