@@ -28,7 +28,7 @@ bitcube DisplayPort ◄── dummy display plug (recommended: a desktop VNC can
 | Device | Connection | MAC | Address |
 |---|---|---|---|
 | gallery (camera) | Wi-Fi | `EC:71:DB:EB:EB:23` | `192.168.9.76` (reserved) |
-| gallery (camera) | Ethernet | `EC:71:DB:B5:45:FD` | `192.168.9.76` once S22 is done (got `.103` before) |
+| gallery (camera) | Ethernet | `EC:71:DB:B5:45:FD` | `192.168.9.76` (same reservation as its Wi-Fi, since 22 Oct) |
 | bitcube | Ethernet, ROUTER port | `00:E7:43:0E:5F:C4` | `192.168.9.79` (reserved) |
 | bitcube | Wi-Fi | `70:D8:23:16:A1:5C` | `192.168.9.80` (reserved) |
 | bitcube | Ethernet, LIGHTS port | `00:E7:43:0E:5F:C3` | `2.0.0.8` (fixed; lighting only) |
@@ -75,7 +75,7 @@ Gives the router a way in that doesn't depend on bitcube. Claude can then fix ad
 2. Log in to **Will's tailnet** (the account the river devices use) and connect.
 3. Leave **Allow Remote Access LAN**, **Allow Remote Access WAN** and **Custom Exit Nodes** **off**.
 4. In Will's Tailscale admin console:
-   - rename the new machine **`gray-router`** (the river router is also called `gl-axt1800`);
+   - rename the new machine (done: **`router-gray-area-gl-axt1800`**; the river one is now `router-river-gl-axt1800`);
    - **disable key expiry**;
    - **approve no subnet routes** for it;
    - **Share** it to `gav.aiken@gmail.com`, and accept the invite on Gavin's account, so the Mac mini reaches it.
