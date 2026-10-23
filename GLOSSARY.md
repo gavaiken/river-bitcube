@@ -27,3 +27,7 @@
 **Target**: In manual mode, where the river should end up: a **target season** and a **target intensity**. The river travels to a target (forward through the calendar), it never jumps there.
 
 **Rules**: The numbers that shape how the river behaves in every mode (how long the year takes, how fast it warms and cools, what counts as busier or quieter than usual, when summer becomes a full torrent). Changing a rule changes the behaviour from that moment on; it doesn't move the river anywhere.
+
+**Mission control**: The team's live web page for the installation: what every part is doing right now (show machine, show file, seasons, presence, cameras, river site, Modal), the controls for steering the piece, and the system map. Behind one shared team password. Not for visitors.
+
+**Studio chat**: One long-running conversation with the team's Claude agent, reachable from mission control. Everyone on the team writes into the same conversation, one request at a time, and the agent can act on the installation, not just talk about it.
