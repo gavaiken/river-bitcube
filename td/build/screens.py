@@ -8,7 +8,7 @@
 # and sets SCREEN_OUTS (the four quad feeds) and SCREEN_INFO (one line for the build's print).
 #
 # Per screen k (1-4):
-#   source   the field under the screen's camera-space corners (tools/pixelmap/screens-<date>.json, from
+#   source   the field around the screen's camera-space corners (Screenspan times its size, same centre) (tools/pixelmap/screens-<date>.json, from
 #            tools/pixelmap/screens.py), upright 128x256 -- or, for a screen not in that file, a portrait window
 #            stacked down one column of the field (Screenorder, top first; Screencolumn)
 #   switch   source | big "F<k>" (Screentest) | corner pattern (Screencorners: red TL, green TR, blue BL, yellow
@@ -38,6 +38,9 @@ if not hasattr(SC.par, 'Screencorners'):
     SCR.appendToggle('Screencorners', label='Test: four-colour corner pattern (red TL as seen)')[0].val = False
     p = SCR.appendInt('Screensolo', label='Light only this screen (0 = all, 9 = none)')[0]
     p.val, p.normMin, p.normMax = 0, 0, 9
+if not hasattr(SC.par, 'Screenspan'):
+    p = SCR.appendFloat('Screenspan', label='Located screens: sample this many times their own size (same centre)')[0]
+    p.val, p.normMin, p.normMax, p.default = 2.4, 1, 5, 2.4
 if not hasattr(SC.par, 'Screenquarter'):
     p = SCR.appendInt('Screenquarter', label='Corner pattern: 0 = four colours, 1-4 = only that quarter white (TL TR BL BR)')[0]
     p.val, p.normMin, p.normMax = 0, 0, 4
@@ -93,10 +96,15 @@ for k in range(1, 5):
         src = get(cornerpinTOP, f'{P}{k}_pin', 1975, y)
         src.inputConnectors[0].connect(FIELD)
         res(src, 128, 256)
+        # A screen covers only ~45x105 px of the field, which upscaled looks blurred: sample Screenspan times its
+        # size around the same centre (2.4 is about one field pixel per LED), still the water where it hangs.
+        cu = sum(LOCATED[k][c][0] for c in ('tl', 'tr', 'bl', 'br')) / 4
+        cv = sum(LOCATED[k][c][1] for c in ('tl', 'tr', 'bl', 'br')) / 4
         for corner in ('tl', 'tr', 'bl', 'br'):
+            u, v = LOCATED[k][corner]
             getattr(src.par, f'extract{corner}unit').val = 'fraction'
-            getattr(src.par, f'extract{corner}x').val = LOCATED[k][corner][0]
-            getattr(src.par, f'extract{corner}y').val = LOCATED[k][corner][1]
+            getattr(src.par, f'extract{corner}x').expr = f'{cu:.5f} + ({u - cu:.5f}) * parent().par.Screenspan'
+            getattr(src.par, f'extract{corner}y').expr = f'{cv:.5f} + ({v - cv:.5f}) * parent().par.Screenspan'
         src.par.extractmapping = 'perspective'
         src.par.extend = 'zero'
         how.append(f'{k}:' + ('estimated' if LOCATED[k].get('estimated') else 'located'))
