@@ -1,7 +1,13 @@
 """Make the river library's three playback speeds for river-local-oct-22-seasons.toe (run on bitcube).
 
-    python tools/seasons/prerender.py                 # from every river-main-*.mp4 in River/recordings/river
+    python tools/seasons/prerender.py                 # from every river-sub-*.mp4 in River/recordings/river
     python tools/seasons/prerender.py --quality mci   # slower to make, smoother slow motion
+    python tools/seasons/prerender.py --out seasons-new   # into another folder (TD holds the live files open)
+
+Source: the sub stream by default. The 21 Oct main (HEVC) recording lost reference frames over Starlink, so
+about 40% of it decodes as smeared purple, grey or magenta blocks (found 23 Oct, on the ropes and screens since
+the seasons file went live); the sub stream (H.264 640x360, 20 fps) recorded at the same time is clean. The
+camera's burned-in clock (top) and "river" label (bottom right) are cropped off.
 
 Writes River/recordings/river/seasons/river-{slow,normal,fast}.mp4: 1280x720 (the Non-Commercial TD limit),
 30 fps, H.264, no sound. The clips are joined into one, then
@@ -40,15 +46,18 @@ def encode(src, dst, vf):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--quality', choices=('blend', 'mci'), default='blend')
-    ap.add_argument('--lib', type=pathlib.Path, default=LIB, help='folder with river-main-*.mp4 (default: bitcube\'s)')
+    ap.add_argument('--lib', type=pathlib.Path, default=LIB, help='folder with the recordings (default: bitcube\'s)')
+    ap.add_argument('--stream', choices=('sub', 'main'), default='sub')
+    ap.add_argument('--out', default='seasons', help='output folder name inside --lib')
     a = ap.parse_args()
     global OUT
-    OUT = a.lib / 'seasons'
-    clips = sorted(p for p in a.lib.glob('river-main-*.mp4'))
+    OUT = a.lib / a.out
+    clips = sorted(p for p in a.lib.glob(f'river-{a.stream}-*.mp4'))
     if not clips:
-        sys.exit(f'no river-main-*.mp4 in {LIB}')
+        sys.exit(f'no river-{a.stream}-*.mp4 in {a.lib}')
     OUT.mkdir(parents=True, exist_ok=True)
-    scale = 'scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720'
+    # Crop the camera's clock (top 6%) and label (bottom 5%) off, then fill 1280x720.
+    scale = 'crop=iw:ih*0.89:0:ih*0.06,scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720'
     with tempfile.TemporaryDirectory() as d:
         joined = pathlib.Path(d) / 'joined.mp4'
         if len(clips) == 1:
