@@ -410,12 +410,13 @@ for k in range(1, 5):
         SCR.appendToggle(f'Quad{k}flipy', label=f'Quad {k} flip y')[0].val = False
     if not hasattr(sz.par, f'Quad{k}swap'):
         SCR.appendToggle(f'Quad{k}swap', label=f'Quad {k} swap its two panel rows')[0].val = False
-# Found by camera with Screentest (23 Oct): flop bottom left + flip y is upright on every screen; quad 4's
-# screen has its two panel rows the other way round (receive card wiring or config), so it swaps them back.
+# Found with Screentest (23 Oct): flop bottom left + flip y is upright on screens 1, 2 and 4; screen 3 hangs
+# the other way up (flip x instead: a half turn); quad 4's screen has its two panel rows the other way round
+# (receive card wiring or config), so it swaps them back.
 for k in range(1, 5):
     setattr(sz.par, f'Quad{k}flop', 'bottomleft')
-    setattr(sz.par, f'Quad{k}flipx', False)
-    setattr(sz.par, f'Quad{k}flipy', True)
+    setattr(sz.par, f'Quad{k}flipx', k == 3)
+    setattr(sz.par, f'Quad{k}flipy', k != 3)
     setattr(sz.par, f'Quad{k}swap', k == 4)
 sz.par.Screentest = False
 WIN_W = 128 / 1280                  # window width as a fraction of the 1280x720 field
