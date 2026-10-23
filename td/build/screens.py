@@ -4,6 +4,7 @@
 #   FIELD         the field TOP in camera space (1280x720, what the ropes sample)
 #   ROPE_CANVAS   the 20 x 400 rope canvas TOP (for the preview)
 #   REPO, proj, get(optype, name, x, y), res(op, w, h), page(comp, name)
+#   optional: SCREEN_PREFIX (operator names, default 'quad'), SCREEN_GAIN / SCREEN_GAMMA (expressions)
 # and sets SCREEN_OUTS (the four quad feeds) and SCREEN_INFO (one line for the build's print).
 #
 # Per screen k (1-4):
@@ -23,6 +24,9 @@ import glob
 import json
 
 SC = SCREENS_COMP
+P = globals().get('SCREEN_PREFIX', 'quad')
+GAIN = globals().get('SCREEN_GAIN', 'parent().par.Panelgain')
+GAMMA = globals().get('SCREEN_GAMMA', 'parent().par.Panelgamma')
 SCR = page(SC, 'Screens')
 if not hasattr(SC.par, 'Screenorder'):
     SCR.appendStr('Screenorder', label='Screen order, top to bottom (quad numbers)')[0].val = '1 2 3 4'
@@ -81,7 +85,7 @@ uprights, SCREEN_OUTS, how = [], [], []
 for k in range(1, 5):
     y = 300 - 150 * (k - 1)
     if k in LOCATED:
-        src = get(cornerpinTOP, f'quad{k}_pin', 1975, y)
+        src = get(cornerpinTOP, f'{P}{k}_pin', 1975, y)
         src.inputConnectors[0].connect(FIELD)
         res(src, 128, 256)
         for corner in ('tl', 'tr', 'bl', 'br'):
@@ -92,7 +96,7 @@ for k in range(1, 5):
         src.par.extend = 'zero'
         how.append(f'{k}:' + ('estimated' if LOCATED[k].get('estimated') else 'located'))
     else:
-        c = get(cropTOP, f'quad{k}_window', 1950, y)
+        c = get(cropTOP, f'{P}{k}_window', 1950, y)
         c.inputConnectors[0].connect(FIELD)
         c.par.cropleft.expr = f"parent().par.Screencolumn - {WIN_W / 2:.5f}"
         c.par.cropright.expr = f"parent().par.Screencolumn + {WIN_W / 2:.5f}"
@@ -100,46 +104,46 @@ for k in range(1, 5):
                 f"if '{k}' in parent().par.Screenorder.eval().split() else {k - 1}")
         c.par.croptop.expr = f"1 - ({slot}) * {STEP:.5f}"
         c.par.cropbottom.expr = f"1 - ({slot}) * {STEP:.5f} - {WIN_H:.5f}"
-        src = get(fitTOP, f'quad{k}_fit', 2000, y)
+        src = get(fitTOP, f'{P}{k}_fit', 2000, y)
         src.inputConnectors[0].connect(c)
         src.par.fit = 'fill'
         res(src, 128, 256)
         how.append(f'{k}:window')
-    for old in ((f'quad{k}_window', f'quad{k}_fit') if k in LOCATED else (f'quad{k}_pin',)):
+    for old in ((f'{P}{k}_window', f'{P}{k}_fit') if k in LOCATED else (f'{P}{k}_pin',)):
         if SC.op(old):
             SC.op(old).destroy()
-    t = get(textTOP, f'quad{k}_testtext', 2000, y - 60)
+    t = get(textTOP, f'{P}{k}_testtext', 2000, y - 60)
     t.par.text = f'F{k}'
     res(t, 128, 256)
     t.par.fontsizex = 90
     t.par.alignx, t.par.aligny = 'center', 'center'
     t.par.bgcolorr, t.par.bgcolorg, t.par.bgcolorb, t.par.bgalpha = 0.0, 0.05, 0.25, 1
-    sw = get(switchTOP, f'quad{k}_src', 2050, y)
+    sw = get(switchTOP, f'{P}{k}_src', 2050, y)
     for i, o in enumerate((src, t, pat, blk)):
         sw.inputConnectors[i].connect(o)
     sw.par.index.expr = (f"3 if (parent().par.Screensolo > 0 and parent().par.Screensolo != {k}) else "
                          f"(2 if parent().par.Screencorners else int(parent().par.Screentest))")
-    vf = get(flipTOP, f'quad{k}_vflip', 2060, y - 60)          # as seen: top to bottom = y of the portrait
+    vf = get(flipTOP, f'{P}{k}_vflip', 2060, y - 60)          # as seen: top to bottom = y of the portrait
     vf.inputConnectors[0].connect(sw)
     vf.par.flipy.expr = f'parent().par.Quad{k}vflip'
     vf.par.flipx.expr = f'parent().par.Quad{k}hflip'
     uprights.append(sw)
-    fl_ = get(flipTOP, f'quad{k}_orient', 2075, y)
+    fl_ = get(flipTOP, f'{P}{k}_orient', 2075, y)
     fl_.inputConnectors[0].connect(vf)
     fl_.par.flop.expr = f'parent().par.Quad{k}flop'
     fl_.par.flipx.expr = f'parent().par.Quad{k}flipx'
     fl_.par.flipy.expr = f'parent().par.Quad{k}flipy'
-    sh = get(transformTOP, f'quad{k}_swap', 2100, y - 60)       # half a frame down, wrapped = rows swapped
+    sh = get(transformTOP, f'{P}{k}_swap', 2100, y - 60)       # half a frame down, wrapped = rows swapped
     sh.inputConnectors[0].connect(fl_)
     sh.par.extend = 'repeat'
     sh.par.tunit = 'fraction'
     sh.par.ty.expr = f'0.5 if parent().par.Quad{k}swap else 0'
-    g = get(levelTOP, f'quad{k}_gain', 2125, y)
+    g = get(levelTOP, f'{P}{k}_gain', 2125, y)
     g.inputConnectors[0].connect(sh)
-    g.par.brightness1.expr = 'parent().par.Panelgain'
-    g.par.gamma1.expr = 'parent().par.Panelgamma'
+    g.par.brightness1.expr = GAIN
+    g.par.gamma1.expr = GAMMA
     g.par.clamp = True
-    o = get(nullTOP, f'quad{k}_out', 2250, y)
+    o = get(nullTOP, f'{P}{k}_out', 2250, y)
     o.inputConnectors[0].connect(g)
     o.viewer = True
     SCREEN_OUTS.append(o)
@@ -152,7 +156,8 @@ res(rp, 160, 256)
 pv = get(layoutTOP, 'screens_preview', 2250, 500)
 pv.par.tops = ' '.join([rp.path] + [u.path for u in uprights])
 pv.par.align = 'horizlr'
-pv.par.fit = 'nativeres'
+pv.par.fit = 'fill'                  # five equal cells across 672x256 (ropes 134 px, screens ~native 128x256)
+pv.par.bgcolora = 1
 res(pv, 672, 256)
 pv.viewer = True
 

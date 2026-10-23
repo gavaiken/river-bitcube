@@ -541,16 +541,19 @@ ropes.par.Canvas = rc.path
 ropes.par.Cropleft = ropes.par.Cropbottom = 0
 ropes.par.Cropright = ropes.par.Croptop = 1
 
-panels = proj.op('panels')
-panels.par.Quad1 = q1.path
-panels.par.Quad2 = blk.path
-panels.par.Quad2off = True
-panels.par.Brightness = 1.0   # full HUB75 brightness; the look is set by Panelgain/Panelgamma above
+# The four HUB75 screens (phase G, 23 Oct): the same module as the seasons file. Its gain fades the rain boost
+# out as the (bright) river cam takes over the field, as quad 1's did. (The old quad 1 chain above, with the
+# Panelcam whole-frame option, no longer feeds the panels.)
+_g = dict(globals(), SCREENS_COMP=rl, FIELD=out, ROPE_CANVAS=rc, SCREEN_PREFIX='screen',
+          SCREEN_GAIN=f"parent().par.Panelgain + (1 - parent().par.Panelgain) * {_cam}",
+          SCREEN_GAMMA=f"parent().par.Panelgamma + (1 - parent().par.Panelgamma) * {_cam}")
+exec(open(REPO + '/td/build/screens.py', encoding='utf-8').read(), _g)
+SCREEN_INFO = _g['SCREEN_INFO']
 
 # No web input in the local checkpoint: Andi's Web Render (Dave's canvas) is switched off.
 web = proj.op('Mask_Panels/webrender1')
 if web is not None:
     web.par.active = False
 
-print('river_local built from', PIXELMAP.rsplit('/', 1)[-1], '|', rl.path, '| uv rows:', tab.numRows - 1, '| mapped ropes:', sorted(int(k) + 1 for k in pm['ropes']),
+print('river_local built from', PIXELMAP.rsplit('/', 1)[-1], '|', SCREEN_INFO, '|', rl.path, '| uv rows:', tab.numRows - 1, '| mapped ropes:', sorted(int(k) + 1 for k in pm['ropes']),
       '| errors:', rl.errors(recurse=True) or 'none', '| warnings:', rl.warnings(recurse=True) or 'none')
