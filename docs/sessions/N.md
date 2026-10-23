@@ -1,6 +1,6 @@
 # Session N: install network at Gray Area
 
-## 2026-10-22 21:38 start: Mac mini · Opus 5.5
+## 2026-10-22 21:38 start: Mac mini
 Gavin is on site at Gray Area with the new GL-AXT1800 (Slate AX). Plan: steps S2.1–S2.3 and S3 in the [execution plan](../execution-plan.md), decisions D18–D23.
 
 ```
@@ -52,7 +52,7 @@ Keep the lighting switch and the Colorlight cable off the router.
 - 00:00 **Cable-pull test with Wi-Fi idle** (the real case): bitcube unreachable at 00:00:33, back over Wi-Fi at 00:00:36: **a 3 s gap**. ✅
 - 00:00 Cam power-cycled with its cable in: by 00:03 it hadn't asked for an address and didn't answer at `.76`. **Open:** the cam on a cable isn't reliable after power cycles; on Wi-Fi it has come back on `.76` every time. Recommendation: leave the cam on Wi-Fi only (no cable) unless we debug its wired behaviour on the ground.
 
-### SESSION N SUMMARY — Fri 23 Oct 2026, 00:05 (Mac mini · Opus 5.5)
+### SESSION N SUMMARY — Fri 23 Oct 2026, 00:05 (Mac mini)
 **Done**
 - **S2/S2.1–S2.3, S3, S17–S19: install network.**
   - Router: our second GL-AXT1800 at Gray Area, LAN `192.168.9.1/24`, Wi-Fi `gray-river` on 2.4 + 5 GHz, Multi-WAN failover Ethernet → Repeater → Tethering → Cellular. Uplink for now: Repeater on Gray Area Staff Wi-Fi.
