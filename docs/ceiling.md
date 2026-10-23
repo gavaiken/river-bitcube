@@ -27,7 +27,7 @@ Once they're up there, nobody can reach a screen or a power button. So everythin
 | 6 | PSAC10 left box **NET2** | PSAC10 **right** box **NET1** | black | ✅ 11:48: right box `2.0.0.11` answers; rope sender open, no error, 80 packets a frame, ropes show the river on the gallery cam |
 | 7 | PSAC10 right box **NET2** | nothing | | end of the chain |
 | 8 | bitcube **HDMI** | Colorlight sender **DVI** | HDMI-to-DVI (blue band) | ✅ 11:48: display "LED 1920X1080"; TD on the seasons file at 60 fps, panels window open on it |
-| 9 | Colorlight sender **LAN1** | the receive card at point 2 (panels) | long black Ethernet | ⏳ 11:48: TD sends the river in four blocks to the sender; whether the panels light (and where) can't be seen remotely: check once they're hung |
+| 9 | Colorlight sender **LAN1** | the receive card at point 2 (panels) | long black Ethernet | ✅ 12:23: the two screens in the cam's view show the river upright (quads 2 and 4); quad 1 (back) shows its test pattern by eye; quad 3 to confirm |
 | 10 | ropes (male round plugs) | PSAC10 OUT1–OUT10 on both boxes, via the XLR adapters | rope leads (labelled B1, B3…) | to confirm by camera at the re-map (S4) |
 | 11 | mains | router, bitcube, rack controller (IEC), Colorlight sender (IEC, red switch), each PSAC10 (blue powerCON, breaker ON) | | ✅ 11:48: everything answers (router, bitcube, both PSAC10s through the rack controller, Colorlight sender seen as a display) |
 
