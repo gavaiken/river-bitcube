@@ -412,16 +412,19 @@ for k in range(1, 5):
         SCR.appendToggle(f'Quad{k}swap', label=f'Quad {k} swap its two panel rows')[0].val = False
     if not hasattr(sz.par, f'Quad{k}vflip'):
         SCR.appendToggle(f'Quad{k}vflip', label=f'Quad {k} flip top to bottom (as seen)')[0].val = False
+    if not hasattr(sz.par, f'Quad{k}hflip'):
+        SCR.appendToggle(f'Quad{k}hflip', label=f'Quad {k} flip left to right (as seen)')[0].val = False
 # Found with Screentest (23 Oct): flop bottom left + flip y is upright on every screen. Screens 3 and 4 have
 # their two panel columns the other way round (receive card wiring or config: "4F"), so they swap them back
-# (Quad<k>swap, in the 256x128 feed); screen 3 is also flipped top to bottom (Quad3vflip, as seen). A half
-# turn for screen 3 instead left a seam down its middle.
+# (Quad<k>swap, in the 256x128 feed); screen 3 also hangs the other way up, so it gets a half turn as seen
+# (Quad3vflip + Quad3hflip). Without the swap, the half turn left a seam down its middle.
 for k in range(1, 5):
     setattr(sz.par, f'Quad{k}flop', 'bottomleft')
     setattr(sz.par, f'Quad{k}flipx', False)
     setattr(sz.par, f'Quad{k}flipy', True)
     setattr(sz.par, f'Quad{k}swap', k in (3, 4))
     setattr(sz.par, f'Quad{k}vflip', k == 3)
+    setattr(sz.par, f'Quad{k}hflip', k == 3)
 sz.par.Screentest = False
 WIN_W = 128 / 1280                  # window width as a fraction of the 1280x720 field
 WIN_H = 256 / 720
@@ -453,6 +456,7 @@ for k in range(1, 5):
     vf = get(flipTOP, f'quad{k}_vflip', 2060, y - 60)          # top to bottom as seen = y of the portrait
     vf.inputConnectors[0].connect(sw)
     vf.par.flipy.expr = f'parent().par.Quad{k}vflip'
+    vf.par.flipx.expr = f'parent().par.Quad{k}hflip'
     fl_ = get(flipTOP, f'quad{k}_orient', 2075, y)
     fl_.inputConnectors[0].connect(vf)
     fl_.par.flop.expr = f'parent().par.Quad{k}flop'
