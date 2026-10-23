@@ -321,4 +321,4 @@ The live checklist is `docs/plan.md` (items and open questions) and the session 
 
 ### 2026-10-22 21:45 (session N, Claude on the Mac mini): install network at Gray Area
 
-- Gavin on site with the second GL-AXT1800 (Slate AX). Decided (D18–D23): one Gray Area drop into the router's WAN; our LAN 192.168.9.0/24, Wi-Fi `river` (not Agape WiFi: visitors know that password); bitcube's spare port and the gallery cam (it has an Ethernet port) cabled to the router, reserved .79 and .76; lighting NIC stays on the switch; no Tailscale on the router, bitcube advertises the cam and router as /32s. Progress in [sessions/N.md](sessions/N.md).
+- Gavin on site with the second GL-AXT1800 (Slate AX). Decided (D18–D23): one Gray Area drop into the router's WAN; our LAN 192.168.9.0/24, Wi-Fi `gray-river` (not Agape WiFi: visitors know that password); bitcube's spare port and the gallery cam (it has an Ethernet port) cabled to the router, reserved .79 and .76; lighting NIC stays on the switch; no Tailscale on the router, bitcube advertises the cam and router as /32s. Progress in [sessions/N.md](sessions/N.md).

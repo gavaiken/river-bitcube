@@ -72,7 +72,7 @@
    "name": "Show: Gray Area",
    "when": "install from Wed 22 Oct 2026, show to 27 Oct",
    "status": "partial",
-   "summary": "Being set up (22 Oct). Gray Area gives one wired drop; our own router (a second GL-AXT1800 Slate AX, 192.168.9.0/24, Wi-Fi 'river') sits behind it. bitcube's spare port (Ethernet 2) and the gallery cam go to the router; bitcube's lighting NIC stays on the switch to the rack and PSAC10s; HDMI to the Colorlight sender. bitcube advertises the cam (192.168.9.76/32) and the router admin page (192.168.9.1/32) on Will's tailnet; the router itself runs no Tailscale. bitcube mirrors Modal's scene (sync.py, :8770) and pushes gallery clips to /ingest. The river cam is at the river on Starlink.",
+   "summary": "Being set up (22 Oct). Gray Area gives one wired drop; our own router (a second GL-AXT1800 Slate AX, 192.168.9.0/24, Wi-Fi 'gray-river') sits behind it. bitcube's spare port (Ethernet 2) and the gallery cam go to the router; bitcube's lighting NIC stays on the switch to the rack and PSAC10s; HDMI to the Colorlight sender. bitcube advertises the cam (192.168.9.76/32) and the router admin page (192.168.9.1/32) on Will's tailnet; the router itself runs no Tailscale. bitcube mirrors Modal's scene (sync.py, :8770) and pushes gallery clips to /ingest. The river cam is at the river on Starlink.",
    "open_questions": [
     "q-river-capture",
     "q-ingest-names",
@@ -144,7 +144,7 @@
    "network": {
     "lan": "192.168.9.0/24",
     "gateway": "192.168.9.1 (our GL-AXT1800)",
-    "wifi": "river",
+    "wifi": "gray-river (5 GHz)",
     "uplink": "Gray Area wired drop (DHCP); failover: repeater to venue Wi-Fi or a phone hotspot"
    }
   },
@@ -1472,9 +1472,9 @@
      "scenario": "now"
     },
     {
-     "name": "Ethernet (or Wi-Fi 'river')",
+     "name": "Ethernet (or Wi-Fi 'gray-river')",
      "ip": "192.168.9.76",
-     "how": "Install router at Gray Area: cabled if a cable reaches, else Wi-Fi 'river'; DHCP reservation .76 (planned)",
+     "how": "Install router at Gray Area: cabled if a cable reaches, else Wi-Fi 'gray-river'; DHCP reservation .76 (planned)",
      "scenario": "show",
      "verified": "unverified"
     }
@@ -1691,7 +1691,7 @@
     "power": "USB-C 5 V 4 A",
     "ports": "1 WAN + 2 LAN",
     "tailscale": "off (D22): bitcube is the door into this network",
-    "factory": "192.168.8.1, Wi-Fi GL-AXT1800-283 (moved to 192.168.9.1 and 'river')"
+    "factory": "192.168.8.1, Wi-Fi GL-AXT1800-283 (moved to 192.168.9.1 and 'gray-river')"
    },
    "interfaces": [
     {
@@ -1708,8 +1708,8 @@
     },
     {
      "name": "Wi-Fi",
-     "ssid": "river",
-     "how": "2.4 + 5 GHz, WPA2/WPA3; not 'Agape WiFi', because many visitors know that password (Gavin, 22 Oct)"
+     "ssid": "gray-river",
+     "how": "5 GHz gray-river (2.4 GHz name to confirm), WPA2/WPA3; not 'Agape WiFi', because many visitors know that password (Gavin, 22 Oct)"
     }
    ],
    "accounts": [
@@ -1718,7 +1718,7 @@
      "auth": "router admin password (Gavin's password manager)"
     },
     {
-     "service": "Wi-Fi 'river'",
+     "service": "Wi-Fi 'gray-river'",
      "auth": "Wi-Fi password (Gavin)"
     }
    ],
@@ -3177,7 +3177,7 @@
    "from": "cam-gallery",
    "to": "router-gallery",
    "medium": "lan",
-   "protocol": "Ethernet if a cable reaches, else Wi-Fi 'river' (reserved 192.168.9.76)",
+   "protocol": "Ethernet if a cable reaches, else Wi-Fi 'gray-river' (reserved 192.168.9.76)",
    "summary": "Gallery cam on the install router.",
    "scenarios": [
     "show"

@@ -138,7 +138,7 @@ flowchart LR
 
 ### Show: Gray Area (`show`, install from Wed 22 Oct 2026, show to 27 Oct)
 
-Being set up (22 Oct). Gray Area gives one wired drop; our own router (a second GL-AXT1800 Slate AX, 192.168.9.0/24, Wi-Fi 'river') sits behind it. bitcube's spare port (Ethernet 2) and the gallery cam go to the router; bitcube's lighting NIC stays on the switch to the rack and PSAC10s; HDMI to the Colorlight sender. bitcube advertises the cam (192.168.9.76/32) and the router admin page (192.168.9.1/32) on Will's tailnet; the router itself runs no Tailscale. bitcube mirrors Modal's scene (sync.py, :8770) and pushes gallery clips to /ingest. The river cam is at the river on Starlink.
+Being set up (22 Oct). Gray Area gives one wired drop; our own router (a second GL-AXT1800 Slate AX, 192.168.9.0/24, Wi-Fi 'gray-river') sits behind it. bitcube's spare port (Ethernet 2) and the gallery cam go to the router; bitcube's lighting NIC stays on the switch to the rack and PSAC10s; HDMI to the Colorlight sender. bitcube advertises the cam (192.168.9.76/32) and the router admin page (192.168.9.1/32) on Will's tailnet; the router itself runs no Tailscale. bitcube mirrors Modal's scene (sync.py, :8770) and pushes gallery clips to /ingest. The river cam is at the river on Starlink.
 
 Open questions: At the river: is the GL.iNet on Starlink, and what runs the capture agent that pushes river clips to /ingest (bitcube over Tailscale via 192.168.8.0/24, or a device there)?; Which location/channel names and clip cadence should bitcube use for camera ingest? (Code: locations gallery/river, channel video, 10 s clips.); Can bitcube get an INGEST_TOKEN? (SITE_TOKEN: answered, it is not set.); OK to run gallery/sync.py on bitcube (port 8770)?; What should the gallery show if bitcube goes down? (Today: the rack controller's SD-card colour cycle.); Does the show need a TouchDesigner Commercial licence? (bitcube has Non-Commercial.)
 
@@ -272,7 +272,7 @@ Solid arrows are working; dotted arrows are planned, stopped, blocked or unknown
 |---|---|---|---|
 | The River (`river`) | now, show | partial | The real river the agent watches. The GL.iNet router and the Reolink E1 Outdoor Pro went there with Colin on 18 Oct; Starlink and solar/battery power are expected there (unverified). Area: near Dobbins, California. |
 | Agape (prototype) (`agape`) | now, show | working | Gavin's house in the Mission, SF, where everything is prototyped until the Gray Area install. Gavin's Mac mini stays here. Network: lan: 10.0.7.0/24; gateway: 10.0.7.1 (eero); wifi: Agape WiFi. |
-| Gray Area (show) (`grayarea`) | show | partial | The gallery. Install Wed 22 to Mon 27 Oct 2026. Network (22 Oct): our GL-AXT1800 behind Gray Area's one wired drop (execution plan D1, D16, D18-D22). Address: Gray Area, 2665 Mission St, San Francisco. Network: lan: 192.168.9.0/24; gateway: 192.168.9.1 (our GL-AXT1800); wifi: river; uplink: Gray Area wired drop (DHCP); failover: repeater to venue Wi-Fi or a phone hotspot. |
+| Gray Area (show) (`grayarea`) | show | partial | The gallery. Install Wed 22 to Mon 27 Oct 2026. Network (22 Oct): our GL-AXT1800 behind Gray Area's one wired drop (execution plan D1, D16, D18-D22). Address: Gray Area, 2665 Mission St, San Francisco. Network: lan: 192.168.9.0/24; gateway: 192.168.9.1 (our GL-AXT1800); wifi: gray-river (5 GHz); uplink: Gray Area wired drop (DHCP); failover: repeater to venue Wi-Fi or a phone hotspot. |
 | Modal cloud (`modal`) | now, show | working | Dave's agent: one Modal app (tick, watch, web) plus model apps, in workspace to-be-a-river. |
 | Internet and Tailscale (`internet`) | now, show | working | The public internet, the two tailnets, and team devices that aren't tied to a site. |
 | GitHub (`github`) | now, show | working | The two repos, the public status site (GitHub Pages) and the camera snapshot branch. |
@@ -552,7 +552,7 @@ Reolink E1 Pro (indoor, pan/tilt, mic). At Agape on Agape WiFi; has an Ethernet 
   - aim: 18 Oct 13:59; bumped once between 14:11 and 14:33
 - **Interfaces:**
   - name: Wi-Fi; ip: 10.0.7.76; how: DHCP on Agape WiFi since 18 Oct 14:09 (was 192.168.8.103, then .189, on the GL.iNet); scenario: now
-  - name: Ethernet (or Wi-Fi 'river'); ip: 192.168.9.76; how: Install router at Gray Area: cabled if a cable reaches, else Wi-Fi 'river'; DHCP reservation .76 (planned); scenario: show; verified: unverified
+  - name: Ethernet (or Wi-Fi 'gray-river'); ip: 192.168.9.76; how: Install router at Gray Area: cabled if a cable reaches, else Wi-Fi 'gray-river'; DHCP reservation .76 (planned); scenario: show; verified: unverified
 - **Accounts:**
   - service: Reolink; user: admin; auth: camera admin password (secrets.local.json -> cameras.gallery)
 - **Ports:**
@@ -643,14 +643,14 @@ Our second GL.iNet GL-AXT1800 (Slate AX), new in the box on 22 Oct: our own netw
   - power: USB-C 5 V 4 A
   - ports: 1 WAN + 2 LAN
   - tailscale: off (D22): bitcube is the door into this network
-  - factory: 192.168.8.1, Wi-Fi GL-AXT1800-283 (moved to 192.168.9.1 and 'river')
+  - factory: 192.168.8.1, Wi-Fi GL-AXT1800-283 (moved to 192.168.9.1 and 'gray-river')
 - **Interfaces:**
   - name: WAN; ip: none; how: DHCP from Gray Area's wired drop; failover to repeater (venue Wi-Fi or phone hotspot); verified: unverified
   - name: LAN; ip: 192.168.9.1/24; how: DHCP for our devices; reservations: gallery cam .76, bitcube wired .79; verified: unverified
-  - name: Wi-Fi; ssid: river; how: 2.4 + 5 GHz, WPA2/WPA3; not 'Agape WiFi', because many visitors know that password (Gavin, 22 Oct)
+  - name: Wi-Fi; ssid: gray-river; how: 5 GHz gray-river (2.4 GHz name to confirm), WPA2/WPA3; not 'Agape WiFi', because many visitors know that password (Gavin, 22 Oct)
 - **Accounts:**
   - service: GL.iNet admin; auth: router admin password (Gavin's password manager)
-  - service: Wi-Fi 'river'; auth: Wi-Fi password (Gavin)
+  - service: Wi-Fi 'gray-river'; auth: Wi-Fi password (Gavin)
 - **Notes:** Not on any tailnet. Reach its admin page through bitcube's 192.168.9.1/32 route on Will's tailnet, or on site.; Never advertise 192.168.9.0/24 into a tailnet bitcube is on: bitcube accepts routes, so its own camera traffic would go through Tailscale and fail when the internet drops.
 - **Sources:** Session A notes, 18 Oct 17:50 and 17:55 (docs/sessions/A.md): GL.iNet to the river, route changes, gallery cam via bitcube, HUB75 gain
 
@@ -974,7 +974,7 @@ Every connection. Auth names the secret, never its value. Medium colours on the 
 | `starlink-internet` | Starlink → Public internet | starlink | Starlink satellite (CGNAT, outbound only) | two-way |  |  | planned (unverified) | now, show | The river's internet. |
 | `cam-river-lan` | River cam → GL.iNet router | lan | LAN 192.168.8.0/24 | two-way |  |  | working (confirmed) | now, show | River cam at 192.168.8.217 behind the GL.iNet. |
 | `cam-gallery-wifi` | Gallery cam → Agape eero | lan | Wi-Fi (Agape WiFi, DHCP 10.0.7.76) | two-way |  |  | working (confirmed) | now | Gallery cam on the house network. |
-| `cam-gallery-galnet` | Gallery cam → Install router (Slate AX) | lan | Ethernet if a cable reaches, else Wi-Fi 'river' (reserved 192.168.9.76) | two-way |  |  | planned (unverified) | show | Gallery cam on the install router. |
+| `cam-gallery-galnet` | Gallery cam → Install router (Slate AX) | lan | Ethernet if a cable reaches, else Wi-Fi 'gray-river' (reserved 192.168.9.76) | two-way |  |  | planned (unverified) | show | Gallery cam on the install router. |
 | `router-gallery-wan` | Install router (Slate AX) → Gray Area gallery network | lan | Ethernet WAN (DHCP); failover: repeater / phone hotspot | two-way |  |  | planned (unverified) | show | The install router's uplink: Gray Area's wired drop. |
 | `rtsp-gallery` | bitcube → Gallery cam | lan | RTSP over TCP 554 (/Preview_01_main) | one-way (bitcube pulls) | camera admin password (secrets.local.json -> cameras.gallery) | on demand; RiverSnapshot every 15 min | working (confirmed) | now, show | Video from the gallery cam: snapshots, calibration (structured light), the status-page snapshot, and (planned) clips for the agent. Path: now: Agape WiFi, direct. Teammates on Will's tailnet reach it through bitcube's 10.0.7.76/32 route. show: gallery network (planned). |
 | `ptz-gallery` | bitcube → Gallery cam | lan | HTTPS 443 JSON API /cgi-bin/api.cgi | one-way | camera admin password -> session token | by hand (about 2,600 px/s of pan; nudge 0.1-0.4 s) | working (confirmed) | now, show | Pan/tilt: Login -> token -> PtzCtrl -> Stop -> Logout (tools/cameras/ptz.py). |

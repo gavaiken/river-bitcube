@@ -39,7 +39,7 @@ One AC input to a power strip on a board, feeding four 5 V 350 W supplies (one p
   <path class="w" d="M380,100 V66" marker-end="url(#a)"/>
   <rect class="g" x="250" y="185" width="260" height="56" rx="8"/>
   <text class="t" x="380" y="208" text-anchor="middle">Our router (GL.iNet)</text>
-  <text class="s" x="380" y="227" text-anchor="middle">our own network (Wi-Fi “river”)</text>
+  <text class="s" x="380" y="227" text-anchor="middle">our own network (Wi-Fi “gray-river”)</text>
   <path class="w" d="M380,185 V150" marker-end="url(#a)"/>
   <rect class="g" x="60" y="290" width="230" height="56" rx="8"/>
   <text class="t" x="175" y="313" text-anchor="middle">Gallery camera</text>

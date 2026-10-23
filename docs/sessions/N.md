@@ -6,15 +6,16 @@ Gavin is on site at Gray Area with the new GL-AXT1800 (Slate AX). Plan: steps S2
 ```
 Gray Area drop ──► router WAN
 router LAN ──► bitcube "Ethernet 2" (spare port)          internet, reserved 192.168.9.79
-router LAN ──► gallery cam (Ethernet; else Wi-Fi "river") reserved 192.168.9.76
-router Wi-Fi "river" ◄── phones, laptops
+router LAN ──► gallery cam (Ethernet; else Wi-Fi "gray-river") reserved 192.168.9.76
+router Wi-Fi "gray-river" ◄── phones, laptops
 bitcube "Ethernet" (2.0.0.8) ──► switch ──► rack controller + both PSAC10s
 bitcube HDMI ──► Colorlight sender ──► receive card ──► panels
 ```
 Keep the lighting switch and the Colorlight cable off the router.
 
-- 21:45 Recorded D18–D23 (router 192.168.9.0/24, Wi-Fi `river`, one drop into WAN, stale IP removal, no Tailscale on the router, session N does bitcube's side). System map: new node `router-gallery`, show-scenario links updated. The gallery cam turns out to have an Ethernet port, so it goes on a cable (no temporary `Agape WiFi` needed if a cable reaches).
+- 21:45 Recorded D18–D23 (router 192.168.9.0/24, Wi-Fi `gray-river`, one drop into WAN, stale IP removal, no Tailscale on the router, session N does bitcube's side). System map: new node `router-gallery`, show-scenario links updated. The gallery cam turns out to have an Ethernet port, so it goes on a cable (no temporary `Agape WiFi` needed if a cable reaches).
 - 21:45 S2.1 ➡️ Gavin configuring the router on site.
+- 21:55 S2.1: 5 GHz Wi-Fi named `gray-river` (Gavin). 2.4 GHz name to confirm.
 
 ### Waiting on Gavin
 - S2.1/S2.2 on site. Tell session N when bitcube is cabled and powered.
