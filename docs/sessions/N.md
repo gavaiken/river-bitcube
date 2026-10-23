@@ -34,9 +34,11 @@ Keep the lighting switch and the Colorlight cable off the router.
 - 22:37 S3: `secrets.local.json` gallery cam 10.0.7.76 → 192.168.9.76 (edited in place, nothing printed); `cam_snap.ps1 gallery` returns a frame (the cam is on the floor among cables).
 - 22:38 S18 ✅ (Gavin: remove it): loopMIDI's HKCU `Run` value removed and its window closed; the program stays installed.
 - 22:40 S3 ✅ Modal link restarted through a one-off interactive scheduled task; gallery clips post again (first `gallery/video` at 22:39). The river cam still fails (river site down).
+- 22:48 Forced bitcube's Wi-Fi to reconnect: it kept 192.168.9.194 until a full release; now **192.168.9.80** (reserved). VNC from the mini works (1920×1080, borrowed ASUS monitor).
+- 22:50 Ceiling plan (Gavin: router and bitcube go in the ceiling, with no monitor up there): checked what's already set for unattended boot (Windows first, auto-login, SSH/Tailscale/TightVNC automatic, sleep off, updates paused to 15 Nov, `gray-river` for all users). Missing: the BIOS power-on-after-power-cut setting (S21). Wrote [ceiling.md](../ceiling.md) and steps S21–S24, R16. TD's Art-Net sender binds to `2.0.0.8`, so it follows whichever port holds that address: the basis for S22 (either port works).
 
 ### Waiting on Gavin
-- Go-ahead for S1 (seasons deploy) and who runs it. S16 when the wired drop arrives.
+- S21 BIOS setting (needs the monitor). OK for S22 (either-port watcher)? Go-ahead for S1 and who runs it. S16 when the wired drop arrives.
 
 ### Waiting on Gavin (earlier)
 - S2.1/S2.2 on site. Tell session N when bitcube is cabled and powered.

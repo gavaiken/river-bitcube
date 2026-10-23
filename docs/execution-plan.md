@@ -19,9 +19,10 @@ title: Execution plan
 **Done tonight (session N):** our router and Wi-Fi `gray-river`, bitcube online (wired, 1 Gbps) and restart-tested, gallery cam at 192.168.9.76 and back in TD's and Modal's reach, Tailscale routes approved, stale settings cleaned up (S2, S3, S17–S19).
 
 **Next:**
-1. **S1, deploy the seasons show file** (Claude). The lights don't need to be connected. Only one Claude on bitcube at a time.
-2. **S16:** when Gray Area connects the wired drop, plug it into the router's **WAN** (Gavin / Lilian). Until then the router uses Gray Area's staff Wi-Fi.
-3. **Friday:** connect the lights (S20), aim the gallery cam at the piece and re-map (S4; the cam is on the floor among cables tonight), tune (S7), power check (S8).
+1. **Ceiling prep** ([page](ceiling.md)), on the ground while there's a monitor: BIOS power-on after a power cut (S21), label or auto-swap the Ethernet ports (S22), pull-the-plug and fallback tests (S23), a dummy display plug if one turns up (S24).
+2. **S1, deploy the seasons show file** (Claude). The lights don't need to be connected. Only one Claude on bitcube at a time.
+3. **S16:** when Gray Area connects the wired drop, plug it into the router's **WAN** (Gavin / Lilian). Until then the router uses Gray Area's staff Wi-Fi.
+4. **Friday:** lift into the ceiling, connect the lights (S20), aim the gallery cam at the piece and re-map (S4; tonight the cam is on the floor among cables), tune (S7), power check (S8).
 
 ### Learned on install night (22 Oct)
 - **No monitor came with the kit:** when bitcube didn't appear online we couldn't tell a stuck boot from a network problem. It was the network. Keep a small HDMI monitor and a USB keyboard with bitcube.
@@ -73,6 +74,10 @@ title: Execution plan
 | ✅ | S18 | loopMIDI (virtual MIDI cable from the 2023 BitCube setup) no longer opens at login: removed its HKCU `Run` value (to restore: `Run` → `loopMIDI` = `C:\Program Files (x86)\Tobias Erichsen\loopMIDI\loopMIDI.exe`); still installed | Gavin's OK | Claude (session N) | Done 22:38 |
 | ✅ | S19 | Router 2.4 GHz back to `gray-river`; `Agape WiFi` no longer broadcasts | — | Gavin | Done 22:35 |
 | ⏳ | S20 | **Connect the lights** (Fri): bitcube lighting NIC → switch → rack controller + both PSAC10s; HDMI → Colorlight sender; then S4 | Ropes and panels hung | Gavin + Lilian | Ropes and HUB75 lit from TD |
+| ➡️ | S21 | **BIOS: Restore on AC Power Loss → Power On** ([ceiling page](ceiling.md)), so bitcube starts after a power cut with nobody to press its button | Monitor + keyboard (on the ground) | Gavin | A pull-the-plug test brings bitcube back by itself |
+| ⏳ | S22 | **Either Ethernet port works:** a small watcher on bitcube gives `2.0.0.8` to whichever port doesn't get a router address, and DHCP to the other; tested by swapping cables. Until then, label the ports ROUTER / LIGHTS | Gavin's OK | Claude (session N) | Swapping the two cables keeps both internet and lights working |
+| ⏳ | S23 | **Pull-the-plug and fallback tests** before lifting (power off/on at the wall; unplug bitcube's router cable; unplug the router's WAN) | S21 | Gavin + Claude | bitcube back on Tailscale and VNC each time, untouched |
+| ⏳ | S24 | **Dummy display plug** in bitcube's DisplayPort: a desktop VNC can use that isn't the LED output (otherwise VNC shows TD's black panels window) | A plug | Gavin | VNC shows a normal desktop with the LED output on its own display |
 
 ## Requirements
 Every step must keep these true. Add new ones at the end.
@@ -94,6 +99,7 @@ Every step must keep these true. Add new ones at the end.
 | R13 | Mission control and the studio chat are **team only, behind the shared password**; the studio agent can never reach Gavin's files, connectors or history (separate `river` user). | Gavin, 22 Oct |
 | R14 | Every step of the mission work is committed and recorded in `docs/mission-plan.md` (progress log) **as it happens**, so another session can pick it up at any point. | Gavin, 22 Oct |
 | R15 | The install LAN never overlaps a range bitcube accepts over Tailscale (today the river router's `192.168.8.0/24`): bitcube sends routed ranges into Tailscale even when the same range is local. | Session N, 22 Oct (seen live) |
+| R16 | **Hands-off recovery in the ceiling:** after a power cut, a missing cable or swapped cables, bitcube comes back by itself to a state we can reach by Tailscale, SSH and VNC (Wi-Fi fallback for bitcube, Repeater fallback for the router). | Gavin, 22 Oct |
 
 ## Decisions
 Newest last. Add with the date and who decided.
