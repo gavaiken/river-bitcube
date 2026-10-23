@@ -70,19 +70,27 @@ class Map:
                 and self.placed(self.nodes[link["to"]], scenario))
 
     def where(self, n):
-        return " · ".join(f"{s['id']}: {self.places[n['place'][s['id']]]['name'] if n['place'].get(s['id']) else 'absent'}"
-                          for s in self.doc["scenarios"])
+        """The node's place: just the name when the map has one scenario, else one entry per scenario."""
+        names = [self.places[n["place"][s["id"]]]["name"] if n["place"].get(s["id"]) else "absent" for s in self.doc["scenarios"]]
+        if len(names) == 1:
+            return names[0]
+        return " · ".join(f"{s['id']}: {name}" for s, name in zip(self.doc["scenarios"], names))
 
 
 def mermaid(m, scenario):
-    """One flowchart per scenario: places as subgraphs; ropes folded into one box per PSAC10."""
+    """One flowchart per scenario: places as subgraphs; ropes folded into one box per PSAC10, drawn in the ropes' own place."""
     out = ["```mermaid", "flowchart LR"]
     rope_box = {n["id"]: f"ropes_{mermaid_id(n['parent'])}" for n in m.doc["nodes"] if n["kind"] == "rope"}
     for p in m.doc["places"]:
         if scenario not in p["scenarios"]:
             continue
-        members = [n for n in m.doc["nodes"] if n["place"].get(scenario) == p["id"] and n["kind"] != "rope"]
-        if not members:
+        here = [n for n in m.doc["nodes"] if n["place"].get(scenario) == p["id"]]
+        members = [n for n in here if n["kind"] != "rope"]
+        rope_groups = {}
+        for n in here:
+            if n["kind"] == "rope":
+                rope_groups.setdefault(rope_box[n["id"]], []).append(n["id"])
+        if not members and not rope_groups:
             continue
         out.append(f'  subgraph p_{mermaid_id(p["id"])}["{mermaid_label(p["name"])}"]')
         for n in members:
@@ -90,10 +98,10 @@ def mermaid(m, scenario):
                         and i["name"] != "Tailscale"), "")
             label = n.get("short", n["name"]) + (f"<br/>{sub}" if sub else "")
             out.append(f'    {mermaid_id(n["id"])}["{mermaid_label(label)}"]')
-            kids = sorted(r for r, box in rope_box.items() if box == f"ropes_{mermaid_id(n['id'])}" and m.placed(m.nodes[r], scenario))
-            if kids:
-                first, last = int(kids[0][5:]), int(kids[-1][5:])
-                out.append(f'    ropes_{mermaid_id(n["id"])}["Ropes {first}-{last} (OUT1-OUT10)"]')
+        for box, kids in sorted(rope_groups.items()):
+            kids.sort()
+            first, last = int(kids[0][5:]), int(kids[-1][5:])
+            out.append(f'    {box}["Ropes {first}-{last} (OUT1-OUT10)"]')
         out.append("  end")
     seen_rope_edges = set()
     for link in m.doc["links"]:
@@ -153,7 +161,7 @@ def render(doc):
            doc["about"], "", f"Updated {doc['updated']}.", "", "**Rules**", ""]
     out += [f"- {r}" for r in doc["rules"]] + [""]
 
-    out += ["## Scenarios", ""]
+    out += ["## Scenario" if len(doc["scenarios"]) == 1 else "## Scenarios", ""]
     for s in doc["scenarios"]:
         out += [f"### {s['name']} (`{s['id']}`, {s['when']})", "", s["summary"], ""]
         if s.get("open_questions"):
@@ -181,10 +189,10 @@ def render(doc):
         if ropes:
             out += ["### Ropes", "", "Each rope: AoShow 360 LED Flex Neon, 10 m, 400 px RGB (UCS1903, 24 V), 3 universes used of 4 reserved. "
                     "Rope n is box ⌈n/10⌉, OUT ((n−1) mod 10)+1, universes 4(n−1) to 4(n−1)+2 (Will's config.local.json).", ""]
-            out += table(["Rope", "Box / OUT", "Universes", "Pile at Agape", "Visible px (camera)", "Status"],
+            out += table(["Rope", "Box / OUT", "Universes", "Status"],
                          [[f"{r['name']} (`{r['id']}`)", f"box {r['specs']['box']} OUT{r['specs']['out']}",
-                           f"{r['specs']['universes'][0]}-{r['specs']['universes'][-1]}", r["specs"]["pile_at_agape"],
-                           r["specs"]["camera_visible_px"], r["status"] + (f": {r['summary']}" if r["status"] != "working" else "")]
+                           f"{r['specs']['universes'][0]}-{r['specs']['universes'][-1]}",
+                           r["status"] + (f": {r['summary']}" if r["status"] not in ("working", "stopped") else "")]
                           for r in ropes]) + [""]
 
     out += ["## Links", "",

@@ -123,26 +123,38 @@ def test_a_real_click_on_a_box_opens_it(page):
     assert "node=psac10-1" in p.pg.evaluate("location.hash")
 
 
-def test_the_scenario_switch_changes_the_map_and_the_hash(page):
+def test_one_scenario_means_no_scenario_switch(page):
+    # The map has one scenario (Gray Area), so the Now/Show switch stays hidden; it is built from system.json,
+    # so it comes back if a second scenario is ever added.
+    assert len(DOC["scenarios"]) == 1
     p = page()
-    assert p.pg.locator('#map [data-id="gallery-net"]').count() == 0
-    p.pg.locator("#sc-show").click()
-    assert p.pg.locator('#map [data-id="gallery-net"]').count() == 1
-    assert "scenario=show" in p.pg.evaluate("location.hash")
-    p.pg.locator("#sc-now").click()
-    assert p.pg.locator('#map [data-id="gallery-net"]').count() == 0
+    assert p.pg.locator("#scenarios").is_hidden() and p.pg.locator("#scenarios button").count() == 0
+    assert "Gray Area" in p.pg.locator("#scenario-lede").inner_text()
+    assert "Agape" not in p.pg.locator("#scenario-lede").inner_text()
 
 
-@pytest.mark.parametrize("fragment,title,scenario", [
-    ("#node=bitcube", "bitcube", "now"),
-    ("#link=artnet-box1", "Art-Net U0–39", "now"),
-    ("#scenario=show&node=gallery-net", "Gray Area gallery network", "show"),
-    ("#node=gallery-net", "Gray Area gallery network", "show"),  # only exists in the show: the page switches
+@pytest.mark.parametrize("fragment", ["#scenario=show", "#scenario=now", "#scenario=show&tab=list"])
+def test_old_scenario_links_still_open_the_map(page, fragment):
+    # Links from the two-scenario days (#scenario=show for Gray Area) land on the one scenario there is.
+    p = page(fragment)
+    nodes, links = visible_in(DOC["scenarios"][0]["id"])
+    assert p.pg.locator("#map .node").count() == len(nodes) and p.pg.locator("#map .link").count() == len(links)
+    assert "scenario=" not in p.pg.evaluate("location.hash")
+    if "tab=list" in fragment:
+        assert p.pg.locator("#tab-list").is_visible()
+    assert p.problems == []
+
+
+@pytest.mark.parametrize("fragment,title", [
+    ("#node=bitcube", "bitcube"),
+    ("#link=artnet-box1", "Art-Net U0–39"),
+    ("#scenario=show&node=router-gallery", "Install router (Slate AX)"),  # an old show-scenario link
+    ("#scenario=now&node=gallery-net", "Gray Area's network"),
 ])
-def test_deep_links_open_the_right_item(page, fragment, title, scenario):
+def test_deep_links_open_the_right_item(page, fragment, title):
     p = page(fragment)
     assert p.panel_open() and p.title() == title
-    assert p.pg.locator(f"#sc-{scenario}").get_attribute("aria-checked") == "true"
+    assert "scenario=" not in p.pg.evaluate("location.hash")
 
 
 def test_tab_deep_link_and_every_tab_renders(page):
@@ -160,7 +172,7 @@ def test_search_by_ip_and_keyboard(page):
     p = page()
     p.pg.locator("body").press("/")
     assert p.pg.evaluate("document.activeElement.id") == "q"
-    p.pg.keyboard.type("10.0.7.76")
+    p.pg.keyboard.type("192.168.9.76")
     assert "Gallery cam" in p.pg.locator("#results").inner_text()
     p.pg.keyboard.press("Enter")
     assert p.title() == "Gallery cam"
@@ -193,12 +205,14 @@ def test_a_malformed_deep_link_still_loads_the_map(page):
     assert p.problems == []
 
 
-def test_switching_away_from_a_selected_show_only_item_closes_the_panel(page):
-    p = page("#node=gallery-net")
-    p.pg.locator("#sc-now").click()
-    assert not p.panel_open()
-    assert "gallery-net" not in p.pg.evaluate("location.hash")
-    assert p.pg.evaluate("document.getElementById('map').classList.contains('focusing')") is False
+def test_the_panel_kicker_names_the_place_without_a_scenario_prefix(page):
+    p = page("#node=cam-gallery")
+    kicker = p.pg.locator("#panel-kicker").text_content()  # text_content: inner_text comes back upper-cased by the CSS
+    assert kicker == "camera · Gray Area: the floor"
+    heads = p.pg.locator("#panel-body .sec h3").all_text_contents()
+    assert any(h.startswith("Connections (") for h in heads) and not any("in this scenario" in h for h in heads)
+    p = page("#link=wifi-bitcube")
+    assert p.pg.locator("#panel-kicker").text_content() == "lan link"
 
 
 def test_a_link_without_a_direction_reads_as_two_way(page):

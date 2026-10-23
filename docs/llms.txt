@@ -8,8 +8,8 @@
 
 ## System map
 
-- [system.json](https://gavaiken.github.io/river-bitcube/system/system.json): the machine-readable map. Places, nodes, links, the `now` (Agape) and `show` (Gray Area) scenarios, the API contract with examples, secrets by name, open questions and sources.
-- [system.md](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/system/system.md): the same facts as Markdown, with a Mermaid diagram per scenario. Generated from system.json.
+- [system.json](https://gavaiken.github.io/river-bitcube/system/system.json): the machine-readable map. Places, nodes, links, one scenario (`now` = the Gray Area install; the Agape prototype map of 17-21 Oct is in git history up to commit bdfe5b6), the API contract with examples, secrets by name, open questions and sources.
+- [system.md](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/system/system.md): the same facts as Markdown, with a Mermaid diagram. Generated from system.json.
 - [Interactive map](https://gavaiken.github.io/river-bitcube/system/): the clickable diagram for people. Deep links like #node=bitcube or #link=artnet-box1.
 
 ## Working on the installation

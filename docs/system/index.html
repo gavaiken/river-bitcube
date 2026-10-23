@@ -202,10 +202,7 @@ body.panel-open footer { margin-right: 420px; }
 <header class="top" id="top">
   <div class="bar">
     <div class="brand"><a href="../">A River Becoming · status</a><h1>System map</h1></div>
-    <div class="seg" role="radiogroup" aria-label="Scenario">
-      <button type="button" role="radio" id="sc-now" data-scenario="now" aria-checked="true">Now: Agape</button>
-      <button type="button" role="radio" id="sc-show" data-scenario="show" aria-checked="false">Show: Gray Area</button>
-    </div>
+    <div class="seg" role="radiogroup" aria-label="Scenario" id="scenarios" hidden></div>
     <div class="search">
       <label for="q" class="vh">Search by name, IP or hostname</label>
       <input id="q" type="search" placeholder="Search name, IP, hostname ( / )" autocomplete="off" spellcheck="false" aria-controls="results">
@@ -268,7 +265,7 @@ body.panel-open footer { margin-right: 420px; }
   const SVGNS = 'http://www.w3.org/2000/svg';
   const $ = (id) => document.getElementById(id);
   const svg = $('map');
-  const S = { doc: null, scenario: 'now', tab: 'map', sel: null, query: '', scale: null, hover: null };
+  const S = { doc: null, scenario: null, tab: 'map', sel: null, query: '', scale: null, hover: null };
   let byId = {}, people = {}, places = {}, questions = {}, sources = {};
 
   // ------------------------------------------------------------ helpers
@@ -289,6 +286,10 @@ body.panel-open footer { margin-right: 420px; }
     return e;
   }
   const human = (k) => k.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+  const defaultScenario = () => S.doc.scenarios[0].id;
+  const scenarioOf = (id) => S.doc.scenarios.find((x) => x.id === id);
+  const scenarioLabel = (s) => (s.name || s.id).split(':')[0].trim() || s.id;  // 'Now: Gray Area' -> 'Now'
+  const oneScenario = () => S.doc.scenarios.length === 1;
   const short = (n) => n.short || n.name;
   const nodeVisible = (n, s = S.scenario) => n.place && n.place[s] != null;
   const linkVisible = (l, s = S.scenario) => l.scenarios.includes(s) && nodeVisible(byId[l.from], s) && nodeVisible(byId[l.to], s);
@@ -325,7 +326,7 @@ body.panel-open footer { margin-right: 420px; }
   }
   function hashFor(sel, scenario = S.scenario, tab = S.tab) {
     const parts = [];
-    if (scenario !== 'now') parts.push('scenario=' + scenario);
+    if (scenario !== defaultScenario()) parts.push('scenario=' + scenario);
     if (tab !== 'map') parts.push('tab=' + tab);
     if (sel) parts.push(sel.type + '=' + encodeURIComponent(sel.id));
     return parts.length ? '#' + parts.join('&') : '';
@@ -336,13 +337,14 @@ body.panel-open footer { margin-right: 420px; }
   }
   function applyHash() {
     const h = readHash();
-    const scen = h.scenario === 'show' ? 'show' : 'now';
+    const scen = scenarioOf(h.scenario) ? h.scenario : defaultScenario();  // old #scenario=show links land on the one scenario there is
     let sel = null;
     if (h.node && byId[h.node] && byId[h.node]._t === 'node') sel = { type: 'node', id: h.node };
     if (h.link && byId[h.link] && byId[h.link]._t === 'link') sel = { type: 'link', id: h.link };
     setScenario(scen, true);
     setTab(['map', 'list', 'api', 'secrets', 'questions', 'agents'].includes(h.tab) ? h.tab : 'map', true);
     if (sel) open(sel.type, sel.id, { fromHash: true }); else close(true);
+    writeHash();  // normalise what the link said (an old #scenario=show, a mistyped item) to what the page shows
   }
 
   // ------------------------------------------------------------ map
@@ -606,7 +608,9 @@ body.panel-open footer { margin-right: 420px; }
   function section(title, ...kids) { return el('div', { class: 'sec' }, el('h3', { text: title }), ...kids); }
   function xref(type, id, text) { return el('button', { type: 'button', class: 'xref', onclick: () => open(type, id) }, text || (byId[id] ? (byId[id].name || byId[id].label) : id)); }
   function placeText(n) {
-    return S.doc.scenarios.map((s) => `${s.id === 'now' ? 'Now' : 'Show'}: ${n.place[s.id] ? places[n.place[s.id]].name : 'not there'}`).join(' · ');
+    const where = (s) => (n.place[s.id] ? places[n.place[s.id]].name : 'not there');
+    if (oneScenario()) return where(S.doc.scenarios[0]);
+    return S.doc.scenarios.map((s) => `${scenarioLabel(s)}: ${where(s)}`).join(' · ');
   }
   function linkName(l) { return l.label || String(l.protocol).split(',')[0]; }
 
@@ -627,7 +631,9 @@ body.panel-open footer { margin-right: 420px; }
       const conns = S.doc.links.filter((l) => (l.from === id || l.to === id));
       const here = conns.filter((l) => linkVisible(l));
       if (conns.length) {
-        body.append(section(`Connections (${here.length} in this scenario${conns.length > here.length ? `, ${conns.length - here.length} more in the other` : ''})`,
+        const connTitle = oneScenario() ? `Connections (${here.length})`
+          : `Connections (${here.length} in this scenario${conns.length > here.length ? `, ${conns.length - here.length} more in the other` : ''})`;
+        body.append(section(connTitle,
           el('div', { class: 'conn' }, conns.sort((a, b) => linkVisible(b) - linkVisible(a)).map((l) => {
             const other = l.from === id ? l.to : l.from;
             const arrowTxt = l.from === id ? '→' : '←';
@@ -647,7 +653,7 @@ body.panel-open footer { margin-right: 420px; }
       if (item.parent) rest.parent = byId[item.parent] ? byId[item.parent].name : item.parent;
       if (Object.keys(rest).length) body.append(section('More', kv(rest)));
     } else {
-      $('panel-kicker').textContent = `${item.medium} link · ${item.scenarios.map((s) => (s === 'now' ? 'Now' : 'Show')).join(' + ')}`;
+      $('panel-kicker').textContent = `${item.medium} link` + (oneScenario() ? '' : ` · ${item.scenarios.map((id) => (scenarioOf(id) ? scenarioLabel(scenarioOf(id)) : id)).join(' + ')}`);
       $('panel-title').textContent = linkName(item);
       body.append(el('div', { class: 'endpoints' }, xref('node', item.from), el('span', { text: String(item.direction || 'two-way').startsWith('one-way') ? '→' : '↔' }), xref('node', item.to)));
       body.append(el('div', { class: 'pills' }, pill(item.status, statusColor(item.status)), verifiedPill(item.verified), pill(item.medium, mediumColor(item.medium))));
@@ -683,11 +689,11 @@ body.panel-open footer { margin-right: 420px; }
 
   // ------------------------------------------------------------ scenario / tabs
   function setScenario(s, silent) {
-    if (!S.doc.scenarios.some((x) => x.id === s)) s = 'now';
+    if (!scenarioOf(s)) s = defaultScenario();
     S.scenario = s;
     if (S.sel && !(S.sel.type === 'node' ? nodeVisible(byId[S.sel.id]) : linkVisible(byId[S.sel.id]))) close(true);
     document.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.scenario === s)));
-    const sc = S.doc.scenarios.find((x) => x.id === s);
+    const sc = scenarioOf(s);
     const lede = $('scenario-lede');
     lede.textContent = '';
     lede.append(el('strong', { text: `${sc.name} (${sc.when}). ` }), sc.summary);
@@ -798,7 +804,7 @@ body.panel-open footer { margin-right: 420px; }
     const root = $('tab-agents'), B = 'https://gavaiken.github.io/river-bitcube/', R = 'https://raw.githubusercontent.com/gavaiken/river-bitcube/main/';
     const files = [
       ['system.json', B + 'system/system.json', 'The whole map as JSON: places, nodes, links, scenarios, the API, secrets by name, open questions, sources. Start here.'],
-      ['system.md', R + 'docs/system/system.md', 'The same facts as Markdown with a Mermaid diagram per scenario (generated by tools/system_docs.py).'],
+      ['system.md', R + 'docs/system/system.md', 'The same facts as Markdown with a Mermaid diagram (generated by tools/system_docs.py).'],
       ['llms.txt', B + 'llms.txt', 'Index of the docs for agents.'],
       ['CLAUDE.md', R + 'CLAUDE.md', 'Rules and hard-won facts for working on bitcube.'],
       ['plan.md', R + 'docs/plan.md', 'The shared checklist, decisions and open questions.'],
@@ -814,7 +820,17 @@ body.panel-open footer { margin-right: 420px; }
         el('li', {}, 'Run the checks: ', el('code', { text: '.venv/bin/pytest tools/tests' }), ' (structure, secret scan, and the real secrets read from bitcube).'),
         el('li', {}, 'Commit and push to main; GitHub Pages republishes this page.')),
       el('h3', { text: 'Fixed values' }), kv({ status: S.doc.enums.status, medium: S.doc.enums.medium, verified: S.doc.enums.verified.join(', ') }),
-      el('h3', { text: 'Deep links' }), el('p', {}, el('code', { text: '#node=bitcube' }), ', ', el('code', { text: '#link=artnet-box1' }), ', ', el('code', { text: '#scenario=show&node=gallery-net' }), ', ', el('code', { text: '#tab=api' }), '.'));
+      el('h3', { text: 'Deep links' }), el('p', {}, el('code', { text: '#node=bitcube' }), ', ', el('code', { text: '#link=artnet-box1' }), ', ', el('code', { text: '#node=router-gallery' }), ', ', el('code', { text: '#tab=api' }), '. Old links with #scenario=show open the one scenario there is.'));
+  }
+
+  // ------------------------------------------------------------ scenario switch
+  function renderScenarioSwitch() {
+    const seg = $('scenarios');
+    seg.textContent = '';
+    if (oneScenario()) { seg.hidden = true; return; }  // one scenario: no Now/Show switch; it comes back with a second scenario
+    S.doc.scenarios.forEach((sc, i) => seg.append(el('button', { type: 'button', role: 'radio', id: 'sc-' + sc.id, 'data-scenario': sc.id,
+      'aria-checked': String(i === 0), text: sc.name, onclick: () => setScenario(sc.id) })));
+    seg.hidden = false;
   }
 
   // ------------------------------------------------------------ legend
@@ -852,7 +868,6 @@ body.panel-open footer { margin-right: 420px; }
   svg.addEventListener('pointerleave', () => { S.hover = null; applyMapClasses(); });
   svg.addEventListener('focusin', (e) => { S.hover = itemFromEvent(e); applyMapClasses(); });
   svg.addEventListener('focusout', () => { S.hover = null; applyMapClasses(); });
-  document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => setScenario(b.dataset.scenario)));
   document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
   $('zoom-in').addEventListener('click', () => zoom(1.25));
   $('zoom-out').addEventListener('click', () => zoom(0.8));
@@ -887,7 +902,8 @@ body.panel-open footer { margin-right: 420px; }
     doc.open_questions.forEach((x) => { questions[x.id] = x; });
     doc.sources.forEach((x) => { sources[x.id] = x; });
     $('footer').append(` Updated ${doc.updated.replace('T', ' ').slice(0, 16)} (Pacific).`);
-    renderLegend(); renderApi(); renderSecrets(); renderQuestions(); renderAgents();
+    S.scenario = defaultScenario();
+    renderScenarioSwitch(); renderLegend(); renderApi(); renderSecrets(); renderQuestions(); renderAgents();
     setTopH();
     applyHash();
     window.__systemMapReady = true;

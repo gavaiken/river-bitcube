@@ -170,6 +170,17 @@ def test_the_maps_legend_matches_the_validator(real):
     assert set(real["enums"]["medium"]) == sc.MEDIA
 
 
+def test_the_map_has_one_scenario_at_gray_area(real):
+    # Since 23 Oct the map shows Gray Area only (the Agape prototype map is in git history, commit bdfe5b6).
+    assert [s["id"] for s in real["scenarios"]] == ["now"]
+    assert "Gray Area" in real["scenarios"][0]["name"]
+    assert all(p["scenarios"] == ["now"] for p in real["places"])
+    assert "agape" not in {p["id"] for p in real["places"]}
+    assert "bdfe5b6" in real["about"]
+    assert {n["place"]["now"] for n in real["nodes"] if n["kind"] == "rope"} == {"floor"}
+    assert real["layout"]["scenarios"].keys() == {"now"}
+
+
 # ---------------------------------------------------------------- secret scanning
 
 FAKE = "Zq7" + "x9Lm2Pw4Rt6Yb8Nc0Vd"  # built at runtime: no token-shaped literal in the repo
@@ -280,6 +291,14 @@ def test_system_md_covers_every_node_link_and_secret(real):
     missing += [s["name"] for s in real["secrets"] if s["name"] not in md]
     assert missing == []
     assert md.count("```mermaid") == len(real["scenarios"])
+
+
+def test_system_md_reads_as_one_scenario(real):
+    import system_docs
+    md = system_docs.render(real)
+    assert "\n## Scenario\n" in md and "## Scenarios" not in md
+    assert "owner Will Gardiner · Gray Area: ceiling grid*" in md  # the place alone, no "now:" prefix
+    assert "Pile at Agape" not in md
 
 
 def test_system_md_survives_github_pages_liquid(real):
