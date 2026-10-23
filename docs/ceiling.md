@@ -52,7 +52,8 @@ bitcube DisplayPort ◄── dummy display plug (recommended: a desktop VNC can
   - VNC works;
   - BIOS powers on after a power cut;
   - power-cut test passed: back 1.5 min after the router had power.
-- ✅ Gallery cam: reachable, posting clips; rebooted remotely through its API.
+- ✅ Power cut of bitcube, router and cam together: bitcube back by itself (online in ~80 s, TD running); VNC works with no monitor; pulling bitcube's cable switches it to Wi-Fi in 3 s.
+- ⚠️ Gallery cam: on Wi-Fi it comes back on `.76` every time. **On a cable it didn't ask for an address after power cycles: keep it on Wi-Fi** unless that's debugged on the ground.
 - ⏳ **S22** one reservation for both cam MACs · **S28** remote access to the router · ✅ S25 port labels (blue tape) · **S20** lights on the ground · **S26** remaining tests · VNC without a monitor (S27) · **S29** radar wait. Details and order: [execution plan](execution-plan.html#before-the-lift-22-oct-night-everything-still-to-resolve).
 
 ## Before lifting (on the ground, with a monitor and keyboard)
