@@ -38,11 +38,11 @@ title: Execution plan
 | ⏳ | S12 | MacBook Air as the on-site fallback console: Tailscale, its SSH key on bitcube, VNC password, Claude Code + this repo (D-open 6) | Gavin | Gavin + Claude | The Air reaches bitcube with the internet down |
 | ⏳ | S13 | Dave merges [river-agent#7](https://github.com/drocamor/river-agent/pull/7) (hide camera logins in capture logs) | Dave | Dave | Merged |
 | ✅ | M1 | **Mission control + studio chat** ([plan](mission-plan.md)): plan written | — | Claude | Plan in the repo |
-| ➡️ | M2 | `mission/` server: password login (bitcube password from a file, scrypt hash, cookie sessions, slow-down), page shells; tests | — | Claude | Tests pass; login works locally |
-| ➡️ | M3 | Studio chat: queue, Agent SDK runner (resume one session, Stop), live events, history; chat page; tests with a fake agent | M2 | Claude | Messages queue and run in order locally |
-| ➡️ | M4 | Mission control: status (seasons state, bitcube probe, Modal, river cam, snapshot), whitelisted controls, system map; page | M2 | Claude | Page shows live status; controls reach bitcube once it's online |
-| ➡️ | M5 | Studio agent policy: `mission/STUDIO.md` system prompt, deny-list settings, no connectors | M3 | Claude | Agent refuses out-of-scope asks in a test |
-| ➡️ | M6 | `mission/setup/` scripts for the `river` user (create hidden standard user, lock `/Users/gav` to 700, secrets, clone with deploy key, LaunchDaemon); river's SSH key on bitcube | M2–M5 | Claude writes; **Gavin runs the sudo part** | Service runs as `river` and survives a restart |
+| ✅ | M2 | `mission/` server: password login (bitcube password from a file, scrypt hash, cookie sessions, slow-down), page shells; tests | — | Claude | Tests pass; login works locally |
+| ✅ | M3 | Studio chat: queue, Agent SDK runner (resume one session, Stop), live events, history; chat page; tests with a fake agent | M2 | Claude | Messages queue and run in order locally |
+| ✅ | M4 | Mission control: status (seasons state, bitcube probe, Modal, river cam, snapshot), whitelisted controls, system map; page | M2 | Claude | Page shows live status; controls reach bitcube once it's online |
+| ✅ | M5 | Studio agent policy: `mission/STUDIO.md` system prompt, deny-list settings, no connectors | M3 | Claude | Agent refuses out-of-scope asks in a test |
+| ⏳ | M6 | `mission/setup/` scripts for the `river` user (create hidden standard user, lock `/Users/gav` to 700, secrets, clone with deploy key, LaunchDaemon); river's SSH key on bitcube | M2–M5 | Claude wrote it (22 Oct); **Gavin runs `sudo bash mission/setup/setup-river.sh`** ([install steps](mission-plan.md#install-m6m8-what-gavin-does)) | Service runs as `river` and survives a restart |
 | ⏳ | M7 | Gavin: `claude setup-token`, save the token into `/Users/river/.secrets/claude-token` | M6 | Gavin | Studio agent answers |
 | ⏳ | M8 | Tailscale Funnel on 443 → `127.0.0.1:8790` (OK'd, MD9) | M6 | Gavin (or Claude with his OK) | `https://gav-m1-mini.tailddc624.ts.net` shows the login page from outside |
 | ⏳ | M9 | End-to-end check from a phone off the tailnet; docs (show-files page link, CLAUDE.md, runbook) | M7, M8 | Claude | Team can log in, chat, see status, steer the seasons |

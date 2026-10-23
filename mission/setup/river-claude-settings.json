@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(sudo:*)",
+      "Bash(su:*)",
+      "Bash(doas:*)",
+      "Bash(tailscale:*)",
+      "Bash(/Applications/Tailscale.app/Contents/MacOS/Tailscale:*)",
+      "Bash(networksetup:*)",
+      "Bash(pfctl:*)",
+      "Bash(socketfilterfw:*)",
+      "Bash(scutil:*)",
+      "Bash(dscl:*)",
+      "Bash(sysadminctl:*)",
+      "Bash(dseditgroup:*)",
+      "Bash(security:*)",
+      "Bash(shutdown:*)",
+      "Bash(reboot:*)",
+      "Bash(halt:*)",
+      "Bash(pmset:*)",
+      "Bash(signal-cli:*)",
+      "Read(/Users/gav/**)",
+      "Edit(/Users/gav/**)",
+      "Write(/Users/gav/**)"
+    ]
+  },
+  "cleanupPeriodDays": 3650
+}

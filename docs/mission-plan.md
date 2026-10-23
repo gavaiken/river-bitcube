@@ -39,6 +39,15 @@ The public docs stay on GitHub Pages, with no login and no dependence on the min
 - **Files on the mini** (outside the repo, owned by `river`, mode 600): `/Users/river/.secrets/site-password` (copy of the bitcube password), `/Users/river/.secrets/claude-token`; state in `/Users/river/mission-state/`.
 - **Service:** `/Library/LaunchDaemons/com.agape.river-mission.plist`, `UserName river`, `KeepAlive`, logs in `/Users/river/mission-state/logs/`.
 
+## Install (M6–M8): what Gavin does
+All in `mission/setup/`. Each script explains itself at the top and is safe to run again.
+1. **`sudo bash ~/claude/Source/river-bitcube/mission/setup/setup-river.sh`** (needs your password once): creates the hidden standard user `river`, locks `/Users/gav` to you, copies the site password (your VNC file, `~/claude/local/secrets/bitcube-vnc`, the same bitcube password), makes river's SSH keys, clones the repo for river, installs the app, writes river's Claude settings (`river-claude-settings.json`, the deny fence), installs and starts the service. It prints the next steps.
+2. **Deploy key** (a Claude session can do this as you): `gh repo deploy-key add /Users/river/.ssh/river_bitcube_deploy.pub --allow-write -R gavaiken/river-bitcube -t 'river studio agent (mini)'`. *Needs river's public key, which step 1 creates; a session can read the `.pub` only via the script's output, since `/Users/river` is private.*
+3. **bitcube**: add river's bitcube public key (printed by step 1) to bitcube's authorized keys (a session does this over SSH when bitcube is online).
+4. **Token (M7)**: run `claude setup-token` (browser login), paste the token into `~/claude/local/secrets/claude-token` (`chmod 600`), then `sudo bash /Users/river/river-bitcube/mission/setup/install-token.sh`.
+5. **Funnel (M8)**: `/Applications/Tailscale.app/Contents/MacOS/Tailscale funnel --bg 8790`.
+6. **Check**: `bash ~/claude/Source/river-bitcube/mission/setup/check.sh` (read-only).
+
 ## Runbook
 - **Turn it off (internet):** `tailscale funnel --https=443 off` (as Gavin). **Stop the app:** `sudo launchctl bootout system/com.agape.river-mission`. **Start:** `sudo launchctl bootstrap system /Library/LaunchDaemons/com.agape.river-mission.plist`.
 - **Update the code:** as `river`, `git -C /Users/river/river-bitcube pull`, then restart the service (`sudo launchctl kickstart -k system/com.agape.river-mission`).
@@ -55,3 +64,4 @@ Newest last. One line per step: date, step, what changed, commit.
 - 22 Oct: M4 (part) bitcube side: `tools/mission/probe.ps1` (one-line JSON status; fixed actions ropes dark/on, HUB75 brightness, boot file) and `tools/mission/td_mission.py` (runs in TD via the bridge). `Start-River.cmd` now boots the best existing show file (seasons > online > old name), overridable by `River\boot-file.txt`.
 - 22 Oct: M4 (part) `mission/lib/mission.mjs`: status polling (bitcube + river cam TCP and seasons /state every 5 s, Modal every 30 s, the bitcube probe over SSH every 60 s) and fixed controls (mode, target, rules, ropes dark/on, HUB75 brightness, boot file) with argument checks; tests.
 - 22 Oct: M2/M3/M4 server and pages: `mission/server.mjs` (127.0.0.1:8790; login with throttle, chat history + live events + send + stop, status, fixed controls, same-origin check), `mission/public/` (login, studio chat, mission control with seasons controls, lights, boot file, camera still, system map). Tested locally with MISSION_FAKE_AGENT=1: queue order, live Modal data, bitcube offline shown, bad arguments refused, cross-site posts blocked.
+- 22 Oct: M6 written: `mission/setup/setup-river.sh` (user, home lock, secrets, keys, clone, npm ci, settings, LaunchDaemon), `com.agape.river-mission.plist`, `river-claude-settings.json`, `install-token.sh`, `check.sh`. **Waiting on Gavin to run step 1 (sudo).**

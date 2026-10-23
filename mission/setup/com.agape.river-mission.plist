@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Mission control + studio chat (docs/mission-plan.md). Installed by setup-river.sh into /Library/LaunchDaemons;
+     runs as the hidden user river at boot, never logged in; restarted if it exits. __NODE__ is filled in. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.agape.river-mission</string>
+  <key>UserName</key><string>river</string>
+  <key>GroupName</key><string>staff</string>
+  <key>ProgramArguments</key>
+  <array><string>__NODE__</string><string>/Users/river/river-bitcube/mission/server.mjs</string></array>
+  <key>WorkingDirectory</key><string>/Users/river/river-bitcube/mission</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/river</string>
+    <key>USER</key><string>river</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>MISSION_PORT</key><string>8790</string>
+    <key>MISSION_PASSWORD_FILE</key><string>/Users/river/.secrets/site-password</string>
+    <key>MISSION_TOKEN_FILE</key><string>/Users/river/.secrets/claude-token</string>
+    <key>MISSION_STATE_DIR</key><string>/Users/river/mission-state</string>
+    <key>MISSION_REPO</key><string>/Users/river/river-bitcube</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>/Users/river/mission-state/logs/server.log</string>
+  <key>StandardErrorPath</key><string>/Users/river/mission-state/logs/server.log</string>
+</dict>
+</plist>
