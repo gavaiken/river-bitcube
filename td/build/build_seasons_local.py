@@ -434,6 +434,11 @@ panels = proj.op('panels')
 for k, o in enumerate(outs, start=1):
     setattr(panels.par, f'Quad{k}', o.path)
 panels.par.Quad2off = False
+# Gray Area receive card (found by camera, 23 Oct): quads stacked down the left edge, quad 4 below quad 3.
+for k, (x, y) in enumerate(((0, 0), (0, 128), (0, 256), (0, 384)), start=1):
+    setattr(panels.par, f'Quad{k}pos1', x)
+    setattr(panels.par, f'Quad{k}pos2', y)
+panels.par.Pairstacked = True
 panels.par.Source = 'canvas'
 panels.par.Brightness = 1.0
 panels.par.Output = True             # the panel window covers the LED display (the show's only display)

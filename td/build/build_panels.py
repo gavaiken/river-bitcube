@@ -5,7 +5,7 @@
 
 REPO = 'C:/Users/user/River/river-bitcube'
 NQ = globals().get('PANEL_QUADS', 2)
-QUAD_X = (0, 256, 512, 768)          # quads in a row along the top (until Andi confirms the receive-card layout)
+QUAD_X = (0, 256, 512, 768)          # quads in a row along the top (the default before Gray Area)
 proj = op('/project1')
 panels = proj.op('panels') or proj.create(baseCOMP, 'panels')
 panels.nodeX, panels.nodeY = 1575, 400
@@ -101,8 +101,19 @@ if NQ >= 4:
     pair = panels.op('quad34') or panels.create(glslTOP, 'quad34')
     pair.par.pixeldat = pair_pix
     pair.par.outputresolution = 'custom'
-    pair.par.resolutionw, pair.par.resolutionh = 512, 128
     pair.nodeX, pair.nodeY = 150, -300
+    if not hasattr(panels.par, 'Pairstacked'):
+        pg = page(panels, 'Panels')
+        pg.appendToggle('Pairstacked', label='Quad 4 below quad 3 (else right of it)')[0].default = False
+    try:
+        if pair.seq.vec.numBlocks < 1:
+            pair.seq.vec.numBlocks = 1
+    except AttributeError:
+        pass
+    pair.par.vec0name = 'uStack'
+    pair.par.vec0valuex.expr = 'parent().par.Pairstacked'
+    pair.par.resolutionw.expr = '256 if parent().par.Pairstacked else 512'
+    pair.par.resolutionh.expr = '256 if parent().par.Pairstacked else 128'
     wire(pair, ['quad3', 'quad4'])
     wire(lay, ['quad1', 'quad2', 'quad34'])           # input order matters: see panel_layout.glsl
 else:
@@ -112,7 +123,7 @@ lay.par.outputresolution = 'custom'
 # Just big enough for both quads: the Non-Commercial key caps TOPs at 1280x1280, so the full-display
 # black comes from the 'screen' container below, not from this TOP.
 lay.par.resolutionw.expr = ("max(" + ", ".join(f"parent().par.Quad{i}pos1" for i in range(1, NQ + 1)) + ") + 256"
-                            if NQ < 4 else "max(parent().par.Quad1pos1, parent().par.Quad2pos1, parent().par.Quad3pos1 + 256) + 256")
+                            if NQ < 4 else "max(parent().par.Quad1pos1, parent().par.Quad2pos1, parent().par.Quad3pos1 + (0 if parent().par.Pairstacked else 256)) + 256")
 lay.par.resolutionh.expr = "max(" + ", ".join(f"parent().par.Quad{i}pos2" for i in range(1, NQ + 1)) + ") + 128"
 try:                                 # GLSL TOP uniforms are a sequence: make room for uQuad0..3 + uMode
     if lay.seq.vec.numBlocks < 5:
@@ -129,7 +140,8 @@ lay.par.vec1valuez, lay.par.vec1valuew = 256, 128
 lay.par.vec3name = 'uQuad2'
 if NQ >= 4:
     lay.par.vec3valuex.expr, lay.par.vec3valuey.expr = 'parent().par.Quad3pos1', 'parent().par.Quad3pos2'
-    lay.par.vec3valuez.val, lay.par.vec3valuew.val = 512, 128
+    lay.par.vec3valuez.expr = '256 if parent().par.Pairstacked else 512'
+    lay.par.vec3valuew.expr = '256 if parent().par.Pairstacked else 128'
 else:
     lay.par.vec3valuex.expr = lay.par.vec3valuey.expr = ''
     lay.par.vec3valuex.val = lay.par.vec3valuey.val = -9999
