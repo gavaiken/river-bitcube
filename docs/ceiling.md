@@ -13,18 +13,20 @@ Once they're up there, nobody can reach a screen or a power button. So everythin
 |---|---|---|---|
 | ![front](img/ceiling-asbuilt-2026-10-23-1.jpg) | ![back](img/ceiling-asbuilt-2026-10-23-2.jpg) | ![back left](img/ceiling-asbuilt-2026-10-23-3.jpg) | ![close-up](img/ceiling-asbuilt-2026-10-23-4.jpg) |
 
+**Live check 23 Oct 11:23:** bitcube rebooted by itself at 11:14:25 and TouchDesigner opened the seasons file 34 s later (60 fps, panel window open); Wi-Fi, internet, the gallery cam (`.76`) and the Modal link all work; **every wired link is down** (rows 1, 2, 4–6, 8).
+
 **Connections as cabled** (read from the photos; "live" is filled in once bitcube and the router are back online and Claude has checked each link from the Mac mini):
 
 | # | From | To | Cable | Live |
 |---|---|---|---|---|
-| 1 | Gray Area's drop | router **WAN** (rightmost port) | black flat Cat 6 | to confirm (router `eth0` link) |
-| 2 | bitcube **ROUTER** port (blue tape) | router port taped **blue** (LAN2) | blue-taped black cable | to confirm (bitcube `Ethernet 2` up, `.79`) |
+| 1 | Gray Area's drop | router **WAN** (rightmost port) | black flat Cat 6 | ❌ 11:23: no link on WAN; router on the staff Wi-Fi (repeater), internet OK |
+| 2 | bitcube **ROUTER** port (blue tape) | router port taped **blue** (LAN2) | blue-taped black cable | ❌ 11:23: no link at either end (bitcube `Ethernet 2` and router `eth2`); bitcube online over Wi-Fi `.80` |
 | 3 | router **LAN1** (middle) | nothing | | correct: LAN1 is off (the old camera cable) |
-| 4 | bitcube **LIGHTS** port (white) | rack controller **NET1** | black (white tape at bitcube) | to confirm (bitcube `Ethernet` up, `2.0.0.8`) |
-| 5 | rack controller **NET2** | PSAC10 **left** box **NET1** | green | to confirm (box answers on `2.0.0.10` or `.11`) |
-| 6 | PSAC10 left box **NET2** | PSAC10 **right** box **NET1** | black | to confirm (second box answers) |
+| 4 | bitcube **LIGHTS** port (white) | rack controller **NET1** | black (white tape at bitcube) | ❌ 11:23: bitcube's LIGHTS port has no link |
+| 5 | rack controller **NET2** | PSAC10 **left** box **NET1** | green | ❌ 11:23: no rope box answers (can't see past row 4) |
+| 6 | PSAC10 left box **NET2** | PSAC10 **right** box **NET1** | black | ❌ 11:23: as row 5 |
 | 7 | PSAC10 right box **NET2** | nothing | | end of the chain |
-| 8 | bitcube **HDMI** | Colorlight sender **DVI** | HDMI-to-DVI (blue band) | to confirm (bitcube sees the `LED` display) |
+| 8 | bitcube **HDMI** | Colorlight sender **DVI** | HDMI-to-DVI (blue band) | ❌ 11:23: bitcube sees no display at all |
 | 9 | Colorlight sender **LAN1** | the receive card at point 2 (panels) | long black Ethernet | to confirm (panels show the river) |
 | 10 | ropes (male round plugs) | PSAC10 OUT1–OUT10 on both boxes, via the XLR adapters | rope leads (labelled B1, B3…) | to confirm by camera at the re-map (S4) |
 | 11 | mains | router, bitcube, rack controller (IEC), Colorlight sender (IEC, red switch), each PSAC10 (blue powerCON, breaker ON) | | to confirm |
