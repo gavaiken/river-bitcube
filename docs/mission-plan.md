@@ -50,3 +50,4 @@ The public docs stay on GitHub Pages, with no login and no dependence on the min
 Newest last. One line per step: date, step, what changed, commit.
 - 22 Oct: M1 this plan written.
 - 22 Oct: M2 (part) shared-password login module `mission/lib/auth.mjs` with tests (scrypt hash, cookie sessions on disk as SHA-256, per-client doubling delay, global slow-down); Agent SDK 0.3.309 pinned in `mission/package.json`.
+- 22 Oct: M3 (part) studio chat core `mission/lib/studio.mjs` with tests: single-threaded queue, resumes one session id (state.json), Stop aborts the current run, history in chat.jsonl, fresh start if the saved session is lost.
