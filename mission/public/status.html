@@ -12,8 +12,8 @@
 
   <section class="panel"><h2>Cameras</h2>
     <div class="cams">
-      <div><img id="cam-gallery" alt="Gallery camera"><div class="dim">Gallery · <span id="t-gallery">–</span></div></div>
-      <div><img id="cam-river" alt="River camera"><div class="dim">River · <span id="t-river">–</span></div></div>
+      <div><img id="cam-gallery" alt="" style="display:none"><div class="dim">Gallery · <span id="t-gallery">fetching through bitcube…</span></div></div>
+      <div><img id="cam-river" alt="" style="display:none"><div class="dim">River · <span id="t-river">fetching through bitcube…</span></div></div>
     </div>
   </section>
 
@@ -93,11 +93,12 @@ async function cams() {
   for (const cam of ['gallery', 'river']) {
     try {
       const r = await fetch(`/api/camera/${cam}.jpg`);
-      if (!r.ok) { $(`t-${cam}`).textContent = (await r.json().catch(() => ({}))).error || 'no picture'; continue; }
+      if (!r.ok) { $(`cam-${cam}`).style.display = 'none'; $(`t-${cam}`).textContent = (await r.json().catch(() => ({}))).error || 'no picture'; continue; }
+      $(`cam-${cam}`).style.display = '';
       const taken = r.headers.get('x-taken');
       $(`cam-${cam}`).src = URL.createObjectURL(await r.blob());
       $(`t-${cam}`).textContent = taken ? `taken ${new Date(taken).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '';
-    } catch { $(`t-${cam}`).textContent = 'no picture'; }
+    } catch { $(`cam-${cam}`).style.display = 'none'; $(`t-${cam}`).textContent = 'no picture'; }
   }
 }
 async function poll() { try { render(await api('/api/status')); } catch { /* next time */ } }

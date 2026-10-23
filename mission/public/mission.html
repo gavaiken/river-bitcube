@@ -54,6 +54,9 @@ function render(s) {
     'ropes': td?.ropes ? (td.ropes.source === 'black' ? 'dark (sending black)' : 'showing the river') : undefined,
     'HUB75 brightness': td?.hub75?.brightness, 'opens at boot': pr?.boot_file,
     'checked': s.probe ? ago(s.probe.age_s) : undefined });
+  const seasonsUp = !!y;
+  document.querySelectorAll('[data-mode], [data-season], #tint, #apply, #reset').forEach((el) => { if (!seasonsUp) el.disabled = true; else if (!el.dataset.mode || el.dataset.mode !== 'dynamic') el.disabled = false; });
+  if (!seasonsUp) $('modenote').textContent = 'the seasons file isn’t running on bitcube yet (step S1)';
   if (td?.hub75 && document.activeElement !== $('hub')) { $('hub').value = td.hub75.brightness; $('hubval').textContent = td.hub75.brightness; }
   $('ropesnote').textContent = td?.ropes ? (td.ropes.source === 'black' ? 'dark now' : 'showing the river') : '';
   $('bootnote').textContent = pr?.boot_file ? `now: ${pr.boot_file}` : '';
