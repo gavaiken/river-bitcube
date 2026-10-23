@@ -408,6 +408,16 @@ for k in range(1, 5):
         m.val = 'bottomleft'
         SCR.appendToggle(f'Quad{k}flipx', label=f'Quad {k} flip x')[0].val = False
         SCR.appendToggle(f'Quad{k}flipy', label=f'Quad {k} flip y')[0].val = False
+    if not hasattr(sz.par, f'Quad{k}swap'):
+        SCR.appendToggle(f'Quad{k}swap', label=f'Quad {k} swap its two panel rows')[0].val = False
+# Found by camera with Screentest (23 Oct): flop bottom left + flip y is upright on every screen; quad 4's
+# screen has its two panel rows the other way round (receive card wiring or config), so it swaps them back.
+for k in range(1, 5):
+    setattr(sz.par, f'Quad{k}flop', 'bottomleft')
+    setattr(sz.par, f'Quad{k}flipx', False)
+    setattr(sz.par, f'Quad{k}flipy', True)
+    setattr(sz.par, f'Quad{k}swap', k == 4)
+sz.par.Screentest = False
 WIN_W = 128 / 1280                  # window width as a fraction of the 1280x720 field
 WIN_H = 256 / 720
 STEP = (1 - WIN_H) / 3              # four windows from the top of the field to the bottom, overlapping
@@ -440,7 +450,12 @@ for k in range(1, 5):
     fl_.par.flop.expr = f'parent().par.Quad{k}flop'
     fl_.par.flipx.expr = f'parent().par.Quad{k}flipx'
     fl_.par.flipy.expr = f'parent().par.Quad{k}flipy'
-    quads.append(fl_)
+    sh = get(transformTOP, f'quad{k}_swap', 2100, y - 60)       # half a frame down, wrapped = rows swapped
+    sh.inputConnectors[0].connect(fl_)
+    sh.par.extend = 'repeat'
+    sh.par.tunit = 'fraction'
+    sh.par.ty.expr = f'0.5 if parent().par.Quad{k}swap else 0'
+    quads.append(sh)
 for old in ('quad1_pin',):          # the Agape corner pin is gone: the 18 Oct map's quad 1 was at Agape
     if sz.op(old):
         sz.op(old).destroy()
