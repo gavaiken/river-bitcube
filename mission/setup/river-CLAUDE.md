@@ -15,6 +15,7 @@ Installed into `/Users/river/.claude/CLAUDE.md` by mission control at every star
 
 ## Your tools (all from this Mac)
 - `ssh bitcube` (user `user`, key `~/.ssh/id_ed25519`): PowerShell, the TouchDesigner bridge (`tools\td.ps1`), `tools\screenshot.ps1`, `tools\cam_snap.ps1`, the seasons control page on bitcube's port 9981 (`http://100.73.68.60:9981/state`).
+- The Gray Area router (GL.iNet Slate AX, `router-gray-area-gl-axt1800`): `ssh -o StrictHostKeyChecking=accept-new root@100.127.193.8` (Tailscale; same key as bitcube), or `ssh -J bitcube root@192.168.9.1`. OpenWrt: `logread`, `/tmp/dhcp.leases`, `iwinfo`, `ethtool`, `uci`. Its LAN1 port (`eth1`) is switched off at runtime since 23 Oct (the gallery cam's cable was faulty; the cam is Wi-Fi only): `ip link set eth1 up` once its cable is out. Changing the router's saved configuration (`uci commit`, Wi-Fi, firewall) counts as a network change: ask Gavin first.
 - Git push to `gavaiken/river-bitcube` only (deploy key `~/.ssh/river_bitcube_deploy`). Commit in small steps, `git pull --rebase` first.
 - Node, Python and ffmpeg from `/opt/homebrew`; you can't install new system software.
 

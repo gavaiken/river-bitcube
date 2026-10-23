@@ -16,7 +16,7 @@ title: Execution plan
 - **The river site is down** (solar panel giving 0 W, Starlink set to switch off at 22:00, battery dead). We have one 64 s river clip; the hourly recorder catches more whenever the site comes back.
 
 ## Before the lift (22 Oct night): everything still to resolve
-Once bitcube, the router and the switch are in the ceiling we can't get back to them. Full instructions: [ceiling page](ceiling.md).
+Once bitcube, the router and the switch are in the ceiling we can't get back to them. **Step-by-step for the lift: [install guide](install.md).** Background: [ceiling page](ceiling.md).
 
 **Done (session N + Gavin, 22–23 Oct; [summary](sessions/N.md)):** our router and Wi-Fi `gray-river`, reservations, bitcube online by cable at 1 Gbps (`.79`) with Wi-Fi fallback (`.80`), Tailscale routes approved, VNC from the mini, BIOS powers on after a power cut, restarts, a power cut of bitcube + router + cam together (no lights, switch or HDMI connected; bitcube back by itself, TD reopened `river-local-oct-18.toe`), bitcube's cable pulled with Wi-Fi idle (back over Wi-Fi in 3 s), VNC with no monitor, cam reachable and posting clips, the cam rebooted remotely through its own API, stale settings removed (S2, S3, S17–S19, S21).
 

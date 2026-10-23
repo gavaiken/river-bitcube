@@ -24,6 +24,8 @@ bitcube DisplayPort ◄── dummy display plug (recommended: a desktop VNC can
 - the lighting switch to the router;
 - the Colorlight sender's cable to the router or the lighting switch.
 
+**Step-by-step for the person on the lift:** [install guide](install.html).
+
 ## Addresses (router `192.168.9.1`, Wi-Fi `gray-river`)
 | Device | Connection | MAC | Address |
 |---|---|---|---|

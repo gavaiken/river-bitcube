@@ -64,7 +64,7 @@ function rows(s) {
       md ? `tick ${md.tick} · ${md.mood}` : (s.modal?.error || '')],
     ['Cameras → Modal link', link_ ? link_.processes > 0 : undefined, 'on bitcube', '', link_ ? (link_.gallery?.last || '').replace(/^\S+\s+INFO\s+/, '') : ''],
     ['River recorder', pr?.recorder ? true : undefined, 'on bitcube', '', pr?.recorder ? `${pr.recorder.clips} clips` : ''],
-    ['Project site', true, 'GitHub Pages', link(PAGES, 'status') + link(PAGES + 'show-files.html', 'show files') + link(PAGES + 'execution-plan.html', 'plan'), ''],
+    ['Project site', true, 'GitHub Pages', link(PAGES, 'status') + link(PAGES + 'show-files.html', 'show files') + link(PAGES + 'execution-plan.html', 'plan') + link(PAGES + 'install.html', 'install guide'), ''],
   ];
 }
 function render(s) {
