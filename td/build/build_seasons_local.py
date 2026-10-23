@@ -388,30 +388,62 @@ rcv = get(nullTOP, 'rope_canvas', 2550, 0)
 rcv.inputConnectors[0].connect(fl)
 rcv.viewer = True
 
-# ---- HUB75 quads: quad 1 from its camera-space corners; 2-4 as windows of the field until the re-map ----
+# ---- HUB75 quads (Gray Area, 23 Oct): four portrait screens hung one above another on the driftwood ----
+# Each quad shows a portrait (1:2) window of the field; the windows are stacked down one column of the
+# field in the order the screens hang (Screens page: Screenorder, top first), so the water flows down
+# through them. The receive card shows each 256x128 quad turned on its side, so each quad has a Flip TOP
+# (Quad<k>flop + Quad<k>flipx/flipy) that turns its 128x256 window into a 256x128 feed that comes out
+# upright. Screentest swaps the river for a big "F<k>" to check that on camera (F reads wrong if mirrored).
+SCR = page(sz, 'Screens')
+if not hasattr(sz.par, 'Screenorder'):
+    SCR.appendStr('Screenorder', label='Screen order, top to bottom (quad numbers)')[0].val = '1 2 3 4'
+    p = SCR.appendFloat('Screencolumn', label='Column centre (u)')[0]
+    p.val, p.normMin, p.normMax = 0.5, 0, 1
+    SCR.appendToggle('Screentest', label='Test: show F<quad> instead of the river')[0].val = False
+for k in range(1, 5):
+    if not hasattr(sz.par, f'Quad{k}flop'):
+        m = SCR.appendMenu(f'Quad{k}flop', label=f'Quad {k} flop')[0]
+        m.menuNames = ['noflop', 'bottomleft', 'topleft']
+        m.menuLabels = ['Off', 'Bottom left', 'Top left']
+        m.val = 'bottomleft'
+        SCR.appendToggle(f'Quad{k}flipx', label=f'Quad {k} flip x')[0].val = False
+        SCR.appendToggle(f'Quad{k}flipy', label=f'Quad {k} flip y')[0].val = False
+WIN_W = 128 / 1280                  # window width as a fraction of the 1280x720 field
+WIN_H = 256 / 720
+STEP = (1 - WIN_H) / 3              # four windows from the top of the field to the bottom, overlapping
 quads = []
-q1 = pm.get('hub75_quad1')
-cp = get(cornerpinTOP, 'quad1_pin', 1950, 300)
-cp.inputConnectors[0].connect(out)
-res(cp, 256, 128)
-if q1 is not None:
-    for corner in ('tl', 'tr', 'bl', 'br'):
-        getattr(cp.par, f'extract{corner}unit').val = 'fraction'
-        getattr(cp.par, f'extract{corner}x').val = q1[corner][0]
-        getattr(cp.par, f'extract{corner}y').val = q1[corner][1]
-cp.par.extractmapping = 'perspective'
-cp.par.extend = 'zero'
-quads.append(cp)
-for k in (2, 3, 4):
-    c = get(cropTOP, f'quad{k}_window', 1950, 300 - 150 * (k - 1))
+for k in range(1, 5):
+    y = 300 - 150 * (k - 1)
+    c = get(cropTOP, f'quad{k}_window', 1950, y)
     c.inputConnectors[0].connect(out)
-    c.par.cropleft, c.par.cropright = 0.04 + 0.32 * (k - 2), 0.04 + 0.32 * (k - 2) + 0.28
-    c.par.cropbottom, c.par.croptop = 0.3, 0.6
-    f_ = get(fitTOP, f'quad{k}_fit', 2025, 300 - 150 * (k - 1))
+    c.par.cropleft.expr = f"parent().par.Screencolumn - {WIN_W / 2:.5f}"
+    c.par.cropright.expr = f"parent().par.Screencolumn + {WIN_W / 2:.5f}"
+    slot = f"[int(q) for q in parent().par.Screenorder.eval().split()].index({k}) if '{k}' in parent().par.Screenorder.eval().split() else {k - 1}"
+    c.par.croptop.expr = f"1 - ({slot}) * {STEP:.5f}"
+    c.par.cropbottom.expr = f"1 - ({slot}) * {STEP:.5f} - {WIN_H:.5f}"
+    f_ = get(fitTOP, f'quad{k}_fit', 2000, y)
     f_.inputConnectors[0].connect(c)
     f_.par.fit = 'fill'
-    res(f_, 256, 128)
-    quads.append(f_)
+    res(f_, 128, 256)
+    t = get(textTOP, f'quad{k}_testtext', 2000, y - 60)
+    t.par.text = f'F{k}'
+    res(t, 128, 256)
+    t.par.fontsizex = 90
+    t.par.alignx, t.par.aligny = 'center', 'center'
+    t.par.bgcolorr, t.par.bgcolorg, t.par.bgcolorb, t.par.bgalpha = 0.0, 0.05, 0.25, 1
+    sw = get(switchTOP, f'quad{k}_src', 2050, y)
+    sw.inputConnectors[0].connect(f_)
+    sw.inputConnectors[1].connect(t)
+    sw.par.index.expr = 'int(parent().par.Screentest)'
+    fl_ = get(flipTOP, f'quad{k}_orient', 2075, y)
+    fl_.inputConnectors[0].connect(sw)
+    fl_.par.flop.expr = f'parent().par.Quad{k}flop'
+    fl_.par.flipx.expr = f'parent().par.Quad{k}flipx'
+    fl_.par.flipy.expr = f'parent().par.Quad{k}flipy'
+    quads.append(fl_)
+for old in ('quad1_pin',):          # the Agape corner pin is gone: the 18 Oct map's quad 1 was at Agape
+    if sz.op(old):
+        sz.op(old).destroy()
 outs = []
 for k, q in enumerate(quads, start=1):
     g = get(levelTOP, f'quad{k}_gain', 2100, 300 - 150 * (k - 1))
