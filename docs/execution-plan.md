@@ -4,7 +4,7 @@ title: Execution plan
 
 # Execution plan: A River Becoming at Gray Area
 
-**Updated Thu 22 Oct 2026 by session A (coordinator, Mac mini); install network and the before-the-lift list by session N (Mac mini), 23:25.** This is the working plan: steps to work through in order, the decisions behind them, and the requirements they must meet. **Add to it freely:** new steps go in the table with the next free number, new requirements get the next R-number, and anything decided gets a D-number with the date and who decided. Terms are defined in [`GLOSSARY.md`](https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md). Phase 1 (the Agape build, 17–21 Oct) is further down as history.
+**Updated Thu 22 Oct 2026 by session A (coordinator, Mac mini); install network, pre-lift tests and the before-the-lift list by session N (Mac mini), Fri 00:05 ([summary](sessions/N.md#session-n-summary--fri-23-oct-2026-0005-mac-mini--opus-55)).** This is the working plan: steps to work through in order, the decisions behind them, and the requirements they must meet. **Add to it freely:** new steps go in the table with the next free number, new requirements get the next R-number, and anything decided gets a D-number with the date and who decided. Terms are defined in [`GLOSSARY.md`](https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md). Phase 1 (the Agape build, 17–21 Oct) is further down as history.
 
 **How to work it:** any Claude session (on the mini or on bitcube) starts with `git pull`, takes the first ➡️ step it can do, marks it ✅ / ⏳ / ❌ here after each step with a line in `docs/sessions/<letter>.md`, and pushes. The [coordination contract](#coordination-contract-every-bitcube-session-follows-this) below still applies, and only one Claude works on bitcube at a time. Gavin says **"sync"** to session A for a report.
 
@@ -18,11 +18,11 @@ title: Execution plan
 ## Before the lift (22 Oct night): everything still to resolve
 Once bitcube, the router and the switch are in the ceiling we can't get back to them. Full instructions: [ceiling page](ceiling.md).
 
-**Done (session N + Gavin, 22 Oct):** our router and Wi-Fi `gray-river`, reservations, bitcube online by cable at 1 Gbps (`.79`) with Wi-Fi fallback (`.80`), Tailscale routes approved, VNC from the mini, BIOS powers on after a power cut, restart and power-cut tests, cam reachable and posting clips, the cam rebooted remotely through its own API, stale settings removed (S2, S3, S17–S19, S21).
+**Done (session N + Gavin, 22–23 Oct; [summary](sessions/N.md)):** our router and Wi-Fi `gray-river`, reservations, bitcube online by cable at 1 Gbps (`.79`) with Wi-Fi fallback (`.80`), Tailscale routes approved, VNC from the mini, BIOS powers on after a power cut, restart and power-cut tests, cam reachable and posting clips, the cam rebooted remotely through its own API, stale settings removed (S2, S3, S17–S19, S21).
 
 **Still to resolve, in order:**
-1. ✅ **S22, the cam's address on Ethernet:** one static lease, both cam MACs → `192.168.9.76` (Wi-Fi `EC:71:DB:EB:EB:23`, wired `EC:71:DB:B5:45:FD`), set over SSH. Prove it next time the cam is on a cable. Decide whether the cam is cabled in its final spot (S23).
-2. ➡️ **S28, remote access to the router:** on Will's tailnet as `router-gray-area-gl-axt1800` with the mini's SSH key; SSH works through bitcube. **Still to do:** the share into Gavin's tailnet (not visible from the mini yet). Will's SSH key too? Recommended for Will, not needed for Dave. After this, Claude can do 1 and S29 remotely.
+1. ⚠️ **The gallery cam's link:** one static lease covers both its MACs (`.76`), but **on a cable it didn't request an address after power cycles**; on Wi-Fi it comes back on `.76`. **Recommended: cam on Wi-Fi only, cable unplugged** (or debug the wired port on the ground). Then its position (S23).
+2. ➡️ **S28, remote access to the router:** on Will's tailnet as `router-gray-area-gl-axt1800` with the mini's SSH key; SSH works through bitcube. **Still to do:** the share into Gavin's tailnet isn't visible from the mini yet. No other SSH keys (Gavin). After this, Claude can do 1 and S29 remotely.
 3. ✅ **S25, bitcube's ports marked** (blue = router link, white = LIGHTS): ROUTER (`Ethernet 2`) and LIGHTS (`Ethernet`), checked live 23:27.
 4. **S20 on the ground:** lighting switch on LIGHTS, Colorlight on HDMI; ropes and HUB75 lit from TD before lifting, so we know the cabling works.
 5. **S26, tests:** ✅ power cut (all three at once), ✅ VNC with no monitor, ✅ cable pulled with Wi-Fi idle (3 s gap). ⚠️ **The cam on a cable doesn't reliably get an address after a power cycle; on Wi-Fi it does. Leave it on Wi-Fi unless debugged.** Still to do:

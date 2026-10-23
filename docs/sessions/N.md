@@ -52,9 +52,70 @@ Keep the lighting switch and the Colorlight cable off the router.
 - 00:00 **Cable-pull test with Wi-Fi idle** (the real case): bitcube unreachable at 00:00:33, back over Wi-Fi at 00:00:36: **a 3 s gap**. ✅
 - 00:00 Cam power-cycled with its cable in: by 00:03 it hadn't asked for an address and didn't answer at `.76`. **Open:** the cam on a cable isn't reliable after power cycles; on Wi-Fi it has come back on `.76` every time. Recommendation: leave the cam on Wi-Fi only (no cable) unless we debug its wired behaviour on the ground.
 
-### Waiting on Gavin
-- The [before-the-lift list](../execution-plan.md#before-the-lift-22-oct-night-everything-still-to-resolve): S22 lease for both cam MACs (or S28 first so Claude can do it), D24 OK, S25 labels (live check), S20 lights on the ground, S26 tests.
+### SESSION N SUMMARY — Fri 23 Oct 2026, 00:05 (Mac mini · Opus 5.5)
+**Done**
+- **S2/S2.1–S2.3, S3, S17–S19: install network.**
+  - Router: our second GL-AXT1800 at Gray Area, LAN `192.168.9.1/24`, Wi-Fi `gray-river` on 2.4 + 5 GHz, Multi-WAN failover Ethernet → Repeater → Tethering → Cellular. Uplink for now: Repeater on Gray Area Staff Wi-Fi.
+  - Reservations: cam `.76` (both MACs), bitcube wired `.79`, bitcube Wi-Fi `.80`.
+  - bitcube:
+    - `Ethernet 2` had DHCP off with no address; now DHCP.
+    - Stale `192.168.1.99` and its gateway removed from the lighting NIC.
+    - `gray-river` profile set to Private.
+    - Tailscale routes `192.168.9.76/32` + `192.168.9.1/32` approved (replacing `10.0.7.76/32`).
+    - `secrets.local.json` cam host → `192.168.9.76`.
+    - Modal link restarted; gallery clips posting.
+    - loopMIDI removed from login.
+- **S21:** BIOS *Auto Power On* is Enabled; bitcube powers on by itself after a power cut.
+- **S22:** the cam's lease lists both MACs (Wi-Fi `EC:71:DB:EB:EB:23`, wired `EC:71:DB:B5:45:FD`) → `.76`. Set over SSH; backup `/etc/config/dhcp.bak-20261022`.
+- **S25:** ports marked with tape: blue = bitcube ↔ router (cable ends and ports), white = bitcube's LIGHTS port. Checked live: ROUTER = `Ethernet 2`.
+- **S26 tests:** ✅ restarts; ✅ power cut of all three (bitcube online in ~80 s, TD running); ✅ VNC with no monitor; ✅ bitcube's cable pulled with Wi-Fi idle (3 s gap).
+- **S28 (mostly):** router on Will's tailnet as `router-gray-area-gl-axt1800` (100.127.193.8), LAN/WAN access and exit nodes off, no routes. River router renamed `router-river-gl-axt1800`. Mini's SSH key on the router.
+- **Docs:**
+  - [ceiling page](../ceiling.md): setup, addresses, tape colours, fallbacks, router access steps, status;
+  - execution plan: before-the-lift list, S16–S31, R15–R16, D18–D25;
+  - welcome page and gallery card credit Andi and Lilian as artists;
+  - system map updated;
+  - `tools/mini/bitcube_ps.sh` (run PowerShell on bitcube from the mini).
 
-### Waiting on Gavin (earlier)
-- S2.1/S2.2 on site. Tell session N when bitcube is cabled and powered.
-- After S3: approve bitcube's `192.168.9.76/32` and `192.168.9.1/32` routes in Will's Tailscale admin console (Machines → bitcube → Edit route settings).
+**Not done / open**
+- ⚠️ **Gallery cam on a cable is unreliable:** after power cycles it didn't request an address over the cable; on Wi-Fi it returns on `.76`. **Recommendation: cam on Wi-Fi only, cable unplugged.** Last seen 00:03: not answering, after Gavin's power cycle with the cable in. Check it's back on `.76` (Wi-Fi) once the cable is out.
+- **S28:** the share into Gavin's tailnet isn't visible from the mini yet. Until it is, the router is only reachable through bitcube (`ssh -J bitcube root@192.168.9.1`).
+- **S16:** Gray Area's wired drop not connected yet; the WAN failover test waits on it.
+- **S29:** after a power cut, 5 GHz `gray-river` can wait 1–10 min (radar check) while the router repeats a DFS channel. Fix with the wired drop + a fixed non-DFS 5 GHz channel.
+- **S20:** lights not tested on the ground. LIGHTS port (white) → switch → rack + PSAC10s; HDMI → Colorlight.
+- **S23:** cam position (Colin, Lilian).
+- **S1:** seasons show file not deployed. **S24:** system map for the rig.
+- D24 and D25 recorded as decided/recommended; Gavin confirmed D24 (Will's tailnet).
+
+**Evidence:** commits `bb773e9` … `fc1398c` on main; router config backup on the router; logs above.
+
+**Hardware state now (00:05):**
+- bitcube on, TD running, online over Wi-Fi `.80` (blue cable pulled for the test; plug it back in).
+- Router on; its internet comes from Gray Area Staff Wi-Fi.
+- Cam: power-cycled, with its cable in at 00:00.
+- No HDMI, monitor or lights connected.
+
+**Changed outside the repo:**
+- On bitcube:
+  - network settings;
+  - Tailscale routes;
+  - `secrets.local.json` (cam IP);
+  - HKCU `Run` (loopMIDI);
+  - Modal link restarted.
+- On the router: everything above, plus `/etc/config/dhcp`.
+- bitcube's own checkout of this repo is behind (`d3ec7e5`); the next bitcube session starts with `git pull`.
+
+**How to reach things from the mini**
+- bitcube:
+  - `ssh bitcube`;
+  - PowerShell via `tools/mini/bitcube_ps.sh`;
+  - VNC via `~/claude/local/bitcube-vnc/vnc.py shot x.png`.
+- Router: `ssh -J bitcube root@192.168.9.1`.
+- Cam API (Login → Reboot / GetLocalLink / SetWifi): from bitcube, with the login from `secrets.local.json`.
+
+**Decisions or answers needed from Gavin:** cam on Wi-Fi only (recommended)? Accept the router share on Gavin's tailnet if it isn't. D25 (lights straight into bitcube) to confirm.
+
+**Suggested next steps:**
+- Plug bitcube's blue cable back in.
+- Unplug the cam's cable.
+- Then S20 on the ground → lift → S1 (remote) → S4/S7.
