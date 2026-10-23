@@ -60,7 +60,25 @@ def locate(quarters, black, thresh=40, min_px=30):
     hm = homography([QUARTERS[k] for k in CORNERS], [cents[k] for k in CORNERS])
     pts = apply_h(hm, np.array([UNIT[k] for k in CORNERS], float))
     corners = {k: (float(p[0]), float(p[1])) for k, p in zip(CORNERS, pts)}
+    area = quad_area([corners[k] for k in CORNERS])
+    # A screen's quarters are similar in size and fill their quad; a tiny or collapsed quad is something else
+    # changing in the picture (the camera's clock, someone walking), as for the back screens on 23 Oct.
+    if area < 400 or area < 0.3 * sum(sizes) or min(sizes) < 0.3 * max(sizes):
+        return None
     return {'corners': corners, 'px': int(sum(sizes)), 'balance': round(min(sizes) / max(sizes), 2)}
+
+
+def quad_area(pts):
+    x, y = np.asarray(pts, float).T
+    return float(abs(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1))) / 2)
+
+
+def keep_inside(uv, margin=0.02):
+    """Shift an estimated screen (TD UVs) so it lies inside the field, keeping its shape."""
+    us, vs = [c[0] for c in uv.values()], [c[1] for c in uv.values()]
+    du = max(0, margin - min(us)) - max(0, max(us) - (1 - margin))
+    dv = max(0, margin - min(vs)) - max(0, max(vs) - (1 - margin))
+    return {k: [round(c[0] + du, 5), round(c[1] + dv, 5)] for k, c in uv.items()}
 
 
 def _inside(pts, poly):
@@ -146,7 +164,7 @@ def main():
         else:
             est = estimate(seen, k)
             if est:
-                screens[k] = to_uv(est, w, h) | {'estimated': True, 'from': NEIGHBOUR[k][0]}
+                screens[k] = keep_inside(to_uv(est, w, h)) | {'estimated': True, 'from': NEIGHBOUR[k][0]}
     im = Image.fromarray(np.clip(np.maximum.reduce([frames[k, q] for k in (1, 2, 3, 4) for q in (1, 2, 3, 4)]), 0, 255).astype(np.uint8))
     dr = ImageDraw.Draw(im)
     for k, s in screens.items():

@@ -1,7 +1,7 @@
 import numpy as np
 from PIL import Image, ImageDraw
 
-from pixelmap.screens import estimate, locate, to_uv
+from pixelmap.screens import estimate, keep_inside, locate, to_uv
 
 W, H = 480, 360
 SPANS = {1: (0, 0), 2: (0.5, 0), 3: (0, 0.5), 4: (0.5, 0.5)}     # Screenquarter -> (s, t) of its top left, as seen
@@ -72,3 +72,18 @@ def test_estimate_puts_screen_1_above_screen_2():
 def test_uv_is_v_up():
     uv = to_uv({'tl': (0, 0), 'br': (W, H)}, W, H)
     assert uv['tl'] == [0.0, 1.0] and uv['br'] == [1.0, 0.0]
+
+
+def test_a_flickering_dot_is_not_a_screen():
+    quarters, black = frames(tilted(240, 180, 60, 120, 0))
+    dots = {}
+    for q in quarters:                          # one small blob that moves a pixel per frame (a clock digit)
+        f = black.copy()
+        f[20:26, 100 + q:106 + q] = 240
+        dots[q] = f
+    assert locate(dots, black) is None
+
+
+def test_estimate_kept_inside_the_field():
+    uv = keep_inside({'tl': [0.6, 1.1], 'tr': [0.7, 1.1], 'br': [0.7, 0.9], 'bl': [0.6, 0.9]})
+    assert max(c[1] for c in uv.values()) <= 0.98 + 1e-9 and abs(uv['tl'][1] - uv['bl'][1] - 0.2) < 1e-6
