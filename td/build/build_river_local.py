@@ -12,6 +12,7 @@
 # off, so it refuses to run in river.toe (the login show file).
 import glob
 import json
+import sys
 
 REPO = 'C:/Users/user/River/river-bitcube'
 PIXELMAP = sorted(glob.glob(REPO + '/tools/pixelmap/pixelmap-????-??-??.json'))[-1].replace('\\', '/')   # newest
@@ -293,12 +294,17 @@ out.viewer = True
 with open(PIXELMAP, encoding='utf-8') as f:
     pm = json.load(f)
 uv = {(p['rope'], p['px']): (p['u'], p['v']) for p in pm['points']}
+# Ropes the capture missed (dark on 18 Oct: 9 and 17) borrow a neighbour's positions until the re-map (S4).
+if REPO + '/tools' not in sys.path:
+    sys.path.insert(0, REPO + '/tools')
+from pixelmap.fill import fill_unmapped
+uv, BORROWED = fill_unmapped(uv, N_ROPES, N_PX)
 tab = get(tableDAT, 'uv_table', 1950, -150)
 tab.clear()
 tab.appendRow(['u', 'v'])
 for r in range(N_ROPES):
     for px in range(N_PX):
-        tab.appendRow(uv.get((r, px), (-1, -1)))      # unmapped ropes sample outside the field = black
+        tab.appendRow(uv.get((r, px), (-1, -1)))      # (-1, -1): outside the field = black
 tab.par.file = ''
 
 dc = get(dattoCHOP, 'uv_chop', 2100, -150)
