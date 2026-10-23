@@ -10,7 +10,7 @@
         "mission control": "ok: serving the page",
         "bitcube": "ok: online over Tailscale, up 3.1 h, 676 GB free",
         "touchdesigner": "ok: online file at 59.8 fps",
-        "seasons": "ok: not part of the online file (its controls are unavailable; expected)",
+        "seasons": "warning: the river's year is not running (the live river file is); its controls are unavailable until you switch",
         "ropes": "ok: showing the rain fallback, sender open, 164 + 171 W",
         "rope box 1": "ok: answers",
         "rope box 2": "ok: answers",

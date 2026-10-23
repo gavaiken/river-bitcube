@@ -197,7 +197,7 @@ const SCENARIOS = {
     title: 'River camera has gone quiet (online file running)',
     description: 'TouchDesigner is running the online show file (river-online-oct-20.toe), the one that uses the live river camera and Dave\'s agent, so the seasons page isn\'t served (fetch failed: connection refused on 9981; td.seasons is null): expected for this file. The fault: the river camera\'s RTSP port still accepts TCP connections (devices.river_cam true) but sends no frames. TD\'s relay reports its last frame 1800 s ago and fresh false (river_cam.py never records a stream error, so error stays null while the relay keeps restarting ffmpeg); the panels and ropes have fallen back to the rain. The Modal link\'s river capture is in the same state: its last successful clip (the last INFO line) was at 01:58, an hour ago, and every clip since has failed with an ERROR line about 70 s apart, so the log file itself is still fresh (log_age_s small). The recorder\'s current run times out. The cached river still is 30 minutes old.',
     expect: { headline: 'The river camera has sent no frames for 30 minutes: the show is running on the rain fallback (online file)', severity: 'warning',
-      items: items({ touchdesigner: 'ok: online file at 59.8 fps', seasons: 'ok: not part of the online file (its controls are unavailable; expected)',
+      items: items({ touchdesigner: 'ok: online file at 59.8 fps', seasons: 'warning: the river\'s year is not running (the live river file is); its controls are unavailable until you switch',
         ropes: 'ok: showing the rain fallback, sender open, 164 + 171 W',
         'river camera': 'warning: port answers but no frames for 1800 s (TD relay); last clip to Dave at 01:58',
         'modal link': 'warning: river clips failing since 01:58; gallery clips fine', recorder: 'warning: current run can\'t get video (timed out)' }),
@@ -313,7 +313,7 @@ const SCENARIOS = {
     title: 'The online file is running, not the seasons file',
     description: 'TouchDesigner is running river-online-oct-20.toe (the live river plus Dave\'s agent and canvas). That file has no seasons COMP, so nothing listens on port 9981: the seasons fetch fails (connection refused, reported as "fetch failed"), devices.seasons_page is false and td.seasons is null. The live river relay is healthy (fresh frames from the river camera, infrared at this hour). The seasons file is still the boot file, so the next restart would bring it back. Everything else is up.',
     expect: { headline: 'TouchDesigner is running the online file, not the seasons file: the river\'s year and its controls are unavailable', severity: 'warning',
-      items: items({ touchdesigner: 'ok: online file at 60 fps', seasons: 'down: control page not served (not part of the online file)',
+      items: items({ touchdesigner: 'ok: online file at 60 fps', seasons: 'warning: the river\'s year is not running (the live river file is); switch to it to get the year and its controls back',
         ropes: 'ok: showing the live river, sender open, 158 + 166 W', 'river camera': 'ok: live, fresh frames (infrared)' }),
       action: 'If nobody chose this on purpose, press Switch now → river-local-oct-22-seasons.toe in mission control (the lights go dark for about a minute). If Colin wants the live river tonight, leave it.' },
     build: () => {
