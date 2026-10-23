@@ -1,0 +1,81 @@
+{
+  "_scenario": {
+    "now": 1792749540000,
+    "title": "bitcube is offline",
+    "description": "The mini can't open a TCP connection to bitcube over Tailscale, the seasons page can't be fetched (fetch failed) and the SSH probe fails (exit 255: \"can't reach bitcube over SSH\"); that probe error is 400 s old. Nothing behind bitcube can be checked: not TouchDesigner, the ropes, the boxes, the panels, the cameras, the router or the internet at Gray Area. Dave's agent is fine (the mini reaches Modal directly). No camera stills: they are fetched through bitcube.",
+    "expect": {
+      "headline": "bitcube is offline: nothing behind it can be checked",
+      "severity": "down",
+      "items": {
+        "mission control": "ok: serving the page",
+        "bitcube": "down: not reachable over Tailscale (TCP 22); the probe has failed for 400 s",
+        "touchdesigner": "unknown: behind bitcube",
+        "seasons": "unknown: the fetch failed because bitcube is down, not because the file is not running",
+        "ropes": "unknown: behind bitcube",
+        "rope box 1": "unknown: behind bitcube",
+        "rope box 2": "unknown: behind bitcube",
+        "hub75 panels": "unknown: behind bitcube",
+        "gallery camera": "unknown: behind bitcube (no still)",
+        "river camera": "unknown: behind bitcube (no still)",
+        "router": "unknown: behind bitcube",
+        "internet": "unknown: behind bitcube",
+        "modal agent": "ok: reachable from the mini, ticked a minute ago",
+        "modal link": "unknown: behind bitcube",
+        "recorder": "unknown: behind bitcube"
+      },
+      "action": "Someone at Gray Area checks bitcube's power light and the router; a restart takes about a minute and bitcube comes back by itself. Nothing can be done from here, and every control would fail."
+    }
+  },
+  "status": {
+    "bitcube": {
+      "at": 1792749536000,
+      "value": {
+        "online": false
+      },
+      "age_s": 4
+    },
+    "seasons": {
+      "at": 1792749536000,
+      "error": "fetch failed",
+      "age_s": 4
+    },
+    "modal": {
+      "at": 1792749531000,
+      "value": {
+        "tick": 4229,
+        "mood": "attentive",
+        "ok": true,
+        "finished_at": "2026-10-23T09:57:48+00:00",
+        "next_tick_epoch": 1792749600,
+        "scene": {
+          "animation": "blooms",
+          "palette": "sandstone-dusk",
+          "colors": [
+            "#c49b6e",
+            "#dbb88a",
+            "#8c7355",
+            "#3a3028",
+            "#ccaa77"
+          ],
+          "speed": 0.28,
+          "turbulence": 0.62
+        },
+        "set_at": "2026-10-23T02:57:47-07:00"
+      },
+      "age_s": 9
+    },
+    "probe": {
+      "at": 1792749140000,
+      "error": "can't reach bitcube over SSH",
+      "age_s": 400
+    }
+  },
+  "cameras": {
+    "gallery": false,
+    "river": false
+  },
+  "camera_age_s": {
+    "gallery": null,
+    "river": null
+  }
+}

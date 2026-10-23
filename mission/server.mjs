@@ -97,7 +97,17 @@ setInterval(async () => {
 
 // ---- helpers ---------------------------------------------------------------------------------------------
 const PAGES = { '/status': 'status.html', '/map': 'map.html', '/chat': 'chat.html', '/mission': 'mission.html', '/login': 'login.html' };
-const STATIC = { '/app.css': ['app.css', 'text/css'], '/app.js': ['app.js', 'text/javascript'] };
+// Assets under public/ (styles, scripts, icons) are served to anyone, like the login page itself: they hold no data.
+// HTML is only served through PAGES (behind the login) and, for design work, /proto/<name> -> public/proto/<name>.html.
+const PUBLIC = join(HERE, 'public');
+const TYPES = { css: 'text/css', js: 'text/javascript', mjs: 'text/javascript', svg: 'image/svg+xml', png: 'image/png',
+                ico: 'image/x-icon', webmanifest: 'application/manifest+json', woff2: 'font/woff2', json: 'application/json' };
+function staticFile(path) {
+  const m = path.match(/^\/([a-z0-9_-]+(?:\/[a-z0-9_-]+)*\.([a-z0-9]+))$/);
+  if (!m || !TYPES[m[2]]) return null;
+  const file = join(PUBLIC, m[1]);
+  return existsSync(file) ? [file, TYPES[m[2]]] : null;
+}
 const MAP_DIR = join(REPO, 'docs', 'system');      // the interactive system map, served with live status
 const page = (name) => readFileSync(join(HERE, 'public', name));
 
@@ -131,7 +141,8 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const path = url.pathname;
   try {
-    if (STATIC[path]) return send(res, 200, page(STATIC[path][0]), STATIC[path][1]);
+    const st = req.method === 'GET' && staticFile(path);
+    if (st) return send(res, 200, readFileSync(st[0]), st[1]);
     if (path === '/login' && req.method === 'GET') return send(res, 200, page('login.html'), 'text/html; charset=utf-8');
     if (path === '/login' && req.method === 'POST') {
       if (!sameOrigin(req)) return send(res, 403, { error: 'cross-origin' });
@@ -168,6 +179,8 @@ const server = createServer(async (req, res) => {
       return send(res, 302, '', 'text/plain', { location: '/status', 'set-cookie': `scenario=${fx[1]}; Path=/; SameSite=Lax` });
     }
     if (PAGES[path]) return send(res, 200, page(PAGES[path]), 'text/html; charset=utf-8');
+    const proto = path.match(/^\/proto\/([a-z0-9-]+)$/);
+    if (proto && existsSync(join(PUBLIC, 'proto', `${proto[1]}.html`))) return send(res, 200, page(join('proto', `${proto[1]}.html`)), 'text/html; charset=utf-8');
     if (path === '/map/' || path === '/map/index.html') {
       const html = readFileSync(join(MAP_DIR, 'index.html'), 'utf8')
         .replace('</body>', '<script>' + readFileSync(join(HERE, 'public', 'map-live.js'), 'utf8') + '</script></body>');

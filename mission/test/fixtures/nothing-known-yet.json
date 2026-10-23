@@ -1,0 +1,46 @@
+{
+  "_scenario": {
+    "now": 1792749540000,
+    "title": "Mission control just started",
+    "description": "The server started a second ago: only the first fast poll has run, so the snapshot holds just the bitcube TCP check (online). The seasons, modal and probe keys don't exist yet (they appear after their first poll: within 5 s, 30 s and up to a minute). No stills yet.",
+    "expect": {
+      "headline": "Checking… bitcube answers; everything else is not known yet",
+      "severity": "unknown",
+      "items": {
+        "mission control": "ok: just started",
+        "bitcube": "ok: reachable over Tailscale",
+        "touchdesigner": "unknown: not checked yet",
+        "seasons": "unknown: not checked yet",
+        "ropes": "unknown: not checked yet",
+        "rope box 1": "unknown: not checked yet",
+        "rope box 2": "unknown: not checked yet",
+        "hub75 panels": "unknown: not checked yet",
+        "gallery camera": "unknown: not checked yet",
+        "river camera": "unknown: not checked yet",
+        "router": "unknown: not checked yet",
+        "internet": "unknown: not checked yet",
+        "modal agent": "unknown: not checked yet",
+        "modal link": "unknown: not checked yet",
+        "recorder": "unknown: not checked yet"
+      },
+      "action": "Wait a minute. Nothing is wrong yet, and nothing is known to be right either."
+    }
+  },
+  "status": {
+    "bitcube": {
+      "at": 1792749539000,
+      "value": {
+        "online": true
+      },
+      "age_s": 1
+    }
+  },
+  "cameras": {
+    "gallery": false,
+    "river": false
+  },
+  "camera_age_s": {
+    "gallery": null,
+    "river": null
+  }
+}

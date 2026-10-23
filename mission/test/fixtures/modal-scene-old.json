@@ -1,0 +1,349 @@
+{
+  "_scenario": {
+    "now": 1792749540000,
+    "title": "Dave's agent stopped ticking 9 hours ago",
+    "description": "Modal answers (status.json and state.json fetched fine, ok still true), but the last tick finished at 17:58 yesterday evening, nine hours ago, and next_tick_epoch is in the past: the agent should have ticked every 5 minutes until 23:55 and didn't. The Modal link's sync log has had nothing to write for 9 hours (it only logs changes). The seasons file doesn't use Dave's scene, so the room is unaffected (the online file would be). Everything else is as in all-good. Note: between 23:55 and 07:00 PDT the agent rests by design and a past next_tick is normal; this one missed six hours of daytime ticks.",
+    "expect": {
+      "headline": "Dave's agent hasn't ticked for 9 hours (the room is unaffected: the seasons file doesn't use its scene)",
+      "severity": "warning",
+      "items": {
+        "mission control": "ok: serving the page",
+        "bitcube": "ok: online over Tailscale, up 3.1 h, 676 GB free",
+        "touchdesigner": "ok: seasons file at 60 fps, no errors",
+        "seasons": "ok: automatic, spring, intensity 0.46; people counter not available (normal)",
+        "ropes": "ok: showing the river, sender open, 182 + 191 W of 600 W per box",
+        "rope box 1": "ok: answers",
+        "rope box 2": "ok: answers",
+        "hub75 panels": "ok: LED display present, brightness 1",
+        "gallery camera": "ok: reachable, clips posting, still 25 s old",
+        "river camera": "ok: reachable, clips posting (the seasons file does not use it)",
+        "router": "ok: answers",
+        "internet": "ok: bitcube reaches the internet",
+        "modal agent": "warning: last tick 17:58 yesterday, next tick 9 h in the past; its ok flag is still true",
+        "modal link": "warning: sync has seen no new state for 9 h; clips are posting fine",
+        "recorder": "ok: 14 clips, last run finished"
+      },
+      "action": "Tell Dave: he checks the Modal dashboard for a failing tick or a stopped deployment. Nothing to do in the gallery."
+    }
+  },
+  "status": {
+    "bitcube": {
+      "at": 1792749536000,
+      "value": {
+        "online": true
+      },
+      "age_s": 4
+    },
+    "seasons": {
+      "at": 1792749536000,
+      "value": {
+        "mode": "automatic",
+        "effective_mode": "automatic",
+        "phase": 1.12,
+        "season": "spring",
+        "weights": {
+          "winter": 0,
+          "spring": 0.965,
+          "summer": 0.035,
+          "autumn": 0
+        },
+        "intensity": 0.464,
+        "target": null,
+        "manual": {
+          "season": "summer",
+          "intensity": 0.5
+        },
+        "presence": {
+          "available": false,
+          "now": 0,
+          "usual": 0.75,
+          "relative": 0,
+          "empty_for_s": 0
+        },
+        "counter_available": false,
+        "rules": {
+          "cycle_seconds": {
+            "value": 240,
+            "label": "Length of the year (automatic)",
+            "default": 240,
+            "min": 60,
+            "max": 1800,
+            "unit": "s"
+          },
+          "warm_seconds": {
+            "value": 60,
+            "label": "Winter to summer as people arrive (dynamic)",
+            "default": 60,
+            "min": 10,
+            "max": 600,
+            "unit": "s"
+          },
+          "cool_seconds": {
+            "value": 180,
+            "label": "Summer to winter as they leave (dynamic)",
+            "default": 180,
+            "min": 10,
+            "max": 1200,
+            "unit": "s"
+          },
+          "warmer": {
+            "value": 1.3,
+            "label": "Busier than usual from",
+            "default": 1.3,
+            "min": 1.05,
+            "max": 3,
+            "unit": "× usual"
+          },
+          "cooler": {
+            "value": 0.7,
+            "label": "Quieter than usual below",
+            "default": 0.7,
+            "min": 0.1,
+            "max": 0.95,
+            "unit": "× usual"
+          },
+          "torrent_at": {
+            "value": 2,
+            "label": "Full torrent at",
+            "default": 2,
+            "min": 1.2,
+            "max": 6,
+            "unit": "× usual"
+          },
+          "now_window": {
+            "value": 30,
+            "label": "Presence now = median of the last",
+            "default": 30,
+            "min": 5,
+            "max": 300,
+            "unit": "s"
+          },
+          "usual_window": {
+            "value": 600,
+            "label": "Usual presence = median of the last",
+            "default": 600,
+            "min": 60,
+            "max": 3600,
+            "unit": "s"
+          },
+          "empty_seconds": {
+            "value": 60,
+            "label": "An empty room turns to winter after",
+            "default": 60,
+            "min": 5,
+            "max": 600,
+            "unit": "s"
+          }
+        },
+        "history": [
+          {
+            "t": 1792749481,
+            "phase": 0.287,
+            "intensity": 0.126,
+            "now": 0,
+            "usual": 0.75,
+            "relative": 0
+          },
+          {
+            "t": 1792749491,
+            "phase": 0.453,
+            "intensity": 0.221,
+            "now": 0,
+            "usual": 0.75,
+            "relative": 0
+          },
+          {
+            "t": 1792749501,
+            "phase": 0.62,
+            "intensity": 0.324,
+            "now": 0,
+            "usual": 0.75,
+            "relative": 0
+          },
+          {
+            "t": 1792749511,
+            "phase": 0.787,
+            "intensity": 0.407,
+            "now": 0,
+            "usual": 0.75,
+            "relative": 0
+          },
+          {
+            "t": 1792749521,
+            "phase": 0.953,
+            "intensity": 0.448,
+            "now": 0,
+            "usual": 0.75,
+            "relative": 0
+          },
+          {
+            "t": 1792749531,
+            "phase": 1.12,
+            "intensity": 0.464,
+            "now": 0,
+            "usual": 0.75,
+            "relative": 0
+          }
+        ],
+        "file": "river-local-oct-22-seasons.toe"
+      },
+      "age_s": 4
+    },
+    "modal": {
+      "at": 1792749531000,
+      "value": {
+        "tick": 4120,
+        "mood": "wistful",
+        "ok": true,
+        "finished_at": "2026-10-23T00:58:00+00:00",
+        "next_tick_epoch": 1792717185,
+        "scene": {
+          "animation": "embers",
+          "palette": "cold-ash",
+          "colors": [
+            "#2b2f36",
+            "#5a6068",
+            "#9aa3ad",
+            "#d9a066",
+            "#f0c27b"
+          ],
+          "speed": 0.18,
+          "turbulence": 0.41
+        },
+        "set_at": "2026-10-22T17:57:59-07:00"
+      },
+      "age_s": 9
+    },
+    "probe": {
+      "at": 1792749520000,
+      "value": {
+        "ok": true,
+        "time": "2026-10-23T02:58:32",
+        "show_files": [
+          "river-local-oct-22-seasons.toe",
+          "river-online-oct-20.toe"
+        ],
+        "lights_route": "direct",
+        "td": {
+          "ok": true,
+          "action": "status",
+          "file": "river-local-oct-22-seasons.toe",
+          "fps": 60.1,
+          "cook_rate": 60,
+          "ropes": {
+            "active": true,
+            "source": "canvas",
+            "box_watts_cap": 600,
+            "status": {
+              "error": null,
+              "sent": 4441370,
+              "dropped": null,
+              "packets": 80,
+              "watts": [
+                182,
+                191
+              ],
+              "seq": 137,
+              "active": true,
+              "open": true,
+              "source": "canvas",
+              "retrying": false
+            }
+          },
+          "hub75": {
+            "brightness": 1,
+            "output": true
+          },
+          "seasons": {
+            "mode": "automatic",
+            "effective_mode": "automatic",
+            "phase": 1.12,
+            "season": "spring",
+            "weights": {
+              "winter": 0,
+              "spring": 0.965,
+              "summer": 0.035,
+              "autumn": 0
+            },
+            "intensity": 0.464,
+            "target": null,
+            "manual": {
+              "season": "summer",
+              "intensity": 0.5
+            },
+            "presence": {
+              "available": false,
+              "now": 0,
+              "usual": 0.75,
+              "relative": 0,
+              "empty_for_s": 0
+            }
+          },
+          "river_cam": null,
+          "errors": 0
+        },
+        "boot_file": "river-local-oct-22-seasons.toe",
+        "modal_link": {
+          "processes": 8,
+          "gallery": {
+            "log_age_s": 1,
+            "last": "02:58:31 INFO    gallery/video -> media/gallery/video/2026-10-23T09-58-32-197Z.mp4 (50 KB)"
+          },
+          "river": {
+            "log_age_s": 4,
+            "last": "02:58:28 INFO    river/video -> media/river/video/2026-10-23T09-58-29-197Z.mp4 (63 KB)"
+          },
+          "sync": {
+            "log_age_s": 32427,
+            "last": "17:58:05 INFO    sync: updated status.json (611 bytes)"
+          }
+        },
+        "recorder": {
+          "clips": 14,
+          "last": "2026-10-23 02:05:41 done"
+        },
+        "devices": {
+          "internet": true,
+          "router": true,
+          "gallery_cam": true,
+          "river_cam": true,
+          "psac10_1": true,
+          "psac10_2": true,
+          "seasons_page": true
+        },
+        "addresses": [
+          {
+            "nic": "Ethernet 2",
+            "ip": "192.168.9.79"
+          },
+          {
+            "nic": "Ethernet",
+            "ip": "2.0.0.8"
+          },
+          {
+            "nic": "Wi-Fi",
+            "ip": "192.168.9.80"
+          },
+          {
+            "nic": "Tailscale",
+            "ip": "100.73.68.60"
+          }
+        ],
+        "displays": [
+          "LED 1920X1080"
+        ],
+        "disk_free_gb": 676,
+        "uptime_h": 3.1
+      },
+      "age_s": 20
+    }
+  },
+  "cameras": {
+    "gallery": true,
+    "river": true
+  },
+  "camera_age_s": {
+    "gallery": 25,
+    "river": 40
+  }
+}

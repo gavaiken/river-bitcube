@@ -102,3 +102,20 @@ test('server in fixture mode: /version, login, /fixtures, status, stills, contro
   assert.match(events.find((e) => e.kind === 'text').text, /You said: hello[\s\S]*\n- .*`river-local-oct-22-seasons.toe`/);
   assert.deepEqual(events.filter((e) => e.kind === 'result').map((e) => e.ok), [false, true]);
 });
+
+test('assets under public/ are served to anyone; prototype pages only behind the login; nothing outside public/', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mission-static-'));
+  const fixtures = join(dir, 'fixtures'); mkdirSync(fixtures);
+  writeFileSync(join(fixtures, 'all-good.json'), JSON.stringify({ status: {}, cameras: {} }));
+  writeFileSync(join(dir, 'pw'), 'test-password\n');
+  const { p, base } = await startServer({ MISSION_PORT: '0', MISSION_STATE_DIR: join(dir, 'state'), MISSION_PASSWORD_FILE: join(dir, 'pw'),
+                                          MISSION_FIXTURES: fixtures, MISSION_FAKE_AGENT: '1' });
+  t.after(() => p.kill());
+  const get = (path, headers = {}) => fetch(base + path, { headers, redirect: 'manual' });
+  assert.match((await get('/app.css')).headers.get('content-type'), /text\/css/);
+  for (const miss of ['/nope.js', '/..%2Fserver.mjs', '/lib/auth.mjs', '/proto/example']) assert.equal((await get(miss)).status, 302, miss);   // not an asset: login first, as before
+  const login = await fetch(base + '/login', { method: 'POST', body: JSON.stringify({ password: 'test-password' }), headers: { 'content-type': 'application/json' } });
+  const mc = login.headers.get('set-cookie').split(';')[0];
+  for (const miss of ['/nope.js', '/..%2Fserver.mjs', '/lib/auth.mjs']) assert.equal((await get(miss, { cookie: mc })).status, 404, miss);   // only files under public/
+  assert.equal((await get('/proto/example', { cookie: mc })).status, 404); // no such prototype
+});
