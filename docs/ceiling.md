@@ -11,7 +11,8 @@ Once they're up there, nobody can reach a screen or a power button. So everythin
 Gray Area wired drop (if there is one) ──► router WAN
 router LAN1 or LAN2 ──► bitcube ROUTER port            internet, 192.168.9.79
 router Wi-Fi "gray-river" ◄── gallery cam (192.168.9.76), bitcube's Wi-Fi as backup (192.168.9.80), phones
-bitcube LIGHTS port (2.0.0.8) ──► lighting switch ──► rack controller NET1 + both PSAC10s ──► 20 ropes
+bitcube LIGHTS port (2.0.0.8) ──► rack controller NET1, NET2 ──► PSAC10 box 1 ──► box 2 ──► 20 ropes
+   (or, with a lighting switch: LIGHTS ──► switch ──► rack NET1 + both PSAC10s)
 bitcube HDMI ──► Colorlight sender ──(its own cable)──► receive card ──► HUB75 panels
 bitcube DisplayPort ◄── dummy display plug (recommended: a desktop VNC can use)
 ```

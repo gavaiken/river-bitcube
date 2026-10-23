@@ -8,7 +8,7 @@ For whoever goes up the lift (Gavin, Lilian, the Gray Area crew). Everything tha
 
 ![Rigging at Gray Area: 1 ceiling, 2 panel power, 3 lowest rope point](img/rigging-2026-10-22.jpg)
 
-- **Point 1, ceiling grid:** bitcube (the show PC), our router, the lighting switch, the rack LED controller, both PSAC10 rope boxes, the Colorlight sender.
+- **Point 1, ceiling grid:** bitcube (the show PC), our router, the rack LED controller (and a lighting switch, if one is used), both PSAC10 rope boxes, the Colorlight sender.
 - **Point 2, on the driftwood:** the HUB75 panels, their receive card and the panel power board.
 - **Point 3:** the lowest point the ropes hang to.
 
@@ -18,11 +18,11 @@ For whoever goes up the lift (Gavin, Lilian, the Gray Area crew). Everything tha
 |---|---|
 | **bitcube** + its power supply | Two Ethernet ports, taped: **blue = ROUTER**, **white = LIGHTS** |
 | **Router** (GL.iNet Slate AX, `gray-river`) + its USB-C power supply | Ports: **WAN** and **LAN1 / LAN2**; LAN2 is taped blue |
-| **Lighting switch** (small network switch) + its power | For the lighting network only |
+| **Lighting switch** (optional) + its power | Only if you'd rather not chain the boxes |
 | **Rack LED controller** (AoShow, 1U) + IEC power cord | Plays its own pattern if bitcube ever stops sending |
 | **PSAC10 box 1** and **box 2** + blue powerCON mains leads | Each can draw up to ~600 W as we run them (1.5 kW at full white): **each on its own circuit** |
 | **Colorlight sender** + its power | Turns bitcube's HDMI into the panels' signal |
-| **Cables** | 1 blue-taped Ethernet (bitcube ↔ router, the good one); 4 short Ethernet (lighting switch); 1 long Ethernet (sender → receive card at point 2); 1 HDMI (bitcube → sender); Gray Area's drop |
+| **Cables** | 1 blue-taped Ethernet (bitcube ↔ router, the good one); 3 short Ethernet (bitcube → rack NET1, rack NET2 → box 1, box 1 → box 2); 1 long Ethernet (sender → receive card at point 2); 1 HDMI (bitcube → sender); Gray Area's drop |
 | **Power strips** and extension leads | Three separate circuits (below) |
 | **Small HDMI monitor + USB keyboard** | Stay with the kit on the ground; only needed if the network is down |
 
@@ -38,11 +38,17 @@ For whoever goes up the lift (Gavin, Lilian, the Gray Area crew). Everything tha
 ## 3. Cable (in this order)
 1. **Network:** Gray Area's drop → router **WAN**. (No drop yet? Skip it: the router uses Gray Area's staff Wi-Fi by itself.)
 2. **Network:** the **blue** cable from bitcube's blue ROUTER port → the router port taped blue (**LAN2**). Not LAN1: that port is switched off since 23 Oct (the studio chat can switch it back on once the camera's old cable is out).
-3. **Lights** (a separate network, never into the router): the **white** cable from bitcube's white LIGHTS port → the lighting switch.
-4. **Lights:** lighting switch → rack controller **NET1**, → PSAC10 box 1 **NET1**, → PSAC10 box 2 **NET1**.
+3. **Lights** (a separate network, never into the router): the **white** cable from bitcube's white LIGHTS port → the **rack controller's `NET1`** (the black AoShow box: NET1 is the left of its two network ports).
+4. **Lights:** rack controller **`NET2`** → PSAC10 box 1 **`NET1`**; box 1 **`NET2`** → box 2 **`NET1`** (a chain: the setup Will tested at Agape). *If you have a separate lighting switch instead:* white → switch, and the switch → rack NET1, box 1 NET1 and box 2 NET1.
 5. **Ropes:** each rope's **male round plug is its input** (the female end stays unused). Box 1 OUT1–OUT10 = ropes 1–10, box 2 OUT1–OUT10 = ropes 11–20, through the XLR adapters. The order doesn't have to be perfect: we re-map the ropes by camera after the hang.
 6. **Panels:** HDMI from bitcube → the Colorlight sender. No monitor on bitcube.
 7. **Panels:** the long Ethernet from the Colorlight sender → the receive card at point 2. Not into the router or the lighting switch.
+
+![The ceiling stack, 23 Oct: router (top), bitcube, rack controller, Colorlight sender](img/ceiling-stack-2026-10-23.jpg)
+
+*The stack, top to bottom: the **router** (blue-taped port = bitcube's link), **bitcube** (blue-taped = ROUTER port, white-taped cable = LIGHTS), the **rack controller** (NET1, NET2, then DMX512, WALL PAD, power), the **Colorlight sender** (LAN1, LAN2, DVI).*
+
+**Not these ports, even though they look like network sockets:** the rack controller's **DMX512 RJ45** pair and its **WALL PAD** socket. The bottom box (**LAN1 / LAN2 / STAT, DVI**) is the **Colorlight sender** for the panels, not for the ropes: its LAN1 goes to the receive card, its DVI takes bitcube's video.
 
 **Never:**
 - the lighting switch into the router;
@@ -65,7 +71,7 @@ Three separate circuits if you can (ask Gray Area which outlets are on which bre
 ## 5. Check it worked (5 minutes, from the floor)
 1. **Wait 2 minutes.**
 2. **Ropes:** they should show the river (slow, blue-white in winter, then green, gold, rust as the 4-minute year turns).
-   - If they **cycle through bright colours by themselves**, the boxes aren't getting bitcube's signal: check the **white** cable is in bitcube's white port and the lighting switch has power.
+   - If they **cycle through bright colours by themselves**, the boxes aren't getting bitcube's signal: check the **white** cable runs from bitcube's white port into the rack controller's **NET1**, then NET2 → box 1 NET1 → box 1 NET2 → box 2 NET1.
    - If one rope is dark, swap its plug to a free OUT to tell a dead rope from a dead port (ropes 9 and 17 have been dark since 18 Oct).
 3. **Panels:** the river, in four blocks. Black: check the HDMI, the sender's power and its long cable to the receive card, and the panel power board.
 4. **On a phone** (any internet): open **[mission control](https://gav-m1-mini.tailddc624.ts.net)**, log in with the team password. **System status** should show green for bitcube, TouchDesigner, the router, the gallery camera, both rope boxes and the HUB75 sender. Red is the thing to fix; the **System map** tab shows where it sits.
@@ -75,7 +81,7 @@ Three separate circuits if you can (ask Gray Area which outlets are on which bre
 
 | You see | Likely | Fix |
 |---|---|---|
-| Ropes cycle colours by themselves | bitcube's signal isn't reaching the boxes | White cable in bitcube's **white** port; lighting switch powered; switch → box NET1 cables in |
+| Ropes cycle colours by themselves | bitcube's signal isn't reaching the boxes | White cable from bitcube's **white** port into rack **NET1** (not DMX512 or WALL PAD); rack NET2 → box 1 NET1; box 1 NET2 → box 2 NET1. With a lighting switch: it's powered and all three are on it |
 | Ropes dark, panels fine | Boxes unpowered or on the wrong voltage | powerCON in and breaker on; selector on 110 V |
 | Panels black, ropes fine | HDMI or sender | HDMI seated at both ends; sender powered; long cable to the receive card |
 | Everything dark | bitcube off or not booted | Its power; wait 2 minutes after power; mission control shows whether it's online |
