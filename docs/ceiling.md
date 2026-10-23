@@ -19,7 +19,7 @@ Once they're up there, nobody can reach a screen or a power button. So everythin
 
 | # | From | To | Cable | Live |
 |---|---|---|---|---|
-| 1 | Gray Area's drop | router **WAN** (rightmost port) | black flat Cat 6 | ❌ 11:35: still no link on WAN; router on the staff Wi-Fi (repeater), internet OK |
+| 1 | Gray Area's drop | router **WAN** (rightmost port) | black flat Cat 6 | ✅ 11:41: 1 Gbps, `10.1.0.90` from Gray Area; internet over the cable, staff Wi-Fi kept as backup |
 | 2 | bitcube **ROUTER** port (blue tape) | router port taped **blue** (LAN2) | blue-taped black cable | ✅ 11:35: 1 Gbps both ends; bitcube `Ethernet 2` = `192.168.9.79`, Wi-Fi on standby |
 | 3 | router **LAN1** (middle) | nothing | | correct: LAN1 is off (the old camera cable) |
 | 4 | bitcube **LIGHTS** port (white) | rack controller **NET1** | black (white tape at bitcube) | ✅ 11:35: up at 100 Mbps, `2.0.0.8` |
