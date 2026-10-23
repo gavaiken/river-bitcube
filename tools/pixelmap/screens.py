@@ -2,10 +2,11 @@
 
     .venv\\Scripts\\python tools\\pixelmap\\screens.py [--cam gallery]      (on bitcube, with a show file open)
 
-One screen at a time shows the four-colour corner pattern of td/build/screens.py (red TL, green TR, blue BL,
-yellow BR, as seen), the other screens and the ropes black. A screen's corners come from the four colour
-centroids through a homography, so they are right however the screen is tilted (hub75.py's diagonal extremes
-assume an upright quad) and labelled as seen. Screens the camera can't see (1 and 3 hang on the back) get an
+One screen at a time lights one quarter of itself white (td/build/screens.py Screenquarter: TL, TR, BL, BR as
+seen), the other screens and the ropes black. A screen's corners come from the four quarter centroids through a
+homography, so they are right however the screen is tilted (hub75.py's diagonal extremes assume an upright quad)
+and labelled as seen. Quarters, not colours: the gallery cam renders the LEDs' colours too unreliably (clipped to
+cyan and white when bright, greyed when dim; 23 Oct). Screens the camera can't see (1 and 3 hang on the back) get an
 estimated place next to a neighbour and are marked "estimated": they still show the water near where they hang.
 Writes tools/pixelmap/screens-<date>.json (TD UVs, v up; read by td/build/screens.py) and
 frames/screens-<stamp>/ (frames and corners.png). Puts the show back as it was, also when the run fails.
@@ -30,40 +31,36 @@ UNIT = {'tl': (0, 0), 'tr': (1, 0), 'br': (1, 1), 'bl': (0, 1)}
 NEIGHBOUR = {1: (2, 1.15, 0.0), 2: (1, -1.15, 0.0), 3: (4, -1.15, -0.3), 4: (3, 1.15, 0.3)}
 
 
-def colour_masks(test):
-    """Red TL, green TR, blue BL, yellow BR as the gallery cam sees bright LEDs: it pushes green towards cyan
-    (84, 253, 233) and blue towards light blue (71, 209, 253) (23 Oct), so green only needs g >= b - 15 and blue
-    needs b clearly above g. Run dim (--brightness) so yellow doesn't clip to white."""
-    r, g, b = test[..., 0], test[..., 1], test[..., 2]
-    return {'tl': (r > g + 60) & (r > b + 60),
-            'tr': (g > r + 50) & (g >= b - 15),
-            'bl': (b > g + 20) & (b > r + 60),
-            'br': (r > b + 40) & (g > b + 40) & (np.abs(r - g) < 60)}
+QUARTER_OF = {1: 'tl', 2: 'tr', 3: 'bl', 4: 'br'}       # Screenquarter -> which quarter is white
 
 
-def locate(test, black, thresh=40, min_px=150):
-    """test, black: float (H, W, 3) frames, one screen showing the corner pattern vs all black.
-    Returns {'corners': {tl,tr,br,bl: (x, y) px}, 'px': lit pixels, 'fit_px': mean miss} or None if not seen."""
+def centroid(test, black, thresh=40, min_px=30):
+    """Centroid (x, y) of the largest region that lit up between black and test, and its size; None if none."""
     lit = (test - black).max(axis=2) > thresh
     if lit.sum() < min_px:
         return None
     region = largest_component(_dilate(lit)) & lit
     if region.sum() < min_px:
         return None
-    masks = {k: m & region for k, m in colour_masks(test).items()}
-    cents = {}
-    for k, m in masks.items():
-        if m.sum() < max(10, region.sum() // 40):
-            return None                                  # a colour is missing: not a whole screen in view
-        ys, xs = np.nonzero(m)
-        cents[k] = (xs.mean() + 0.5, ys.mean() + 0.5)
+    ys, xs = np.nonzero(region)
+    return (float(xs.mean() + 0.5), float(ys.mean() + 0.5)), int(region.sum())
+
+
+def locate(quarters, black, thresh=40, min_px=30):
+    """quarters: {1..4: frame with that quarter of one screen white}; black: all dark (float H, W, 3 frames).
+    Returns {'corners': {tl,tr,br,bl: (x, y) px}, 'px': lit pixels, 'balance': smallest/largest quarter} or None
+    when any quarter wasn't seen (the screen is out of view or partly hidden)."""
+    cents, sizes = {}, []
+    for q, frame in quarters.items():
+        r = centroid(frame, black, thresh, min_px)
+        if r is None:
+            return None
+        cents[QUARTER_OF[q]], n = r
+        sizes.append(n)
     hm = homography([QUARTERS[k] for k in CORNERS], [cents[k] for k in CORNERS])
     pts = apply_h(hm, np.array([UNIT[k] for k in CORNERS], float))
     corners = {k: (float(p[0]), float(p[1])) for k, p in zip(CORNERS, pts)}
-    # Fit check: how far the region's pixels on its outline lie from the predicted quad (rough, in px).
-    ys, xs = np.nonzero(region)
-    inside = _inside(np.stack([xs + 0.5, ys + 0.5], 1), [corners[k] for k in CORNERS])
-    return {'corners': corners, 'px': int(region.sum()), 'inside': round(float(inside.mean()), 3)}
+    return {'corners': corners, 'px': int(sum(sizes)), 'balance': round(min(sizes) / max(sizes), 2)}
 
 
 def _inside(pts, poly):
@@ -103,7 +100,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--cam', default='gallery')
     ap.add_argument('--settle', type=float, default=2.0)
-    ap.add_argument('--brightness', type=float, default=0.06, help='panels brightness (the cam clips colours above ~0.1)')
+    ap.add_argument('--brightness', type=float, default=0.3, help='panels brightness while locating')
     a = ap.parse_args()
     comp = capture.td("print([p for p in ('/project1/seasons', '/project1/river_local') "
                       "if op(p) is not None and hasattr(op(p).par, 'Screencorners')][0])")['stdout'].strip()
@@ -121,24 +118,27 @@ def main():
     try:
         capture.td(f"c = op('{comp}'); c.par.Screentest = False; c.par.Screencorners = True\n"
                    f"op('/project1/ropes').par.Source = 'black'; op('/project1/panels').par.Brightness = {a.brightness}")
-        for k in (9, 1, 2, 3, 4):                         # 9 = all black first
-            capture.td(f"op('{comp}').par.Screensolo = {k}")
+        shots = [(9, 0)] + [(k, q) for k in (1, 2, 3, 4) for q in (1, 2, 3, 4)]    # all black first
+        for k, q in shots:
+            capture.td(f"c = op('{comp}'); c.par.Screensolo = {k}; c.par.Screenquarter = {q}")
             time.sleep(a.settle)
-            frames[k] = cam.after(time.monotonic(), n=4)
-            Image.fromarray(np.clip(frames[k], 0, 255).astype(np.uint8)).save(out / f'solo{k}.png')
+            frames[k, q] = cam.after(time.monotonic(), n=3)
+            Image.fromarray(np.clip(frames[k, q], 0, 255).astype(np.uint8)).save(out / f'screen{k}-q{q}.png')
     finally:
         capture.td(f"c = op('{comp}'); c.par.Screencorners = {keep['corners']}; c.par.Screensolo = {keep['solo']}; "
+                   f"c.par.Screenquarter = 0; "
                    f"c.par.Screentest = {keep['test']}\nop('/project1/ropes').par.Source = '{keep['source']}'\n"
                    f"op('/project1/panels').par.Brightness = {keep['bright']}")
         cam.close()
-    h, w = frames[9].shape[:2]
+    black = frames[9, 0]
+    h, w = black.shape[:2]
     seen, info = {}, {}
     for k in (1, 2, 3, 4):
-        r = locate(frames[k], frames[9])
+        r = locate({q: frames[k, q] for q in (1, 2, 3, 4)}, black)
         if r:
             seen[k] = r['corners']
-            info[k] = {'px': r['px'], 'inside': r['inside']}
-        print(f'screen {k}:', 'seen' if r else 'not seen', r and {'px': r['px'], 'inside': r['inside']})
+            info[k] = {'px': r['px'], 'balance': r['balance']}
+        print(f'screen {k}:', 'seen' if r else 'not seen', r and info[k])
     screens = {}
     for k in (1, 2, 3, 4):
         if k in seen:
@@ -147,7 +147,7 @@ def main():
             est = estimate(seen, k)
             if est:
                 screens[k] = to_uv(est, w, h) | {'estimated': True, 'from': NEIGHBOUR[k][0]}
-    im = Image.fromarray(np.clip(np.maximum.reduce([frames[k] for k in (1, 2, 3, 4)]), 0, 255).astype(np.uint8))
+    im = Image.fromarray(np.clip(np.maximum.reduce([frames[k, q] for k in (1, 2, 3, 4) for q in (1, 2, 3, 4)]), 0, 255).astype(np.uint8))
     dr = ImageDraw.Draw(im)
     for k, s in screens.items():
         pts = [(s[c][0] * w, (1 - s[c][1]) * h) for c in CORNERS]

@@ -11,8 +11,8 @@
 #   source   the field under the screen's camera-space corners (tools/pixelmap/screens-<date>.json, from
 #            tools/pixelmap/screens.py), upright 128x256 -- or, for a screen not in that file, a portrait window
 #            stacked down one column of the field (Screenorder, top first; Screencolumn)
-#   switch   source | big "F<k>" (Screentest) | four-colour corner pattern (Screencorners: red TL, green TR,
-#            blue BL, yellow BR as seen) | black (Screensolo = another screen; 9 = all black)
+#   switch   source | big "F<k>" (Screentest) | corner pattern (Screencorners: red TL, green TR, blue BL, yellow
+#            BR as seen; Screenquarter 1-4 = only that quarter white) | black (Screensolo = another screen; 9 = all)
 #   as seen  Quad<k>vflip / Quad<k>hflip (screen 3 hangs the other way up)
 #   feed     flop + flips turn the upright portrait into the 256x128 quad the receive card shows on its side;
 #            Quad<k>swap swaps its two panel rows (screens 3 and 4 are wired that way)
@@ -38,6 +38,9 @@ if not hasattr(SC.par, 'Screencorners'):
     SCR.appendToggle('Screencorners', label='Test: four-colour corner pattern (red TL as seen)')[0].val = False
     p = SCR.appendInt('Screensolo', label='Light only this screen (0 = all, 9 = none)')[0]
     p.val, p.normMin, p.normMax = 0, 0, 9
+if not hasattr(SC.par, 'Screenquarter'):
+    p = SCR.appendInt('Screenquarter', label='Corner pattern: 0 = four colours, 1-4 = only that quarter white (TL TR BL BR)')[0]
+    p.val, p.normMin, p.normMax = 0, 0, 4
 for k in range(1, 5):
     if not hasattr(SC.par, f'Quad{k}flop'):
         m = SCR.appendMenu(f'Quad{k}flop', label=f'Quad {k} flop')[0]
@@ -63,6 +66,7 @@ for k in range(1, 5):
     setattr(SC.par, f'Quad{k}hflip', k == 3)
 SC.par.Screentest = SC.par.Screencorners = False
 SC.par.Screensolo = 0
+SC.par.Screenquarter = 0
 
 # Where each screen hangs in the camera frame (newest screens-*.json), if located.
 _files = sorted(glob.glob(REPO + '/tools/pixelmap/screens-????-??-??.json'))
@@ -73,7 +77,8 @@ if SCREEN_FILE:
         LOCATED = {int(k): v for k, v in json.load(f)['screens'].items()}
 
 pat = get(moviefileinTOP, 'screen_corners', 1950, 500)
-pat.par.file = REPO + '/td/screens/corners.png'
+pat.par.file.expr = (f"'{REPO}/td/screens/' + ('corners.png' if parent().par.Screenquarter == 0 "
+                     f"else 'q%d.png' % parent().par.Screenquarter)")
 blk = get(constantTOP, 'screen_black', 2000, 500)
 res(blk, 128, 256)
 blk.par.colorr = blk.par.colorg = blk.par.colorb = 0

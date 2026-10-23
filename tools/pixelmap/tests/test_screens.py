@@ -4,19 +4,22 @@ from PIL import Image, ImageDraw
 from pixelmap.screens import estimate, locate, to_uv
 
 W, H = 480, 360
-COLOURS = {'tl': (200, 40, 40), 'tr': (84, 253, 233), 'bl': (71, 180, 253), 'br': (170, 160, 50)}   # as the cam sees them
+SPANS = {1: (0, 0), 2: (0.5, 0), 3: (0, 0.5), 4: (0.5, 0.5)}     # Screenquarter -> (s, t) of its top left, as seen
 
 
-def frames(corners, ambient=20):
-    """A dark frame and the same frame with a (possibly tilted) screen showing the four-colour pattern."""
+def frames(corners, ambient=20, hide=None):
+    """All-dark frame and, per quarter 1-4, the frame with only that quarter of a (tilted) screen lit."""
     black = np.full((H, W, 3), ambient, np.float32)
-    im = Image.fromarray(black.astype(np.uint8))
-    dr = ImageDraw.Draw(im)
     c = {k: np.array(v, float) for k, v in corners.items()}
     at = lambda s, t: tuple(c['tl'] + (c['tr'] - c['tl']) * s + (c['bl'] - c['tl']) * t)   # parallelogram
-    for key, (s0, t0) in {'tl': (0, 0), 'tr': (0.5, 0), 'bl': (0, 0.5), 'br': (0.5, 0.5)}.items():
-        dr.polygon([at(s0, t0), at(s0 + 0.5, t0), at(s0 + 0.5, t0 + 0.5), at(s0, t0 + 0.5)], fill=COLOURS[key])
-    return np.asarray(im, np.float32), black
+    out = {}
+    for q, (s0, t0) in SPANS.items():
+        im = Image.fromarray(black.astype(np.uint8))
+        if q != hide:
+            ImageDraw.Draw(im).polygon([at(s0, t0), at(s0 + 0.5, t0), at(s0 + 0.5, t0 + 0.5), at(s0, t0 + 0.5)],
+                                       fill=(230, 240, 235))
+        out[q] = np.asarray(im, np.float32)
+    return out, black
 
 
 def tilted(cx, cy, w, h, deg):
@@ -34,31 +37,28 @@ def test_upright_screen():
     truth = tilted(240, 180, 60, 120, 0)
     r = locate(*frames(truth))
     assert r and close(r['corners'], truth, 3)
+    assert r['balance'] > 0.9
 
 
-def test_tilted_45_keeps_its_labels():
+def test_tilted_40_keeps_its_labels():
     truth = tilted(240, 180, 60, 120, 40)      # diagonal extremes would mislabel this one
     r = locate(*frames(truth))
     assert r and close(r['corners'], truth, 3)
-    assert r['inside'] > 0.95
 
 
 def test_upside_down_screen_is_labelled_as_seen():
-    truth = tilted(240, 180, 60, 120, 180)     # red is bottom right in the image: tl is there
+    truth = tilted(240, 180, 60, 120, 180)     # its top left as seen is at the image's bottom right
     r = locate(*frames(truth))
     assert r and close(r['corners'], truth, 3)
 
 
 def test_nothing_lit_is_not_seen():
-    black = np.full((H, W, 3), 20, np.float32)
-    assert locate(black.copy(), black) is None
+    quarters, black = frames(tilted(240, 180, 60, 120, 0))
+    assert locate({q: black.copy() for q in quarters}, black) is None
 
 
 def test_partly_hidden_screen_is_not_seen():
-    truth = tilted(240, 180, 60, 120, 0)
-    test, black = frames(truth)
-    test[:, 240:] = black[:, 240:]             # the right half (green and yellow) hidden
-    assert locate(test, black) is None
+    assert locate(*frames(tilted(240, 180, 60, 120, 0), hide=2)) is None
 
 
 def test_estimate_puts_screen_1_above_screen_2():
