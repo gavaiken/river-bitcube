@@ -8,6 +8,20 @@ title: Execution plan
 
 **How to work it:** any Claude session (on the mini or on bitcube) starts with `git pull`, takes the first ➡️ step it can do, marks it ✅ / ⏳ / ❌ here after each step with a line in `docs/sessions/<letter>.md`, and pushes. The [coordination contract](#coordination-contract-every-bitcube-session-follows-this) below still applies, and only one Claude works on bitcube at a time. Gavin says **"sync"** to session A for a report.
 
+## Phase G: screens in place, online file current, see what TD sends (23 Oct, session A)
+*Gavin, 23 Oct afternoon: do items 1, 2 and 6 as their own steps; a Mission Control UX overhaul runs in parallel, so no work in `mission/` (the only touch: the show-file list in `tools/mission/probe.ps1`, one line, for G2).*
+
+| | Step | What | Done when |
+|---|---|---|---|
+| ⏳ | G1 | **One screens module for both show files:** move the four-screen chain (portrait window → orientation → panel-row swap, Screens page, F test, panel layout hookup) out of `build_seasons_local.py` into `td/build/screens.py`; the seasons build uses it | Seasons rebuilt; F2/F4 upright on camera as before |
+| ⏳ | G2 | **Online show file current:** `build_river_local.py` uses the screens module (all four screens instead of quad 1 at its Agape corners) and the 23 Oct rope map; saved as `river-online-oct-23.toe` (oct-20 kept as fallback); `Start-River.cmd`, the probe's show-file list, its page; back to the seasons file afterwards | Online file opens with ropes and all four screens lit; seasons file back on |
+| ⏳ | G3 | **Corner pattern for locating screens:** a portrait four-colour pattern (red TL, green TR, blue BL, yellow BR as seen) and *Screensolo* (one screen lit, the rest black) in the screens module | Each screen shows the pattern alone on request |
+| ⏳ | G4 | **Find each screen in the gallery cam** (`tools/pixelmap/screens.py`): one screen at a time; corners from the four colour centroids through a homography (works when the screen is tilted, unlike the diagonal extremes in `hub75.py`); screens the cam can't see (1 and 3, on the back) get estimated positions next to their neighbours, marked as estimates → `tools/pixelmap/screens-<date>.json`; tests on synthetic frames | Screens 2 and 4 found with a small check error; JSON committed |
+| ⏳ | G5 | **Screens sample the river where they hang:** each screen's picture is the field under its camera-space corners (corner pin, upright), so screens and the ropes around them show the same water; window column as the fallback | Both show files rebuilt and saved; camera shows the screens continuous with the ropes |
+| ⏳ | G6 | **TD preview of what's sent:** one TOP with the four screens upright side by side and the 20 ropes, so anyone can see the output without VNC (VNC shows TD's window as black) | Preview TOP in both show files |
+| ⏳ | G7 | **Preview on the live page every minute:** `tools/snapshot.ps1` also pushes the preview (`t/<minute>.png`) to the snapshot branch; `docs/live.md` shows it under the camera still; tests | Live page shows camera and TD output side by side |
+| ⏳ | G8 | Docs: show-file pages, CLAUDE.md, system map; session log | Pages match the files |
+
 ## Where we are (22 Oct)
 - Everything works end to end at Agape: TouchDesigner (TD) on bitcube drives 18 of 20 ropes and HUB75 quad 1 from the camera pixel map; the live river cam, Dave's Modal agent (cameras up, scene down) and his canvas all feed the **online show file**.
 - **At Gray Area since Thu 22 Oct** (install led by Lily). Colin, Justine and Gavin tune visuals Fri and Mon; Lily covers the weekend.
