@@ -319,6 +319,6 @@ The live checklist is `docs/plan.md` (items and open questions) and the session 
 - Gavin asked to turn the HUB75 off for the day: panels `Source=black` set live in `river-local-oct-18.toe` (output max 0.0, gallery cam shows the panel dark; the window still covers the LED display in black). **Not saved**, so the next reboot or reload brings the HUB75 rain back. The ropes still show the rain (about 136 W). To turn it back on: `.\tools\td.ps1 "setattr(op('/project1/panels').par, 'Source', 'canvas')"`.
 - 18:50: Gavin switched off the ropes' power (both PSAC10s; `2.0.0.10` and `.11` no longer answer ping). TD still sends the rain over Art-Net, which is harmless to unpowered boxes, so the rain comes back as soon as they are powered on.
 
-### 2026-10-22 21:45 (session N, Claude on the Mac mini): install network at Gray Area
+### 2026-10-22 21:38 (session N, Claude on the Mac mini): install network at Gray Area
 
 - Gavin on site with the second GL-AXT1800 (Slate AX). Decided (D18–D23): one Gray Area drop into the router's WAN; our LAN 192.168.9.0/24, Wi-Fi `gray-river` (not Agape WiFi: visitors know that password); bitcube's spare port and the gallery cam (it has an Ethernet port) cabled to the router, reserved .79 and .76; lighting NIC stays on the switch; no Tailscale on the router, bitcube advertises the cam and router as /32s. Progress in [sessions/N.md](sessions/N.md).

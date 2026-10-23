@@ -4,7 +4,7 @@ title: Execution plan
 
 # Execution plan: A River Becoming at Gray Area
 
-**Updated Thu 22 Oct 2026 by session A (coordinator, Mac mini); install network by session N (Mac mini), 21:45.** This is the working plan: steps to work through in order, the decisions behind them, and the requirements they must meet. **Add to it freely:** new steps go in the table with the next free number, new requirements get the next R-number, and anything decided gets a D-number with the date and who decided. Terms are defined in [`GLOSSARY.md`](https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md). Phase 1 (the Agape build, 17–21 Oct) is further down as history.
+**Updated Thu 22 Oct 2026 by session A (coordinator, Mac mini); install network by session N (Mac mini), 21:38.** This is the working plan: steps to work through in order, the decisions behind them, and the requirements they must meet. **Add to it freely:** new steps go in the table with the next free number, new requirements get the next R-number, and anything decided gets a D-number with the date and who decided. Terms are defined in [`GLOSSARY.md`](https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md). Phase 1 (the Agape build, 17–21 Oct) is further down as history.
 
 **How to work it:** any Claude session (on the mini or on bitcube) starts with `git pull`, takes the first ➡️ step it can do, marks it ✅ / ⏳ / ❌ here after each step with a line in `docs/sessions/<letter>.md`, and pushes. The [coordination contract](#coordination-contract-every-bitcube-session-follows-this) below still applies, and only one Claude works on bitcube at a time. Gavin says **"sync"** to session A for a report.
 

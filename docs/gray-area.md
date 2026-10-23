@@ -4,7 +4,7 @@ title: "A River Becoming: network and power at Gray Area"
 
 # A River Becoming at Gray Area: network and power
 
-For Seabrook and the Gray Area team. What we plug in, what it needs from the building, and how it connects. (Updated 22 Oct 2026, 21:45.)
+For Seabrook and the Gray Area team. What we plug in, what it needs from the building, and how it connects. (Updated 22 Oct 2026, 21:38.)
 
 **Detailed map of every device, address and connection:** [system map](system/) (interactive; tap any box or line).
 
