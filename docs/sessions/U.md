@@ -16,3 +16,5 @@ Planned steps:
 - **U4** Build page by page; ship to `main` as soon as it beats the old UI, then keep improving.
 - **U5** Adversarial review loops (mobile and touch, accessibility, copy, correctness, security) until two rounds in a row find nothing major.
 - **U6** Finish: confirm `/version` on the live site, before/after Artifact, update `docs/mission-plan.md` (progress log, "UI v2" section), `docs/execution-plan.md`, SESSION SUMMARY here.
+
+- 04:00 U1 ✅ groundwork: fixture mode (`MISSION_FIXTURES`), `GET /version`, `planControl` whitelist, fake-agent moods, tests 24 pass; harness `~/claude/local/ui-shots/shots.mjs` (Playwright on Google Chrome: 13 scenarios × 4 pages × 3 viewports × 2 themes × fold/full = 643 baseline PNGs); 13 scenario fixtures with an `expect` block each; `preflight.sh` (clean checkout of a commit: `npm ci`, start with the fake agent, every page 200) passed on the commit (commit 3ce16ea)
