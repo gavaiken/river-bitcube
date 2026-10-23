@@ -73,6 +73,38 @@ $out.recorder = [ordered]@{
     clips = @(Get-ChildItem (Join-Path $river 'recordings\river') -Filter '*.mp4' -ErrorAction SilentlyContinue).Count
     last = $(if (Test-Path $rlog) { $l = Get-Content $rlog -Tail 1; $l.Substring(0, [Math]::Min(120, $l.Length)) } else { $null })
 }
+# Calibration job (tools/mission/calibrate.py, started by calibrate.ps1): its progress file when it is from the last 24 h,
+# with alive (is its process still there) and stale (running is still true but the process is gone). Shape: mission/lib/lights.mjs.
+$cal = Join-Path $river 'calibration.json'
+$out.calibration = $null
+if ((Test-Path $cal) -and ((Get-Date) - (Get-Item $cal).LastWriteTime).TotalHours -lt 24) {
+    try {
+        $c = Get-Content -Raw $cal | ConvertFrom-Json
+        $alive = ($c.pid -gt 0) -and [bool](Get-Process -Id ([int]$c.pid) -ErrorAction SilentlyContinue)
+        $c | Add-Member -NotePropertyName alive -NotePropertyValue $alive -Force
+        if ($c.running -and -not $alive) { $c | Add-Member -NotePropertyName stale -NotePropertyValue $true -Force }
+        $out.calibration = $c
+    } catch { $out.calibration = @{ error = 'unreadable calibration.json' } }
+}
+# Newest rope pixel map (tools/pixelmap/pixelmap-YYYY-MM-DD.json): a summary; pixelmap.ps1 prints the whole file.
+# Rope numbers are 1-based (as in the rope map); dark = no visible pixel in the map (unmapped or unlit, e.g. ropes 9 and 17).
+$out.pixelmap = $null
+$pm = Get-ChildItem (Join-Path $repo 'tools\pixelmap') -Filter 'pixelmap-????-??-??.json' -ErrorAction SilentlyContinue | Sort-Object Name | Select-Object -Last 1
+if ($pm) {
+    try {
+        $m = Get-Content -Raw $pm.FullName | ConvertFrom-Json
+        $found = @(); $dark = @()
+        foreach ($r in 1..20) {
+            $e = $m.ropes.PSObject.Properties[[string]($r - 1)]
+            if ($e -and $e.Value.visible -gt 0) { $found += $r } else { $dark += $r }
+        }
+        $quads = @($m.PSObject.Properties.Name | Where-Object { $_ -match '^hub75_quad\d+$' } | Sort-Object)
+        $date = $(if ($pm.Name -match '(\d{4}-\d{2}-\d{2})') { $Matches[1] } else { $null })
+        $out.pixelmap = [ordered]@{ file = $pm.Name; date = $date; points = @($m.points).Count; ropes = $found.Count; ropes_found = $found
+                                    ropes_dark = $dark; hub75_quads = $quads; camera = $m.meta.camera; frame_size = $m.meta.frame_size
+                                    drift_px = $m.meta.drift; modified = $pm.LastWriteTime.ToString('s') }
+    } catch { $out.pixelmap = @{ file = $pm.Name; error = 'unreadable pixel map' } }
+}
 # Network: what bitcube can reach (the mini can't see the install LAN or the river router directly)
 function Tcp([string]$h, [int]$p) {
     try { $c = New-Object Net.Sockets.TcpClient; $ok = $c.ConnectAsync($h, $p).Wait(1500) -and $c.Connected; $c.Close(); return $ok } catch { return $false }
