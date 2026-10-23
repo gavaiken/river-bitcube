@@ -4,11 +4,11 @@ title: A River Becoming: show machine status
 
 # Welcome to bitcube
 
-**A River Becoming** is an installation by **Colin, Justine, Will, Dave and Gavin**, with Andi and Lilian, for Gray Area, San Francisco (October 2026). This site is the team's working notes for bitcube, the show machine.
+**A River Becoming** is an installation by **Colin, Justine, Andi, Lilian, Will, Dave and Gavin**, for Gray Area, San Francisco (October 2026). This site is the team's working notes for bitcube, the show machine.
 
 **[Show files](show-files.md)** (what the piece is doing) · **[Execution plan](execution-plan.md)** (status table and session prompts) · **[Plan & open questions](plan.md)** · **[Log](a-river-becoming-log.md)** · **[Hardware](a-river-becoming-hardware.md)** · **[System map](system/)** (every device, IP and connection; [system.json](system/system.json) for agents)
 
-**Status as of Thu 22 Oct 2026, 22:00.** Gray Area install under way: setting up our router (Wi-Fi `gray-river`, 192.168.9.x) behind the venue's wired drop ([S2](execution-plan.md)).
+**Status as of Thu 22 Oct 2026, 22:30.** Gray Area install under way. Our router is up (Wi-Fi `gray-river`, 192.168.9.x; internet through the venue's staff Wi-Fi until the wired drop is connected). bitcube is online at Gray Area on `gray-river` and restarts by itself; the gallery cam is on `gray-river`. Lights not connected yet. [Next steps](execution-plan.md#next-steps-22-oct-night).
 
 bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes over Art-Net, the HUB75 panels over HDMI, and the Reolink cameras. It runs TouchDesigner and a Claude Code session.
 
@@ -22,7 +22,7 @@ bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes ov
   - **Live river cam across the ropes and HUB75:** the camera at the river streams over Starlink and Tailscale to bitcube (10 fps). It replaces the rain as the image that both the ropes and the HUB75 sample, so the real river flows across the installation. If the stream drops for more than 10 s, it falls back to the rain by itself.
   - **Connected to Dave's Modal agent:** both cameras post 10 s clips to the agent, and the agent's scene (colours, speed, density, turbulence, brightness, every 5 min, plus fast camera reflexes) now shapes the look on the ropes and HUB75, and Dave's own animation plays as a layer over the live river. The river cam's look switches between day and night (infrared) settings by itself.
 - **Moving to Gray Area** (install Thu 22 Oct, 7 pm). A new local-only **seasons** show file (the river's year, steered by the people in the room) is written and waiting to deploy when bitcube is back online. [What each show file does](show-files.md).
-- **Next** ([execution plan](execution-plan.md), steps S1…): deploy the seasons file, set up our router at Gray Area, re-map the hung piece, tune on the real lights, build the people counter.
+- **Next** ([execution plan](execution-plan.md#next-steps-22-oct-night)): finish the network (camera address, Tailscale routes, wired cable), deploy the seasons file, connect the lights, re-map the hung piece, tune on the real lights, build the people counter.
 
 ![Rain checkpoint on the coiled ropes and HUB75, 18 Oct 15:57](img/rain-checkpoint-2026-10-18.jpg)
 

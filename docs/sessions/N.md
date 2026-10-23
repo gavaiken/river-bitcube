@@ -25,10 +25,14 @@ Keep the lighting switch and the Colorlight cable off the router.
 - 22:14 Confirmed the range clash (D18): bitcube routes `192.168.8.0/24` via Tailscale (the river router, offline 1 day), so it can't reach the cam at 192.168.8.189 (TCP 554 fails). The router's LAN must move to 192.168.9.1.
 - 22:16 S2.3 (partly): `gray-river` Wi-Fi profile → Private; removed the stale `192.168.1.99/24` and gateway `192.168.1.1` from the lighting NIC (persistent config now only `2.0.0.8/8`). Found why the wired port never showed in the router's Clients: **`Ethernet 2` had DHCP turned off with no address**. Turned DHCP on.
 - 22:20 `Ethernet 2` still gets no address: its link comes up at only 10 Mbps, drops, and has received 0 packets. Suspect the flat white cable (or a port): try another cable and the router's LAN2.
+- 22:17 Gavin restarted bitcube as a test: back by itself (Windows 22:17:08, online on `gray-river`). He'd seen Windows on the monitor earlier, so the evening's "offline" was only the network (Ethernet 2 with DHCP off, Wi-Fi knowing only Agape WiFi).
+- 22:25 S2.1 ✅ Router LAN moved to **192.168.9.1** (Gavin). bitcube's Wi-Fi now 192.168.9.194; the cam is reconnecting.
+- 22:28 S3: bitcube now advertises `192.168.9.76/32` + `192.168.9.1/32` (was `10.0.7.76/32`); waiting for Gavin's approval in the admin console.
+- 22:28 "loopMIDI opens at restart": it's a virtual MIDI cable installed in Aug 2023 for the old BitCube setup, started by the HKCU `Run` key. Nothing in our show uses it (S18, Gavin to decide).
+- 22:30 Credits: Andi and Lilian are now named artists on the welcome page and the gallery card. Plan updated: next steps, S16–S20, R15, learnings. System map and CLAUDE.md updated; system tests pass, including the secret scan against bitcube's real secrets.
 
 ### Waiting on Gavin
-- Router LAN → 192.168.9.1, then reservations (cam .76, bitcube wired .79).
-- Another Ethernet cable for bitcube.
+- The [next steps](../execution-plan.md#next-steps-22-oct-night): reservations, route approval, 2.4 GHz back to `gray-river`, another cable, loopMIDI.
 
 ### Waiting on Gavin (earlier)
 - S2.1/S2.2 on site. Tell session N when bitcube is cabled and powered.

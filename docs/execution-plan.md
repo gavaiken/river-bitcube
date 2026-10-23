@@ -4,15 +4,42 @@ title: Execution plan
 
 # Execution plan: A River Becoming at Gray Area
 
-**Updated Thu 22 Oct 2026 by session A (coordinator, Mac mini); install network by session N (Mac mini), 21:38.** This is the working plan: steps to work through in order, the decisions behind them, and the requirements they must meet. **Add to it freely:** new steps go in the table with the next free number, new requirements get the next R-number, and anything decided gets a D-number with the date and who decided. Terms are defined in [`GLOSSARY.md`](https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md). Phase 1 (the Agape build, 17–21 Oct) is further down as history.
+**Updated Thu 22 Oct 2026 by session A (coordinator, Mac mini); install network and next steps by session N (Mac mini), 22:30.** This is the working plan: steps to work through in order, the decisions behind them, and the requirements they must meet. **Add to it freely:** new steps go in the table with the next free number, new requirements get the next R-number, and anything decided gets a D-number with the date and who decided. Terms are defined in [`GLOSSARY.md`](https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md). Phase 1 (the Agape build, 17–21 Oct) is further down as history.
 
 **How to work it:** any Claude session (on the mini or on bitcube) starts with `git pull`, takes the first ➡️ step it can do, marks it ✅ / ⏳ / ❌ here after each step with a line in `docs/sessions/<letter>.md`, and pushes. The [coordination contract](#coordination-contract-every-bitcube-session-follows-this) below still applies, and only one Claude works on bitcube at a time. Gavin says **"sync"** to session A for a report.
 
 ## Where we are (22 Oct)
 - Everything works end to end at Agape: TouchDesigner (TD) on bitcube drives 18 of 20 ropes and HUB75 quad 1 from the camera pixel map; the live river cam, Dave's Modal agent (cameras up, scene down) and his canvas all feed the **online show file**.
-- **Moving to Gray Area tonight** (Thu 22 Oct, 7 pm install, Lily leading). Gavin on site Fri morning with the MacBook Air; Colin, Justine and Gavin tune visuals Fri and Mon; Lily covers the weekend.
-- **bitcube is packed and offline.** The new **local-only seasons show file** is written and tested off the machine and waits for step S1 to deploy it.
+- **At Gray Area since Thu 22 Oct** (install led by Lily). Colin, Justine and Gavin tune visuals Fri and Mon; Lily covers the weekend.
+- **Install network up (22:30, session N):** our router (Wi-Fi `gray-river`, 192.168.9.x) gets internet from Gray Area's staff Wi-Fi until the wired drop is connected. bitcube is online on `gray-river` and came back by itself from a restart; the gallery cam is on `gray-river`. **Lights not connected yet.** [Next steps](#next-steps-22-oct-night).
+- The new **local-only seasons show file** is written and tested off the machine and waits for step S1 to deploy it.
 - **The river site is down** (solar panel giving 0 W, Starlink set to switch off at 22:00, battery dead). We have one 64 s river clip; the hourly recorder catches more whenever the site comes back.
+
+## Next steps (22 Oct night)
+**Gavin, on site, in this order:**
+1. **Reservations** (router → Network → LAN → Address Reservation → Add), then unplug the camera's power for 10 s:
+   | Device | MAC | Address |
+   |---|---|---|
+   | Gallery cam (`gallery`) | `EC:71:DB:EB:EB:23` | `192.168.9.76` |
+   | bitcube Wi-Fi (`BITCUBE`) | `70:D8:23:16:A1:5C` | `192.168.9.80` |
+   | bitcube wired | `00:E7:43:0E:5F:C4` | `192.168.9.79` |
+2. **Approve bitcube's routes** in Will's Tailscale admin console: Machines → bitcube → Edit route settings → `192.168.9.76/32` and `192.168.9.1/32` (S3).
+3. Router → Wireless: **2.4 GHz back to `gray-river`** (S19).
+4. **A different Ethernet cable** from bitcube's spare port to router LAN2 (S17).
+5. Say whether loopMIDI should stop opening at login (S18).
+6. When Gray Area connects the wired drop: plug it into the router's **WAN** (S16).
+
+**Claude (session N), right after step 1:** renew bitcube's Wi-Fi to `.80`, put the cam's `192.168.9.76` in `secrets.local.json`, test `cam_snap.ps1 gallery`, restart the Modal link and check it (S3). **Then S1** (deploy the seasons show file); the lights don't need to be connected for it.
+
+**Friday:** connect the lights (S20), re-map (S4), tune (S7), power check (S8).
+
+### Learned on install night (22 Oct)
+- **No monitor came with the kit:** when bitcube didn't appear online we couldn't tell a stuck boot from a network problem. It was the network. Keep a small HDMI monitor and a USB keyboard with bitcube.
+- **bitcube's spare port (`Ethernet 2`) had DHCP turned off with no address,** so a cable to any router never got it online. Now DHCP. Its saved Wi-Fi was only `Agape WiFi`; `gray-river` was added from the console (WPA2).
+- **The range clash is real (R15):** on 192.168.8.x, bitcube routed the camera's address into Tailscale towards the river router (offline a day), and couldn't reach it. Moving our LAN to 192.168.9.x fixed it.
+- **The gallery cam has an Ethernet port and works on 5 GHz,** including the DFS channel. While the router repeats a venue Wi-Fi on 5 GHz, its own 5 GHz Wi-Fi shares that channel (124 tonight).
+- Using the venue Wi-Fi as the router's uplink (Repeater) works as a stopgap and doesn't rebroadcast the venue's network; Multi-WAN switches to Ethernet when the drop is plugged in.
+- A restart brings bitcube back by itself in about a minute (Windows, auto-login, Tailscale, then TD, Claude and the Modal link).
 
 ## Steps
 ✅ done · ➡️ next · ⏳ waiting on someone · 🅿️ parked
@@ -26,10 +53,10 @@ title: Execution plan
 | ⏳ | S1.4 | Windows Firewall: allow TD inbound on port 9981 for Private and Tailscale; open `http://bitcube.tail03bc1a.ts.net:9981` from the mini | S1.3 | Claude | Control page shows the year turning |
 | ⏳ | S1.5 | Save, toeexpand secret check, commit; `Start-River.cmd` → seasons file; restart TD via the one-off interactive task | S1.4 | Claude | TD reopens the seasons file by itself |
 | ➡️ | S2 | **Install network** (D18–D23; [progress](sessions/N.md)): our second GL-AXT1800 behind Gray Area's wired drop; bitcube and gallery cam behind it | Router at the venue | Gavin + Claude (session N) | bitcube online via the router, gallery cam reachable from bitcube |
-| ➡️ | S2.1 | Gavin configures the router: admin password, WAN = Gray Area drop, LAN **192.168.9.1**, Wi-Fi **`gray-river`** (5 GHz; 2.4 GHz name to confirm), failover Ethernet → repeater, Tailscale off | On site | Gavin | Phone on `river` loads a web page |
-| ⏳ | S2.2 | Plug in: gallery cam to a router LAN port by cable (it has an Ethernet port; else Wi-Fi, see D19), bitcube's spare port (Ethernet 2) to the other LAN port, lighting NIC to the switch, HDMI to the sender; reserve cam **.76**, bitcube wired (`00:E7:43:0E:5F:C4`) **.79** | S2.1 | Gavin | Both in the router's Clients at their addresses; bitcube online on Tailscale |
-| ➡️ | S2.3 | bitcube network (over `ssh bitcube` from the mini): Ethernet 2 network → Private profile; remove stale `192.168.1.99` + gateway from the lighting NIC (D21); check routes and both PSAC10s | S2.2 | Claude (session N) | Default route via 192.168.9.1; `2.0.0.10`/`.11` answer |
-| ⏳ | S3 | Gallery cam's new address (192.168.9.76) into bitcube's `secrets.local.json`; bitcube advertises `192.168.9.76/32` + `192.168.9.1/32` (D22), Gavin approves in Will's admin console; restart the Modal link | S2 | Claude (session N) | `tools\cam_snap.ps1 gallery` works; Modal link posts gallery clips |
+| ✅ | S2.1 | Router configured: admin password, LAN **192.168.9.1**, Wi-Fi **`gray-river`** on 5 GHz (2.4 GHz temporarily `Agape WiFi`, see S19), Multi-WAN failover Ethernet → Repeater → Tethering → Cellular, Tailscale off. Uplink for now: Repeater on Gray Area's staff Wi-Fi (S16) | On site | Gavin | Done 22:25: phone, laptop, bitcube and cam online through it |
+| ➡️ | S2.2 | Devices on the router: gallery cam on Wi-Fi `gray-river` (no cable reaches its spot), bitcube on Wi-Fi `gray-river` (wired port waits on S17). **Reservations** (Network → LAN → Address Reservation): cam `EC:71:DB:EB:EB:23` → **.76**, bitcube Wi-Fi `70:D8:23:16:A1:5C` → **.80**, bitcube wired `00:E7:43:0E:5F:C4` → **.79**; then power-cycle the cam | S2.1 | Gavin | Cam and bitcube at their reserved addresses in Clients |
+| ✅ | S2.3 | bitcube network: `gray-river` → Private profile; stale `192.168.1.99` + gateway removed from the lighting NIC; **`Ethernet 2` had DHCP off with no address** (why it never got online by cable), now DHCP; restart test passed 22:17 (on Wi-Fi) | S2.2 | Claude (session N) | Done 22:20 |
+| ➡️ | S3 | bitcube advertises `192.168.9.76/32` + `192.168.9.1/32` (done 22:28, replaces `10.0.7.76/32`); **Gavin approves** in Will's admin console (Machines → bitcube → Edit route settings). After S2.2: bitcube's Wi-Fi renewed to .80, cam 192.168.9.76 into `secrets.local.json`, restart the Modal link | S2.2 | Claude (session N) + Gavin | `tools\cam_snap.ps1 gallery` works; Modal link posts gallery clips; routes approved |
 | ⏳ | S4 | **Re-map at Gray Area** after the hang (Thu night or Fri morning): structured-light capture, new `pixelmap-<date>.json`, rebuild | Ropes hung and powered, camera fixed in its final spot, room dark; S1 | Claude (+ someone on site) | All lit ropes mapped; ropes 9/17 found if they now light |
 | ➡️ | S5 | Extend `tools/pixelmap/hub75.py` to locate HUB75 quads 2–4 (today only quad 1), so the seasons file samples each quad at its real position | — (code now), S4 (to use) | Claude | Pixel map JSON has `hub75_quad1..4` |
 | ⏳ | S6 | Confirm the receive-card layout of the 4 quads with Andi; change `QUAD_X` in `build_panels.py` if it isn't 4 in a row | Andi | Gavin → Andi | Each quad shows its own picture |
@@ -51,6 +78,11 @@ title: Execution plan
 | ➡️ | M9 | End-to-end check from a phone off the tailnet (login page confirmed reachable from the internet 22 Oct; agent answered as `river` and was denied `/Users/gav`); river's key on bitcube when it's online; docs (show-files page link, CLAUDE.md, runbook) | M7, M8 | Claude | Team can log in, chat, see status, steer the seasons |
 | 🅿️ | S14 | Gallery card and page for the online version (when we run Dave's agent in the show) | Decision to run it | Claude | — |
 | 🅿️ | S15 | AI-enhanced river footage via Modal (upscaling, smoother slow motion, longer clips) | — | — | — |
+| ⏳ | S16 | Gray Area's wired drop into the router's **WAN** port (Ethernet then takes over from the staff Wi-Fi by itself) | Gray Area cable | Gavin / Lilian | Router's Internet page shows Ethernet active |
+| ⏳ | S17 | A good Ethernet cable from bitcube's spare port to router LAN2 (the flat white cable linked at only 10 Mbps, dropped and passed no packets) | A cable | Gavin | `Ethernet 2` has 192.168.9.79 at 1 Gbps |
+| ⏳ | S18 | loopMIDI (virtual MIDI cable from the 2023 BitCube setup) opens a window at every login (HKCU `Run`). Nothing in our show uses it: remove the autostart entry? | Gavin's OK | Gavin → Claude | No loopMIDI window after a restart |
+| ⏳ | S19 | Router 2.4 GHz back from `Agape WiFi` to `gray-river` (bitcube and the cam no longer need Agape WiFi) | — | Gavin | Only `gray-river` broadcasts |
+| ⏳ | S20 | **Connect the lights** (Fri): bitcube lighting NIC → switch → rack controller + both PSAC10s; HDMI → Colorlight sender; then S4 | Ropes and panels hung | Gavin + Lilian | Ropes and HUB75 lit from TD |
 
 ## Requirements
 Every step must keep these true. Add new ones at the end.
@@ -71,6 +103,7 @@ Every step must keep these true. Add new ones at the end.
 | R12 | TD keeps 60 fps on bitcube. | standing |
 | R13 | Mission control and the studio chat are **team only, behind the shared password**; the studio agent can never reach Gavin's files, connectors or history (separate `river` user). | Gavin, 22 Oct |
 | R14 | Every step of the mission work is committed and recorded in `docs/mission-plan.md` (progress log) **as it happens**, so another session can pick it up at any point. | Gavin, 22 Oct |
+| R15 | The install LAN never overlaps a range bitcube accepts over Tailscale (today the river router's `192.168.8.0/24`): bitcube sends routed ranges into Tailscale even when the same range is local. | Session N, 22 Oct (seen live) |
 
 ## Decisions
 Newest last. Add with the date and who decided.
@@ -94,7 +127,7 @@ Newest last. Add with the date and who decided.
 | D15 | Remote UI control of bitcube from the mini over **VNC** (`~/claude/local/bitcube-vnc/vnc.py`), with `tools/screenshot.ps1` as the fallback. | More robust than scheduled-task input; reaches UAC and the lock screen. | Gavin, 20 Oct |
 | D17 | **Mission control and the studio chat** on the Mac mini, online via Tailscale Funnel, as a hidden `river` user service; details and their reasons in [mission-plan.md](mission-plan.md) (MD1–MD10). | Team access to the agent and the controls from anywhere. | Gavin, 22 Oct |
 | D16 | **Asks to Gray Area** ([page](gray-area.html)): wired drop, connections only started by us (no ports, forwarding or fixed IP), UDP 41641/3478 if easy, three separate circuits (two rope boxes, one HUB75 power board). | Seabrook's questions, 21–22 Oct. | Gavin, 22 Oct |
-| D18 | **Install router:** the second GL-AXT1800 (Slate AX, MAC `94:83:C4:96:62:83`) on its own range **192.168.9.0/24** (router `192.168.9.1`), with DHCP reservations: gallery cam `.76`, bitcube wired `.79`. | The default 192.168.8.x clashes with the river router's range, which bitcube reaches over Tailscale (river cam `192.168.8.217`). | Gavin, 22 Oct (was open decision 1) |
+| D18 | **Install router:** the second GL-AXT1800 (Slate AX, MAC `94:83:C4:96:62:83`) on its own range **192.168.9.0/24** (router `192.168.9.1`), with DHCP reservations: gallery cam `.76`, bitcube wired `.79`, bitcube Wi-Fi `.80`. | The default 192.168.8.x clashes with the river router's range, which bitcube reaches over Tailscale (river cam `192.168.8.217`). | Gavin, 22 Oct (was open decision 1) |
 | D19 | **Wi-Fi name `gray-river`** (5 GHz) with its own password, not a copy of Agape WiFi. **Gallery cam on Wi-Fi** (no cable reaches its spot, 22 Oct): moved by cabling it to the router briefly, renaming 2.4 GHz to `gray-river` and switching it in the Reolink app. Without a cable, the router broadcasts `Agape WiFi` on 2.4 GHz for ~15 min so the cam comes online, the cam is switched to `gray-river` (Reolink `SetWifi` from bitcube, or the Reolink app), then 2.4 GHz takes our own name. | Many visitors know the Agape password. Resetting the cam would wipe its login and settings. | Gavin, 22 Oct (replaces open decision 2) |
 | D20 | **One wired drop, into the router's WAN** (no second drop to bitcube). Failover: Ethernet → repeater (venue Wi-Fi or phone hotspot). bitcube's spare port (`Ethernet 2`) is cabled to the router; its lighting NIC stays on the switch; HDMI to the Colorlight sender. bitcube needs no Wi-Fi. | bitcube has two Ethernet ports, so nothing has to share. | Gavin, 22 Oct (was open decision 3) |
 | D21 | Remove the stale `192.168.1.99/24` and gateway `192.168.1.1` from bitcube's lighting NIC. | It can steal bitcube's internet route. | Gavin, 22 Oct (was open decision 4) |
