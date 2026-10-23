@@ -49,7 +49,7 @@ bitcube DisplayPort ◄── dummy display plug (recommended: a desktop VNC can
   - BIOS powers on after a power cut;
   - power-cut test passed: back 1.5 min after the router had power.
 - ✅ Gallery cam: reachable, posting clips; rebooted remotely through its API.
-- ⏳ **S22** one reservation for both cam MACs · **S28** remote access to the router · **S25** port labels · **S20** lights on the ground · **S26** remaining tests · VNC without a monitor (S27) · **S29** radar wait. Details and order: [execution plan](execution-plan.html#before-the-lift-22-oct-night-everything-still-to-resolve).
+- ⏳ **S22** one reservation for both cam MACs · **S28** remote access to the router · ✅ S25 port labels (blue tape) · **S20** lights on the ground · **S26** remaining tests · VNC without a monitor (S27) · **S29** radar wait. Details and order: [execution plan](execution-plan.html#before-the-lift-22-oct-night-everything-still-to-resolve).
 
 ## Before lifting (on the ground, with a monitor and keyboard)
 1. **BIOS: power on after a power cut.** Already set (checked 22 Oct): Advanced → Customer Exclusive Functions → **Auto Power On = Enabled**, and Wake On LAN is Enabled. To check again, press **Del** as bitcube starts.
