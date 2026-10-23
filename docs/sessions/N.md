@@ -21,9 +21,14 @@ Keep the lighting switch and the Colorlight cable off the router.
 - 21:55 S2.1/S2.2: gallery cam on Wi-Fi `gray-river`, no cable; both bands now `gray-river` (`Agape WiFi` gone); Multi-WAN failover. bitcube powered on and cabled to the router, but **offline on Tailscale** (last seen ~3 h ago): check it's in the router's Clients, else its cable is in the lighting port (static 2.0.0.8) and goes in the other one. Lights not connected tonight (Gavin). Router LAN still 192.168.8.1: must move to 192.168.9.1 (D18) before bitcube's camera traffic works, then reservations.
 - 21:58 Router Clients: gallery cam online at 192.168.8.189 on **5 GHz** (so it does handle the DFS channel); no wired clients, so **bitcube isn't on the router**. Likely cause: cable in bitcube's lighting port (static 2.0.0.8 + 192.168.1.99, never asks for an address). Next: the cam's known-good cable into the router's LAN1 and bitcube's other port.
 - 22:01 Still no bitcube: Gavin moved the cable to the other port (the first port had link lights, so the cable and link were fine) and put `Agape WiFi` back on 2.4 GHz for bitcube's saved Wi-Fi; still not in Clients and offline on Tailscale. Neither NIC is asking for an address, so **bitcube probably hasn't reached Windows**. Suspect its firmware settings reset while it was unplugged (GRUB menu or a BIOS prompt) or a stuck boot. Next: an HDMI monitor and USB keyboard from Gray Area. No monitor came with the kit.
+- 22:12 **bitcube online** (Windows booted 22:12:36, after Gavin connected a monitor and restarted it). It's on Wi-Fi `gray-river` (5 GHz, channel 124) at 192.168.8.194; Gavin joined it from the console.
+- 22:14 Confirmed the range clash (D18): bitcube routes `192.168.8.0/24` via Tailscale (the river router, offline 1 day), so it can't reach the cam at 192.168.8.189 (TCP 554 fails). The router's LAN must move to 192.168.9.1.
+- 22:16 S2.3 (partly): `gray-river` Wi-Fi profile → Private; removed the stale `192.168.1.99/24` and gateway `192.168.1.1` from the lighting NIC (persistent config now only `2.0.0.8/8`). Found why the wired port never showed in the router's Clients: **`Ethernet 2` had DHCP turned off with no address**. Turned DHCP on.
+- 22:20 `Ethernet 2` still gets no address: its link comes up at only 10 Mbps, drops, and has received 0 packets. Suspect the flat white cable (or a port): try another cable and the router's LAN2.
 
 ### Waiting on Gavin
-- A monitor + keyboard on bitcube; report what's on screen.
+- Router LAN → 192.168.9.1, then reservations (cam .76, bitcube wired .79).
+- Another Ethernet cable for bitcube.
 
 ### Waiting on Gavin (earlier)
 - S2.1/S2.2 on site. Tell session N when bitcube is cabled and powered.
