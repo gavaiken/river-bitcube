@@ -4,7 +4,7 @@ title: "A River Becoming: ceiling install, step by step"
 
 # Ceiling install: step by step
 
-For whoever goes up the lift (Gavin, Lilian, the Gray Area crew). Everything that lives in the ceiling, how to cable it, and how to check it worked, without needing anyone else. About 45 minutes. Background and addresses: [ceiling page](ceiling.html). Plan: [execution plan](execution-plan.html). Updated 23 Oct 2026.
+For whoever goes up the lift (Gavin, Lilian, the Gray Area crew). Everything that lives in the ceiling, how to cable it, and how to check it worked, without needing anyone else. About 45 minutes. Background and addresses: [ceiling page](ceiling.html); **as built on 23 Oct, with photos: [ceiling page → As built](ceiling.html#as-built-gavins-photos-23-oct-in-the-ceiling)**. Plan: [execution plan](execution-plan.html). Updated 23 Oct 2026.
 
 ![Rigging at Gray Area: 1 ceiling, 2 panel power, 3 lowest rope point](img/rigging-2026-10-22.jpg)
 

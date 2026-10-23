@@ -6,6 +6,31 @@ title: bitcube and the router in the ceiling
 
 Once they're up there, nobody can reach a screen or a power button. So everything has to come back by itself after a power cut, and we have to be able to fix things remotely (VNC, SSH) whatever got plugged in. (Session N, 22 Oct 2026. Steps are in the [execution plan](execution-plan.html#before-the-lift-22-oct-night-everything-still-to-resolve): S20–S30.)
 
+## As built (Gavin's photos, 23 Oct, in the ceiling)
+**The stack, top to bottom:** our router (GL.iNet Slate AX) · bitcube · the rack LED controller (AoShow, "LED Controller") · the Colorlight sender (two-digit display on the front) · the two PSAC10 rope boxes side by side.
+
+| Front | Back | Back, left side | Back, close-up |
+|---|---|---|---|
+| ![front](img/ceiling-asbuilt-2026-10-23-1.jpg) | ![back](img/ceiling-asbuilt-2026-10-23-2.jpg) | ![back left](img/ceiling-asbuilt-2026-10-23-3.jpg) | ![close-up](img/ceiling-asbuilt-2026-10-23-4.jpg) |
+
+**Connections as cabled** (read from the photos; "live" is filled in once bitcube and the router are back online and Claude has checked each link from the Mac mini):
+
+| # | From | To | Cable | Live |
+|---|---|---|---|---|
+| 1 | Gray Area's drop | router **WAN** (rightmost port) | black flat Cat 6 | to confirm (router `eth0` link) |
+| 2 | bitcube **ROUTER** port (blue tape) | router port taped **blue** (LAN2) | blue-taped black cable | to confirm (bitcube `Ethernet 2` up, `.79`) |
+| 3 | router **LAN1** (middle) | nothing | | correct: LAN1 is off (the old camera cable) |
+| 4 | bitcube **LIGHTS** port (white) | rack controller **NET1** | black (white tape at bitcube) | to confirm (bitcube `Ethernet` up, `2.0.0.8`) |
+| 5 | rack controller **NET2** | PSAC10 **left** box **NET1** | green | to confirm (box answers on `2.0.0.10` or `.11`) |
+| 6 | PSAC10 left box **NET2** | PSAC10 **right** box **NET1** | black | to confirm (second box answers) |
+| 7 | PSAC10 right box **NET2** | nothing | | end of the chain |
+| 8 | bitcube **HDMI** | Colorlight sender **DVI** | HDMI-to-DVI (blue band) | to confirm (bitcube sees the `LED` display) |
+| 9 | Colorlight sender **LAN1** | the receive card at point 2 (panels) | long black Ethernet | to confirm (panels show the river) |
+| 10 | ropes (male round plugs) | PSAC10 OUT1–OUT10 on both boxes, via the XLR adapters | rope leads (labelled B1, B3…) | to confirm by camera at the re-map (S4) |
+| 11 | mains | router, bitcube, rack controller (IEC), Colorlight sender (IEC, red switch), each PSAC10 (blue powerCON, breaker ON) | | to confirm |
+
+*Left and right are as seen from the back. Which PSAC10 is box 001 (`2.0.0.10`, ropes 1–10) and which is 002 shows on each box's front display (`ID:001` / `ID:002`); the rope labels B1… suggest the left box is box 1. The gallery camera has no cable (Wi-Fi only).*
+
 ## The setup
 ```
 Gray Area wired drop (if there is one) ──► router WAN
