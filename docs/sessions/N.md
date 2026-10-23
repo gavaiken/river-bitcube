@@ -44,6 +44,7 @@ Keep the lighting switch and the Colorlight cable off the router.
 - 23:25 Synced with session A's 22:57 commit (rigging layout, its S21–S24). Merged the clashing numbers: A's S21 (power-cut recovery) is done; A's S22–S24 stay; session N's became S25 (port labels), S26 (tests), S27 (dummy plug); new S28 (router's own Tailscale + SSH key, D24), S29 (5 GHz radar wait after power-up), S30 (optional smart plugs). Wrote the before-the-lift list in the execution plan and on the ceiling page.
 - 23:24 S25 live check: Gavin plugged the router cable into one port; **`Ethernet 2` came up** (1 Gbps, `.79`, internet via it). So the port he used is **ROUTER**, and the other is **LIGHTS** (`Ethernet`, `2.0.0.8`). Which side physically: to record from Gavin.
 - 23:27 S25 ✅ Ports labelled with blue tape (Gavin). Double-checked: ROUTER = `Ethernet 2`, up at 1 Gbps, `192.168.9.79`, internet goes through it, router and github.com reachable, 0 receive errors. LIGHTS = `Ethernet` (`2.0.0.8`), unplugged. Wi-Fi also up on `.80` as the fallback.
+- 23:35 Gavin's tape marks (colour only, no writing): **blue** = the bitcube ↔ router cable (both ends), bitcube's ROUTER port and the router port; **white** = bitcube's LIGHTS port.
 
 ### Waiting on Gavin
 - The [before-the-lift list](../execution-plan.md#before-the-lift-22-oct-night-everything-still-to-resolve): S22 lease for both cam MACs (or S28 first so Claude can do it), D24 OK, S25 labels (live check), S20 lights on the ground, S26 tests.

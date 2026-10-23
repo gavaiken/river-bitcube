@@ -16,6 +16,8 @@ bitcube HDMI ──► Colorlight sender ──(its own cable)──► receive 
 bitcube DisplayPort ◄── dummy display plug (recommended: a desktop VNC can use)
 ```
 
+**Tape colours on the kit:** blue = the bitcube ↔ router cable and both its ports; white = bitcube's LIGHTS port.
+
 **The lights go into bitcube's LIGHTS port, not the router** (D25): the show then keeps running if the router restarts or the Wi-Fi has trouble. If that's ever impossible, the lighting switch can go into a spare router port and Claude moves the lighting address over remotely.
 
 **Never plug in:**
@@ -55,7 +57,7 @@ bitcube DisplayPort ◄── dummy display plug (recommended: a desktop VNC can
 
 ## Before lifting (on the ground, with a monitor and keyboard)
 1. **BIOS: power on after a power cut.** Already set (checked 22 Oct): Advanced → Customer Exclusive Functions → **Auto Power On = Enabled**, and Wake On LAN is Enabled. To check again, press **Del** as bitcube starts.
-2. **Label bitcube's two network ports (S25).** The lights only work in **LIGHTS**. To tell them apart, plug the router cable into one port and ask Claude which one came up:
+2. **Label bitcube's two network ports (S25).** ✅ Done 22 Oct with coloured tape (no writing): **blue** marks the router link (bitcube's ROUTER port, both ends of the cable, and the router port); **white** marks bitcube's LIGHTS port. Plug blue to blue; the lighting switch goes into white. Originally: The lights only work in **LIGHTS**. To tell them apart, plug the router cable into one port and ask Claude which one came up:
    - **ROUTER** = `Ethernet 2` (MAC `00:E7:43:0E:5F:C4`); it gets `192.168.9.79` from the router.
    - **LIGHTS** = `Ethernet` (MAC `00:E7:43:0E:5F:C3`); it holds the fixed lighting address `2.0.0.8`.
 3. **Pull-the-plug test:** switch off bitcube's and the router's power at the wall, wait 10 s, switch back on, touch nothing. Within about 2 minutes:
