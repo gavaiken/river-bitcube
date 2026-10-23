@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { derive, dur, daytimeMinutes, intensityWord, PAGE_STALE_S, POLL_S, STALE_FACTOR } from '../public/model.js';
+import { derive, dur, daytimeMinutes, intensityWord, seasonOfPhase, contactFor, PAGE_STALE_S, POLL_S, STALE_FACTOR } from '../public/model.js';
 
 const DIR = new URL('./fixtures/', import.meta.url);
 const fixtures = readdirSync(DIR).filter((f) => f.endsWith('.json') && !f.startsWith('_')).sort()
@@ -298,4 +298,54 @@ test('model.js runs in the browser: plain ESM with no imports, no Node globals',
   const src = readFileSync(new URL('../public/model.js', import.meta.url), 'utf8');
   assert.doesNotMatch(src, /^\s*import\b|require\(|\bprocess\.|node:|\bBuffer\b|\b__dirname\b/m);
   assert.match(src, /^export function derive\(/m);
+});
+
+test("timeline extensions: the season of a phase, the year's history with seasons, uptime, and who to call per cause", () => {
+  assert.deepEqual([0, 0.49, 0.51, 1.12, 2, 3.4, 3.6, 4.2, -0.3].map(seasonOfPhase),
+    ['winter', 'winter', 'spring', 'spring', 'summer', 'autumn', 'winter', 'winter', 'winter']);
+  assert.equal(seasonOfPhase(null), null);
+  assert.equal(seasonOfPhase('1'), null);
+  const m = run(byName['all-good']);
+  assert.equal(m.show.history.length, 6);
+  assert.deepEqual(m.show.history.map((h) => h.season), ['winter', 'winter', 'spring', 'spring', 'spring', 'spring']);
+  assert.equal(m.show.history[0].t_ms, 1792749481000);
+  assert.equal(m.show.history[5].intensity, 0.464);
+  assert.equal(m.show.uptime_s, Math.round(3.1 * 3600 + m.sources.probe.age_s));
+  const off = run(byName['bitcube-offline']);
+  assert.deepEqual(off.show.history, []);
+  assert.equal(off.show.uptime_s, null);
+  assert.equal(run(byName['just-booted']).show.history.length, 0);
+  // every cause the fixtures produce names a person to call, or deliberately nobody (wait and look again)
+  const nobody = new Set(['coming-up', 'not-checked', 'td-restarting', 'unknown']);
+  const seen = new Set();
+  for (const [name, fx] of fixtures) for (const p of run(fx).problems) {
+    seen.add(p.id);
+    const c = contactFor(p.id);
+    if (nobody.has(p.id)) assert.equal(c, null, `${name} ${p.id}`);
+    else assert.ok(c?.name && c?.owns, `${name} ${p.id} has nobody to call`);
+  }
+  assert.ok(seen.size >= 10, 'the fixtures exercise many causes');
+  assert.equal(contactFor('no-such-cause'), null);
+  assert.equal(contactFor(null), null);
+});
+
+test('the panels, like the ropes, carry a state word and plain words for the page', () => {
+  const p = (name) => run(byName[name]).show.panels;
+  assert.equal(p('all-good').state, 'river');
+  assert.match(p('all-good').words, /show the river at 100 %/);
+  assert.equal(p('td-frozen').state, 'frozen');
+  assert.match(p('td-frozen').words, /frozen picture/);
+  assert.equal(p('lights-not-connected').state, 'no-sender');
+  assert.equal(p('bitcube-offline').state, 'unknown');
+  assert.equal(p('nothing-known-yet').state, 'unknown');
+  assert.equal(p('just-booted').state, 'river', 'TouchDesigner is up with the file open: the panels show it');
+  assert.match(p('seasons-not-running').words, /the live river/);
+  assert.match(p('river-cam-stale').words, /rain fallback/);
+  assert.match(p('ropes-dark-on-purpose').words, /show the river/, 'the panels keep the river while the ropes are dark');
+  for (const [name] of fixtures) {
+    const x = p(name);
+    assert.ok(['unknown', 'no-sender', 'restarting', 'frozen', 'gone', 'no-output', 'off', 'river'].includes(x.state), `${name}: ${x.state}`);
+    assert.ok(x.words && x.summary, name);
+    assert.doesNotMatch(x.words, JARGON, `${name}: ${x.words}`);
+  }
 });

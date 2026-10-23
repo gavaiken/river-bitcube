@@ -71,13 +71,14 @@
         "time": "2026-10-23T02:58:32",
         "show_files": [
           "river-local-oct-22-seasons.toe",
+          "river-online-oct-23.toe",
           "river-online-oct-20.toe"
         ],
         "lights_route": "direct",
         "td": {
           "ok": true,
           "action": "status",
-          "file": "river-online-oct-20.toe",
+          "file": "river-online-oct-23.toe",
           "fps": 59.8,
           "cook_rate": 60,
           "ropes": {

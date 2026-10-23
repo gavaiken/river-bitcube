@@ -9,7 +9,7 @@ const PROBE = PS + 'probe.ps1';
 export const CAMERAS = ['gallery', 'river'];
 const SNAP_CACHE_MS = 45_000;
 // Show files mission control may open (the online one keeps its old name until step S1.1 renames it).
-export const BOOT_FILES = ['river-local-oct-22-seasons.toe', 'river-online-oct-20.toe', 'river-local-oct-18.toe'];
+export const BOOT_FILES = ['river-local-oct-22-seasons.toe', 'river-online-oct-23.toe', 'river-online-oct-20.toe', 'river-local-oct-18.toe'];
 export const MODES = ['automatic', 'dynamic', 'manual'];
 export const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
 

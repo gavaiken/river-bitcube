@@ -16,6 +16,7 @@
 //   problems: [ { id, level, headline, detail, action, items } ]   one per cause, the headline's first
 //   show: what the piece is doing: { file, boot_file, show_files, season, phase, weights, intensity, mode, target,
 //         presence, ropes, panels, river, scene, modal, fresh, words }, each with plain words for the page
+//         (ropes and panels carry { state, words, summary }: a state word, a sentence, and the item's summary)
 //   items: [ { id, name, level, summary, detail, action, checked_from, age_s, stale, address, cause, muted } ]
 //     one per piece of equipment or link, what matters most first and OK items last. `level` is the state of
 //     that piece itself (a down camera is down even when the show does not need it; `overall` says what it
@@ -37,11 +38,39 @@ export const DISK_LOW_GB = 20;
 export const TZ = 'America/Los_Angeles';        // bitcube, the mini and the team keep Pacific time
 export const FILES = {                          // GLOSSARY.md: the local-only file is "the river's year", the online one "the live river"
   'river-local-oct-22-seasons.toe': { kind: 'year', label: "the river's year" },
-  'river-online-oct-20.toe': { kind: 'live', label: 'the live river' },
+  'river-online-oct-23.toe': { kind: 'live', label: 'the live river' },
+  'river-online-oct-20.toe': { kind: 'live', label: 'the live river (20 Oct)' },
   'river-local-oct-18.toe': { kind: 'live', label: 'the live river (old file name)' },
 };
 export const INTENSITY_WORDS = [[0.1, 'stillness'], [0.3, 'trickle'], [0.6, 'flowing'], [0.8, 'strong'], [Infinity, 'torrent']];
 export const LEVELS = { down: 0, warning: 1, unknown: 2, ok: 3 };   // what wins the headline, and the items' order
+export const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
+/** The season a phase of the year falls in (seasons.py: the rounded phase, wrapped to four), or null. */
+export function seasonOfPhase(phase) {
+  return typeof phase === 'number' && Number.isFinite(phase) ? SEASONS[Math.round(((phase % 4) + 4) % 4) % 4] : null;
+}
+// Who to call, by the cause behind the headline (ia.md, "What to do"): first names and what they own. The numbers
+// live in an untracked file on the mini and never in the repo. A cause mapped to null means "wait and look again".
+export const CONTACTS = {
+  gavin: { name: 'Gavin', owns: 'bitcube, TouchDesigner, the show file and mission control' },
+  lilian: { name: 'Lilian', owns: 'the lights and the rigging' },
+  andi: { name: 'Andi', owns: 'the panels' },
+  will: { name: 'Will', owns: 'the network, the cameras and the river site' },
+  dave: { name: 'Dave', owns: 'his agent on Modal' },
+  colin: { name: 'Colin', owns: 'how the piece should look' },
+};
+const CONTACT_BY_CAUSE = {
+  page: 'gavin', 'bitcube-unchecked': 'gavin', 'bitcube-offline': 'gavin', 'check-failed': 'gavin', 'probe-stale': 'gavin',
+  'td-unknown': 'gavin', 'td-frozen': 'gavin', 'td-off': 'gavin', 'td-slow': 'gavin', 'year-page': 'gavin', 'sender-off': 'gavin',
+  'link-off': 'gavin', 'link-failing': 'gavin', recorder: 'gavin', disk: 'gavin', 'modal-stale': 'gavin', 'seasons-stale': 'gavin',
+  lights: 'lilian', sender: 'lilian', box: 'lilian',
+  panels: 'andi', 'panels-off': 'andi', 'panels-dark': 'andi',
+  'ropes-dark': 'colin', 'online-file': 'colin',
+  'river-stale': 'will', 'no-internet': 'will', router: 'will', 'river-site': 'will', 'gallery-cam': 'will',
+  'modal-unreachable': 'dave', 'modal-stalled': 'dave', 'modal-not-ok': 'dave',
+  'td-restarting': null, 'coming-up': null, 'not-checked': null, unknown: null,
+};
+export function contactFor(cause) { const k = CONTACT_BY_CAUSE[cause]; return k ? CONTACTS[k] : null; }
 const ROPE_BOX = { 'rope box 1': ['2.0.0.10', '1-10'], 'rope box 2': ['2.0.0.11', '11-20'] };
 // name, where it is checked from, address for the details drawer
 const NAMES = {
@@ -525,6 +554,14 @@ export function derive(status, nowMs) {
   const ropesWords = { river: kind === 'live' ? (relay?.fresh ? 'the ropes show the live river' : 'the ropes show the rain fallback') : 'the ropes show the river',
                        dark: 'the ropes are dark on purpose', 'not-reaching': 'the ropes are not getting the river', unknown: 'the ropes are not known' }[ropesState];
   const ropesItem = items.find((x) => x.id === 'ropes');
+  // The panels, the same way: a state word for the page and plain words, beside the item's summary.
+  const riverWords = kind === 'live' ? (relay?.fresh ? 'the live river' : 'the rain fallback') : 'the river';
+  const panelsState = !pr || online === false || led == null ? 'unknown' : ledMissing ? 'no-sender' : !td ? 'unknown'
+    : tdRestarting || tdOffBooting ? 'restarting' : frozen ? 'frozen' : !tdOk ? 'gone' : !hub ? 'no-output'
+    : hub.output === false || brightness === 0 ? 'off' : 'river';
+  const panelsWords = { unknown: 'the panels are not known', 'no-sender': 'the panels have no sender: dark', restarting: 'the panels are dark while TouchDesigner restarts',
+    frozen: 'the panels hold a frozen picture', gone: 'the panels show nothing: TouchDesigner is not running', 'no-output': 'this show file has no panel output',
+    off: 'the panels are switched off', river: `the panels show ${riverWords}${brightness != null ? ` at ${Math.round(brightness * 100)} %` : ''}` }[panelsState];
   const manual = yearOk ? obj(year.manual) : null;
   const show = {
     file: tdOk ? { name: td.file, kind, label, words: `TouchDesigner is showing ${label}` } : null,
@@ -537,12 +574,17 @@ export function derive(status, nowMs) {
     presence: presence ? { available: presence.available === true, now: num(presence.now), usual: num(presence.usual), relative: num(presence.relative),
       words: presence.available ? `${presence.now} people (usual ${presence.usual})` : 'people counter not available' } : null,
     ropes: { state: ropesState, words: ropesWords, summary: ropesItem?.summary ?? 'not known', source: rs?.source ?? ro?.source ?? null, open: senderKnown ? rs.open : null, watts, cap: capW, route: pr?.lights_route ?? null },
-    panels: { present: led, brightness, output: hub ? hub.output !== false : null, words: items.find((x) => x.id === 'hub75 panels')?.summary ?? 'not known' },
+    panels: { present: led, brightness, output: hub ? hub.output !== false : null, state: panelsState, words: panelsWords,
+              summary: items.find((x) => x.id === 'hub75 panels')?.summary ?? 'not known' },
     river: relay ? { live: relay.fresh === true, last_frame_age_s: relayAge, night: relay.night ?? null, words: relay.fresh ? 'live frames from the river' : `no live frames for ${dur(relayAgeNow)}: the rain fallback` }
                  : { live: null, last_frame_age_s: null, night: null, words: kind === 'year' ? "the river library (the live river isn't used)" : 'not known' },
     scene: m && obj(m.scene) ? { ...m.scene, set_at: m.set_at ?? null, words: `${m.scene.animation ?? '?'} / ${m.scene.palette ?? '?'}${m.set_at && Number.isFinite(Date.parse(m.set_at)) ? `, set ${clockDay(Date.parse(m.set_at), now)}` : ''}` } : null,
     modal: m ? { tick: m.tick ?? null, mood: m.mood ?? null, ok: m.ok !== false, resting: inRest(now), overdue_min: Math.round(lateMin), last_tick_ms: Number.isFinite(finMs) ? finMs : null, next_tick_ms: nextMs } : null,
     fresh: { seasons_age_s: se.age_s, probe_age_s: pb.age_s, stale: overall.stale },
+    // the year's recent path (the seasons page keeps a point every 10 s): when each season began, for a timeline
+    history: Array.isArray(y?.history) ? y.history.map(obj).filter((h) => h && num(h.t) != null)
+      .map((h) => ({ t_ms: h.t * 1000, phase: num(h.phase), season: seasonOfPhase(num(h.phase)), intensity: num(h.intensity) })) : [],
+    uptime_s: upS != null ? Math.round(upS) : null,   // bitcube's uptime as of the server's clock (its restart = now - uptime)
     words: tdOk ? `${cap(tdWords)}${yearOk ? `: ${year.season}, ${intensityWord(intensity)}, ${modeWords}` : ''}. ${cap(ropesWords)}.` : (top?.headline ?? ''),
   };
 

@@ -90,7 +90,8 @@ $('ropesdark').onclick = () => act('/api/control/ropes', { dark: true }, 'lerr')
 $('hub').onchange = () => act('/api/control/hub75', { brightness: +$('hub').value }, 'lerr');
 const LABEL = {
   'river-local-oct-22-seasons.toe': ['Seasons', 'local-only: the river library through the four seasons; works with no internet'],
-  'river-online-oct-20.toe': ['Online', "the live river camera plus Dave's Modal agent and his canvas; needs internet"],
+  'river-online-oct-23.toe': ['Online', "the live river camera plus Dave's Modal agent and his canvas, all four screens; needs internet"],
+  'river-online-oct-20.toe': ['Online (20 Oct)', "the previous online file, kept as a fallback"],
   'river-local-oct-18.toe': ['Online', "the live river camera plus Dave's Modal agent and his canvas (old file name until the rename); needs internet"],
 };
 function drawShowFiles(pr) {

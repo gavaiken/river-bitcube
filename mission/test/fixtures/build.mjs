@@ -17,8 +17,8 @@ const S = 1000;
 
 const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
 const SEASONS_FILE = 'river-local-oct-22-seasons.toe';
-const ONLINE_FILE = 'river-online-oct-20.toe';
-const SHOW_FILES = [SEASONS_FILE, ONLINE_FILE];
+const ONLINE_FILE = 'river-online-oct-23.toe';            // the current online file (23 Oct: four screens, the 23 Oct rope map)
+const SHOW_FILES = [SEASONS_FILE, ONLINE_FILE, 'river-online-oct-20.toe'];
 const RULES = recorded.seasons.value.rules;            // the defaults, as served by the control page
 const ADDRESSES = recorded.probe.value.addresses;      // bitcube's addresses at Gray Area
 const SCENE_COLORS = recorded.modal.value.scene.colors;

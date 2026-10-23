@@ -347,7 +347,7 @@ Our second GL.iNet GL-AXT1800 (Slate AX): the installation's own network at Gray
 - **Interfaces:**
   - name: WAN (eth0); ip: none; how: For now: Repeater on Gray Area's staff Wi-Fi (5 GHz DFS; address 10.30.0.101, gateway 10.30.0.1). Then the wired drop on the WAN port (S16); Multi-WAN failover Ethernet -> Repeater -> Tethering -> Cellular; verified: confirmed
   - name: LAN (eth1 + eth2); ip: 192.168.9.1/24; how: DHCP for our devices with the reservations above; LAN1 off (the cam's faulty cable), LAN2 = bitcube (blue); verified: confirmed
-  - name: Wi-Fi; ssid: gray-river; how: gray-river on 2.4 and 5 GHz (WPA2; the 5 GHz AP shares the repeater's DFS channel while repeating): the gallery cam (.76), bitcube's fallback (.80), phones and laptops. Not 'Agape WiFi': many visitors know that password; verified: confirmed
+  - name: Wi-Fi; ssid: gray-river; how: gray-river on 2.4 GHz (channel 6, 20 MHz) and 5 GHz (channel 36, 40 MHz), one name and password so the cam can fall back to 2.4; 5 GHz moves to the repeater's channel only while river-wan-watch has the repeater on (drop down). WPA2. The 2.4 GHz radio broadcast 'Agape' until 23 Oct 13:17. Not 'Agape WiFi': many visitors know that password; verified: confirmed
   - name: Tailscale; ip: 100.127.193.8; how: Will's tailnet (router-gray-area-gl-axt1800.tail03bc1a.ts.net), management only, no routes; shared into Gavin's tailnet
 - **Hostnames:** router-gray-area-gl-axt1800; router-gray-area-gl-axt1800.tail03bc1a.ts.net
 - **Accounts:**
@@ -448,7 +448,7 @@ Reolink E1 Pro (indoor, pan/tilt, mic) at Gray Area on Wi-Fi gray-river at 192.1
   - remote admin: HTTPS JSON API from bitcube: Login, Reboot, GetLocalLink, SetWifi (rebooted remotely 22 Oct 23:17). It can't run Tailscale: bitcube's /32 route is the way in from Will's tailnet
   - aim: to re-aim once mounted (S23); the Agape aim of 18 Oct no longer applies
 - **Interfaces:**
-  - name: Wi-Fi; mac: EC:71:DB:EB:EB:23; ip: 192.168.9.76; how: gray-river on 2.4 GHz (channel 6, 20 MHz) and 5 GHz (channel 36, 40 MHz), one name and password so the cam can fall back to 2.4; 5 GHz moves to the repeater's channel only while river-wan-watch has the repeater on (drop down). WPA2. The 2.4 GHz radio broadcast 'Agape' until 23 Oct 13:17. Not 'Agape WiFi': many visitors know that password; verified: confirmed
+  - name: Wi-Fi; mac: EC:71:DB:EB:EB:23; ip: 192.168.9.76; how: gray-river on the install router (DHCP, reserved .76); comes back on .76 after every power cycle; its cable path is faulty, so Wi-Fi only (23 Oct); verified: confirmed
   - name: Ethernet; mac: EC:71:DB:B5:45:FD; ip: none; how: unplugged. 23 Oct 01:50-02:00: with the cable in, router port eth1 had link (100 Mbps) but received only corrupted frames (rx_pktbadbyte, rx_frag, zero good packets), at 100 and forced 10 Mbps: a physical fault in the cable path. While the cable has link the cam turns its Wi-Fi off, so it went dark; eth1 was switched off to bring it back. Earlier it got .103 (its own MAC) and after power cycles asked for no address at all; verified: confirmed
 - **Accounts:**
   - service: Reolink; user: admin; auth: camera admin password (secrets.local.json -> cameras.gallery)

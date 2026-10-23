@@ -1453,7 +1453,7 @@
      "name": "Wi-Fi",
      "mac": "EC:71:DB:EB:EB:23",
      "ip": "192.168.9.76",
-     "how": "gray-river on 2.4 GHz (channel 6, 20 MHz) and 5 GHz (channel 36, 40 MHz), one name and password so the cam can fall back to 2.4; 5 GHz moves to the repeater's channel only while river-wan-watch has the repeater on (drop down). WPA2. The 2.4 GHz radio broadcast 'Agape' until 23 Oct 13:17. Not 'Agape WiFi': many visitors know that password",
+     "how": "gray-river on the install router (DHCP, reserved .76); comes back on .76 after every power cycle; its cable path is faulty, so Wi-Fi only (23 Oct)",
      "verified": "confirmed"
     },
     {
@@ -1679,7 +1679,7 @@
     {
      "name": "Wi-Fi",
      "ssid": "gray-river",
-     "how": "gray-river on 2.4 and 5 GHz (WPA2; the 5 GHz AP shares the repeater's DFS channel while repeating): the gallery cam (.76), bitcube's fallback (.80), phones and laptops. Not 'Agape WiFi': many visitors know that password",
+     "how": "gray-river on 2.4 GHz (channel 6, 20 MHz) and 5 GHz (channel 36, 40 MHz), one name and password so the cam can fall back to 2.4; 5 GHz moves to the repeater's channel only while river-wan-watch has the repeater on (drop down). WPA2. The 2.4 GHz radio broadcast 'Agape' until 23 Oct 13:17. Not 'Agape WiFi': many visitors know that password",
      "verified": "confirmed"
     },
     {
