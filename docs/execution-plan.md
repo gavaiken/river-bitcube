@@ -4,7 +4,7 @@ title: Execution plan
 
 # Execution plan: A River Becoming at Gray Area
 
-**Updated Thu 22 Oct 2026 by session A (coordinator, Mac mini); install network and next steps by session N (Mac mini), 22:45.** This is the working plan: steps to work through in order, the decisions behind them, and the requirements they must meet. **Add to it freely:** new steps go in the table with the next free number, new requirements get the next R-number, and anything decided gets a D-number with the date and who decided. Terms are defined in [`GLOSSARY.md`](https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md). Phase 1 (the Agape build, 17–21 Oct) is further down as history.
+**Updated Thu 22 Oct 2026 by session A (coordinator, Mac mini); install network and the before-the-lift list by session N (Mac mini), 23:25.** This is the working plan: steps to work through in order, the decisions behind them, and the requirements they must meet. **Add to it freely:** new steps go in the table with the next free number, new requirements get the next R-number, and anything decided gets a D-number with the date and who decided. Terms are defined in [`GLOSSARY.md`](https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md). Phase 1 (the Agape build, 17–21 Oct) is further down as history.
 
 **How to work it:** any Claude session (on the mini or on bitcube) starts with `git pull`, takes the first ➡️ step it can do, marks it ✅ / ⏳ / ❌ here after each step with a line in `docs/sessions/<letter>.md`, and pushes. The [coordination contract](#coordination-contract-every-bitcube-session-follows-this) below still applies, and only one Claude works on bitcube at a time. Gavin says **"sync"** to session A for a report.
 
@@ -15,14 +15,34 @@ title: Execution plan
 - The new **local-only seasons show file** is written and tested off the machine and waits for step S1 to deploy it.
 - **The river site is down** (solar panel giving 0 W, Starlink set to switch off at 22:00, battery dead). We have one 64 s river clip; the hourly recorder catches more whenever the site comes back.
 
-## Next steps (22 Oct night)
-**Done tonight (session N):** our router and Wi-Fi `gray-river`, bitcube online (wired, 1 Gbps) and restart-tested, gallery cam at 192.168.9.76 and back in TD's and Modal's reach, Tailscale routes approved, stale settings cleaned up (S2, S3, S17–S19).
+## Before the lift (22 Oct night): everything still to resolve
+Once bitcube, the router and the switch are in the ceiling we can't get back to them. Full instructions: [ceiling page](ceiling.md).
 
-**Next:**
-1. **Ceiling prep** ([page](ceiling.md)), on the ground while there's a monitor: BIOS power-on after a power cut (S21), label or auto-swap the Ethernet ports (S22), pull-the-plug and fallback tests (S23), a dummy display plug if one turns up (S24).
-2. **S1, deploy the seasons show file** (Claude). The lights don't need to be connected. Only one Claude on bitcube at a time.
-3. **S16:** when Gray Area connects the wired drop, plug it into the router's **WAN** (Gavin / Lilian). Until then the router uses Gray Area's staff Wi-Fi.
-4. **Friday:** lift into the ceiling, connect the lights (S20), aim the gallery cam at the piece and re-map (S4; tonight the cam is on the floor among cables), tune (S7), power check (S8).
+**Done (session N + Gavin, 22 Oct):** our router and Wi-Fi `gray-river`, reservations, bitcube online by cable at 1 Gbps (`.79`) with Wi-Fi fallback (`.80`), Tailscale routes approved, VNC from the mini, BIOS powers on after a power cut, restart and power-cut tests, cam reachable and posting clips, the cam rebooted remotely through its own API, stale settings removed (S2, S3, S17–S19, S21).
+
+**Still to resolve, in order:**
+1. **S22, the cam's address on Ethernet:** a static lease with both cam MACs → `192.168.9.76` (Wi-Fi `EC:71:DB:EB:EB:23`, wired `EC:71:DB:B5:45:FD`). Decide whether the cam is cabled in its final spot (S23).
+2. **S28, remote access to the router:** its Tailscale on Gavin's tailnet, LAN access off (D24), plus the mini's SSH key. After this, Claude can do 1 and S29 remotely.
+3. **S25, label bitcube's ports:** ROUTER (`Ethernet 2`) and LIGHTS (`Ethernet`), checked live.
+4. **S20 on the ground:** lighting switch on LIGHTS, Colorlight on HDMI; ropes and HUB75 lit from TD before lifting, so we know the cabling works.
+5. **S26, the remaining tests:**
+   - cable pulled with Wi-Fi idle;
+   - a full power cut with everything properly plugged in (ends with TD on the show file);
+   - the router's WAN pulled, once the drop exists.
+6. **VNC with only the LED sender as a display** (no monitor): check we can still work. Get a dummy plug (S27) if not.
+7. **S29:** no radar wait for 5 GHz after a power cut (wired drop + fixed channel, or repeat Gray Area's 2.4 GHz).
+8. **In the ceiling:**
+   - airflow around bitcube's fins, with nothing on top of it;
+   - outlets for bitcube, the router, the rack, the Colorlight sender and both rope boxes (three circuits, S8);
+   - good cables with slack.
+9. Keep a small HDMI monitor and a USB keyboard with the kit.
+
+**After the lift (remote):**
+- S1, deploy the seasons show file;
+- S16, the wired drop;
+- S4, re-map;
+- S7, tune;
+- S24, update the system map.
 
 ### Learned on install night (22 Oct)
 - **No monitor came with the kit:** when bitcube didn't appear online we couldn't tell a stuck boot from a network problem. It was the network. Keep a small HDMI monitor and a USB keyboard with bitcube.
@@ -31,6 +51,10 @@ title: Execution plan
 - **The gallery cam has an Ethernet port and works on 5 GHz,** including the DFS channel. While the router repeats a venue Wi-Fi on 5 GHz, its own 5 GHz Wi-Fi shares that channel (124 tonight).
 - Using the venue Wi-Fi as the router's uplink (Repeater) works as a stopgap and doesn't rebroadcast the venue's network; Multi-WAN switches to Ethernet when the drop is plugged in.
 - A restart brings bitcube back by itself in about a minute (Windows, auto-login, Tailscale, then TD, Claude and the Modal link).
+- **The gallery cam has two MACs:** Wi-Fi `EC:71:DB:EB:EB:23`, wired `EC:71:DB:B5:45:FD`. A reservation for one doesn't cover the other. (bitcube's ARP table briefly showed the Wi-Fi MAC at the wired address; the cam's own API is the source of truth.)
+- **Windows doesn't join Wi-Fi while the cable works,** so the fallback Wi-Fi sits idle until the cable drops. Still to test that it then joins by itself (S26).
+- **We can reboot and reconfigure the cam remotely** through its HTTPS API from bitcube (Login → Reboot, GetLocalLink, SetWifi). The cam can't run Tailscale; bitcube's `/32` route is the way in.
+- **The router needs its own way in** (S28): fixing DHCP, Clients or Wi-Fi otherwise needs someone at its admin page on site.
 
 ## Rigging layout (Gavin, 22 Oct night)
 ![Rigging at Gray Area, 22 Oct: 1 ceiling, 2 panel power, 3 lowest rope point](img/rigging-2026-10-22.jpg)
@@ -75,8 +99,8 @@ title: Execution plan
 | ✅ | M7 | Gavin: `claude setup-token`, save the token into `/Users/river/.secrets/claude-token` | M6 | Gavin | Studio agent answers |
 | ✅ | M8 | Tailscale Funnel on 443 → `127.0.0.1:8790` (OK'd, MD9) | M6 | Gavin (or Claude with his OK) | `https://gav-m1-mini.tailddc624.ts.net` shows the login page from outside |
 | ➡️ | M9 | End-to-end check from a phone off the tailnet (login page confirmed reachable from the internet 22 Oct; agent answered as `river` and was denied `/Users/gav`); river's key on bitcube when it's online; docs (show-files page link, CLAUDE.md, runbook) | M7, M8 | Claude | Team can log in, chat, see status, steer the seasons |
-| ✅ | S21 | **BIOS: power on after a power cut.** Already set: Advanced → Customer Exclusive Functions → **Auto Power On = Enabled** (Wake On LAN also Enabled). Checked by Gavin on the monitor, 22 Oct | — | Gavin | Done 22:58; proven by the S23 pull-the-plug test |
-| ➡️ | S22 | **Gallery cam on Ethernet keeps its address:** today `192.168.9.76` is reserved for its Wi-Fi MAC (`EC:71:DB:EB:EB:23`); its wired port has another MAC and would get a different address, breaking snapshots, the Modal clips, the people counter and the Tailscale route (this is why it "crapped out" on Ethernet before). Before rigging: plug it into the router once by cable, read its wired MAC in the router's client list, then reserve `.76` for **both** MACs (one host with two MACs in the router's advanced LuCI DHCP settings) or, if that isn't possible, reserve the wired MAC as `.77` and update `secrets.local.json` and bitcube's advertised route | The camera and the router, on the ground | Gavin (plug in, router UI) + Claude (secrets, route, check) | Cam answers at `.76` on Wi-Fi *and* on Ethernet |
+| ✅ | S21 | **Recover from a power cut by itself** (bitcube is going in the ceiling): BIOS *Auto Power On* is **Enabled** (Advanced → Customer Exclusive Functions; Wake On LAN also on, checked by Gavin 22:58). Tested 23:02 by pulling bitcube's and the router's power at the wall: bitcube powered on and logged in by itself; online over the wire 1.5 min after the router had power. Still to see with the router powered properly: TD on the show file and mission control (part of S26) | Before the rig goes up | Gavin + Claude (session N) | Done 23:07 |
+| ➡️ | S22 | **Gallery cam on Ethernet keeps its address:** today `192.168.9.76` is reserved for its Wi-Fi MAC (`EC:71:DB:EB:EB:23`); its wired port has another MAC and would get a different address, breaking snapshots, the Modal clips, the people counter and the Tailscale route (this is why it "crapped out" on Ethernet before). Before rigging: plug it into the router once by cable, read its wired MAC in the router's client list, then reserve `.76` for **both** MACs (one host with two MACs in the router's advanced LuCI DHCP settings) or, if that isn't possible, reserve the wired MAC as `.77` and update `secrets.local.json` and bitcube's advertised route | The camera and the router, on the ground **Found 23:18 (session N): its wired MAC is `EC:71:DB:B5:45:FD`** (on a cable it got `.103`). So: one static lease with **both MACs → `.76`** (LuCI → Network → DHCP and DNS → Static Leases), done by Gavin in LuCI or by Claude once S28 gives router access | Gavin (plug in, router UI) + Claude (secrets, route, check) | Cam answers at `.76` on Wi-Fi *and* on Ethernet |
 | ➡️ | S23 | **Gallery cam position:** sees the artwork and the people in front of it (the people counter's "near the piece" size threshold depends on it; ceiling-high and wide changes what counts as foreground); fixed before the re-map (S4) | Rigging | Colin, Lilian | Mounted; still from it on mission control shows the piece and the floor in front |
 | ⏳ | S24 | Update the system map for the rigging (devices in the ceiling, cable runs, the cam's final link) | S20, S22 | Claude | `docs/system/system.json` matches the rig; tests pass |
 | 🅿️ | S14 | Gallery card and page for the online version (when we run Dave's agent in the show) | Decision to run it | Claude | — |
@@ -86,10 +110,12 @@ title: Execution plan
 | ✅ | S18 | loopMIDI (virtual MIDI cable from the 2023 BitCube setup) no longer opens at login: removed its HKCU `Run` value (to restore: `Run` → `loopMIDI` = `C:\Program Files (x86)\Tobias Erichsen\loopMIDI\loopMIDI.exe`); still installed | Gavin's OK | Claude (session N) | Done 22:38 |
 | ✅ | S19 | Router 2.4 GHz back to `gray-river`; `Agape WiFi` no longer broadcasts | — | Gavin | Done 22:35 |
 | ⏳ | S20 | **Connect the lights** (Fri): bitcube lighting NIC → switch → rack controller + both PSAC10s; HDMI → Colorlight sender; then S4 | Ropes and panels hung | Gavin + Lilian | Ropes and HUB75 lit from TD |
-| ✅ | S21 | **BIOS: power on after a power cut.** Already set: Advanced → Customer Exclusive Functions → **Auto Power On = Enabled** (Wake On LAN also Enabled). Checked by Gavin on the monitor, 22 Oct | — | Gavin | Done 22:58; proven by the S23 pull-the-plug test |
-| ⏳ | S22 | **Either Ethernet port works:** a small watcher on bitcube gives `2.0.0.8` to whichever port doesn't get a router address, and DHCP to the other; tested by swapping cables. Until then, label the ports ROUTER / LIGHTS | Gavin's OK | Claude (session N) | Swapping the two cables keeps both internet and lights working |
-| ➡️ | S23 | **Pull-the-plug and fallback tests** before lifting (power off/on at the wall; unplug bitcube's router cable; unplug the router's WAN) | S21 | Gavin + Claude | bitcube back on Tailscale and VNC each time, untouched |
-| ⏳ | S24 | **Dummy display plug** in bitcube's DisplayPort: a desktop VNC can use that isn't the LED output (otherwise VNC shows TD's black panels window) | A plug | Gavin | VNC shows a normal desktop with the LED output on its own display |
+| ⏳ | S25 | **Label bitcube's two Ethernet ports** **ROUTER** (`Ethernet 2`, MAC `…5F:C4`, DHCP) and **LIGHTS** (`Ethernet`, MAC `…5F:C3`, fixed `2.0.0.8`): the lights only work in LIGHTS. Identify them live (plug the router cable into one port; Claude says which came up). *Optional, not recommended:* a watcher that swaps the roles automatically | — | Gavin + Claude | Both ports labelled; checked live |
+| ➡️ | S26 | **Pull-the-plug and fallback tests** before lifting. Done: power cut (S21), bitcube's cable pulled with its Wi-Fi already joined (stayed online, 23:11). To do: the same with Wi-Fi idle (Windows only joins Wi-Fi once the cable drops); a full power cut with everything plugged in properly, ending with TD on the show file; the router's WAN pulled once the drop exists (S16) | S21 | Gavin + Claude | bitcube back on Tailscale and VNC each time, untouched |
+| ⏳ | S27 | **Dummy display plug** in bitcube's DisplayPort: a desktop VNC can use that isn't the LED output (otherwise VNC shows TD's black panels window) | A plug | Gavin | VNC shows a normal desktop with the LED output on its own display |
+| ⏳ | S28 | **Remote access to the router itself** (so DHCP, clients, Wi-Fi and reboots never need someone on a ladder): turn on the router's **Tailscale on Gavin's tailnet with "Allow Remote Access LAN" off** (D24), and add the mini's SSH key (LuCI → System → Administration → SSH-Keys). Then Claude can fix leases, read Clients and reboot it remotely | Gavin's tailnet login on the router | Gavin, then Claude | `ssh root@<router>` from the mini works; router's admin page opens over Tailscale |
+| ⏳ | S29 | **No radar wait after a power cut:** while the router repeats Gray Area's 5 GHz DFS channel, its own 5 GHz `gray-river` shares that channel and can stay silent 1–10 min after power-up. Fix: the wired drop on WAN (S16), then pin 5 GHz to a non-DFS channel (36 or 149); or repeat Gray Area's 2.4 GHz instead | S16 | Gavin / Claude (with S28) | 5 GHz `gray-river` is up within 2 min of power-on |
+| ⏳ | S30 | *Optional:* smart plugs with a local API (e.g. Shelly) on the camera and bitcube, for a remote hard power cycle | Plugs | Gavin | Claude can power-cycle each from bitcube |
 
 ## Requirements
 Every step must keep these true. Add new ones at the end.
@@ -141,6 +167,7 @@ Newest last. Add with the date and who decided.
 | D21 | Remove the stale `192.168.1.99/24` and gateway `192.168.1.1` from bitcube's lighting NIC. | It can steal bitcube's internet route. | Gavin, 22 Oct (was open decision 4) |
 | D22 | **No Tailscale on the install router.** bitcube is the door: it advertises `192.168.9.76/32` (cam) and `192.168.9.1/32` (router admin) on Will's tailnet, replacing `10.0.7.76/32`; Gavin approves them. Never advertise `192.168.9.0/24` into a tailnet bitcube is on. | bitcube accepts routes: a /24 from the router would send its own camera traffic through Tailscale, so the local people counter (D11, R1) would lose the cam when the internet drops (the 18 Oct failure). | Gavin, 22 Oct (was open decision 5) |
 | D23 | bitcube's network steps (S2.3, S3) are done by **session N from the Mac mini over `ssh bitcube`**; the Claude on bitcube stays idle meanwhile. | Only one Claude on bitcube at a time. | Gavin, 22 Oct |
+| D24 | **The router may join Tailscale for its own management**, on **Gavin's** tailnet with **"Allow Remote Access LAN" off** (it advertises nothing). Amends D22: bitcube stays the only subnet router (Will's tailnet), and a router on a different tailnet can't touch bitcube's routes. | In the ceiling nobody can reach the router; we need a second way in if bitcube is down, and remote DHCP and reboot. | Session N recommendation, 22 Oct (Gavin to confirm) |
 
 ### Open decisions (Gavin)
 My recommendation is in brackets; say yes or change it, then move it into the table above.

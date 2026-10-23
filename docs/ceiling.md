@@ -4,7 +4,7 @@ title: bitcube and the router in the ceiling
 
 # Putting bitcube and the router in the ceiling
 
-Once they're up there, nobody can reach a screen or a power button. So everything has to come back by itself after a power cut, and we have to be able to fix things remotely (VNC, SSH) whatever got plugged in. (Session N, 22 Oct 2026; see the [execution plan](execution-plan.html) steps S21–S24.)
+Once they're up there, nobody can reach a screen or a power button. So everything has to come back by itself after a power cut, and we have to be able to fix things remotely (VNC, SSH) whatever got plugged in. (Session N, 22 Oct 2026. Steps are in the [execution plan](execution-plan.html#before-the-lift-22-oct-night-everything-still-to-resolve): S20–S30.)
 
 ## The setup
 ```
@@ -20,18 +20,42 @@ bitcube DisplayPort ◄── dummy display plug (recommended: a desktop VNC can
 - the lighting switch to the router;
 - the Colorlight sender's cable to the router or the lighting switch.
 
+## Addresses (router `192.168.9.1`, Wi-Fi `gray-river`)
+| Device | Connection | MAC | Address |
+|---|---|---|---|
+| gallery (camera) | Wi-Fi | `EC:71:DB:EB:EB:23` | `192.168.9.76` (reserved) |
+| gallery (camera) | Ethernet | `EC:71:DB:B5:45:FD` | `192.168.9.76` once S22 is done (got `.103` before) |
+| bitcube | Ethernet, ROUTER port | `00:E7:43:0E:5F:C4` | `192.168.9.79` (reserved) |
+| bitcube | Wi-Fi | `70:D8:23:16:A1:5C` | `192.168.9.80` (reserved) |
+| bitcube | Ethernet, LIGHTS port | `00:E7:43:0E:5F:C3` | `2.0.0.8` (fixed; lighting only) |
+
 ## How it copes when something is missing
 | If… | then… |
 |---|---|
 | Gray Area's drop isn't connected or fails | the router uses Gray Area's staff Wi-Fi (Repeater), by itself |
 | bitcube's router cable is missing or fails | bitcube uses its Wi-Fi (`gray-river`), by itself |
 | the power goes off and on | the router and bitcube start by themselves (bitcube's BIOS *Auto Power On* is on) |
-| the ROUTER and LIGHTS cables are swapped | bitcube stays online over Wi-Fi; the lights are dark until the roles are swapped (remotely, or automatically: S22) |
+| the ROUTER and LIGHTS cables are swapped | bitcube stays online over Wi-Fi, but the lights stay dark: swap the cables (or Claude swaps the port settings remotely) |
+| the gallery cam moves between Wi-Fi and a cable | it keeps `192.168.9.76` **once both its MACs share one reservation (S22)** |
+| something on the router needs fixing (leases, Wi-Fi, a reboot) | Claude does it remotely **once the router has its own Tailscale and SSH key (S28)** |
 | the internet is down | the show keeps running from bitcube's disk; the team on site reaches it on `gray-river` |
+
+## Status before the lift (23:25, 22 Oct)
+- ✅ The router: Wi-Fi `gray-river` on both bands, reservations, Ethernet → Repeater failover. Its uplink is Gray Area's staff Wi-Fi until the drop is connected.
+- ✅ bitcube:
+  - online by cable (`.79`, 1 Gbps), falling back to Wi-Fi (`.80`);
+  - Tailscale routes to the cam and router approved;
+  - VNC works;
+  - BIOS powers on after a power cut;
+  - power-cut test passed: back 1.5 min after the router had power.
+- ✅ Gallery cam: reachable, posting clips; rebooted remotely through its API.
+- ⏳ **S22** one reservation for both cam MACs · **S28** remote access to the router · **S25** port labels · **S20** lights on the ground · **S26** remaining tests · VNC without a monitor (S27) · **S29** radar wait. Details and order: [execution plan](execution-plan.html#before-the-lift-22-oct-night-everything-still-to-resolve).
 
 ## Before lifting (on the ground, with a monitor and keyboard)
 1. **BIOS: power on after a power cut.** Already set (checked 22 Oct): Advanced → Customer Exclusive Functions → **Auto Power On = Enabled**, and Wake On LAN is Enabled. To check again, press **Del** as bitcube starts.
-2. **Label bitcube's two network ports:** **ROUTER** is the one the router cable is in now; **LIGHTS** is the other. (S22 may make either work.)
+2. **Label bitcube's two network ports (S25).** The lights only work in **LIGHTS**. To tell them apart, plug the router cable into one port and ask Claude which one came up:
+   - **ROUTER** = `Ethernet 2` (MAC `00:E7:43:0E:5F:C4`); it gets `192.168.9.79` from the router.
+   - **LIGHTS** = `Ethernet` (MAC `00:E7:43:0E:5F:C3`); it holds the fixed lighting address `2.0.0.8`.
 3. **Pull-the-plug test:** switch off bitcube's and the router's power at the wall, wait 10 s, switch back on, touch nothing. Within about 2 minutes:
    - the router's Clients page shows BITCUBE at 192.168.9.79;
    - bitcube is online on Tailscale;
@@ -39,7 +63,7 @@ bitcube DisplayPort ◄── dummy display plug (recommended: a desktop VNC can
 4. **Fallback tests:**
    - Unplug bitcube's router cable: within a minute bitcube is still on Tailscale and VNC (over Wi-Fi). Plug it back in.
    - If the wired drop is connected, unplug it from WAN: the router's Internet page switches to Repeater. Plug it back in.
-5. **Dummy display plug in DisplayPort** (recommended, S24). It gives Windows a desktop that isn't the LED output. Without it, the only display is the Colorlight sender, so over VNC you only see TouchDesigner's black panels window.
+5. **Dummy display plug in DisplayPort** (recommended, S27). It gives Windows a desktop that isn't the LED output. Without it, the only display is the Colorlight sender, so over VNC you only see TouchDesigner's black panels window.
 
 ## In the ceiling
 - **bitcube has no fan.** Keep air around its fins, and don't put the router or anything else on top of it.

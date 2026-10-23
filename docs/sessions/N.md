@@ -40,9 +40,11 @@ Keep the lighting switch and the Colorlight cable off the router.
 - 23:02 S23 pull-the-plug (bitcube + router at the wall): bitcube powered on by itself (Windows 23:02:38). The router wasn't plugged in properly, so bitcube stayed offline (its status page showed the offline copy) until the router was fixed; then online over the wire at 23:07:40, about 1.5 min after router power. bitcube's Wi-Fi didn't join `gray-river` by itself while the cable worked (Windows avoids a second connection while wired); connected by hand at 23:10.
 - 23:11 Fallback test: Gavin unplugged bitcube's Ethernet; its route moved to Wi-Fi (192.168.9.80) with no gap seen from the mini. (Wi-Fi was already connected; still to test with Wi-Fi idle when the cable drops.)
 - 23:13 Gallery cam on a cable to the router: it answers at **192.168.9.103** with the **same MAC as on Wi-Fi** (`EC:71:DB:EB:EB:23`), so the .76 reservation already covers it. Likely the router still holds the Wi-Fi lease for .76 under another client ID; clearing it (delete the old entry or reboot the router) and power-cycling the cam should give .76.
+- 23:17 **Correction:** the cam's wired port has **its own MAC, `EC:71:DB:B5:45:FD`** (read from the cam's API, `GetLocalLink`: active link LAN, DHCP). bitcube's ARP entry at 23:13 still showed the Wi-Fi MAC, so the "same MAC" line above is wrong. On a cable it gets `.103` because only its Wi-Fi MAC is reserved. Rebooted the cam remotely through its API from bitcube (Login → Reboot); back at `.103` with the wired MAC within a minute. Fix (S22): one static lease with both MACs → `.76`.
+- 23:25 Synced with session A's 22:57 commit (rigging layout, its S21–S24). Merged the clashing numbers: A's S21 (power-cut recovery) is done; A's S22–S24 stay; session N's became S25 (port labels), S26 (tests), S27 (dummy plug); new S28 (router's own Tailscale + SSH key, D24), S29 (5 GHz radar wait after power-up), S30 (optional smart plugs). Wrote the before-the-lift list in the execution plan and on the ceiling page.
 
 ### Waiting on Gavin
-- S23 pull-the-plug test. OK for S22 (either-port watcher)? Go-ahead for S1 and who runs it. S16 when the wired drop arrives.
+- The [before-the-lift list](../execution-plan.md#before-the-lift-22-oct-night-everything-still-to-resolve): S22 lease for both cam MACs (or S28 first so Claude can do it), D24 OK, S25 labels (live check), S20 lights on the ground, S26 tests.
 
 ### Waiting on Gavin (earlier)
 - S2.1/S2.2 on site. Tell session N when bitcube is cabled and powered.
