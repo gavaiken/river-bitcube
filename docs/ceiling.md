@@ -70,15 +70,19 @@ bitcube DisplayPort ◄── dummy display plug (recommended: a desktop VNC can
 5. **Dummy display plug in DisplayPort** (recommended, S27). It gives Windows a desktop that isn't the LED output. Without it, the only display is the Colorlight sender, so over VNC you only see TouchDesigner's black panels window.
 
 ## Remote access to the router (S28, D24)
-Gives the router a way in that doesn't depend on bitcube. Claude can then fix addresses, read Clients, change Wi-Fi and restart the router remotely.
+Gives the router a way in that doesn't depend on bitcube. Claude can then fix addresses, read Clients, change Wi-Fi and restart the router remotely. It goes on **Will's tailnet**, with the other river devices.
 1. Router admin (`http://192.168.9.1`) → **Applications → Tailscale** → turn it on, then open the bind link.
-2. Log in as **Gavin** (`gav.aiken@gmail.com`), not the river account, and connect.
-3. Leave **Allow Remote Access LAN**, **Allow Remote Access WAN** and **Custom Exit Nodes** **off**. The router then shares nothing, so it can never affect bitcube's routes.
-4. In Gavin's Tailscale admin console:
+2. Log in to **Will's tailnet** (the account the river devices use) and connect.
+3. Leave **Allow Remote Access LAN**, **Allow Remote Access WAN** and **Custom Exit Nodes** **off**.
+4. In Will's Tailscale admin console:
    - rename the new machine **`gray-router`** (the river router is also called `gl-axt1800`);
-   - **disable key expiry** for it.
+   - **disable key expiry**;
+   - **approve no subnet routes** for it;
+   - **Share** it to `gav.aiken@gmail.com`, and accept the invite on Gavin's account, so the Mac mini reaches it.
 5. Router admin → **System → Advanced Settings** → open LuCI (install it if asked).
 6. In LuCI: **System → Administration → SSH-Keys** → paste the Mac mini's public key (Claude has it) → Add → Save & Apply.
+
+**If anyone ever ticks "Allow Remote Access LAN":** nothing happens until an admin approves the route. If it does get approved, bitcube starts sending its camera traffic through Tailscale. Fix: Will's admin console → Machines → `gray-router` → Edit route settings → un-approve the route. bitcube recovers at once.
 
 ## In the ceiling
 - **bitcube has no fan.** Keep air around its fins, and don't put the router or anything else on top of it.

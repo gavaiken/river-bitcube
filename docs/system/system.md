@@ -647,7 +647,7 @@ Our second GL.iNet GL-AXT1800 (Slate AX): our own network at Gray Area. Set up b
   - mac: 94:83:C4:96:62:83
   - power: USB-C 5 V 4 A
   - ports: 1 WAN + 2 LAN
-  - tailscale: off for now; plan (D24, S28): its own Tailscale on Gavin's tailnet with LAN access off, for remote management only; bitcube stays the subnet router
+  - tailscale: planned (D24, S28): on Will's tailnet as gray-router, LAN access off, no routes approved, shared into Gavin's tailnet; for management only; bitcube stays the subnet router
   - factory: 192.168.8.1, Wi-Fi GL-AXT1800-283 (moved to 192.168.9.1 and 'gray-river')
 - **Interfaces:**
   - name: WAN; ip: none; how: For now: Repeater on Gray Area's staff Wi-Fi (5 GHz DFS, address 10.30.0.101, gateway 10.30.0.1). Then the wired drop on the WAN port; Multi-WAN failover Ethernet → Repeater → Tethering → Cellular; verified: confirmed
