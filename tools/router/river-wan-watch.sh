@@ -2,7 +2,7 @@
 # river-wan-watch: Gray Area's staff Wi-Fi repeater as a standby uplink (S29, Gavin 23 Oct: "#2 if bullet proof").
 # Runs from cron every minute on the install router (GL.iNet GL-AXT1800, `router-gray-area-gl-axt1800`).
 #
-#   Wired drop healthy             -> repeater OFF, 5 GHz pinned to channel 149 (no radar wait for `gray-river`).
+#   Wired drop healthy             -> repeater OFF, 5 GHz pinned to channel 36, 40 MHz (no radar wait for `gray-river`).
 #   Wired drop down for FAIL_N min -> repeater ON (GL's own repeater service reconnects to "Gray Area Staff"; the
 #                                     5 GHz radio follows its channel). GL's kmwan failover then routes over it.
 #   Wired healthy again for OK_N min -> repeater OFF again.
@@ -18,7 +18,8 @@
 FAIL_N=2            # consecutive failed minutes before the repeater comes on
 OK_N=10             # consecutive healthy minutes before it goes off again
 KICK_N=5            # minutes the repeater may stay unconnected while on before its service is restarted
-CHANNEL=149         # 5 GHz channel while the repeater is off (non-DFS, full power in the US)
+CHANNEL=36          # 5 GHz while the repeater is off: 36+40 measured quietest (23 Oct); non-DFS
+HTMODE=HE40         # 40 MHz: all the gallery cam uses (1 stream, 40 MHz), and less to collide with
 TARGETS="1.1.1.1 8.8.8.8 208.67.222.222"
 S=/tmp/river-wan
 
@@ -57,6 +58,7 @@ repeater_off() {
     # up on its auto pick (channel 48, 23 Oct) instead of $CHANNEL.
     uci set wireless.sta.disabled='1'
     uci set wireless.radio0.channel="$CHANNEL"
+    uci set wireless.radio0.htmode="$HTMODE"
     uci commit wireless
     uci set repeater.@main[0].disabled='1'
     uci commit repeater
@@ -90,4 +92,4 @@ else
 fi
 
 if repeater_enabled; then rep="on ($(repeater_state))"; else rep=off; fi
-put status "$(date '+%Y-%m-%d %H:%M:%S') wired=$wired ok=$(num ok) fail=$(num fail) repeater=$rep channel=$(uci -q get wireless.radio0.channel)"
+put status "$(date '+%Y-%m-%d %H:%M:%S') wired=$wired ok=$(num ok) fail=$(num fail) repeater=$rep channel=$(uci -q get wireless.radio0.channel) $(uci -q get wireless.radio0.htmode)"
