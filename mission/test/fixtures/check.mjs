@@ -17,8 +17,8 @@ const NOW = 1792749540000;                       // the moment every fixture is 
 const SEVERITIES = ['ok', 'warning', 'down', 'unknown'];
 const MODES = ['automatic', 'dynamic', 'manual'];
 const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
-const SEASONS_FILE = 'river-local-oct-22-seasons.toe', ONLINE_FILE = 'river-online-oct-20.toe';
-const SHOW_FILES = [SEASONS_FILE, ONLINE_FILE, 'river-local-oct-18.toe'];
+const SEASONS_FILE = 'river-local-oct-22-seasons.toe', ONLINE_FILE = 'river-online-oct-23.toe';
+const SHOW_FILES = [SEASONS_FILE, ONLINE_FILE, 'river-online-oct-20.toe', 'river-local-oct-18.toe'];
 const DEVICES = ['internet', 'router', 'gallery_cam', 'river_cam', 'psac10_1', 'psac10_2', 'seasons_page'];
 const SENDER_KEYS = ['error', 'sent', 'dropped', 'packets', 'watts', 'seq', 'active', 'open', 'source', 'retrying'];
 const RELAY_KEYS = ['relay', 'frames', 'last_frame_age_s', 'fresh', 'error', 'colourfulness', 'night', 'nightness'];
