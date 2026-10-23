@@ -652,7 +652,7 @@ Our second GL.iNet GL-AXT1800 (Slate AX): our own network at Gray Area. Set up b
 - **Interfaces:**
   - name: WAN; ip: none; how: For now: Repeater on Gray Area's staff Wi-Fi (5 GHz DFS, address 10.30.0.101, gateway 10.30.0.1). Then the wired drop on the WAN port; Multi-WAN failover Ethernet → Repeater → Tethering → Cellular; verified: confirmed
   - name: LAN; ip: 192.168.9.1/24; how: DHCP for our devices; reservations: gallery cam .76 (both its MACs, Wi-Fi and Ethernet), bitcube wired .79, bitcube Wi-Fi .80; verified: confirmed
-  - name: Wi-Fi; ssid: gray-river; how: gray-river on 2.4 and 5 GHz (5 GHz shares the repeater's channel while repeating), WPA2/WPA3. Not 'Agape WiFi': many visitors know that password
+  - name: Wi-Fi; ssid: gray-river; how: gray-river on 2.4 GHz (channel 6, 20 MHz) and 5 GHz (channel 36, 40 MHz), one name and password so the cam can fall back to 2.4; 5 GHz moves to the repeater's channel only while river-wan-watch has the repeater on (drop down). WPA2. The 2.4 GHz radio broadcast 'Agape' until 23 Oct 13:17. Not 'Agape WiFi': many visitors know that password
   - name: Tailscale; ip: 100.127.193.8; how: Will's tailnet, management only (no routes)
 - **Hostnames:** router-gray-area-gl-axt1800; router-gray-area-gl-axt1800.tail03bc1a.ts.net
 - **Accounts:**

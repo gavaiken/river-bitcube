@@ -1728,7 +1728,7 @@
     {
      "name": "Wi-Fi",
      "ssid": "gray-river",
-     "how": "gray-river on 2.4 and 5 GHz (5 GHz shares the repeater's channel while repeating), WPA2/WPA3. Not 'Agape WiFi': many visitors know that password"
+     "how": "gray-river on 2.4 GHz (channel 6, 20 MHz) and 5 GHz (channel 36, 40 MHz), one name and password so the cam can fall back to 2.4; 5 GHz moves to the repeater's channel only while river-wan-watch has the repeater on (drop down). WPA2. The 2.4 GHz radio broadcast 'Agape' until 23 Oct 13:17. Not 'Agape WiFi': many visitors know that password"
     },
     {
      "name": "Tailscale",
