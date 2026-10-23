@@ -6,6 +6,7 @@ rem The boot show file: the seasons file once it exists (execution plan D7), els
 rem old name. Mission control can choose instead: ..\boot-file.txt names a show file in this folder.
 set "TOE=%~dp0river-local-oct-18.toe"
 if exist "%~dp0river-online-oct-20.toe" set "TOE=%~dp0river-online-oct-20.toe"
+if exist "%~dp0river-online-oct-23.toe" set "TOE=%~dp0river-online-oct-23.toe"
 if exist "%~dp0river-local-oct-22-seasons.toe" set "TOE=%~dp0river-local-oct-22-seasons.toe"
 if exist "%~dp0..\boot-file.txt" for /f "usebackq delims=" %%f in ("%~dp0..\boot-file.txt") do if exist "%~dp0%%f" set "TOE=%~dp0%%f"
 

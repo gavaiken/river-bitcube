@@ -4,7 +4,7 @@ title: "river-online-oct-20"
 
 # river-online-oct-20
 
-**The live river and Dave's AI.** Was `river-local-oct-18.toe` until 22 Oct. [All show files](../show-files.html)
+**Superseded by [river-online-oct-23](river-online-oct-23.html)** (23 Oct: four screens and the Gray Area rope map). Kept as a fallback: it drives only HUB75 quad 1, from its Agape corners. Was `river-local-oct-18.toe` until 22 Oct. [All show files](../show-files.html)
 
 ## For visitors
 The river you see is happening now: a camera at a river in the Sierra foothills streams it here over a satellite link. An AI listens to this room and the river through their cameras and writes a journal; every few minutes it chooses the colours and the mood of the water, and it reacts to what it sees in between.

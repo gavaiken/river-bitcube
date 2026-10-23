@@ -2,7 +2,7 @@
 # Prints ONE line of JSON. Run from the Mac mini as:  ssh bitcube powershell -NoProfile -ExecutionPolicy Bypass
 #   -File C:\Users\user\River\river-bitcube\tools\mission\probe.ps1 [-Action ropes -Dark] [-Action hub75 -Brightness 0.6]
 #   [-Action bootfile -BootFile river-local-oct-22-seasons.toe]   which show file opens at boot
-#   [-Action switch -BootFile river-online-oct-20.toe]            also restart TouchDesigner on it now (~1 min dark)
+#   [-Action switch -BootFile river-online-oct-23.toe]            also restart TouchDesigner on it now (~1 min dark)
 #   [-Action lightsroute -LightsRoute direct|router]             which port carries the lighting network (D25, S31)
 param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute)
 $ErrorActionPreference = 'Continue'
@@ -10,7 +10,7 @@ $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $river = Split-Path $repo -Parent
 $out = [ordered]@{ ok = $true; time = (Get-Date).ToString('s') }
 
-$BOOT_FILES = @('river-local-oct-22-seasons.toe', 'river-online-oct-20.toe', 'river-local-oct-18.toe')
+$BOOT_FILES = @('river-local-oct-22-seasons.toe', 'river-online-oct-23.toe', 'river-online-oct-20.toe', 'river-local-oct-18.toe')
 $out.show_files = @($BOOT_FILES | Where-Object { Test-Path (Join-Path $repo $_) })
 if ($Action -in 'bootfile', 'switch') {
     if ($out.show_files -notcontains $BootFile) { $out.ok = $false; $out.error = "no show file $BootFile on bitcube"; $Action = 'status' }

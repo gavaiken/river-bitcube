@@ -36,7 +36,7 @@ Read first:
 - **Power:** a full-white box is ≈1.5 kW. Cap brightness in TD.
 
 ## Show files and their pages
-- Show files (TouchDesigner files that run the whole piece) are named for their kind and the date of their last real change: `river-online-oct-20.toe` (live river + Dave's Modal agent), `river-local-oct-22-seasons.toe` (the river's year, local-only, **the boot file**). When a show file changes meaningfully, give it the new date (`td_save.ps1 -Target`), keep the previous one as a fallback, and update `Start-River.cmd`, the build script's guard and the docs in the same commit.
+- Show files (TouchDesigner files that run the whole piece) are named for their kind and the date of their last real change: `river-online-oct-23.toe` (live river + Dave's Modal agent; oct-20 its fallback), `river-local-oct-22-seasons.toe` (the river's year, local-only, **the boot file**). When a show file changes meaningfully, give it the new date (`td_save.ps1 -Target`), keep the previous one as a fallback, and update `Start-River.cmd`, the build script's guard and the docs in the same commit.
 - **Every show file has a page:** `docs/files/<name>.md`, listed in `docs/show-files.md` (for Colin and Justine) with a gallery card for the iPad (`docs/card/`). **Change a show file → update its page in the same commit.** Terms are in `GLOSSARY.md`; use them.
 - The seasons file's control page is served by TD on port 9981 (`td/seasons/seasons_td.py`; private networks and the tailnet only).
 
