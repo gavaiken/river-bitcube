@@ -4,7 +4,7 @@ from PIL import Image, ImageDraw
 from pixelmap.screens import estimate, locate, to_uv
 
 W, H = 480, 360
-COLOURS = {'tl': (200, 40, 40), 'tr': (50, 180, 60), 'bl': (50, 70, 200), 'br': (170, 160, 50)}   # as the cam sees them
+COLOURS = {'tl': (200, 40, 40), 'tr': (84, 253, 233), 'bl': (71, 180, 253), 'br': (170, 160, 50)}   # as the cam sees them
 
 
 def frames(corners, ambient=20):

@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from pixelmap.hub75 import _colour_masks, _dilate, apply_h, homography, largest_component  # noqa: E402
+from pixelmap.hub75 import _dilate, apply_h, homography, largest_component  # noqa: E402
 
 CORNERS = ('tl', 'tr', 'br', 'bl')
 QUARTERS = {'tl': (0.25, 0.25), 'tr': (0.75, 0.25), 'br': (0.75, 0.75), 'bl': (0.25, 0.75)}
@@ -28,6 +28,17 @@ UNIT = {'tl': (0, 0), 'tr': (1, 0), 'br': (1, 1), 'bl': (0, 1)}
 # Which screen to borrow a place from when one isn't seen, and where to put it (in units of the neighbour's
 # own up and right vectors, as seen): screen 1 hangs above screen 2, screen 3 below screen 4 (Gavin's photos).
 NEIGHBOUR = {1: (2, 1.15, 0.0), 2: (1, -1.15, 0.0), 3: (4, -1.15, -0.3), 4: (3, 1.15, 0.3)}
+
+
+def colour_masks(test):
+    """Red TL, green TR, blue BL, yellow BR as the gallery cam sees bright LEDs: it pushes green towards cyan
+    (84, 253, 233) and blue towards light blue (71, 209, 253) (23 Oct), so green only needs g >= b - 15 and blue
+    needs b clearly above g. Run dim (--brightness) so yellow doesn't clip to white."""
+    r, g, b = test[..., 0], test[..., 1], test[..., 2]
+    return {'tl': (r > g + 60) & (r > b + 60),
+            'tr': (g > r + 50) & (g >= b - 15),
+            'bl': (b > g + 20) & (b > r + 60),
+            'br': (r > b + 40) & (g > b + 40) & (np.abs(r - g) < 60)}
 
 
 def locate(test, black, thresh=40, min_px=150):
@@ -39,7 +50,7 @@ def locate(test, black, thresh=40, min_px=150):
     region = largest_component(_dilate(lit)) & lit
     if region.sum() < min_px:
         return None
-    masks = {k: m & region for k, m in _colour_masks(test).items()}
+    masks = {k: m & region for k, m in colour_masks(test).items()}
     cents = {}
     for k, m in masks.items():
         if m.sum() < max(10, region.sum() // 40):
@@ -92,7 +103,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--cam', default='gallery')
     ap.add_argument('--settle', type=float, default=2.0)
-    ap.add_argument('--brightness', type=float, default=0.25, help='panels brightness (camera colours clip at 1)')
+    ap.add_argument('--brightness', type=float, default=0.06, help='panels brightness (the cam clips colours above ~0.1)')
     a = ap.parse_args()
     comp = capture.td("print([p for p in ('/project1/seasons', '/project1/river_local') "
                       "if op(p) is not None and hasattr(op(p).par, 'Screencorners')][0])")['stdout'].strip()
