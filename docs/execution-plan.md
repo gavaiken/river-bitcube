@@ -43,9 +43,9 @@ title: Execution plan
 | ✅ | M4 | Mission control: status (seasons state, bitcube probe, Modal, river cam, snapshot), whitelisted controls, system map; page | M2 | Claude | Page shows live status; controls reach bitcube once it's online |
 | ✅ | M5 | Studio agent policy: `mission/STUDIO.md` system prompt, deny-list settings, no connectors | M3 | Claude | Agent refuses out-of-scope asks in a test |
 | ✅ | M6 | `mission/setup/` scripts for the `river` user (create hidden standard user, lock `/Users/gav` to 700, secrets, clone with deploy key, LaunchDaemon); river's SSH key on bitcube | M2–M5 | Claude wrote it (22 Oct); **Gavin runs `sudo bash mission/setup/setup-river.sh`** ([install steps](mission-plan.md#install-m6m8-what-gavin-does)) | Service runs as `river` and survives a restart |
-| ⏳ | M7 | Gavin: `claude setup-token`, save the token into `/Users/river/.secrets/claude-token` | M6 | Gavin | Studio agent answers |
+| ✅ | M7 | Gavin: `claude setup-token`, save the token into `/Users/river/.secrets/claude-token` | M6 | Gavin | Studio agent answers |
 | ✅ | M8 | Tailscale Funnel on 443 → `127.0.0.1:8790` (OK'd, MD9) | M6 | Gavin (or Claude with his OK) | `https://gav-m1-mini.tailddc624.ts.net` shows the login page from outside |
-| ⏳ | M9 | End-to-end check from a phone off the tailnet; docs (show-files page link, CLAUDE.md, runbook) | M7, M8 | Claude | Team can log in, chat, see status, steer the seasons |
+| ➡️ | M9 | End-to-end check from a phone off the tailnet (login page confirmed reachable from the internet 22 Oct; agent answered as `river` and was denied `/Users/gav`); river's key on bitcube when it's online; docs (show-files page link, CLAUDE.md, runbook) | M7, M8 | Claude | Team can log in, chat, see status, steer the seasons |
 | 🅿️ | S14 | Gallery card and page for the online version (when we run Dave's agent in the show) | Decision to run it | Claude | — |
 | 🅿️ | S15 | AI-enhanced river footage via Modal (upscaling, smoother slow motion, longer clips) | — | — | — |
 
