@@ -23,3 +23,7 @@
 **Mode**: Who is steering the year. **Automatic**: the season cycle, one season a minute. **Dynamic**: relative presence steers it, a closed loop that people can watch but not touch. **Manual**: someone picks a target season and an intensity, and the year travels forward to it quickly. In every mode the year only turns forward.
 
 **Intensity (in manual)**: Set directly on a scale from **stillness** (0) to **turbulence** (1), instead of following the season.
+
+**Target**: In manual mode, where the river should end up: a **target season** and a **target intensity**. The river travels to a target (forward through the calendar), it never jumps there.
+
+**Rules**: The numbers that shape how the river behaves in every mode (how long the year takes, how fast it warms and cools, what counts as busier or quieter than usual, when summer becomes a full torrent). Changing a rule changes the behaviour from that moment on; it doesn't move the river anywhere.
