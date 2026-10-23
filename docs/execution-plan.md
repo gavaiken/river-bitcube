@@ -32,6 +32,14 @@ title: Execution plan
 - Using the venue Wi-Fi as the router's uplink (Repeater) works as a stopgap and doesn't rebroadcast the venue's network; Multi-WAN switches to Ethernet when the drop is plugged in.
 - A restart brings bitcube back by itself in about a minute (Windows, auto-login, Tailscale, then TD, Claude and the Modal link).
 
+## Rigging layout (Gavin, 22 Oct night)
+![Rigging at Gray Area, 22 Oct: 1 ceiling, 2 panel power, 3 lowest rope point](img/rigging-2026-10-22.jpg)
+- **1, the ceiling grid:** bitcube, our router (GL.iNet), both PSAC10 rope boxes and their supplies, the Art-Net rack controller ("the driver") and the lighting switch: everything hidden in the roof. bitcube sits next to the Colorlight send card, so its HDMI stays short; the send card reaches the receive card over Ethernet.
+- **2, on the driftwood:** the HUB75 panel power board (four 5 V supplies) and the panels.
+- **3:** the lowest point the ropes hang to, woven through the river logs.
+- **Cabling:** Gray Area's wired drop → router **WAN**; router → bitcube's spare port (`Ethernet 2`, `.79`) with a good cable (S17). Gallery cam: position not decided; it must see the artwork and the visitors (maybe rigged up top too), on Wi-Fi or Ethernet (S22).
+- **What it means:** once it's up there, nobody can reach bitcube or the router by hand. Everything has to recover by itself after a power cut (S21), and we work through VNC, mission control and SSH. The VNC view will be the LED display, covered by the panels window (black), so working in TouchDesigner means hiding that window first. A small HDMI monitor and a USB keyboard should still stay with the kit for the day the network is down.
+
 ## Steps
 ✅ done · ➡️ next · ⏳ waiting on someone · 🅿️ parked
 
@@ -67,6 +75,10 @@ title: Execution plan
 | ✅ | M7 | Gavin: `claude setup-token`, save the token into `/Users/river/.secrets/claude-token` | M6 | Gavin | Studio agent answers |
 | ✅ | M8 | Tailscale Funnel on 443 → `127.0.0.1:8790` (OK'd, MD9) | M6 | Gavin (or Claude with his OK) | `https://gav-m1-mini.tailddc624.ts.net` shows the login page from outside |
 | ➡️ | M9 | End-to-end check from a phone off the tailnet (login page confirmed reachable from the internet 22 Oct; agent answered as `river` and was denied `/Users/gav`); river's key on bitcube when it's online; docs (show-files page link, CLAUDE.md, runbook) | M7, M8 | Claude | Team can log in, chat, see status, steer the seasons |
+| ➡️ | S21 | **Recover from a power cut by itself** (bitcube is going in the ceiling): check bitcube's BIOS "restore on AC power loss = on" (or "power on"), and that the router comes back on its own; then test once by switching the ceiling power off and on | Before the rig goes up | Gavin (BIOS on site) + Claude (check after) | Power off → on: bitcube boots, logs in, TD opens the show file, mission control shows it, with nobody touching anything |
+| ➡️ | S22 | **Gallery cam on Ethernet keeps its address:** today `192.168.9.76` is reserved for its Wi-Fi MAC (`EC:71:DB:EB:EB:23`); its wired port has another MAC and would get a different address, breaking snapshots, the Modal clips, the people counter and the Tailscale route (this is why it "crapped out" on Ethernet before). Before rigging: plug it into the router once by cable, read its wired MAC in the router's client list, then reserve `.76` for **both** MACs (one host with two MACs in the router's advanced LuCI DHCP settings) or, if that isn't possible, reserve the wired MAC as `.77` and update `secrets.local.json` and bitcube's advertised route | The camera and the router, on the ground | Gavin (plug in, router UI) + Claude (secrets, route, check) | Cam answers at `.76` on Wi-Fi *and* on Ethernet |
+| ⏳ | S23 | **Gallery cam position:** sees the artwork and the people in front of it (the people counter's "near the piece" size threshold depends on it; ceiling-high and wide changes what counts as foreground); fixed before the re-map (S4) | Rigging | Colin, Lilian | Mounted; still from it on mission control shows the piece and the floor in front |
+| ⏳ | S24 | Update the system map for the rigging (devices in the ceiling, cable runs, the cam's final link) | S20, S22 | Claude | `docs/system/system.json` matches the rig; tests pass |
 | 🅿️ | S14 | Gallery card and page for the online version (when we run Dave's agent in the show) | Decision to run it | Claude | — |
 | 🅿️ | S15 | AI-enhanced river footage via Modal (upscaling, smoother slow motion, longer clips) | — | — | — |
 | ⏳ | S16 | Gray Area's wired drop into the router's **WAN** port (Ethernet then takes over from the staff Wi-Fi by itself) | Gray Area cable | Gavin / Lilian | Router's Internet page shows Ethernet active |
