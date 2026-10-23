@@ -8,7 +8,7 @@ title: A River Becoming: show machine status
 
 **[Show files](show-files.md)** (what the piece is doing) · **[Execution plan](execution-plan.md)** (status table and session prompts) · **[Plan & open questions](plan.md)** · **[Log](a-river-becoming-log.md)** · **[Hardware](a-river-becoming-hardware.md)** · **[System map](system/)** (every device, IP and connection; [system.json](system/system.json) for agents)
 
-**Status as of Thu 22 Oct 2026, 22:30.** Gray Area install under way. Our router is up (Wi-Fi `gray-river`, 192.168.9.x; internet through the venue's staff Wi-Fi until the wired drop is connected). bitcube is online at Gray Area on `gray-river` and restarts by itself; the gallery cam is on `gray-river`. Lights not connected yet. [Next steps](execution-plan.md#next-steps-22-oct-night).
+**Status as of Thu 22 Oct 2026, 22:45.** At Gray Area, network done: our router (Wi-Fi `gray-river`, 192.168.9.x; internet through the venue's staff Wi-Fi until the wired drop is connected). bitcube is online by cable and restarts by itself; the gallery cam is back in reach and posting clips to Dave's agent. Lights not connected yet. [Next steps](execution-plan.md#next-steps-22-oct-night).
 
 bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes over Art-Net, the HUB75 panels over HDMI, and the Reolink cameras. It runs TouchDesigner and a Claude Code session.
 
