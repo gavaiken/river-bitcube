@@ -11,12 +11,7 @@ Read first:
 `docs\` in this repo is the source of truth. Gavin's Mac mini pulls it, and a Claude session there can also SSH in (`ssh bitcube`).
 
 ## Current goal
-TouchDesigner (TD) drives the 20 ropes over Art-Net **and** the HUB75 panels over HDMI from one canvas, while Claude watches the result through the cameras and iterates. The full plan is in `docs\a-river-becoming-log.md` → open items. Work through it in this order:
-1. **Bridge:** in TD's Textport (Alt+T), run `exec(open(r'C:\Users\user\River\river-bitcube\td\bridge\install_bridge.py').read())` once, then save. After that, `tools\td.ps1` runs Python inside TD (`.\tools\td.ps1 "app.build"`, `-File`, `-Errors`, `-Screenshot /path/to/top`). Prefer this over clicking in the GUI.
-2. **Ropes over Art-Net** (priority).
-3. **Two panel quads over HDMI.**
-4. **Cameras** (`tools\cam_snap.ps1 <name>`).
-5. **One shared canvas,** saved as `river.toe`.
+**Work from [`docs/execution-plan.md`](docs/execution-plan.md):** the Gray Area phase at the top has numbered steps (S1, S2…), requirements (R1…) and decisions (D1…). Start with `git pull`, do the first step you can, mark it in the table, push. Terms are in `GLOSSARY.md`. Don't reopen a recorded decision without Gavin; add new requirements and decisions to the plan as they're made.
 
 ## Facts you'll need
 - **TD 2025.33230:** `C:\Program Files\Derivative\TouchDesigner\bin\TouchDesigner.exe`. The login autostart (`Start-River.cmd`, next to this file) opens **`river-local-oct-18.toe`** (the local rain checkpoint) since 18 Oct; `river.toe` is the general show file for Dave's visuals (session D).

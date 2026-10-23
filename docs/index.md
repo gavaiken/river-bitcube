@@ -8,7 +8,7 @@ title: A River Becoming: show machine status
 
 **[Show files](show-files.md)** (what the piece is doing) · **[Execution plan](execution-plan.md)** (status table and session prompts) · **[Plan & open questions](plan.md)** · **[Log](a-river-becoming-log.md)** · **[Hardware](a-river-becoming-hardware.md)** · **[System map](system/)** (every device, IP and connection; [system.json](system/system.json) for agents)
 
-**Status as of Tue 20 Oct 2026, 10:15.** Gray Area install starts **Wed 22 Oct**.
+**Status as of Thu 22 Oct 2026, evening.** Gray Area install starts **Thu 22 Oct**.
 
 bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes over Art-Net, the HUB75 panels over HDMI, and the Reolink cameras. It runs TouchDesigner and a Claude Code session.
 
@@ -21,9 +21,8 @@ bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes ov
   - **[System map](system/):** a clickable diagram of every machine, device and connection (Agape now, Gray Area planned), with IPs, ports, usernames and the Modal↔bitcube API. No secrets.
   - **Live river cam across the ropes and HUB75:** the camera at the river streams over Starlink and Tailscale to bitcube (10 fps). It replaces the rain as the image that both the ropes and the HUB75 sample, so the real river flows across the installation. If the stream drops for more than 10 s, it falls back to the rain by itself.
   - **Connected to Dave's Modal agent:** both cameras post 10 s clips to the agent, and the agent's scene (colours, speed, density, turbulence, brightness, every 5 min, plus fast camera reflexes) now shapes the look on the ropes and HUB75, and Dave's own animation plays as a layer over the live river. The river cam's look switches between day and night (infrared) settings by itself.
-- **Next:**
-  1. Connect quad 2, and fix ropes 9 and 17.
-  2. Re-map once the ropes are hung at Gray Area.
+- **Moving to Gray Area** (install Thu 22 Oct, 7 pm). A new local-only **seasons** show file (the river's year, steered by the people in the room) is written and waiting to deploy when bitcube is back online. [What each show file does](show-files.md).
+- **Next** ([execution plan](execution-plan.md), steps S1…): deploy the seasons file, set up our router at Gray Area, re-map the hung piece, tune on the real lights, build the people counter.
 
 ![Rain checkpoint on the coiled ropes and HUB75, 18 Oct 15:57](img/rain-checkpoint-2026-10-18.jpg)
 

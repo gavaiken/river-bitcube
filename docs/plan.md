@@ -4,7 +4,7 @@ title: Plan and open questions
 
 # Plan and open questions
 
-The shared checklist for **A River Becoming**'s show machine, bitcube. Install at Gray Area starts **Wed 22 Oct 2026**.
+The shared checklist for **A River Becoming**'s show machine, bitcube. Install at Gray Area starts **Thu 22 Oct 2026**.
 
 **How we work:**
 - This repo is how people and Claude sessions coordinate.
@@ -51,15 +51,4 @@ Session-by-session prompts, models and skills: **[execution plan](execution-plan
 - **Rope facts Colin asked for:** each 10 m tube has **400 individually addressable pixels** (40 ICs/m; the 240 LEDs/m are driven in groups of 6), i.e. 3 universes per rope (170+170+60 px). Will's provisional mapping reserves 4 universes per rope: box 1 = universes 0–39 (ropes 1–10), box 2 = 40–79 (ropes 11–20). 18 of 20 ropes have lit with it; ropes 9 and 17 haven't.
 
 ## Open questions
-| Question | Ask | Asked | Answer |
-|---|---|---|---|
-| Is `SITE_TOKEN` set on Modal? Can bitcube get an `INGEST_TOKEN`? | Dave | | `SITE_TOKEN`: **not set** (session I, 18 Oct 17:21: `/data/*.json` answer without a token). `INGEST_TOKEN`: still needed |
-| What location/channel names and clip cadence should bitcube use for camera ingest? Is anything already pushing these cameras? | Dave | | |
-| Preferred canvas design size (`?w=&h=`) for 20×400 ropes + panels? OK to run `gallery/sync.py` on bitcube? | Dave | | |
-| Receive-card layout for quad 2? (Quad 1 is correct; the 'split' was a test-pattern bar.) Thread size for the panel mounts? | Andi | | |
-| Retire RopeLights or keep it as a backup? OK for Claude to edit `config.local.json` after the rope-ID run? | Will | | |
-| Gallery network: dual NIC plan, and how the gallery cam reaches Tailscale at Gray Area | Will | | |
-| What should the gallery show if bitcube goes down? (Today: the rack controller's SD-card colour cycle) | Team | | |
-| Does the show need a TouchDesigner Commercial licence? (bitcube has Non-Commercial) | Gavin | | |
-| Gallery cam is on Agape WiFi (`10.0.7.76`, DHCP). Give it a fixed address? At Gray Area, does it join the gallery network or go back on the GL.iNet router? | Will | | |
-| Can the Colorlight sender run at a lower resolution? Not needed (we only use the top-left 512×128). | Andi | | |
+Moved to the **[execution plan](execution-plan.md)** (open decisions for Gavin, and open questions for others), 22 Oct. Answered since 19 Oct: Dave gave the ingest token and names (gallery/video, river/video) and OK'd `sync.py`; `SITE_TOKEN` is not set; quad 2 works in hardware (Andi, 21 Oct); the gallery network plan is our own router behind Gray Area's wired drop (D1, D16).

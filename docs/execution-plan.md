@@ -2,11 +2,110 @@
 title: Execution plan
 ---
 
-# Execution plan: from today's hardware to the full Modal-driven show
+# Execution plan: A River Becoming at Gray Area
 
-**Updated Mon 19 Oct 2026, 17:50, by session A (coordinator).**
+**Updated Thu 22 Oct 2026 by session A (coordinator, Mac mini).** This is the working plan: steps to work through in order, the decisions behind them, and the requirements they must meet. **Add to it freely:** new steps go in the table with the next free number, new requirements get the next R-number, and anything decided gets a D-number with the date and who decided. Terms are defined in [`GLOSSARY.md`](https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md). Phase 1 (the Agape build, 17–21 Oct) is further down as history.
 
-## Status
+**How to work it:** any Claude session (on the mini or on bitcube) starts with `git pull`, takes the first ➡️ step it can do, marks it ✅ / ⏳ / ❌ here after each step with a line in `docs/sessions/<letter>.md`, and pushes. The [coordination contract](#coordination-contract-every-bitcube-session-follows-this) below still applies, and only one Claude works on bitcube at a time. Gavin says **"sync"** to session A for a report.
+
+## Where we are (22 Oct)
+- Everything works end to end at Agape: TouchDesigner (TD) on bitcube drives 18 of 20 ropes and HUB75 quad 1 from the camera pixel map; the live river cam, Dave's Modal agent (cameras up, scene down) and his canvas all feed the **online show file**.
+- **Moving to Gray Area tonight** (Thu 22 Oct, 7 pm install, Lily leading). Gavin on site Fri morning with the MacBook Air; Colin, Justine and Gavin tune visuals Fri and Mon; Lily covers the weekend.
+- **bitcube is packed and offline.** The new **local-only seasons show file** is written and tested off the machine and waits for step S1 to deploy it.
+- **The river site is down** (solar panel giving 0 W, Starlink set to switch off at 22:00, battery dead). We have one 64 s river clip; the hourly recorder catches more whenever the site comes back.
+
+## Steps
+✅ done · ➡️ next · ⏳ waiting on someone · 🅿️ parked
+
+| | Step | What | Needs | Owner | Done when |
+|---|---|---|---|---|---|
+| ⏳ | S1 | **Deploy the seasons show file** (S1.1–S1.5 below) | bitcube online at Gray Area | Claude | Seasons file is the boot file, comes up by itself after a TD restart, 60 fps, control page answers |
+| ⏳ | S1.1 | Rename the online file: `td_save.ps1 -Target river-online-oct-20.toe`, `git rm river-local-oct-18.toe`, update `Start-River.cmd` | S1 | Claude | Only `river-online-oct-20.toe` in the repo |
+| ⏳ | S1.2 | `python tools\seasons\prerender.py` (three speeds of the river library) | S1 | Claude | `recordings\river\seasons\river-{slow,normal,fast}.mp4` exist |
+| ⏳ | S1.3 | `td_save.ps1 -Target river-local-oct-22-seasons.toe`, then `td.ps1 -File td\build\build_seasons_local.py` (save first: new network) | S1.1, S1.2 | Claude | No TD errors; screenshots of `field_out`, `quad1..4_out`, `rope_canvas` look right |
+| ⏳ | S1.4 | Windows Firewall: allow TD inbound on port 9981 for Private and Tailscale; open `http://bitcube.tail03bc1a.ts.net:9981` from the mini | S1.3 | Claude | Control page shows the year turning |
+| ⏳ | S1.5 | Save, toeexpand secret check, commit; `Start-River.cmd` → seasons file; restart TD via the one-off interactive task | S1.4 | Claude | TD reopens the seasons file by itself |
+| ⏳ | S2 | **Install network:** second GL.iNet as our router behind the wired drop; bitcube and gallery cam behind it (settle D-open 1–4 first) | Router at the venue; Gavin's decisions | Gavin + Claude | bitcube online via the router, gallery cam reachable from bitcube |
+| ⏳ | S3 | Gallery cam's new address into bitcube's `secrets.local.json`; Tailscale route for it (D-open 5) | S2 | Claude | `tools\cam_snap.ps1 gallery` works; Modal link posts gallery clips |
+| ⏳ | S4 | **Re-map at Gray Area** after the hang (Thu night or Fri morning): structured-light capture, new `pixelmap-<date>.json`, rebuild | Ropes hung and powered, camera fixed in its final spot, room dark; S1 | Claude (+ someone on site) | All lit ropes mapped; ropes 9/17 found if they now light |
+| ➡️ | S5 | Extend `tools/pixelmap/hub75.py` to locate HUB75 quads 2–4 (today only quad 1), so the seasons file samples each quad at its real position | — (code now), S4 (to use) | Claude | Pixel map JSON has `hub75_quad1..4` |
+| ⏳ | S6 | Confirm the receive-card layout of the 4 quads with Andi; change `QUAD_X` in `build_panels.py` if it isn't 4 in a row | Andi | Gavin → Andi | Each quad shows its own picture |
+| ⏳ | S7 | **Tune on the real lights** (Fri morning): palettes, overlays, natural-colour mix, HUB75 gain; judge the 4-minute year | S1, S4 | Gavin, Colin, Justine + Claude | Artists happy; changes written to the file's page |
+| ⏳ | S8 | **Power:** confirm separate circuits (Seabrook); then raise the rope cap from 600 W to 1,200 W per box (`Boxwatts`) | Seabrook | Gavin | Cap matches the circuits (D13) |
+| ⏳ | S9 | Gallery card on the iPad (`docs/card/seasons.html`); Colin and Justine edit the words | iPad from Gray Area | Justine, Colin | Card on the iPad by opening |
+| ➡️ | S10 | **People counter** ([plan](presence-plan.md)): local person detector → `River\presence.json`; turns on dynamic mode | S1 (to test) | Claude | Control page shows live counts; dynamic warms and cools the river |
+| ⏳ | S11 | River site back up (solar, Starlink schedule); recorder fills the library; rerun S1.2 with the new footage | Colin / Maria at the river | Colin | More than a few minutes of river in the library |
+| ⏳ | S12 | MacBook Air as the on-site fallback console: Tailscale, its SSH key on bitcube, VNC password, Claude Code + this repo (D-open 6) | Gavin | Gavin + Claude | The Air reaches bitcube with the internet down |
+| ⏳ | S13 | Dave merges [river-agent#7](https://github.com/drocamor/river-agent/pull/7) (hide camera logins in capture logs) | Dave | Dave | Merged |
+| 🅿️ | S14 | Gallery card and page for the online version (when we run Dave's agent in the show) | Decision to run it | Claude | — |
+| 🅿️ | S15 | AI-enhanced river footage via Modal (upscaling, smoother slow motion, longer clips) | — | — | — |
+
+## Requirements
+Every step must keep these true. Add new ones at the end.
+
+| | Requirement | Source |
+|---|---|---|
+| R1 | The seasons show file runs with **no network at all** (no internet, Modal or live river feed). | Gavin, 22 Oct |
+| R2 | The river is **always moving**, and is **recognisably a river** on the ropes and on the panels. | Gavin, 22 Oct |
+| R3 | **The year only turns forward** (winter → spring → summer → autumn → winter), in every mode. | Gavin, 22 Oct |
+| R4 | Automatic mode: one season a minute (a 4-minute year). | Gavin, 22 Oct |
+| R5 | Dynamic mode adapts to the size of the night: it reacts to **relative presence**, not the raw count. An empty room is winter; a busier-than-usual room becomes a summer torrent. | Gavin, 22 Oct |
+| R6 | Manual mode reaches any **target** in under a minute, travelling forward. | Gavin, 22 Oct |
+| R7 | The control page shows the year, intensity and presence read-only, and switches modes, sets targets and **rules**. Private networks and the tailnet only. | Gavin, 22 Oct |
+| R8 | After a restart the piece is never left in manual. | Gavin, 22 Oct |
+| R9 | Every show file has a page (visitors + team) and its version has a gallery card; **changing a show file updates its page in the same commit**. | Gavin, 22 Oct |
+| R10 | Rope power stays within what the circuits can carry (D13). | Gavin, 22 Oct |
+| R11 | No secrets (passwords, tokens, camera logins) in the public repo, the `.toe` files or logs. | Gavin, 17 Oct |
+| R12 | TD keeps 60 fps on bitcube. | standing |
+
+## Decisions
+Newest last. Add with the date and who decided.
+
+| | Decision | Why | Who, when |
+|---|---|---|---|
+| D1 | Bring our **second GL.iNet** as the install router: our devices behind it, it behind Gray Area's wired drop. | Venue Wi-Fi isolation, logins and address changes stop mattering; only the router's uplink changes on site. | Gavin, 21 Oct |
+| D2 | A **phone hotspot** is the backup uplink. | Internet outage on install day. | Gavin, 21 Oct |
+| D3 | **No dress rehearsal** of the move at Agape. | Not worth the time. | Gavin, 21 Oct |
+| D4 | Gavin on site **Fri morning** with the MacBook Air; install Thu 7 pm (Lily leads); visuals Fri and Mon. | Team schedule (Colin, 20 Oct). | Team, 20–21 Oct |
+| D5 | **Re-map late Thursday** after the hang (or first thing Friday). | The pixel map depends on where everything hangs. | Gavin, 21 Oct |
+| D6 | **Offline is an acceptable fallback:** the show must run from bitcube's disk if the internet fails. | The river site and the internet are unreliable. | Gavin, 21 Oct |
+| D7 | A separate **local-only seasons show file**, `river-local-oct-22-seasons.toe`, becomes **the boot file** once it works; the online file is renamed `river-online-oct-20.toe` and kept as the fallback. Show files are named for their kind and the date of their last real change. | The live river may be down for the show; the local file always works. | Gavin, 22 Oct |
+| D8 | **Seasons behaviour:** 4-minute automatic year; forward-only; dynamic = relative presence (now = 30 s median, usual = 10 min median, floor 0.75; warmer above 1.3×, cooler below 0.7×, hold between; full torrent at 2×; nobody for 60 s = winter; warming ~1 min, cooling ~3 min); manual targets in under a minute; rules editable with Apply; restart → dynamic if the counter runs, else automatic. | Adapts whether the night brings 4 people or 100; numbers are starting points to tune on site. | Gavin, 22 Oct |
+| D9 | **Seasons look:** the recorded river is always the base; seasons grade it (winter white/blue, spring green/teal, summer gold, autumn ochre/rust/mud); intensity crossfades 3 pre-rendered speeds (slow with generated frames) plus a torrent overlay; glints, leaves and rain per season. Panels are windows on the same canvas (4 quads in a row until the re-map). | Slowing 16 fps footage stutters; overlays make the torrent read. | Gavin, 22 Oct |
+| D10 | **Control page** on bitcube (TD, port 9981), private networks and tailnet only, no password. | Works without internet; only the team can reach it. | Gavin, 22 Oct |
+| D11 | **People counting is local-only**: a small person detector on the gallery cam's low-res stream, counting people big enough to be near the piece, no tracking, motion as fallback. | R1; no dependence on Modal or the internet. | Gavin, 22 Oct |
+| D12 | **Pages:** a parent page for Colin and Justine ([show files](show-files.md)), one page per show file, and a museum-style **gallery card** per version (the seasons card now; the online one later). | Explain the piece to visitors and let the artists steer it. | Gavin, 22 Oct |
+| D13 | Rope power cap **600 W per box** (our own software limit, set for the shared Agape circuit) until Gray Area confirms separate circuits, then **1,200 W** (80% of 15 A). | Safety. | Gavin, 22 Oct |
+| D14 | Changes to Dave's repo go in as **PRs**, never direct pushes (main deploys to Modal). | His production system. | Gavin, 21 Oct |
+| D15 | Remote UI control of bitcube from the mini over **VNC** (`~/claude/local/bitcube-vnc/vnc.py`), with `tools/screenshot.ps1` as the fallback. | More robust than scheduled-task input; reaches UAC and the lock screen. | Gavin, 20 Oct |
+| D16 | **Asks to Gray Area** ([page](gray-area.html)): wired drop, connections only started by us (no ports, forwarding or fixed IP), UDP 41641/3478 if easy, three separate circuits (two rope boxes, one HUB75 power board). | Seabrook's questions, 21–22 Oct. | Gavin, 22 Oct |
+
+### Open decisions (Gavin)
+My recommendation is in brackets; say yes or change it, then move it into the table above.
+1. GL.iNet install router on its own range, **192.168.9.x**, with fixed addresses for bitcube and the cam. *(Yes: the default 192.168.8.x clashes with the river router's range, which bitcube reaches over Tailscale.)*
+2. Give the GL.iNet the **same Wi-Fi name and password as Agape WiFi**, so the cam and bitcube join it by themselves. *(Yes; its radio stays off at Agape.)*
+3. Router uplink order: venue Ethernet → venue Wi-Fi (repeater) → phone hotspot; plus a cable from bitcube's spare Ethernet port to the router. *(Yes.)*
+4. Remove the stale `192.168.1.99` address and gateway on bitcube's lighting port. *(Yes: it can steal bitcube's internet route when the lighting switch is plugged in. A network change, so it needs your OK.)*
+5. Pre-share the cam's new address on Will's tailnet (bitcube advertises `192.168.9.76/32`; you approve it in the admin console). *(Yes.)*
+6. Prepare the MacBook Air as the fallback console (S12). *(Yes.)*
+7. Who on site can power the ropes and say "go" for the Thursday-night re-map? *(Name one person; otherwise re-map Friday morning.)*
+8. TouchDesigner licence: stay on Non-Commercial unless the show is ticketed or commercial. *(Yes; one-line check with Colin.)*
+
+## Open questions (others)
+| Question | Ask | Status |
+|---|---|---|
+| Receive-card layout of the 4 HUB75 quads (S6) | Andi | open |
+| Separate circuits near the rack? (S8) | Seabrook (via Lilian) | asked 22 Oct |
+| River site power and the Starlink 22:00 shutoff (S11) | Colin / Maria | in progress |
+| Merge river-agent#7 (S13) | Dave | open |
+| Reply to Colin: ropes 9/17 need no software change; the re-map picks them up if they light | Gavin → Colin | to send |
+| Who records the river: Will's Modal copy or bitcube's recorder, not both (several viewers degrade a Starlink stream) | Gavin → Will | to send |
+
+---
+
+# Phase 1: the Agape build (17–21 Oct, history)
+
+## Phase 1 status
 ✅ done · ➡️ next (in order) · ❌ blocked
 
 | | Step | What | Session (machine · model) | Owner |
