@@ -18,8 +18,8 @@ PIXELMAP = sorted(glob.glob(REPO + '/tools/pixelmap/pixelmap-????-??-??.json'))[
 N_ROPES, N_PX = 20, 400
 FIELD_W, FIELD_H = 1280, 720
 
-if not project.name.startswith('river-local'):
-    raise RuntimeError(f'build_river_local.py rewires ropes/panels; open river-local-*.toe first '
+if not project.name.startswith(('river-local', 'river-online')) or 'seasons' in project.name:
+    raise RuntimeError(f'build_river_local.py rewires ropes/panels; open river-online-*.toe first '
                        f'(TD has {project.name} open). Use  td_save.ps1 -Target river-local-....toe  to make one.')
 
 proj = op('/project1')
