@@ -1,11 +1,14 @@
 // Mission control + studio chat server (docs/mission-plan.md). Listens on 127.0.0.1 only; Tailscale Funnel
 // puts it online at https://gav-m1-mini.tailddc624.ts.net. Configured by environment variables:
-//   MISSION_PORT            8790
+//   MISSION_PORT            8790 (0 picks a free port; the start-up line says which)
 //   MISSION_PASSWORD_FILE   the shared team password (same as bitcube's login), e.g. /Users/river/.secrets/site-password
 //   MISSION_TOKEN_FILE      Claude token from `claude setup-token` (optional until M7: without it the chat says so)
 //   MISSION_STATE_DIR       sessions, chat history, agent session id, logs
 //   MISSION_REPO            the studio agent's working folder (its clone of river-bitcube)
 //   MISSION_FAKE_AGENT=1    a pretend agent, for testing the pages without spending tokens
+//   MISSION_FAKE_AGENT_DELAY_MS   its pause between steps (700)
+//   MISSION_FIXTURES=<dir>  fixture mode (lib/fixtures.mjs): status, stills and controls come from <dir>/<scenario>.json and
+//                           nothing talks to bitcube, Modal or the seasons page. For designing the pages; never for the live site.
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -15,12 +18,14 @@ import { fileURLToPath } from 'node:url';
 import { Auth, readPasswordFile, parseCookies, SESSION_MAX_AGE_S } from './lib/auth.mjs';
 import { Studio } from './lib/studio.mjs';
 import { Mission } from './lib/mission.mjs';
+import { FixtureMission } from './lib/fixtures.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const env = process.env;
 const PORT = Number(env.MISSION_PORT || 8790);
 const STATE = env.MISSION_STATE_DIR || join(HERE, '..', '..', 'mission-state');
 const REPO = env.MISSION_REPO || join(HERE, '..');
+const FIXTURES = env.MISSION_FIXTURES || null;
 const COOKIE = 'mc';
 
 // Running as river: keep its Claude user files in step with the repo (no sudo needed: it's river's own home).
@@ -32,8 +37,13 @@ if (userInfo().username === 'river') {
 }
 
 // Self-update: when a pull brings new mission/ code, restart (launchd starts us again) as soon as the chat is idle.
-const missionTree = () => { try { return execFileSync('git', ['-C', REPO, 'rev-parse', 'HEAD:mission'], { encoding: 'utf8' }).trim(); } catch { return null; } };
+const git = (...args) => { try { return execFileSync('git', ['-C', REPO, ...args], { encoding: 'utf8' }).trim(); } catch { return null; } };
+const missionTree = () => git('rev-parse', 'HEAD:mission');
 const BOOT_TREE = missionTree();
+// GET /version (no login): so a push can be confirmed from outside once the live site restarts on it. Only this leaves the box.
+const COMMIT = git('rev-parse', 'HEAD');
+const VERSION = { commit: COMMIT, short: COMMIT && COMMIT.slice(0, 7), mission_tree: BOOT_TREE, started: new Date().toISOString(),
+                  node: process.version, fixtures: !!FIXTURES };
 let restartPending = false;
 function checkForUpdate() {
   if (!restartPending && BOOT_TREE && missionTree() && missionTree() !== BOOT_TREE) {
@@ -46,15 +56,19 @@ const auth = new Auth({ password: readPasswordFile(env.MISSION_PASSWORD_FILE), s
 
 async function makeRunner() {
   if (env.MISSION_FAKE_AGENT) {
+    const delay = Number(env.MISSION_FAKE_AGENT_DELAY_MS ?? 700);
     return async function* ({ text, resume, signal }) {
       yield { kind: 'session', sessionId: resume ?? 'fake-session' };
-      for (const step of ['read CLAUDE.md', 'ran: Check bitcube is online']) {
-        await new Promise((r) => setTimeout(r, 700));
+      for (const step of ['read CLAUDE.md', 'ran: Check bitcube is online', 'edited docs/sessions/U.md']) {
+        await new Promise((r) => setTimeout(r, delay));
         if (signal.aborted) return;
         yield { kind: 'activity', text: step };
       }
-      yield { kind: 'text', text: `(pretend agent) You said: ${text}` };
-      yield { kind: 'result', ok: true, text: '', cost: 0, turns: 1 };
+      // A message with the word "fail" shows what a broken run looks like; anything else gets a markdown reply.
+      const failed = /\bfail\b/i.test(text);
+      if (failed) yield { kind: 'error', text: '(pretend) ssh: connect to host bitcube port 22: Operation timed out' };
+      else yield { kind: 'text', text: `(pretend agent) You said: ${text}\n\nWhat I found:\n- bitcube answers on port 22\n- TouchDesigner is running \`river-local-oct-22-seasons.toe\` at 60 fps\n- the river camera is **offline**, so the panels show the gallery\n\nNothing needed changing.` };
+      yield { kind: 'result', ok: !failed, text: failed ? 'bitcube did not answer' : '', cost: 0, turns: 4 };
     };
   }
   const tokenFile = env.MISSION_TOKEN_FILE;
@@ -70,11 +84,11 @@ async function makeRunner() {
 }
 
 const studio = new Studio({ runner: await makeRunner(), dir: STATE });
-const mission = new Mission();
+const mission = FIXTURES ? new FixtureMission({ dir: FIXTURES, stateDir: STATE }) : new Mission();   // fixtures: nothing is polled or run
 mission.start();
 studio.on('status', (st) => { if (restartPending && !st.running && !st.queue.length) { console.log('restarting for new code'); process.exit(0); } });
 setInterval(async () => {
-  if (studio.status().running || env.MISSION_FAKE_AGENT) return;
+  if (studio.status().running || env.MISSION_FAKE_AGENT || FIXTURES) return;
   const { syncRepo } = await import('./lib/agent.mjs');
   await syncRepo(REPO);
   checkForUpdate();
@@ -133,8 +147,10 @@ const server = createServer(async (req, res) => {
         'set-cookie': `${COOKIE}=${r.token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE_S}${secure ? '; Secure' : ''}` });
     }
     if (path === '/healthz') return send(res, 200, { ok: true });
+    if (path === '/version') return send(res, 200, VERSION);
 
-    const token = parseCookies(req.headers.cookie)[COOKIE];
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies[COOKIE];
     if (!auth.valid(token)) {
       if (path.startsWith('/api/')) return send(res, 401, { error: 'log in first' });
       return send(res, 302, '', 'text/plain', { location: '/login' });
@@ -144,6 +160,13 @@ const server = createServer(async (req, res) => {
       return send(res, 200, { ok: true }, 'application/json', { 'set-cookie': `${COOKIE}=; Path=/; Max-Age=0` });
     }
     if (path === '/') return send(res, 302, '', 'text/plain', { location: '/status' });
+    const fx = FIXTURES && path.match(/^\/fixtures(?:\/([a-z0-9-]+))?$/);
+    if (fx) {
+      // Fixture mode: list the scenarios, or pick the one this browser sees (a cookie, so every tab can differ).
+      if (!fx[1]) return send(res, 200, { active: mission.active(cookies.scenario), scenarios: mission.list() });
+      if (mission.active(fx[1]) !== fx[1]) return send(res, 404, { error: 'no such scenario' });
+      return send(res, 302, '', 'text/plain', { location: '/status', 'set-cookie': `scenario=${fx[1]}; Path=/; SameSite=Lax` });
+    }
     if (PAGES[path]) return send(res, 200, page(PAGES[path]), 'text/html; charset=utf-8');
     if (path === '/map/' || path === '/map/index.html') {
       const html = readFileSync(join(MAP_DIR, 'index.html'), 'utf8')
@@ -175,12 +198,13 @@ const server = createServer(async (req, res) => {
     if (path === '/api/chat/stop' && req.method === 'POST') return send(res, 200, { stopped: studio.stop() });
 
     // mission control
-    if (path === '/api/status') return send(res, 200, { ...mission.snapshot(), studio: studio.status() });
+    // (the scenario cookie only means something in fixture mode; Mission ignores it)
+    if (path === '/api/status') return send(res, 200, { ...mission.snapshot(cookies.scenario), studio: studio.status() });
     const cam = path.match(/^\/api\/camera\/([a-z]+)\.jpg$/);
     if (cam) {
-      const c = await mission.camera(cam[1]);
+      const c = await mission.camera(cam[1], cookies.scenario);
       if (!c.jpeg) return send(res, 503, { error: 'no picture from that camera right now' });
-      return send(res, 200, c.jpeg, 'image/jpeg', { 'x-taken': new Date(c.at).toISOString() });
+      return send(res, 200, c.jpeg, c.type || 'image/jpeg', { 'x-taken': new Date(c.at).toISOString() });
     }
     const m = path.match(/^\/api\/control\/([a-z0-9-]+)$/);
     if (m && req.method === 'POST') {
@@ -193,6 +217,6 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '127.0.0.1', () => console.log(`mission control on http://127.0.0.1:${PORT} (state in ${STATE}, agent in ${REPO})`));
+server.listen(PORT, '127.0.0.1', () => console.log(`mission control on http://127.0.0.1:${server.address().port} (state in ${STATE}, agent in ${REPO}${FIXTURES ? `, fixtures from ${FIXTURES}` : ''})`));
 const quit = () => { mission.stop(); server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 3000).unref(); };
 process.on('SIGTERM', quit); process.on('SIGINT', quit);

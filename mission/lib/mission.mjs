@@ -1,6 +1,6 @@
 // Mission control's data and controls (docs/mission-plan.md). The server polls each source on its own
 // timer and serves one combined snapshot; controls are fixed actions with checked arguments, never
-// arbitrary commands.
+// arbitrary commands. planControl is the whitelist on its own (pure), shared with fixture mode.
 import { execFile } from 'node:child_process';
 import { connect } from 'node:net';
 
@@ -115,39 +115,8 @@ export class Mission {
 
   // ---- controls (fixed actions) ----------------------------------------------------------------------
   async control(action, body = {}) {
-    switch (action) {
-      case 'mode': {
-        if (!MODES.includes(body.mode)) throw bad('mode must be automatic, dynamic or manual');
-        return this.#seasons('/mode', { mode: body.mode });
-      }
-      case 'target': {
-        const t = {};
-        if (body.season !== undefined) { if (!SEASONS.includes(body.season)) throw bad('unknown season'); t.season = body.season; }
-        if (body.intensity !== undefined) { const x = Number(body.intensity); if (!(x >= 0 && x <= 1)) throw bad('intensity is 0 to 1'); t.intensity = x; }
-        return this.#seasons('/target', t);
-      }
-      case 'rules': {
-        const r = {};
-        for (const [k, v] of Object.entries(body.rules ?? {})) { if (!/^[a-z_]{1,40}$/.test(k) || !Number.isFinite(Number(v))) throw bad('bad rule'); r[k] = Number(v); }
-        return this.#seasons('/rules', r);
-      }
-      case 'rules-reset': return this.#seasons('/rules/reset', {});
-      case 'ropes': return this.#probeAction(`-Action ropes${body.dark ? ' -Dark' : ''}`);
-      case 'hub75': {
-        const x = Number(body.brightness);
-        if (!(x >= 0 && x <= 1)) throw bad('brightness is 0 to 1');
-        return this.#probeAction(`-Action hub75 -Brightness ${x.toFixed(2)}`);
-      }
-      case 'bootfile': case 'switch': {
-        if (!BOOT_FILES.includes(body.file)) throw bad('unknown show file');
-        return this.#probeAction(`-Action ${action} -BootFile ${body.file}`);
-      }
-      case 'lightsroute': {
-        if (!['direct', 'router'].includes(body.route)) throw bad('route is direct or router');
-        return this.#probeAction(`-Action lightsroute -LightsRoute ${body.route}`);
-      }
-      default: throw bad('unknown action');
-    }
+    const plan = planControl(action, body);
+    return plan.kind === 'seasons' ? this.#seasons(plan.path, plan.body) : this.#probeAction(plan.args);
   }
 
   async #seasons(path, body) {
@@ -160,6 +129,46 @@ export class Mission {
     const r = await this.probe(this.sshHost, args);
     if (r.ok !== false || r.td) this.#set('probe', r);
     return r;
+  }
+}
+
+/** The control whitelist: what a fixed action would do, with its arguments checked. Pure, so fixture mode checks
+ *  requests exactly as the real server does. Returns { kind: 'seasons', path, body } (a POST to the seasons page)
+ *  or { kind: 'probe', args } (probe.ps1 on bitcube); anything else is a status-400 error. */
+export function planControl(action, body = {}) {
+  if (!body || typeof body !== 'object') throw bad('bad body');
+  switch (action) {
+    case 'mode': {
+      if (!MODES.includes(body.mode)) throw bad('mode must be automatic, dynamic or manual');
+      return { kind: 'seasons', path: '/mode', body: { mode: body.mode } };
+    }
+    case 'target': {
+      const t = {};
+      if (body.season !== undefined) { if (!SEASONS.includes(body.season)) throw bad('unknown season'); t.season = body.season; }
+      if (body.intensity !== undefined) { const x = Number(body.intensity); if (!(x >= 0 && x <= 1)) throw bad('intensity is 0 to 1'); t.intensity = x; }
+      return { kind: 'seasons', path: '/target', body: t };
+    }
+    case 'rules': {
+      const r = {};
+      for (const [k, v] of Object.entries(body.rules ?? {})) { if (!/^[a-z_]{1,40}$/.test(k) || !Number.isFinite(Number(v))) throw bad('bad rule'); r[k] = Number(v); }
+      return { kind: 'seasons', path: '/rules', body: r };
+    }
+    case 'rules-reset': return { kind: 'seasons', path: '/rules/reset', body: {} };
+    case 'ropes': return { kind: 'probe', args: `-Action ropes${body.dark ? ' -Dark' : ''}` };
+    case 'hub75': {
+      const x = Number(body.brightness);
+      if (!(x >= 0 && x <= 1)) throw bad('brightness is 0 to 1');
+      return { kind: 'probe', args: `-Action hub75 -Brightness ${x.toFixed(2)}` };
+    }
+    case 'bootfile': case 'switch': {
+      if (!BOOT_FILES.includes(body.file)) throw bad('unknown show file');
+      return { kind: 'probe', args: `-Action ${action} -BootFile ${body.file}` };
+    }
+    case 'lightsroute': {
+      if (!['direct', 'router'].includes(body.route)) throw bad('route is direct or router');
+      return { kind: 'probe', args: `-Action lightsroute -LightsRoute ${body.route}` };
+    }
+    default: throw bad('unknown action');
   }
 }
 
