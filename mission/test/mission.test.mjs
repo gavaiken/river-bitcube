@@ -25,11 +25,12 @@ test('controls are fixed actions with checked arguments', async () => {
   await m.control('hub75', { brightness: 0.5 });
   await m.control('bootfile', { file: 'river-online-oct-20.toe' });
   await m.control('switch', { file: 'river-local-oct-18.toe' });
+  await m.control('lightsroute', { route: 'router' });
   assert.deepEqual(calls.map((c) => c.path), ['/mode', '/target']);
   assert.deepEqual(calls[1].body, { season: 'summer', intensity: 0.8 });
-  assert.deepEqual(probes, ['-Action ropes -Dark', '-Action hub75 -Brightness 0.50', '-Action bootfile -BootFile river-online-oct-20.toe', '-Action switch -BootFile river-local-oct-18.toe']);
+  assert.deepEqual(probes, ['-Action ropes -Dark', '-Action hub75 -Brightness 0.50', '-Action bootfile -BootFile river-online-oct-20.toe', '-Action switch -BootFile river-local-oct-18.toe', '-Action lightsroute -LightsRoute router']);
   for (const [a, b] of [['mode', { mode: 'chaos' }], ['target', { season: 'monsoon' }], ['hub75', { brightness: 3 }],
-                        ['bootfile', { file: 'evil.toe; rm -rf' }], ['rules', { rules: { 'x; y': 1 } }], ['shell', {}]]) {
+                        ['bootfile', { file: 'evil.toe; rm -rf' }], ['lightsroute', { route: 'both' }], ['rules', { rules: { 'x; y': 1 } }], ['shell', {}]]) {
     await assert.rejects(m.control(a, b), (e) => e.status === 400, a);
   }
   srv.close();

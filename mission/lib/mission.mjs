@@ -142,6 +142,10 @@ export class Mission {
         if (!BOOT_FILES.includes(body.file)) throw bad('unknown show file');
         return this.#probeAction(`-Action ${action} -BootFile ${body.file}`);
       }
+      case 'lightsroute': {
+        if (!['direct', 'router'].includes(body.route)) throw bad('route is direct or router');
+        return this.#probeAction(`-Action lightsroute -LightsRoute ${body.route}`);
+      }
       default: throw bad('unknown action');
     }
   }

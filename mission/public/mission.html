@@ -27,6 +27,8 @@
   </section>
 
   <section class="panel"><h2>Lights</h2>
+    <div class="row"><span>Lighting network on:</span><button id="lrdirect">bitcube's LIGHTS port (the plan)</button><button id="lrrouter">the router (fallback)</button><span class="dim" id="lrnote"></span></div>
+    <div class="dim" style="margin:4px 0 10px">Match where the lighting switch is plugged in: into bitcube's white LIGHTS port, or into a router LAN port. The ropes follow within a few seconds.</div>
     <div class="row"><span>Ropes:</span><button id="ropeson">On</button><button id="ropesdark">Dark (send black)</button><span class="dim" id="ropesnote"></span></div>
     <div class="row" style="margin-top:10px"><span>HUB75 brightness:</span><input type="range" id="hub" min="0" max="1" step="0.05" style="max-width:240px"><span id="hubval" class="dim"></span></div>
     <div class="err" id="lerr"></div>
@@ -63,6 +65,7 @@ function render(s) {
   if (td?.hub75 && document.activeElement !== $('hub')) { $('hub').value = td.hub75.brightness; $('hubval').textContent = td.hub75.brightness; }
   $('ropesnote').textContent = td?.ropes ? (td.ropes.source === 'black' ? 'dark now' : 'showing the river') : '';
   drawShowFiles(pr);
+  if (pr?.lights_route) { $('lrnote').textContent = `now: ${pr.lights_route}`; $('lrdirect').classList.toggle('on', pr.lights_route === 'direct'); $('lrrouter').classList.toggle('on', pr.lights_route === 'router'); }
 }
 function drawRules(rules) {
   $('rules').innerHTML = Object.entries(rules).map(([k, r]) => `<div class="row" style="justify-content:space-between;margin-top:6px">
@@ -80,6 +83,8 @@ $('tint').onchange = () => { dragging = false; act('/api/control/target', { inte
 $('apply').onclick = () => { const r = {}; document.querySelectorAll('[data-rule]').forEach((i) => r[i.dataset.rule] = +i.value);
   act('/api/control/rules', { rules: r }, 'serr').then(() => rulesDrawn = false); };
 $('reset').onclick = () => act('/api/control/rules-reset', {}, 'serr').then(() => rulesDrawn = false);
+$('lrdirect').onclick = () => act('/api/control/lightsroute', { route: 'direct' }, 'lerr');
+$('lrrouter').onclick = () => { if (confirm('Move the lighting network to the router port? Only do this if the lighting switch is plugged into the router.')) act('/api/control/lightsroute', { route: 'router' }, 'lerr'); };
 $('ropeson').onclick = () => act('/api/control/ropes', { dark: false }, 'lerr');
 $('ropesdark').onclick = () => act('/api/control/ropes', { dark: true }, 'lerr');
 $('hub').onchange = () => act('/api/control/hub75', { brightness: +$('hub').value }, 'lerr');

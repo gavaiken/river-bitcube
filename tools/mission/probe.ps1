@@ -3,7 +3,8 @@
 #   -File C:\Users\user\River\river-bitcube\tools\mission\probe.ps1 [-Action ropes -Dark] [-Action hub75 -Brightness 0.6]
 #   [-Action bootfile -BootFile river-local-oct-22-seasons.toe]   which show file opens at boot
 #   [-Action switch -BootFile river-online-oct-20.toe]            also restart TouchDesigner on it now (~1 min dark)
-param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile)
+#   [-Action lightsroute -LightsRoute direct|router]             which port carries the lighting network (D25, S31)
+param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute)
 $ErrorActionPreference = 'Continue'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $river = Split-Path $repo -Parent
@@ -28,6 +29,13 @@ if ($Action -eq 'switch') {
     Unregister-ScheduledTask -TaskName 'MissionSwitchShow' -Confirm:$false
     $out.switched_to = $BootFile
 }
+
+if ($Action -eq 'lightsroute') {
+    if ($LightsRoute -notin 'direct', 'router') { $out.ok = $false; $out.error = 'lights route is direct or router' }
+    else { $null = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'tools\lights_route.ps1') $LightsRoute 2>&1 }
+}
+$lr = Get-NetIPAddress -IPAddress '2.0.0.8' -AddressFamily IPv4 -ErrorAction SilentlyContinue
+$out.lights_route = $(if (@($lr).Count -gt 1) { 'BOTH' } elseif ($lr.InterfaceAlias -eq 'Ethernet') { 'direct' } elseif ($lr.InterfaceAlias -eq 'Ethernet 2') { 'router' } else { 'none' })
 
 # TouchDesigner (via the bridge): status, or one of its fixed actions
 $td = $null
