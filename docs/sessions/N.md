@@ -30,9 +30,13 @@ Keep the lighting switch and the Colorlight cable off the router.
 - 22:28 S3: bitcube now advertises `192.168.9.76/32` + `192.168.9.1/32` (was `10.0.7.76/32`); waiting for Gavin's approval in the admin console.
 - 22:28 "loopMIDI opens at restart": it's a virtual MIDI cable installed in Aug 2023 for the old BitCube setup, started by the HKCU `Run` key. Nothing in our show uses it (S18, Gavin to decide).
 - 22:30 Credits: Andi and Lilian are now named artists on the welcome page and the gallery card. Plan updated: next steps, S16–S20, R15, learnings. System map and CLAUDE.md updated; system tests pass, including the secret scan against bitcube's real secrets.
+- 22:35 Gavin: reservations in (cam .76, bitcube wired .79, Wi-Fi .80), routes approved, 2.4 GHz back to `gray-river`, new cable in. **`Ethernet 2` up at 1 Gbps with 192.168.9.79**, now bitcube's preferred route; Windows put it on the same Private `gray-river` profile. Cam answers RTSP at 192.168.9.76; router at .1. Wi-Fi stayed on .194 after a release/renew (harmless; it should take .80 when it next reconnects).
+- 22:37 S3: `secrets.local.json` gallery cam 10.0.7.76 → 192.168.9.76 (edited in place, nothing printed); `cam_snap.ps1 gallery` returns a frame (the cam is on the floor among cables).
+- 22:38 S18 ✅ (Gavin: remove it): loopMIDI's HKCU `Run` value removed and its window closed; the program stays installed.
+- 22:40 S3 ✅ Modal link restarted through a one-off interactive scheduled task; gallery clips post again (first `gallery/video` at 22:39). The river cam still fails (river site down).
 
 ### Waiting on Gavin
-- The [next steps](../execution-plan.md#next-steps-22-oct-night): reservations, route approval, 2.4 GHz back to `gray-river`, another cable, loopMIDI.
+- Go-ahead for S1 (seasons deploy) and who runs it. S16 when the wired drop arrives.
 
 ### Waiting on Gavin (earlier)
 - S2.1/S2.2 on site. Tell session N when bitcube is cabled and powered.
