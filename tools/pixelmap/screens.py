@@ -34,29 +34,32 @@ NEIGHBOUR = {1: (2, 1.15, 0.0), 2: (1, -1.15, 0.0), 3: (4, -1.15, -0.3), 4: (3, 
 QUARTER_OF = {1: 'tl', 2: 'tr', 3: 'bl', 4: 'br'}       # Screenquarter -> which quarter is white
 
 
-def centroid(test, black, thresh=40, min_px=30):
-    """Centroid (x, y) of the largest region that lit up between black and test, and its size; None if none."""
-    lit = (test - black).max(axis=2) > thresh
-    if lit.sum() < min_px:
-        return None
-    region = largest_component(_dilate(lit)) & lit
-    if region.sum() < min_px:
-        return None
-    ys, xs = np.nonzero(region)
-    return (float(xs.mean() + 0.5), float(ys.mean() + 0.5)), int(region.sum())
-
-
 def locate(quarters, black, thresh=40, min_px=30):
     """quarters: {1..4: frame with that quarter of one screen white}; black: all dark (float H, W, 3 frames).
     Returns {'corners': {tl,tr,br,bl: (x, y) px}, 'px': lit pixels, 'balance': smallest/largest quarter} or None
-    when any quarter wasn't seen (the screen is out of view or partly hidden)."""
-    cents, sizes = {}, []
-    for q, frame in quarters.items():
-        r = centroid(frame, black, thresh, min_px)
-        if r is None:
+    when any quarter wasn't seen (the screen is out of view or partly hidden).
+    The screen is the largest region lit in any of the four frames together; each quarter is then looked for only
+    there, so something else changing in one frame (someone walking by, 23 Oct) can't pull a corner away."""
+    lit = {q: (f - black).max(axis=2) > thresh for q, f in quarters.items()}
+    union = np.logical_or.reduce(list(lit.values()))
+    if union.sum() < min_px:
+        return None
+    for _ in range(4):                                 # the largest region that holds all four quarters
+        blob = largest_component(_dilate(union))
+        screen = _dilate(blob, 3)
+        parts = {q: m & screen for q, m in lit.items()}
+        if all(m.sum() >= min_px for m in parts.values()):
+            break
+        union &= ~screen
+        if union.sum() < min_px:
             return None
-        cents[QUARTER_OF[q]], n = r
-        sizes.append(n)
+    else:
+        return None
+    cents, sizes = {}, []
+    for q, m in parts.items():
+        ys, xs = np.nonzero(m)
+        cents[QUARTER_OF[q]] = (float(xs.mean() + 0.5), float(ys.mean() + 0.5))
+        sizes.append(int(m.sum()))
     hm = homography([QUARTERS[k] for k in CORNERS], [cents[k] for k in CORNERS])
     pts = apply_h(hm, np.array([UNIT[k] for k in CORNERS], float))
     corners = {k: (float(p[0]), float(p[1])) for k, p in zip(CORNERS, pts)}

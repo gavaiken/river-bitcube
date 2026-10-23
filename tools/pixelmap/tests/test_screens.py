@@ -87,3 +87,12 @@ def test_a_flickering_dot_is_not_a_screen():
 def test_estimate_kept_inside_the_field():
     uv = keep_inside({'tl': [0.6, 1.1], 'tr': [0.7, 1.1], 'br': [0.7, 0.9], 'bl': [0.6, 0.9]})
     assert max(c[1] for c in uv.values()) <= 0.98 + 1e-9 and abs(uv['tl'][1] - uv['bl'][1] - 0.2) < 1e-6
+
+
+def test_someone_walking_by_in_one_frame_is_ignored():
+    truth = tilted(240, 180, 60, 120, 30)
+    quarters, black = frames(truth)
+    quarters[4] = quarters[4].copy()
+    quarters[4][250:350, 380:470] = 240        # a bigger bright blob far away, in the last frame only
+    r = locate(quarters, black)
+    assert r and close(r['corners'], truth, 3)
