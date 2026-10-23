@@ -45,6 +45,7 @@ export class Studio extends EventEmitter {
     this.queue.push(item);
     this.#record({ kind: 'user', id: item.id, text, queued: !!this.current || this.queue.length > 1 });
     this.#pump();
+    if (this.current && this.current.id !== item.id) this.emit('status', this.status());   // it queued: tell open pages now
     return item.id;
   }
 

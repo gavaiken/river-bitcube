@@ -87,3 +87,12 @@ test('empty and huge messages are refused', () => {
   assert.throws(() => s.send('   '));
   assert.throws(() => s.send('x'.repeat(20001)));
 });
+
+test('a message that queues behind a running one is announced at once', async () => {
+  const s = new Studio({ runner: fakeRunner([], { delay: 50 }), dir: dir() });
+  const seen = [];
+  s.on('status', (st) => seen.push(st.queue.length));
+  s.send('one'); s.send('two');
+  assert.ok(seen.includes(1), `status events saw queue lengths ${seen}`);   // "1 waiting" went out when "two" queued
+  await s.drained();
+});

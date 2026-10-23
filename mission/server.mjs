@@ -212,7 +212,7 @@ const server = createServer(async (req, res) => {
 
     // mission control
     // (the scenario cookie only means something in fixture mode; Mission ignores it)
-    if (path === '/api/status') return send(res, 200, { ...mission.snapshot(cookies.scenario), studio: studio.status() });
+    if (path === '/api/status') return send(res, 200, { ...mission.snapshot(cookies.scenario), studio: studio.status(), now: Date.now() });   // now: the server's clock, so a phone's skew can't age or freshen anything
     const cam = path.match(/^\/api\/camera\/([a-z]+)\.jpg$/);
     if (cam) {
       const c = await mission.camera(cam[1], cookies.scenario);
