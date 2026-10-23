@@ -1,8 +1,11 @@
-# Build (or update) /project1/panels: two 256x128 quads -> top-left of the HDMI output.
+# Build (or update) /project1/panels: two or four 256x128 quads -> top-left of the HDMI output.
 # Idempotent; run with  .\tools\td.ps1 -File .\td\build\build_panels.py
+# Set PANEL_QUADS = 4 before exec'ing this file for four quads (river-local-oct-22-seasons.toe); default 2.
 # Open the output window with  op('/project1/panels').par.Output = True
 
 REPO = 'C:/Users/user/River/river-bitcube'
+NQ = globals().get('PANEL_QUADS', 2)
+QUAD_X = (0, 256, 512, 768)          # quads in a row along the top (until Andi confirms the receive-card layout)
 proj = op('/project1')
 panels = proj.op('panels') or proj.create(baseCOMP, 'panels')
 panels.nodeX, panels.nodeY = 1575, 400
@@ -37,9 +40,16 @@ if not hasattr(panels.par, 'Sweep'):
     pg.appendToggle('Sweep', label='Test Sweep Bar')[0].default = False
     pg.appendToggle('Quad2off', label='Blank Quad 2')[0].default = False
     panels.par.Sweep = panels.par.Quad2off = False
+for i in range(3, NQ + 1):
+    if not hasattr(panels.par, f'Quad{i}'):
+        pg.appendTOP(f'Quad{i}')[0].default = ''
+        px, py = pg.appendInt(f'Quad{i}pos', label=f'Quad{i} x,y (px)', size=2)
+        px.default, py.default = QUAD_X[i - 1], 0
+        px.normMax, py.normMax = 1024, 512
+        px.val, py.val = px.default, py.default
 
 # Canvas inputs and test patterns
-for i in (1, 2):
+for i in range(1, NQ + 1):
     sel = panels.op(f'quad{i}') or panels.create(selectTOP, f'quad{i}')
     # Canvas crop or test pattern, switched here so layout needs only two inputs.
     sel.par.top.expr = f"parent().par.Quad{i}.eval() if parent().par.Source == 'canvas' else op('test{i}')"
@@ -81,19 +91,34 @@ def wire(dst, names, k=0):
         run(wire, dst, names, k, delayFrames=1)
 
 
-wire(lay, ['quad1', 'quad2'])      # input order matters: see panel_layout.glsl
+wire(lay, [f'quad{i}' for i in range(1, NQ + 1)])      # input order matters: see panel_layout.glsl
 lay.par.pixeldat = lay_pix
 lay.par.outputresolution = 'custom'
 # Just big enough for both quads: the Non-Commercial key caps TOPs at 1280x1280, so the full-display
 # black comes from the 'screen' container below, not from this TOP.
-lay.par.resolutionw.expr = "max(parent().par.Quad1pos1, parent().par.Quad2pos1) + 256"
-lay.par.resolutionh.expr = "max(parent().par.Quad1pos2, parent().par.Quad2pos2) + 128"
+lay.par.resolutionw.expr = "max(" + ", ".join(f"parent().par.Quad{i}pos1" for i in range(1, NQ + 1)) + ") + 256"
+lay.par.resolutionh.expr = "max(" + ", ".join(f"parent().par.Quad{i}pos2" for i in range(1, NQ + 1)) + ") + 128"
+try:                                 # GLSL TOP uniforms are a sequence: make room for uQuad0..3 + uMode
+    if lay.seq.vec.numBlocks < 5:
+        lay.seq.vec.numBlocks = 5
+except AttributeError:
+    pass
 lay.par.vec0name = 'uQuad0'
 lay.par.vec0valuex.expr, lay.par.vec0valuey.expr = 'parent().par.Quad1pos1', 'parent().par.Quad1pos2'
 lay.par.vec0valuez, lay.par.vec0valuew = 256, 128
 lay.par.vec1name = 'uQuad1'
 lay.par.vec1valuex.expr, lay.par.vec1valuey.expr = 'parent().par.Quad2pos1', 'parent().par.Quad2pos2'
 lay.par.vec1valuez, lay.par.vec1valuew = 256, 128
+for i in (3, 4):                     # uQuad2/uQuad3 on vec3/vec4 (vec2 is uMode); unused with two quads
+    v = i
+    setattr(lay.par, f'vec{v}name', f'uQuad{i - 1}')
+    if i <= NQ:
+        getattr(lay.par, f'vec{v}valuex').expr = f'parent().par.Quad{i}pos1'
+        getattr(lay.par, f'vec{v}valuey').expr = f'parent().par.Quad{i}pos2'
+    else:
+        getattr(lay.par, f'vec{v}valuex').expr = getattr(lay.par, f'vec{v}valuey').expr = ''
+        getattr(lay.par, f'vec{v}valuex').val = getattr(lay.par, f'vec{v}valuey').val = -9999
+    getattr(lay.par, f'vec{v}valuez').val, getattr(lay.par, f'vec{v}valuew').val = 256, 128
 lay.par.vec2name = 'uMode'
 lay.par.vec2valuex.expr = "parent().par.Source.menuIndex"
 lay.par.vec2valuey.expr = 'parent().par.Brightness'

@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>River year: control</title>
+<!-- Served by TouchDesigner on bitcube (river-local-oct-22-seasons.toe, port 9981): works with no internet.
+     API: GET /state, POST /mode {mode}, POST /target {season, intensity}, POST /rules {...}, POST /rules/reset.
+     Terms as in GLOSSARY.md. -->
+<style>
+  :root { --bg:#0e1116; --panel:#171b22; --line:#2a313c; --text:#e8ecf1; --dim:#8b96a5; --accent:#7cc4ff;
+          --winter:#cfe6ff; --spring:#7fe0a8; --summer:#ffc84a; --autumn:#e0743a; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) { --bg:#f5f6f8; --panel:#fff; --line:#d8dde4; --text:#14181d; --dim:#5e6875; --accent:#1769b8;
+            --winter:#5a8fc9; --spring:#2f9e5f; --summer:#c98a00; --autumn:#b8501c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 4px 0 2px; } .sub { color: var(--dim); font-size: 13px; margin-bottom: 14px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+  .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  .now { flex: 1 1 220px; min-width: 0; }
+  .modes > *, .seasons > *, .stats > * { min-width: 0; }
+  #wheel { width: min(190px, 60vw); height: auto; }
+  .season { font-size: 30px; font-weight: 650; text-transform: capitalize; }
+  .label { color: var(--dim); font-size: 13px; }
+  .bar { position: relative; height: 14px; border-radius: 7px; background: linear-gradient(90deg, #6b88a8, #7fd1c8, #ffd36b, #ff6b3d); margin: 6px 0 2px; }
+  .bar i { position: absolute; top: -4px; width: 4px; height: 22px; border-radius: 2px; background: var(--text); transform: translateX(-2px); }
+  .ends { display: flex; justify-content: space-between; color: var(--dim); font-size: 12px; }
+  .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  button { font: inherit; color: var(--text); background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 10px 8px; cursor: pointer; }
+  button.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .modes small { display: block; color: var(--dim); font-size: 12px; }
+  .seasons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 8px 0 12px; }
+  .seasons button { text-transform: capitalize; }
+  input[type=range] { width: 100%; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+  .stats b { display: block; font-size: 24px; }
+  .note { color: var(--dim); font-size: 13px; margin-top: 8px; }
+  details summary { cursor: pointer; font-weight: 600; }
+  .rule { display: grid; grid-template-columns: 1fr 110px; gap: 8px; align-items: center; margin: 8px 0; }
+  .rule input { font: inherit; width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .rule span { color: var(--dim); font-size: 12px; }
+  .actions { display: flex; gap: 8px; margin-top: 10px; }
+  .err { color: #ff7b72; font-size: 13px; min-height: 18px; }
+  svg text { fill: var(--dim); font-size: 11px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>A River Becoming · the river's year</h1>
+  <div class="sub" id="file">connecting…</div>
+
+  <section class="panel">
+    <div class="row">
+      <svg id="wheel" viewBox="-100 -100 200 200" aria-label="Season wheel"></svg>
+      <div class="now">
+        <div class="label">Season now</div>
+        <div class="season" id="season">…</div>
+        <div class="label" id="blend"></div>
+        <div style="height:12px"></div>
+        <div class="label">Intensity</div>
+        <div class="bar"><i id="ibar" style="left:0%"></i></div>
+        <div class="ends"><span>stillness</span><span id="ival"></span><span>turbulence</span></div>
+        <div class="label" style="margin-top:8px" id="heading"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="label" style="margin-bottom:8px">Mode</div>
+    <div class="modes">
+      <button data-mode="automatic">Automatic<small>4-minute year</small></button>
+      <button data-mode="dynamic" id="dyn">Dynamic<small>people steer it</small></button>
+      <button data-mode="manual">Manual<small>pick a target</small></button>
+    </div>
+    <div class="note" id="modenote"></div>
+  </section>
+
+  <section class="panel hidden" id="manual">
+    <div class="label">Target season</div>
+    <div class="seasons">
+      <button data-season="winter">winter</button><button data-season="spring">spring</button>
+      <button data-season="summer">summer</button><button data-season="autumn">autumn</button>
+    </div>
+    <div class="label">Target intensity: <span id="tival"></span></div>
+    <input type="range" id="tint" min="0" max="1" step="0.01">
+    <div class="ends"><span>stillness</span><span>turbulence</span></div>
+    <div class="note">The river travels forward through the calendar to the target (under a minute), never backwards.</div>
+  </section>
+
+  <section class="panel" id="dynamic">
+    <div class="label" style="margin-bottom:8px">Presence (people in front of the piece)</div>
+    <div class="stats">
+      <div><b id="pnow">–</b><span class="label">now</span></div>
+      <div><b id="pusual">–</b><span class="label">usual</span></div>
+      <div><b id="prel">–</b><span class="label">relative</span></div>
+    </div>
+    <svg id="graph" width="100%" height="90" viewBox="0 0 300 90" preserveAspectRatio="none" style="margin-top:10px"></svg>
+    <div class="note" id="dynnote"></div>
+  </section>
+
+  <section class="panel">
+    <details>
+      <summary>Advanced: rules</summary>
+      <div class="note">Rules change how the river behaves from the moment you apply them; they don't move it anywhere.</div>
+      <form id="rules"></form>
+      <div class="actions"><button id="apply">Apply</button><button id="reset" type="button">Reset to defaults</button></div>
+      <div class="err" id="rerr"></div>
+    </details>
+  </section>
+  <div class="err" id="err"></div>
+</main>
+<script>
+const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
+const css = n => getComputedStyle(document.documentElement).getPropertyValue('--' + n).trim();
+let last = null, rulesDrawn = false, dragging = false;
+
+function polar(phase, r) { const a = phase / 4 * 2 * Math.PI - Math.PI / 2; return [r * Math.cos(a), r * Math.sin(a)]; }
+function arc(k, r) {
+  const [x0, y0] = polar(k - 0.5, r), [x1, y1] = polar(k + 0.5, r);
+  return `M ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1}`;
+}
+function drawWheel(s) {
+  const svg = document.getElementById('wheel');
+  let h = '';
+  SEASONS.forEach((n, k) => {
+    h += `<path d="${arc(k, 78)}" stroke="${css(n)}" stroke-width="16" fill="none" opacity="${0.35 + 0.65 * s.weights[n]}"/>`;
+    const [tx, ty] = polar(k, 50); h += `<text x="${tx}" y="${ty + 4}" text-anchor="middle">${n}</text>`;
+  });
+  h += `<path d="M 0 -96 l -6 -2 l 0 4 z" fill="${css('dim')}"/>`;
+  if (s.target) { const [x, y] = polar(SEASONS.indexOf(s.target), 78); h += `<circle cx="${x}" cy="${y}" r="13" fill="none" stroke="${css('text')}" stroke-width="2" stroke-dasharray="3 3"/>`; }
+  const [px, py] = polar(s.phase, 78);
+  h += `<circle cx="${px}" cy="${py}" r="9" fill="${css('text')}" stroke="${css('bg')}" stroke-width="3"/>`;
+  svg.innerHTML = h;
+}
+function drawGraph(hist) {
+  const svg = document.getElementById('graph');
+  if (!hist.length) { svg.innerHTML = `<text x="150" y="48" text-anchor="middle">no history yet</text>`; return; }
+  const n = Math.max(hist.length, 2), x = i => i / (n - 1) * 300;
+  const rel = hist.map((p, i) => `${x(i)},${90 - Math.min(3, p.relative) / 3 * 86}`).join(' ');
+  const inten = hist.map((p, i) => `${x(i)},${90 - p.intensity * 86}`).join(' ');
+  const y13 = 90 - (last ? last.rules.warmer.value : 1.3) / 3 * 86, y07 = 90 - (last ? last.rules.cooler.value : 0.7) / 3 * 86;
+  svg.innerHTML = `<line x1="0" x2="300" y1="${y13}" y2="${y13}" stroke="${css('summer')}" stroke-dasharray="4 4" opacity=".5"/>
+    <line x1="0" x2="300" y1="${y07}" y2="${y07}" stroke="${css('winter')}" stroke-dasharray="4 4" opacity=".5"/>
+    <polyline points="${inten}" fill="none" stroke="${css('dim')}" stroke-width="1.5"/>
+    <polyline points="${rel}" fill="none" stroke="${css('accent')}" stroke-width="2"/>
+    <text x="2" y="10">last 30 min · blue: relative presence · grey: intensity</text>`;
+}
+function drawRules(rules) {
+  const f = document.getElementById('rules');
+  f.innerHTML = Object.entries(rules).map(([k, r]) =>
+    `<label class="rule"><div>${r.label}<br><span>${r.min}–${r.max} ${r.unit} · default ${r.default}</span></div>
+     <input name="${k}" type="number" step="any" min="${r.min}" max="${r.max}" value="${r.value}"></label>`).join('');
+  rulesDrawn = true;
+}
+function render(s) {
+  last = s;
+  document.getElementById('file').textContent = `${s.file} · on bitcube`;
+  document.getElementById('season').textContent = s.season;
+  const top = SEASONS.map(n => [n, s.weights[n]]).sort((a, b) => b[1] - a[1]).filter(x => x[1] > 0.04);
+  document.getElementById('blend').textContent = top.map(([n, w]) => `${Math.round(w * 100)}% ${n}`).join(' · ');
+  document.getElementById('ibar').style.left = (s.intensity * 100) + '%';
+  document.getElementById('ival').textContent = s.intensity.toFixed(2);
+  document.getElementById('heading').textContent = s.target ? `heading for ${s.target}` : (s.effective_mode === 'automatic' ? 'turning with the 4-minute year' : 'resting');
+  document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === s.mode));
+  document.getElementById('dyn').disabled = !s.counter_available;
+  document.getElementById('modenote').textContent = !s.counter_available
+    ? 'Dynamic is unavailable: the people counter is not running yet.'
+    : (s.mode === 'dynamic' ? 'Dynamic is a closed loop: people steer the river, so the controls are read-only.' : '');
+  document.getElementById('manual').classList.toggle('hidden', s.mode !== 'manual');
+  document.querySelectorAll('[data-season]').forEach(b => b.classList.toggle('on', s.mode === 'manual' && b.dataset.season === s.manual.season));
+  if (!dragging) { document.getElementById('tint').value = s.manual.intensity; }
+  document.getElementById('tival').textContent = (+document.getElementById('tint').value).toFixed(2);
+  const p = s.presence;
+  document.getElementById('pnow').textContent = p.available ? p.now : '–';
+  document.getElementById('pusual').textContent = p.available ? p.usual : '–';
+  document.getElementById('prel').textContent = p.available ? p.relative + '×' : '–';
+  document.getElementById('dynnote').textContent = p.available ? (p.empty_for_s >= 60 ? 'Nobody for a while: winter.' : '') : 'No counts yet.';
+  drawWheel(s); drawGraph(s.history);
+  if (!rulesDrawn) drawRules(s.rules);
+}
+async function call(path, body) {
+  const r = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.status);
+  return j;
+}
+async function poll() {
+  try { render(await call('/state')); document.getElementById('err').textContent = ''; }
+  catch (e) { document.getElementById('err').textContent = 'Can’t reach bitcube: ' + e.message; }
+}
+document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => call('/mode', { mode: b.dataset.mode }).then(render).catch(e => document.getElementById('err').textContent = e.message));
+document.querySelectorAll('[data-season]').forEach(b => b.onclick = () => call('/target', { season: b.dataset.season }).then(render));
+const ti = document.getElementById('tint');
+ti.oninput = () => { dragging = true; document.getElementById('tival').textContent = (+ti.value).toFixed(2); };
+ti.onchange = () => { dragging = false; call('/target', { intensity: +ti.value }).then(render); };
+document.getElementById('apply').onclick = e => {
+  e.preventDefault();
+  const body = Object.fromEntries([...new FormData(document.getElementById('rules'))].map(([k, v]) => [k, +v]));
+  call('/rules', body).then(s => { document.getElementById('rerr').textContent = 'Applied.'; rulesDrawn = false; render(s); })
+    .catch(err => document.getElementById('rerr').textContent = err.message);
+};
+document.getElementById('reset').onclick = () => call('/rules/reset', {}).then(s => { document.getElementById('rerr').textContent = 'Back to defaults.'; rulesDrawn = false; render(s); });
+poll(); setInterval(poll, 1000);
+</script>
+</body>
+</html>
