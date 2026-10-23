@@ -119,3 +119,6 @@ Keep the lighting switch and the Colorlight cable off the router.
 - Plug bitcube's blue cable back in.
 - Unplug the cam's cable.
 - Then S20 on the ground → lift → S1 (remote) → S4/S7.
+
+- 00:20 Cleaned up contradictions in the plan and ceiling page. The cable pull with Wi-Fi idle was **done** (00:00, 3 s); the 23:53 power cut was bitcube + router + cam (no lights, switch or HDMI), and TD reopened `river-local-oct-18.toe` at 23:54:14. The only remaining power-cut test is with everything plugged in as in the ceiling (with S20, ideally after S1). S22 is ⚠️ (cam unreliable on a cable), not ✅.
+- 00:20 **Session N has ended and isn't working on bitcube.** bitcube is free for another session (e.g. session A for S1). bitcube's blue cable was still out at 00:20 (`Ethernet 2` disconnected; online over Wi-Fi).

@@ -44,31 +44,38 @@ bitcube DisplayPort ◄── dummy display plug (recommended: a desktop VNC can
 | something on the router needs fixing (leases, Wi-Fi, a reboot) | Claude does it remotely **once the router has its own Tailscale and SSH key (S28)** |
 | the internet is down | the show keeps running from bitcube's disk; the team on site reaches it on `gray-river` |
 
-## Status before the lift (23:25, 22 Oct)
-- ✅ The router: Wi-Fi `gray-river` on both bands, reservations, Ethernet → Repeater failover. Its uplink is Gray Area's staff Wi-Fi until the drop is connected.
-- ✅ bitcube:
-  - online by cable (`.79`, 1 Gbps), falling back to Wi-Fi (`.80`);
-  - Tailscale routes to the cam and router approved;
-  - VNC works;
-  - BIOS powers on after a power cut;
-  - power-cut test passed: back 1.5 min after the router had power.
-- ✅ Power cut of bitcube, router and cam together: bitcube back by itself (online in ~80 s, TD running); VNC works with no monitor; pulling bitcube's cable switches it to Wi-Fi in 3 s.
-- ⚠️ Gallery cam: on Wi-Fi it comes back on `.76` every time. **On a cable it didn't ask for an address after power cycles: keep it on Wi-Fi** unless that's debugged on the ground.
-- ⏳ **S22** one reservation for both cam MACs · **S28** remote access to the router · ✅ S25 port labels (blue tape) · **S20** lights on the ground · **S26** remaining tests · VNC without a monitor (S27) · **S29** radar wait. Details and order: [execution plan](execution-plan.html#before-the-lift-22-oct-night-everything-still-to-resolve).
+## Status before the lift (Fri 23 Oct, 00:20)
+**Tested and passing** (bitcube, router and cam; no lights, switch or HDMI connected):
+- ✅ **Power cut** of all three at once: bitcube powered on by itself, TD reopened its show file, online about 80 s after power.
+- ✅ **bitcube's cable pulled with its Wi-Fi idle:** back over Wi-Fi (`.80`) in 3 s.
+- ✅ **VNC with no monitor:** a normal desktop. No dummy plug needed.
+- ✅ Restarts; BIOS *Auto Power On*; Tailscale routes to the cam and router; cam posting clips; cam rebooted remotely through its API.
+
+**Not working as hoped:**
+- ⚠️ **The cam on a cable didn't ask for an address after power cycles.** On Wi-Fi it comes back on `.76` every time: **keep it on Wi-Fi, cable unplugged.**
+
+**Still to do before lifting:**
+1. **S20:** lights on the ground (switch into the white LIGHTS port, Colorlight on HDMI), ropes and HUB75 lit from TD.
+2. **S26:** one more power cut with everything plugged in as in the ceiling, ideally after the seasons file is deployed (S1).
+3. **S28:** the router visible from the Mac mini (the share into Gavin's tailnet). Until then it's reachable only through bitcube.
+4. **During S20:** check VNC with the Colorlight sender as the only display (TD's panels window covers it in black).
+5. **S29:** the 5 GHz radar wait after a power cut (needs the wired drop and a fixed channel).
+
+Details and order: [execution plan](execution-plan.html#before-the-lift-22-oct-night-everything-still-to-resolve).
 
 ## Before lifting (on the ground, with a monitor and keyboard)
 1. **BIOS: power on after a power cut.** Already set (checked 22 Oct): Advanced → Customer Exclusive Functions → **Auto Power On = Enabled**, and Wake On LAN is Enabled. To check again, press **Del** as bitcube starts.
 2. **Label bitcube's two network ports (S25).** ✅ Done 22 Oct with coloured tape (no writing): **blue** marks the router link (bitcube's ROUTER port, both ends of the cable, and the router port); **white** marks bitcube's LIGHTS port. Plug blue to blue; the lighting switch goes into white. Originally: The lights only work in **LIGHTS**. To tell them apart, plug the router cable into one port and ask Claude which one came up:
    - **ROUTER** = `Ethernet 2` (MAC `00:E7:43:0E:5F:C4`); it gets `192.168.9.79` from the router.
    - **LIGHTS** = `Ethernet` (MAC `00:E7:43:0E:5F:C3`); it holds the fixed lighting address `2.0.0.8`.
-3. **Pull-the-plug test:** switch off bitcube's and the router's power at the wall, wait 10 s, switch back on, touch nothing. Within about 2 minutes:
+3. **Pull-the-plug test** (✅ passed 22 Oct without the lights; repeat once with everything plugged in): switch off bitcube's and the router's power at the wall, wait 10 s, switch back on, touch nothing. Within about 2 minutes:
    - the router's Clients page shows BITCUBE at 192.168.9.79;
    - bitcube is online on Tailscale;
    - VNC shows its desktop.
 4. **Fallback tests:**
-   - Unplug bitcube's router cable: within a minute bitcube is still on Tailscale and VNC (over Wi-Fi). Plug it back in.
+   - ✅ Unplug bitcube's router cable: bitcube stays on Tailscale and VNC over Wi-Fi (3 s gap, 23 Oct). Plug it back in.
    - If the wired drop is connected, unplug it from WAN: the router's Internet page switches to Repeater. Plug it back in.
-5. **Dummy display plug in DisplayPort** (recommended, S27). It gives Windows a desktop that isn't the LED output. Without it, the only display is the Colorlight sender, so over VNC you only see TouchDesigner's black panels window.
+5. **Dummy display plug:** not needed. VNC showed a normal desktop with no display attached. Still check VNC once the Colorlight sender is the only display.
 
 ## Remote access to the router (S28, D24)
 Gives the router a way in that doesn't depend on bitcube. Claude can then fix addresses, read Clients, change Wi-Fi and restart the router remotely. It goes on **Will's tailnet**, with the other river devices.
@@ -83,7 +90,7 @@ Gives the router a way in that doesn't depend on bitcube. Claude can then fix ad
 5. Router admin → **System → Advanced Settings** → open LuCI (install it if asked).
 6. In LuCI: **System → Administration → SSH-Keys** → paste the Mac mini's public key (Claude has it) → Add → Save & Apply.
 
-**If anyone ever ticks "Allow Remote Access LAN":** nothing happens until an admin approves the route. If it does get approved, bitcube starts sending its camera traffic through Tailscale. Fix: Will's admin console → Machines → `gray-router` → Edit route settings → un-approve the route. bitcube recovers at once.
+**If anyone ever ticks "Allow Remote Access LAN":** nothing happens until an admin approves the route. If it does get approved, bitcube starts sending its camera traffic through Tailscale. Fix: Will's admin console → Machines → `router-gray-area-gl-axt1800` → Edit route settings → un-approve the route. bitcube recovers at once.
 
 ## In the ceiling
 - **bitcube has no fan.** Keep air around its fins, and don't put the router or anything else on top of it.
