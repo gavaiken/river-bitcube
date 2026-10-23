@@ -37,6 +37,15 @@ title: Execution plan
 | ⏳ | S11 | River site back up (solar, Starlink schedule); recorder fills the library; rerun S1.2 with the new footage | Colin / Maria at the river | Colin | More than a few minutes of river in the library |
 | ⏳ | S12 | MacBook Air as the on-site fallback console: Tailscale, its SSH key on bitcube, VNC password, Claude Code + this repo (D-open 6) | Gavin | Gavin + Claude | The Air reaches bitcube with the internet down |
 | ⏳ | S13 | Dave merges [river-agent#7](https://github.com/drocamor/river-agent/pull/7) (hide camera logins in capture logs) | Dave | Dave | Merged |
+| ✅ | M1 | **Mission control + studio chat** ([plan](mission-plan.md)): plan written | — | Claude | Plan in the repo |
+| ➡️ | M2 | `mission/` server: password login (bitcube password from a file, scrypt hash, cookie sessions, slow-down), page shells; tests | — | Claude | Tests pass; login works locally |
+| ➡️ | M3 | Studio chat: queue, Agent SDK runner (resume one session, Stop), live events, history; chat page; tests with a fake agent | M2 | Claude | Messages queue and run in order locally |
+| ➡️ | M4 | Mission control: status (seasons state, bitcube probe, Modal, river cam, snapshot), whitelisted controls, system map; page | M2 | Claude | Page shows live status; controls reach bitcube once it's online |
+| ➡️ | M5 | Studio agent policy: `mission/STUDIO.md` system prompt, deny-list settings, no connectors | M3 | Claude | Agent refuses out-of-scope asks in a test |
+| ➡️ | M6 | `mission/setup/` scripts for the `river` user (create hidden standard user, lock `/Users/gav` to 700, secrets, clone with deploy key, LaunchDaemon); river's SSH key on bitcube | M2–M5 | Claude writes; **Gavin runs the sudo part** | Service runs as `river` and survives a restart |
+| ⏳ | M7 | Gavin: `claude setup-token`, save the token into `/Users/river/.secrets/claude-token` | M6 | Gavin | Studio agent answers |
+| ⏳ | M8 | Tailscale Funnel on 443 → `127.0.0.1:8790` (OK'd, MD9) | M6 | Gavin (or Claude with his OK) | `https://gav-m1-mini.tailddc624.ts.net` shows the login page from outside |
+| ⏳ | M9 | End-to-end check from a phone off the tailnet; docs (show-files page link, CLAUDE.md, runbook) | M7, M8 | Claude | Team can log in, chat, see status, steer the seasons |
 | 🅿️ | S14 | Gallery card and page for the online version (when we run Dave's agent in the show) | Decision to run it | Claude | — |
 | 🅿️ | S15 | AI-enhanced river footage via Modal (upscaling, smoother slow motion, longer clips) | — | — | — |
 
@@ -57,6 +66,8 @@ Every step must keep these true. Add new ones at the end.
 | R10 | Rope power stays within what the circuits can carry (D13). | Gavin, 22 Oct |
 | R11 | No secrets (passwords, tokens, camera logins) in the public repo, the `.toe` files or logs. | Gavin, 17 Oct |
 | R12 | TD keeps 60 fps on bitcube. | standing |
+| R13 | Mission control and the studio chat are **team only, behind the shared password**; the studio agent can never reach Gavin's files, connectors or history (separate `river` user). | Gavin, 22 Oct |
+| R14 | Every step of the mission work is committed and recorded in `docs/mission-plan.md` (progress log) **as it happens**, so another session can pick it up at any point. | Gavin, 22 Oct |
 
 ## Decisions
 Newest last. Add with the date and who decided.
@@ -78,6 +89,7 @@ Newest last. Add with the date and who decided.
 | D13 | Rope power cap **600 W per box** (our own software limit, set for the shared Agape circuit) until Gray Area confirms separate circuits, then **1,200 W** (80% of 15 A). | Safety. | Gavin, 22 Oct |
 | D14 | Changes to Dave's repo go in as **PRs**, never direct pushes (main deploys to Modal). | His production system. | Gavin, 21 Oct |
 | D15 | Remote UI control of bitcube from the mini over **VNC** (`~/claude/local/bitcube-vnc/vnc.py`), with `tools/screenshot.ps1` as the fallback. | More robust than scheduled-task input; reaches UAC and the lock screen. | Gavin, 20 Oct |
+| D17 | **Mission control and the studio chat** on the Mac mini, online via Tailscale Funnel, as a hidden `river` user service; details and their reasons in [mission-plan.md](mission-plan.md) (MD1–MD10). | Team access to the agent and the controls from anywhere. | Gavin, 22 Oct |
 | D16 | **Asks to Gray Area** ([page](gray-area.html)): wired drop, connections only started by us (no ports, forwarding or fixed IP), UDP 41641/3478 if easy, three separate circuits (two rope boxes, one HUB75 power board). | Seabrook's questions, 21–22 Oct. | Gavin, 22 Oct |
 
 ### Open decisions (Gavin)
