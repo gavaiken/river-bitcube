@@ -25,7 +25,11 @@ export function sshProbe(sshHost, args = '', timeout = 45_000) {
       { timeout, maxBuffer: 1 << 20 }, (err, stdout) => {
         const line = String(stdout ?? '').split('\n').map((l) => l.trim()).filter((l) => l.startsWith('{')).pop();
         if (line) { try { return resolve(JSON.parse(line)); } catch { /* fall through */ } }
-        resolve({ ok: false, error: err ? String(err.message).split('\n')[0].slice(0, 200) : 'no answer' });
+        const why = !err ? 'no answer from the probe'
+          : err.killed ? 'bitcube took too long to answer'
+          : err.code === 255 ? "can't reach bitcube over SSH"
+          : `probe failed (exit ${err.code})`;
+        resolve({ ok: false, error: why });
       });
   });
 }
