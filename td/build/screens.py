@@ -106,7 +106,7 @@ for k in range(1, 5):
             getattr(src.par, f'extract{corner}x').expr = f'{cu:.5f} + ({u - cu:.5f}) * parent().par.Screenspan'
             getattr(src.par, f'extract{corner}y').expr = f'{cv:.5f} + ({v - cv:.5f}) * parent().par.Screenspan'
         src.par.extractmapping = 'perspective'
-        src.par.extend = 'zero'
+        src.par.extend = 'mirror'             # Screenspan can reach past the field's edge: no black corners
         how.append(f'{k}:' + ('estimated' if LOCATED[k].get('estimated') else 'located'))
     else:
         c = get(cropTOP, f'{P}{k}_window', 1950, y)
