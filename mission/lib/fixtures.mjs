@@ -8,6 +8,18 @@
 // Files are read on every request, so editing one needs no restart. A browser picks its scenario with the
 // `scenario` cookie (GET /fixtures/<name>); without one it gets all-good, else the first name alphabetically.
 // Controls are checked exactly like the real ones (planControl), then only logged to <state>/controls.log.
+//
+// GET /api/lights (what TouchDesigner is sending to the lights right now) is answered here by synthesising season-coloured
+// flowing water from the scenario's seasons state, so the pages can draw the ropes and panels without bitcube. The contract,
+// which a real frames endpoint will serve one day (until then the real server answers 503 { error: 'not available yet' }):
+//   200 { at:     ms epoch when the frame was taken (the server's clock),
+//         source: 'canvas' (the show) | 'black' (the ropes are dark on purpose: every rope byte is 0; the panels still show the river),
+//         ropes:  { w: 20, h: 400, rgb: <base64 of w*h*3 bytes> }    row-major 8-bit RGB: byte (led * 20 + rope) * 3 is the red of LED
+//                                                                   `led` (0 = the plug end, in the ceiling) on rope `rope` (0 = rope 1);
+//                                                                   drawn as a 20-wide, 400-tall image it is the 20 ropes side by side
+//         panels: { w: 256, h: 32, rgb: <base64 of w*h*3 bytes> } } row-major, top row first: the four HUB75 quads side by side,
+//                                                                   64 x 32 each (quad 1 at x 0-63, quad 2 at 64-127, ...)
+//   503 { error } when there is nothing to show: bitcube offline, TouchDesigner not answering, or not checked yet.
 import { readFileSync, readdirSync, existsSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { CAMERAS, planControl } from './mission.mjs';
@@ -82,6 +94,20 @@ export class FixtureMission {
     return { ok: true, fixture: true, action, body, note: 'fixture mode: nothing was changed' };
   }
 
+  /** What the lights are being sent right now (the contract at the top), synthesised from the scenario's seasons state. */
+  lights(name) {
+    const [, f] = this.#scenario(name);
+    const st = f.status ?? {};
+    const no = (why) => Object.assign(new Error(why), { status: 503 });
+    if (st.bitcube?.value?.online === false) throw no('bitcube is offline: no frames');
+    const pr = st.probe?.value, td = pr?.td;
+    if (!pr) throw no('not checked yet: no frames until the full check of bitcube answers');
+    if (!td || td.ok === false || typeof td.file !== 'string') throw no("TouchDesigner isn't answering: no frames");
+    const year = st.seasons?.value ?? td.seasons ?? null;
+    return renderLights({ at: this.now(), source: td.ropes?.source === 'black' ? 'black' : 'canvas', weights: year?.weights ?? null,
+                          intensity: typeof year?.intensity === 'number' ? year.intensity : 0.5, look: td.river_cam?.fresh ? 'live' : 'rain', fps: td.fps ?? null });
+  }
+
   #scenario(name) {
     const n = this.active(name);
     if (!n) throw Object.assign(new Error('fixture mode: no scenario files yet'), { status: 503 });
@@ -92,6 +118,43 @@ export class FixtureMission {
     try { return JSON.parse(readFileSync(join(this.dir, `${name}.json`), 'utf8')); }
     catch (e) { throw Object.assign(new Error(`fixture ${name}.json: ${e.message}`), { status: e.code === 'ENOENT' ? 404 : 500 }); }
   }
+}
+
+// The looks: deep, mid and light colours per season (GLOSSARY.md), the live river at night (infrared) and the rain fallback.
+const LOOKS = {
+  winter: [[6, 14, 36], [110, 150, 205], [235, 242, 255]],
+  spring: [[4, 36, 30], [36, 150, 118], [180, 235, 205]],
+  summer: [[52, 26, 2], [224, 150, 28], [255, 232, 160]],
+  autumn: [[38, 12, 4], [182, 78, 26], [236, 176, 96]],
+  live: [[8, 10, 14], [118, 128, 140], [222, 226, 230]],
+  rain: [[6, 10, 22], [66, 90, 124], [168, 186, 214]],
+};
+/** One frame for the lights: slow water flowing along each rope and across the panels, in the season's colours (blended
+ *  by weight), brighter and faster with intensity; a slow TouchDesigner (fps under 30) moves in quarter-second steps. */
+export function renderLights({ at, source = 'canvas', weights = null, intensity = 0.5, look = 'rain', fps = null }) {
+  const ws = weights ? Object.entries(weights).filter(([k, v]) => LOOKS[k] && v > 0) : [];
+  const total = ws.reduce((s, [, v]) => s + v, 0);
+  const pal = total > 0 ? [0, 1, 2].map((i) => [0, 1, 2].map((j) => ws.reduce((s, [k, v]) => s + LOOKS[k][i][j] * v / total, 0))) : LOOKS[look] ?? LOOKS.rain;
+  const gain = 0.35 + 0.65 * Math.min(1, Math.max(0, intensity));
+  let t = (at / 1000) * (0.4 + 1.2 * gain);
+  if (fps != null && fps < 30) t = Math.floor(t * 4) / 4;
+  const put = (buf, o, v) => {
+    v = Math.min(1, Math.max(0, v));
+    const [a, b, k] = v < 0.5 ? [pal[0], pal[1], v * 2] : [pal[1], pal[2], (v - 0.5) * 2];
+    const glint = v > 0.9 ? (v - 0.9) * 600 : 0;
+    for (let j = 0; j < 3; j++) buf[o + j] = Math.max(0, Math.min(255, Math.round((a[j] + (b[j] - a[j]) * k) * gain + glint)));
+  };
+  const ropes = Buffer.alloc(20 * 400 * 3);
+  if (source !== 'black') for (let led = 0; led < 400; led++) for (let r = 0; r < 20; r++) {
+    const u = led / 400;
+    put(ropes, (led * 20 + r) * 3, 0.5 + 0.25 * Math.sin(u * 18 + t * 1.7 + r * 0.9) + 0.15 * Math.sin(u * 41 - t * 2.3 + r * 2.1) + 0.1 * Math.sin(u * 7 + t * 0.7 + r * 0.3));
+  }
+  const panels = Buffer.alloc(256 * 32 * 3);
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 256; x++) {
+    const X = (x % 64) / 64, Y = y / 32, q = Math.floor(x / 64);
+    put(panels, (y * 256 + x) * 3, 0.5 + 0.25 * Math.sin(X * 6 + t * 1.3 + Y * 2 + q) + 0.15 * Math.sin(X * 15 - t * 2.1 + Y * 5) + 0.1 * Math.sin(Y * 9 + t + q * 1.7));
+  }
+  return { at, source, ropes: { w: 20, h: 400, rgb: ropes.toString('base64') }, panels: { w: 256, h: 32, rgb: panels.toString('base64') } };
 }
 
 function svgStill(cam) {
@@ -113,10 +176,26 @@ export function rebase(v, delta) {
       if (EPOCH_S.test(key) && x > 1e9) return Math.round(x + delta / 1000);
       return x;
     }
+    if (typeof x === 'string' && key === 'last') return shiftLogLine(x, delta);
     if (typeof x === 'string' && ISO.test(x)) return shiftIso(x, delta);
     return x;
   };
   return walk(v, '');
+}
+
+/** A log line's clock ("02:58:31 INFO ..." or "2026-10-23 02:05:41 done", bitcube's local time) moves with the probe's `time`
+ *  stamp (an ISO string, shifted above), so the ages the model reads from them (its lineAge) stay what the scenario meant:
+ *  a clip "15 minutes before the check" is 15 minutes old whenever the page is opened, not hours old by the evening. */
+function shiftLogLine(s, delta) {
+  const p = (n) => String(n).padStart(2, '0');
+  const t = /^(\d{2}):(\d{2}):(\d{2})([\s\S]*)$/.exec(s);
+  if (t) {
+    const tod = ((+t[1] * 3600 + +t[2] * 60 + +t[3] + Math.round(delta / 1000)) % 86400 + 86400) % 86400;
+    return `${p(Math.floor(tod / 3600))}:${p(Math.floor(tod / 60) % 60)}:${p(tod % 60)}${t[4]}`;
+  }
+  const d = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})([\s\S]*)$/.exec(s);
+  if (d) return shiftIso(`${d[1]}T${d[2]}`, delta).replace('T', ' ') + d[3];
+  return s;
 }
 
 function shiftIso(s, delta) {

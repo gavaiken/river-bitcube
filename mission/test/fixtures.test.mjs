@@ -117,7 +117,16 @@ test('fixture timestamps are moved to the present, so ages never drift', async (
   assert.equal(r.value.finished_at, '2026-10-23T07:53:15Z');
   assert.equal(r.value.history[0].t, 1_792_751_339);
   assert.equal(r.value.fps, 60.2);                       // numbers that aren't times stay
-  assert.equal(r.value.last, '02:58:48 INFO x');         // log lines stay
+  assert.equal(r.value.last, '03:58:48 INFO x');         // log lines move with the probe's clock, so their ages hold
+  assert.equal(rebase({ last: '23:30:00 INFO y' }, 3_600_000).last, '00:30:00 INFO y');
+  assert.equal(rebase({ last: '2026-10-23 02:05:41 done' }, 3_600_000).last, '2026-10-23 03:05:41 done');
+  assert.equal(rebase({ last: 'Error ope' }, 3_600_000).last, 'Error ope');
+  // the point of it: a scenario served hours after its moment still reads the same (all-good stays OK, a failing camera's clips stay 15 min old)
+  const real = new FixtureMission({ dir: new URL('./fixtures/', import.meta.url).pathname, stateDir: mkdtempSync(join(tmpdir(), 'fx-')), now: () => 1_792_749_540_000 + 15 * 3600_000 });
+  const { derive } = await import('../public/model.js');
+  const later = (name) => derive({ ...real.snapshot(name), now: 1_792_749_540_000 + 15 * 3600_000 }, 1_792_749_540_000 + 15 * 3600_000 + 2000);
+  assert.equal(later('all-good').overall.level, 'ok', later('all-good').overall.headline);
+  assert.match(later('gallery-cam-down').items.find((x) => x.id === 'modal link').summary, /Gallery clips failing since 17:4\d/);
   const d = mkdtempSync(join(tmpdir(), 'fx-'));
   writeFileSync(join(d, 'all-good.json'), JSON.stringify({ _scenario: { now: 1000 }, status: { modal: { at: 0, value: { set_at: '2026-10-22T23:53:14-07:00' } } } }));
   const fm = new FixtureMission({ dir: d, stateDir: d, now: () => 7_201_000 });
@@ -125,4 +134,46 @@ test('fixture timestamps are moved to the present, so ages never drift', async (
   assert.equal(s.modal.at, 7_200_000);                   // 1 s before "now", as 0 was 1 s before the fixture's now
   assert.equal(s.modal.age_s, 1);
   assert.equal(s.modal.value.set_at, '2026-10-23T01:53:14-07:00');
+});
+
+test('lights: a season-coloured frame for the ropes and panels, black ropes when dark on purpose, nothing without TouchDesigner', async () => {
+  const { renderLights } = await import('../lib/fixtures.mjs');
+  const dir = fixtureDir();
+  const m = fm(dir);
+  assert.throws(() => m.lights(), (e) => e.status === 503 && /not checked yet/.test(e.message));     // the smoke fixtures have no probe
+  const td = { ok: true, file: 'river-local-oct-22-seasons.toe', fps: 60, ropes: { source: 'canvas' }, seasons: { weights: { winter: 0, spring: 1, summer: 0, autumn: 0 }, intensity: 0.5 } };
+  const withTd = (t) => writeFileSync(join(dir, 'all-good.json'), scenario('all-good', { status: { ...STATUS, probe: { at: 1000, value: { td: t } } } }));
+  withTd(td);
+  const l = m.lights();
+  assert.deepEqual([l.at, l.source, l.ropes.w, l.ropes.h, l.panels.w, l.panels.h], [5_000_000, 'canvas', 20, 400, 256, 32]);
+  const ropes = Buffer.from(l.ropes.rgb, 'base64'), panels = Buffer.from(l.panels.rgb, 'base64');
+  assert.deepEqual([ropes.length, panels.length], [20 * 400 * 3, 256 * 32 * 3]);
+  let r = 0, g = 0;
+  for (let i = 0; i < ropes.length; i += 3) { r += ropes[i]; g += ropes[i + 1]; }
+  assert.ok(g > r, 'spring is green');
+  assert.ok(panels.some((x) => x > 0));
+  withTd({ ...td, ropes: { source: 'black' } });
+  const b = m.lights();
+  assert.equal(b.source, 'black');
+  assert.ok(Buffer.from(b.ropes.rgb, 'base64').every((x) => x === 0), 'dark ropes get black');
+  assert.ok(Buffer.from(b.panels.rgb, 'base64').some((x) => x > 0), 'the panels still show the river');
+  withTd({ ok: false, error: 'no answer from the TD bridge' });
+  assert.throws(() => m.lights(), (e) => e.status === 503 && /TouchDesigner/.test(e.message));
+  writeFileSync(join(dir, 'all-good.json'), scenario('all-good', { status: { bitcube: { at: 1000, value: { online: false } } } }));
+  assert.throws(() => m.lights(), (e) => e.status === 503 && /offline/.test(e.message));
+  // the water moves: a different moment gives a different frame, the same moment the same one; a slow TD steps
+  const a1 = renderLights({ at: 1000, weights: { summer: 1 }, intensity: 0.8 }), a2 = renderLights({ at: 1000, weights: { summer: 1 }, intensity: 0.8 });
+  const a3 = renderLights({ at: 4000, weights: { summer: 1 }, intensity: 0.8 }), s1 = renderLights({ at: 1000, look: 'live', fps: 4 }), s2 = renderLights({ at: 1010, look: 'live', fps: 4 });
+  assert.equal(a1.ropes.rgb, a2.ropes.rgb);
+  assert.notEqual(a1.ropes.rgb, a3.ropes.rgb);
+  assert.equal(s1.ropes.rgb, s2.ropes.rgb, 'under 30 fps the frame holds for a quarter second');
+  // every real scenario either draws or says why not
+  const real = new FixtureMission({ dir: new URL('./fixtures/', import.meta.url).pathname, stateDir: dir, now: () => 1_792_749_540_000 });
+  const outcome = {};
+  for (const name of real.names()) { try { outcome[name] = real.lights(name).source; } catch (e) { outcome[name] = `503 ${e.message}`; } }
+  const want = { 'all-good': 'canvas', 'bitcube-offline': '503 bitcube is offline: no frames', 'gallery-cam-down': 'canvas', 'just-booted': 'canvas',
+    'lights-not-connected': 'canvas', 'modal-scene-old': 'canvas', 'no-internet': 'canvas', 'nothing-known-yet': '503 not checked yet: no frames until the full check of bitcube answers',
+    'river-cam-stale': 'canvas', 'ropes-dark-on-purpose': 'black', 'seasons-not-running': 'canvas', 'td-frozen': "503 TouchDesigner isn't answering: no frames", 'td-low-fps': 'canvas' };
+  for (const [name, w] of Object.entries(want)) if (name in outcome) assert.equal(outcome[name], w, name);
+  assert.ok(Object.keys(outcome).length >= 13);
 });

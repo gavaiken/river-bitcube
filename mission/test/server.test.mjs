@@ -70,6 +70,12 @@ test('server in fixture mode: /version, login, /fixtures, status, stills, contro
   assert.deepEqual([st.fixture, st.bitcube.value.online, st.studio.running, st.studio.queue], ['quiet', false, false, []]);
   assert.equal((await (await get('/api/status', { cookie: mc })).json()).fixture, 'all-good');
 
+  // the lights: fixture mode synthesises a frame, or says why there is none (these smoke fixtures have no TouchDesigner)
+  assert.equal((await get('/api/lights')).status, 401);
+  const lights = await get('/api/lights', { cookie: mc });
+  assert.equal(lights.status, 503);
+  assert.match((await lights.json()).error, /not checked yet/);
+
   // stills: a placeholder for a camera the scenario has, 503 for one it has not
   const cam = await get('/api/camera/gallery.jpg', { cookie: mc });
   assert.deepEqual([cam.status, cam.headers.get('content-type')], [200, 'image/svg+xml']);

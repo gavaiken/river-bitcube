@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e141a" media="(prefers-color-scheme: dark)">
+<title>Status · Mission control</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231e5f7d'/%3E%3Cpath d='M8 24c10-8 18 8 28 0s14-6 20 0M8 40c10-8 18 8 28 0s14-6 20 0' fill='none' stroke='%23e6f1f7' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/proto/a.css">
+<script>try { const t = localStorage.getItem('mc-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
+</head>
+<body>
+<div class="art" aria-hidden="true">
+  <div class="wash"></div>
+  <svg class="flow" viewBox="0 0 2400 1000" preserveAspectRatio="none">
+    <path d="M-50,150 C250,90 500,250 800,170 S1300,110 1600,210 S2100,160 2450,190"/>
+    <path d="M-50,330 C300,290 550,420 850,350 S1350,280 1700,380 S2150,320 2450,360"/>
+    <path d="M-50,520 C200,470 520,600 820,540 S1300,460 1650,560 S2120,500 2450,540"/>
+    <path d="M-50,690 C280,650 560,770 860,700 S1380,630 1720,730 S2180,680 2450,700"/>
+    <path d="M-50,860 C260,820 540,940 840,880 S1320,800 1680,900 S2160,850 2450,870"/>
+    <path d="M-50,240 C320,210 620,330 920,270 S1420,200 1780,300 S2220,250 2450,270"/>
+    <path d="M-50,600 C240,560 600,690 900,620 S1400,540 1760,650 S2200,600 2450,620"/>
+  </svg>
+  <div class="ripple r1"></div><div class="ripple r2"></div>
+</div>
+
+<header class="top">
+  <div class="brand"><span class="wordmark">Mission control</span><span class="title">Status</span></div>
+  <div class="fresh" id="fresh" aria-live="polite">Connecting…</div>
+  <button class="menu-btn" data-act="menu" aria-label="Menu" title="Menu">⋯</button>
+</header>
+
+<main>
+  <div class="col-a">
+    <section id="verdict" class="verdict lv-unknown" aria-live="polite"></section>
+    <section class="card now" aria-label="What the piece is doing">
+      <div id="now-head"></div>
+      <div id="now-steer"></div>
+    </section>
+  </div>
+  <div class="col-b">
+    <div id="problems"></div>
+    <div id="fine"></div>
+    <div id="installer"></div>
+    <footer class="foot">
+      <a href="/map">System map (for engineers)</a> ·
+      <a href="https://gavaiken.github.io/river-bitcube/show-files" target="_blank" rel="noopener">Show files</a> ·
+      <a href="https://gavaiken.github.io/river-bitcube/install" target="_blank" rel="noopener">Install guide</a> ·
+      <a href="https://gavaiken.github.io/river-bitcube/execution-plan" target="_blank" rel="noopener">The plan</a>
+      <div>A River Becoming at Gray Area, San Francisco, until 27 Oct · mission control v2, prototype A</div>
+    </footer>
+  </div>
+</main>
+
+<nav class="tabs" aria-label="Pages">
+  <a class="on" href="/proto/a" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>Status</a>
+  <a href="#lights" data-act="lights"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.6 1 1.3 1 2.5h6c0-1.2.3-1.9 1-2.5A6 6 0 0 0 12 3z"/></svg>Lights</a>
+  <a href="/chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>Studio chat</a>
+</nav>
+
+<dialog id="sheet" class="sheet" aria-label="Sheet"></dialog>
+<script type="module" src="/proto/a.js"></script>
+</body>
+</html>

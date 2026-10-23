@@ -213,6 +213,12 @@ const server = createServer(async (req, res) => {
     // mission control
     // (the scenario cookie only means something in fixture mode; Mission ignores it)
     if (path === '/api/status') return send(res, 200, { ...mission.snapshot(cookies.scenario), studio: studio.status(), now: Date.now() });   // now: the server's clock, so a phone's skew can't age or freshen anything
+    // What TouchDesigner is sending to the lights right now (the contract is at the top of lib/fixtures.mjs). Only fixture
+    // mode can answer until TouchDesigner serves frames (design/ia.md OQ1); the real server says so rather than invent a picture.
+    if (path === '/api/lights') {
+      if (!FIXTURES) return send(res, 503, { error: 'not available yet' });
+      try { return send(res, 200, mission.lights(cookies.scenario)); } catch (e) { return send(res, e.status || 503, { error: e.message }); }
+    }
     const cam = path.match(/^\/api\/camera\/([a-z]+)\.jpg$/);
     if (cam) {
       const c = await mission.camera(cam[1], cookies.scenario);
