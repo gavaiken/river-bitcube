@@ -25,7 +25,7 @@ Once bitcube, the router and the switch are in the ceiling we can't get back to 
 2. ➡️ **S28, remote access to the router:** on Will's tailnet as `router-gray-area-gl-axt1800` with the mini's SSH key; SSH works through bitcube. **Still to do:** the share into Gavin's tailnet isn't visible from the mini yet. No other SSH keys (Gavin). After this, Claude can do 1 and S29 remotely.
 3. ✅ **S25, bitcube's ports marked** (blue = router link, white = LIGHTS): ROUTER (`Ethernet 2`) and LIGHTS (`Ethernet`), checked live 23:27.
 4. **S20 on the ground:** lighting switch on LIGHTS, Colorlight on HDMI; ropes and HUB75 lit from TD before lifting, so we know the cabling works.
-5. **S26, the one remaining test:** a power cut **with everything plugged in as in the ceiling** (lights on LIGHTS, Colorlight on HDMI), ideally after S1 so it ends on the seasons file with ropes and HUB75 lit. Run it with S20. Later, once the drop exists: pull the router's WAN (S16).
+5. **S26, the one remaining test:** a power cut **with everything plugged in as in the ceiling** (lights on LIGHTS, Colorlight on HDMI); S1 is done (23 Oct 00:28), so it should end on the seasons file with ropes and HUB75 lit. Run it with S20. Later, once the drop exists: pull the router's WAN (S16).
 6. **VNC with the Colorlight sender as the only display:** VNC works with no display at all, but with the LED sender attached, TD's panels window covers that display in black. Check during S20 that we can still work (hide the window via the TD bridge if needed).
 7. **S29:** no radar wait for 5 GHz after a power cut (wired drop + fixed channel, or repeat Gray Area's 2.4 GHz).
 8. **In the ceiling:**
@@ -35,7 +35,6 @@ Once bitcube, the router and the switch are in the ceiling we can't get back to 
 9. Keep a small HDMI monitor and a USB keyboard with the kit.
 
 **After the lift (remote):**
-- S1, deploy the seasons show file;
 - S16, the wired drop;
 - S4, re-map;
 - S7, tune;
@@ -67,12 +66,12 @@ Once bitcube, the router and the switch are in the ceiling we can't get back to 
 
 | | Step | What | Needs | Owner | Done when |
 |---|---|---|---|---|---|
-| ⏳ | S1 | **Deploy the seasons show file** (S1.1–S1.5 below) | bitcube online at Gray Area | Claude | Seasons file is the boot file, comes up by itself after a TD restart, 60 fps, control page answers |
-| ⏳ | S1.1 | Rename the online file: `td_save.ps1 -Target river-online-oct-20.toe`, `git rm river-local-oct-18.toe`, update `Start-River.cmd` | S1 | Claude | Only `river-online-oct-20.toe` in the repo |
-| ⏳ | S1.2 | `python tools\seasons\prerender.py` (three speeds of the river library) | S1 | Claude | `recordings\river\seasons\river-{slow,normal,fast}.mp4` exist |
-| ⏳ | S1.3 | `td_save.ps1 -Target river-local-oct-22-seasons.toe`, then `td.ps1 -File td\build\build_seasons_local.py` (save first: new network) | S1.1, S1.2 | Claude | No TD errors; screenshots of `field_out`, `quad1..4_out`, `rope_canvas` look right. *`Start-River.cmd` boots the seasons file as soon as it exists: if the build fails, write `river-online-oct-20.toe` into `River\boot-file.txt` until it's fixed.* |
-| ⏳ | S1.4 | Windows Firewall: allow TD inbound on port 9981 for Private and Tailscale; open `http://bitcube.tail03bc1a.ts.net:9981` from the mini | S1.3 | Claude | Control page shows the year turning |
-| ⏳ | S1.5 | Save, toeexpand secret check, commit; `Start-River.cmd` → seasons file; restart TD via the one-off interactive task | S1.4 | Claude | TD reopens the seasons file by itself |
+| ✅ | S1 | **Deploy the seasons show file** (S1.1–S1.5 below) | bitcube online at Gray Area | Claude | Seasons file is the boot file, comes up by itself after a TD restart, 60 fps, control page answers |
+| ✅ | S1.1 | Rename the online file: `td_save.ps1 -Target river-online-oct-20.toe`, `git rm river-local-oct-18.toe`, update `Start-River.cmd` | S1 | Claude | Only `river-online-oct-20.toe` in the repo |
+| ✅ | S1.2 | `python tools\seasons\prerender.py` (three speeds of the river library) | S1 | Claude | `recordings\river\seasons\river-{slow,normal,fast}.mp4` exist |
+| ✅ | S1.3 | `td_save.ps1 -Target river-local-oct-22-seasons.toe`, then `td.ps1 -File td\build\build_seasons_local.py` (save first: new network) | S1.1, S1.2 | Claude | No TD errors; screenshots of `field_out`, `quad1..4_out`, `rope_canvas` look right. *`Start-River.cmd` boots the seasons file as soon as it exists: if the build fails, write `river-online-oct-20.toe` into `River\boot-file.txt` until it's fixed.* |
+| ✅ | S1.4 | Windows Firewall: allow TD inbound on port 9981 for Private and Tailscale; open `http://bitcube.tail03bc1a.ts.net:9981` from the mini | S1.3 | Claude | Control page shows the year turning |
+| ✅ | S1.5 | Save, toeexpand secret check, commit; `Start-River.cmd` → seasons file; restart TD via the one-off interactive task | S1.4 | Claude | TD reopens the seasons file by itself |
 | ✅ | S2 | **Install network** (D18–D23; [progress](sessions/N.md)): our second GL-AXT1800 behind Gray Area's wired drop; bitcube and gallery cam behind it | Router at the venue | Gavin + Claude (session N) | bitcube online via the router, gallery cam reachable from bitcube |
 | ✅ | S2.1 | Router configured: admin password, LAN **192.168.9.1**, Wi-Fi **`gray-river`** on 5 GHz (2.4 GHz temporarily `Agape WiFi`, see S19), Multi-WAN failover Ethernet → Repeater → Tethering → Cellular, Tailscale off. Uplink for now: Repeater on Gray Area's staff Wi-Fi (S16) | On site | Gavin | Done 22:25: phone, laptop, bitcube and cam online through it |
 | ✅ | S2.2 | Devices on the router: gallery cam on Wi-Fi `gray-river` (no cable reaches its spot) at **192.168.9.76**; bitcube wired (`Ethernet 2`, 1 Gbps) at **192.168.9.79**, its preferred route, plus Wi-Fi `gray-river` (reserved .80, still on .194 until it next reconnects). Reservations: cam `EC:71:DB:EB:EB:23` → .76, bitcube Wi-Fi `70:D8:23:16:A1:5C` → .80, bitcube wired `00:E7:43:0E:5F:C4` → .79 | S2.1 | Gavin | Done 22:35 |

@@ -67,3 +67,9 @@ Notes kept here while another session is editing the shared docs; folded into th
 - 22 Oct 23:45 (session A): rigging layout from Gavin logged in the execution plan (photo, points 1-3), new steps S21 (self-recovery after a power cut, BIOS), S22 (gallery cam keeps .76 on Ethernet: reservation is for the Wi-Fi MAC only), S23 (cam position), S24 (map for the rig).
 
 ## 23 Oct 00:35 start: Mac mini · session A · S1 (deploy the seasons show file), then S20 + final S26 power cut with Gavin. Session N has ended; bitcube is free.
+- 00:20 S1.1 ✅ online file saved as `river-online-oct-20.toe`, old name removed (363481e, from bitcube).
+- 00:22 S1.2 ✅ river library pre-rendered on bitcube in 83 s: slow 256 s, normal 64 s, fast 32 s, 1280×720 @ 30 fps (`recordings\river\seasons`).
+- 00:23 S1.3 ✅ `build_seasons_local.py` in `river-local-oct-22-seasons.toe`: no errors; year turning (one season a minute), 60 fps, clips moving at their own speeds. Fix: a GLSL TOP takes at most 3 inputs in this TD build, so quads 3+4 are joined by `td/panels/panel_pair.glsl` (3e2474d); all four quads now show. Hardware decoding off (Intel GPU).
+- 00:25 S1.4 ✅ Windows Firewall rule "River seasons control page (TouchDesigner, 9981)": TD inbound on 9981 from LocalSubnet, 100.64.0.0/10, 192.168.9.0/24; `/state` answers from the mini.
+- 00:26 S1.5 ✅ saved, toeexpand secret scan 0 hits, committed (092e5f6). Restart test through mission control's *Switch now* path (`probe.ps1 -Action switch`): TD restarted 00:26:49 and was running the seasons file at 60 fps with the panel window open within 75 s; `River\boot-file.txt` now names the seasons file.
+- Next: S20 (lights on the ground) and the final S26 power cut, with Gavin.
