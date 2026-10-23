@@ -4,7 +4,7 @@ title: "A River Becoming: the people counter (plan)"
 
 # The people counter: plan
 
-Not built yet. It is what turns on **dynamic** mode in [river-local-oct-22-seasons](files/river-local-oct-22-seasons.html). Terms as in the [glossary](https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md). Decided 22 Oct 2026 with Gavin.
+**Built 23 Oct** (`tools/presence/counter.py`, started at login by `Start-Presence.cmd`; status: `.venv\Scripts\python.exe tools\presence\counter.py status`). It is what turns on **dynamic** mode in [river-local-oct-22-seasons](files/river-local-oct-22-seasons.html). Terms as in the [glossary](https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md). Decided 22 Oct 2026 with Gavin.
 
 ## What it must produce
 Every half second, a line in `C:\Users\user\River\presence.json`: `{"t": <unix time>, "count": <people in the foreground>}`. That's the whole contract with the show file (`td/seasons/seasons_td.py` reads it). If the file stops changing for 30 s, the show falls back to automatic by itself; when it comes back, the show returns to dynamic by itself (unless someone picked a mode on the control page).
@@ -22,6 +22,13 @@ Every half second, a line in `C:\Users\user\River\presence.json`: `{"t": <unix t
 - **Relative presence** = now ÷ usual: above 1.3× warms the year toward summer, below 0.7× cools it toward winter, in between holds; nobody for a minute = winter. Summer's strength rises from 1.3× to full torrent at 2×.
 - The year only turns forward; warming takes about a minute, freezing about three.
 - All of these are **rules**, adjustable live on the control page.
+
+## As built (23 Oct)
+- **Detector:** YOLOv8 nano, ONNX (`River\models\yolov8n.onnx`, from Hugging Face `Kalray/yolov8`, sha256 in `counter.py`), onnxruntime 1.31 on the CPU with 2 threads: ~70–120 ms a frame at 2 frames a second; TouchDesigner stays at 60 fps. No OpenCV: letterbox with PIL, NMS in numpy.
+- **Near the piece:** a box at least 25% of the frame tall. Checked on a 12:11 still with three people by the piece: all three found (0.63–0.83), 31–56% tall. The empty room gave 0, no false hits from ropes, branches or speakers.
+- **Camera:** the gallery cam has two presets (`tools/cameras/ptz.py gallery goto 1|2`): **1 "map"**, the framing the rope map and screen positions came from (use it for any re-map), and **2 "room"**, tilted down to the people around the piece, where it stays for the counter and Dave's agent. Moving it doesn't change the ropes or screens: their maps were only needed at capture time.
+- **Also writes** `River\presence-status.json` (detector, frame time, raw and near counts); `run --debug` writes a local tuning frame `River\presence-debug.jpg` with the boxes.
+- **Live 15:40:** the seasons file went to dynamic mode by itself; empty room → target winter.
 
 ## Steps when we build it
 1. Install `onnxruntime` and `opencv-python` into bitcube's `.venv`; download the detector model.
