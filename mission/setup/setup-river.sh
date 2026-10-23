@@ -17,6 +17,7 @@
 set -euo pipefail
 
 [ "$(id -u)" = 0 ] || { echo "run with sudo"; exit 1; }
+cd /                  # commands run as river must not inherit a folder inside /Users/gav (locked in step 2)
 GAV=gav
 R=river
 RH=/Users/$R
@@ -62,6 +63,7 @@ say "4. ssh keys and config"
 install -d -o "$R" -g staff -m 700 "$RH/.ssh"
 [ -f "$RH/.ssh/id_ed25519" ] || sudo -u "$R" ssh-keygen -q -t ed25519 -N '' -C "river@gav-m1-mini (bitcube)" -f "$RH/.ssh/id_ed25519"
 [ -f "$RH/.ssh/river_bitcube_deploy" ] || sudo -u "$R" ssh-keygen -q -t ed25519 -N '' -C "river@gav-m1-mini (deploy key)" -f "$RH/.ssh/river_bitcube_deploy"
+echo "keys: $(ls $RH/.ssh | tr '\n' ' ')"
 cat > "$RH/.ssh/config" <<'EOF'
 Host bitcube
     HostName 100.73.68.60
@@ -84,7 +86,8 @@ sudo -u "$R" -H git -C "$RH/river-bitcube" remote set-url --push origin git@gith
 sudo -u "$R" -H git -C "$RH/river-bitcube" config user.name "River studio agent"
 sudo -u "$R" -H git -C "$RH/river-bitcube" config user.email "studio@river-agent.invalid"
 sudo -u "$R" -H git -C "$RH/river-bitcube" pull -q --ff-only || echo "(pull skipped: local changes)"
-(cd "$RH/river-bitcube/mission" && sudo -u "$R" -H env PATH=/opt/homebrew/bin:/usr/bin:/bin npm ci --silent --no-audit --no-fund)
+(cd "$RH/river-bitcube/mission" && sudo -u "$R" -H env PATH=/opt/homebrew/bin:/usr/bin:/bin npm ci --silent --no-audit --no-fund) \
+  || { echo "npm ci failed: see the output above"; exit 1; }
 echo "mission/ dependencies installed"
 
 say "6. Claude settings for $R"
