@@ -51,3 +51,4 @@ Newest last. One line per step: date, step, what changed, commit.
 - 22 Oct: M1 this plan written.
 - 22 Oct: M2 (part) shared-password login module `mission/lib/auth.mjs` with tests (scrypt hash, cookie sessions on disk as SHA-256, per-client doubling delay, global slow-down); Agent SDK 0.3.309 pinned in `mission/package.json`.
 - 22 Oct: M3 (part) studio chat core `mission/lib/studio.mjs` with tests: single-threaded queue, resumes one session id (state.json), Stop aborts the current run, history in chat.jsonl, fresh start if the saved session is lost.
+- 22 Oct: M5 (part) agent runner `mission/lib/agent.mjs` (Agent SDK, dontAsk + allow list + deny fence, no MCP, resumes the session) and the studio rules `mission/STUDIO.md`; tests.
