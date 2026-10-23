@@ -388,121 +388,19 @@ rcv = get(nullTOP, 'rope_canvas', 2550, 0)
 rcv.inputConnectors[0].connect(fl)
 rcv.viewer = True
 
-# ---- HUB75 quads (Gray Area, 23 Oct): four portrait screens hung one above another on the driftwood ----
-# Each quad shows a portrait (1:2) window of the field; the windows are stacked down one column of the
-# field in the order the screens hang (Screens page: Screenorder, top first), so the water flows down
-# through them. The receive card shows each 256x128 quad turned on its side, so each quad has a Flip TOP
-# (Quad<k>flop + Quad<k>flipx/flipy) that turns its 128x256 window into a 256x128 feed that comes out
-# upright. Screentest swaps the river for a big "F<k>" to check that on camera (F reads wrong if mirrored).
-SCR = page(sz, 'Screens')
-if not hasattr(sz.par, 'Screenorder'):
-    SCR.appendStr('Screenorder', label='Screen order, top to bottom (quad numbers)')[0].val = '1 2 3 4'
-    p = SCR.appendFloat('Screencolumn', label='Column centre (u)')[0]
-    p.val, p.normMin, p.normMax = 0.5, 0, 1
-    SCR.appendToggle('Screentest', label='Test: show F<quad> instead of the river')[0].val = False
-for k in range(1, 5):
-    if not hasattr(sz.par, f'Quad{k}flop'):
-        m = SCR.appendMenu(f'Quad{k}flop', label=f'Quad {k} flop')[0]
-        m.menuNames = ['noflop', 'bottomleft', 'topleft']
-        m.menuLabels = ['Off', 'Bottom left', 'Top left']
-        m.val = 'bottomleft'
-        SCR.appendToggle(f'Quad{k}flipx', label=f'Quad {k} flip x')[0].val = False
-        SCR.appendToggle(f'Quad{k}flipy', label=f'Quad {k} flip y')[0].val = False
-    if not hasattr(sz.par, f'Quad{k}swap'):
-        SCR.appendToggle(f'Quad{k}swap', label=f'Quad {k} swap its two panel rows')[0].val = False
-    if not hasattr(sz.par, f'Quad{k}vflip'):
-        SCR.appendToggle(f'Quad{k}vflip', label=f'Quad {k} flip top to bottom (as seen)')[0].val = False
-    if not hasattr(sz.par, f'Quad{k}hflip'):
-        SCR.appendToggle(f'Quad{k}hflip', label=f'Quad {k} flip left to right (as seen)')[0].val = False
-# Found with Screentest (23 Oct): flop bottom left + flip y is upright on every screen. Screens 3 and 4 have
-# their two panel columns the other way round (receive card wiring or config: "4F"), so they swap them back
-# (Quad<k>swap, in the 256x128 feed); screen 3 also hangs the other way up, so it gets a half turn as seen
-# (Quad3vflip + Quad3hflip). Without the swap, the half turn left a seam down its middle.
-for k in range(1, 5):
-    setattr(sz.par, f'Quad{k}flop', 'bottomleft')
-    setattr(sz.par, f'Quad{k}flipx', False)
-    setattr(sz.par, f'Quad{k}flipy', True)
-    setattr(sz.par, f'Quad{k}swap', k in (3, 4))
-    setattr(sz.par, f'Quad{k}vflip', k == 3)
-    setattr(sz.par, f'Quad{k}hflip', k == 3)
-sz.par.Screentest = False
-WIN_W = 128 / 1280                  # window width as a fraction of the 1280x720 field
-WIN_H = 256 / 720
-STEP = (1 - WIN_H) / 3              # four windows from the top of the field to the bottom, overlapping
-quads = []
-for k in range(1, 5):
-    y = 300 - 150 * (k - 1)
-    c = get(cropTOP, f'quad{k}_window', 1950, y)
-    c.inputConnectors[0].connect(out)
-    c.par.cropleft.expr = f"parent().par.Screencolumn - {WIN_W / 2:.5f}"
-    c.par.cropright.expr = f"parent().par.Screencolumn + {WIN_W / 2:.5f}"
-    slot = f"[int(q) for q in parent().par.Screenorder.eval().split()].index({k}) if '{k}' in parent().par.Screenorder.eval().split() else {k - 1}"
-    c.par.croptop.expr = f"1 - ({slot}) * {STEP:.5f}"
-    c.par.cropbottom.expr = f"1 - ({slot}) * {STEP:.5f} - {WIN_H:.5f}"
-    f_ = get(fitTOP, f'quad{k}_fit', 2000, y)
-    f_.inputConnectors[0].connect(c)
-    f_.par.fit = 'fill'
-    res(f_, 128, 256)
-    t = get(textTOP, f'quad{k}_testtext', 2000, y - 60)
-    t.par.text = f'F{k}'
-    res(t, 128, 256)
-    t.par.fontsizex = 90
-    t.par.alignx, t.par.aligny = 'center', 'center'
-    t.par.bgcolorr, t.par.bgcolorg, t.par.bgcolorb, t.par.bgalpha = 0.0, 0.05, 0.25, 1
-    sw = get(switchTOP, f'quad{k}_src', 2050, y)
-    sw.inputConnectors[0].connect(f_)
-    sw.inputConnectors[1].connect(t)
-    sw.par.index.expr = 'int(parent().par.Screentest)'
-    vf = get(flipTOP, f'quad{k}_vflip', 2060, y - 60)          # top to bottom as seen = y of the portrait
-    vf.inputConnectors[0].connect(sw)
-    vf.par.flipy.expr = f'parent().par.Quad{k}vflip'
-    vf.par.flipx.expr = f'parent().par.Quad{k}hflip'
-    fl_ = get(flipTOP, f'quad{k}_orient', 2075, y)
-    fl_.inputConnectors[0].connect(vf)
-    fl_.par.flop.expr = f'parent().par.Quad{k}flop'
-    fl_.par.flipx.expr = f'parent().par.Quad{k}flipx'
-    fl_.par.flipy.expr = f'parent().par.Quad{k}flipy'
-    sh = get(transformTOP, f'quad{k}_swap', 2100, y - 60)       # half a frame down, wrapped = rows swapped
-    sh.inputConnectors[0].connect(fl_)
-    sh.par.extend = 'repeat'
-    sh.par.tunit = 'fraction'
-    sh.par.ty.expr = f'0.5 if parent().par.Quad{k}swap else 0'
-    quads.append(sh)
-for old in ('quad1_pin',):          # the Agape corner pin is gone: the 18 Oct map's quad 1 was at Agape
-    if sz.op(old):
-        sz.op(old).destroy()
-outs = []
-for k, q in enumerate(quads, start=1):
-    g = get(levelTOP, f'quad{k}_gain', 2100, 300 - 150 * (k - 1))
-    g.inputConnectors[0].connect(q)
-    g.par.brightness1.expr = 'parent().par.Panelgain'
-    g.par.gamma1.expr = 'parent().par.Panelgamma'
-    g.par.clamp = True
-    o = get(nullTOP, f'quad{k}_out', 2250, 300 - 150 * (k - 1))
-    o.inputConnectors[0].connect(g)
-    o.viewer = True
-    outs.append(o)
-
-# ---- hook up the ropes and four quads ------------------------------------------------------------------
+# ---- ropes and the four HUB75 screens -------------------------------------------------------------------
 ropes = proj.op('ropes')
 ropes.par.Canvas = rcv.path
 ropes.par.Cropleft = ropes.par.Cropbottom = 0
 ropes.par.Cropright = ropes.par.Croptop = 1
-exec(open(REPO + '/td/build/build_panels.py', encoding='utf-8').read(), dict(globals(), PANEL_QUADS=4))
-panels = proj.op('panels')
-for k, o in enumerate(outs, start=1):
-    setattr(panels.par, f'Quad{k}', o.path)
-panels.par.Quad2off = False
-# Gray Area receive card (found by camera, 23 Oct): quads stacked down the left edge, quad 4 below quad 3.
-for k, (x, y) in enumerate(((0, 0), (0, 128), (0, 256), (0, 384)), start=1):
-    setattr(panels.par, f'Quad{k}pos1', x)
-    setattr(panels.par, f'Quad{k}pos2', y)
-panels.par.Pairstacked = True
-panels.par.Source = 'canvas'
-panels.par.Brightness = 1.0
-panels.par.Output = True             # the panel window covers the LED display (the show's only display)
+for old in ('quad1_pin',):          # the Agape corner pin (the 18 Oct map's quad 1 was at Agape)
+    if sz.op(old) and not sz.op(old).inputs:
+        sz.op(old).destroy()
+_g = dict(globals(), SCREENS_COMP=sz, FIELD=out, ROPE_CANVAS=rcv)
+exec(open(REPO + '/td/build/screens.py', encoding='utf-8').read(), _g)
+SCREEN_INFO = _g['SCREEN_INFO']
 
 missing = [f for f in ('river-slow.mp4', 'river-normal.mp4', 'river-fast.mp4') if not glob.glob(f'{LIB}/{f}')]
 print('seasons built from', PIXELMAP.rsplit('/', 1)[-1], '|', sz.path, '| control page on port', PORT,
-      '| river library missing:', missing or 'none (all three speeds present)',
+      '| river library missing:', missing or 'none (all three speeds present)', '|', SCREEN_INFO,
       '| errors:', sz.errors(recurse=True) or 'none', '| warnings:', sz.warnings(recurse=True) or 'none')
