@@ -91,12 +91,28 @@ def wire(dst, names, k=0):
         run(wire, dst, names, k, delayFrames=1)
 
 
-wire(lay, [f'quad{i}' for i in range(1, NQ + 1)])      # input order matters: see panel_layout.glsl
+# A GLSL TOP takes at most 3 inputs here, so with four quads, quads 3 and 4 are joined side by side first
+# (td/panels/panel_pair.glsl) and the layout gets quad 1, quad 2 and that pair; quad 4 sits right of quad 3.
+if NQ >= 4:
+    pair_pix = panels.op('pair_pixel') or panels.create(textDAT, 'pair_pixel')
+    pair_pix.par.file = REPO + '/td/panels/panel_pair.glsl'
+    pair_pix.par.syncfile = True
+    pair_pix.nodeX, pair_pix.nodeY = 150, -450
+    pair = panels.op('quad34') or panels.create(glslTOP, 'quad34')
+    pair.par.pixeldat = pair_pix
+    pair.par.outputresolution = 'custom'
+    pair.par.resolutionw, pair.par.resolutionh = 512, 128
+    pair.nodeX, pair.nodeY = 150, -300
+    wire(pair, ['quad3', 'quad4'])
+    wire(lay, ['quad1', 'quad2', 'quad34'])           # input order matters: see panel_layout.glsl
+else:
+    wire(lay, [f'quad{i}' for i in range(1, NQ + 1)])  # input order matters: see panel_layout.glsl
 lay.par.pixeldat = lay_pix
 lay.par.outputresolution = 'custom'
 # Just big enough for both quads: the Non-Commercial key caps TOPs at 1280x1280, so the full-display
 # black comes from the 'screen' container below, not from this TOP.
-lay.par.resolutionw.expr = "max(" + ", ".join(f"parent().par.Quad{i}pos1" for i in range(1, NQ + 1)) + ") + 256"
+lay.par.resolutionw.expr = ("max(" + ", ".join(f"parent().par.Quad{i}pos1" for i in range(1, NQ + 1)) + ") + 256"
+                            if NQ < 4 else "max(parent().par.Quad1pos1, parent().par.Quad2pos1, parent().par.Quad3pos1 + 256) + 256")
 lay.par.resolutionh.expr = "max(" + ", ".join(f"parent().par.Quad{i}pos2" for i in range(1, NQ + 1)) + ") + 128"
 try:                                 # GLSL TOP uniforms are a sequence: make room for uQuad0..3 + uMode
     if lay.seq.vec.numBlocks < 5:
@@ -109,16 +125,17 @@ lay.par.vec0valuez, lay.par.vec0valuew = 256, 128
 lay.par.vec1name = 'uQuad1'
 lay.par.vec1valuex.expr, lay.par.vec1valuey.expr = 'parent().par.Quad2pos1', 'parent().par.Quad2pos2'
 lay.par.vec1valuez, lay.par.vec1valuew = 256, 128
-for i in (3, 4):                     # uQuad2/uQuad3 on vec3/vec4 (vec2 is uMode); unused with two quads
-    v = i
-    setattr(lay.par, f'vec{v}name', f'uQuad{i - 1}')
-    if i <= NQ:
-        getattr(lay.par, f'vec{v}valuex').expr = f'parent().par.Quad{i}pos1'
-        getattr(lay.par, f'vec{v}valuey').expr = f'parent().par.Quad{i}pos2'
-    else:
-        getattr(lay.par, f'vec{v}valuex').expr = getattr(lay.par, f'vec{v}valuey').expr = ''
-        getattr(lay.par, f'vec{v}valuex').val = getattr(lay.par, f'vec{v}valuey').val = -9999
-    getattr(lay.par, f'vec{v}valuez').val, getattr(lay.par, f'vec{v}valuew').val = 256, 128
+# uQuad2 (vec3) = where the quads 3+4 pair goes: at Quad3pos, 512 wide. uQuad3 (vec4) is no longer used.
+lay.par.vec3name = 'uQuad2'
+if NQ >= 4:
+    lay.par.vec3valuex.expr, lay.par.vec3valuey.expr = 'parent().par.Quad3pos1', 'parent().par.Quad3pos2'
+    lay.par.vec3valuez.val, lay.par.vec3valuew.val = 512, 128
+else:
+    lay.par.vec3valuex.expr = lay.par.vec3valuey.expr = ''
+    lay.par.vec3valuex.val = lay.par.vec3valuey.val = -9999
+lay.par.vec4name = 'uQuad3'
+lay.par.vec4valuex.expr = lay.par.vec4valuey.expr = ''
+lay.par.vec4valuex.val = lay.par.vec4valuey.val = -9999
 lay.par.vec2name = 'uMode'
 lay.par.vec2valuex.expr = "parent().par.Source.menuIndex"
 lay.par.vec2valuey.expr = 'parent().par.Brightness'

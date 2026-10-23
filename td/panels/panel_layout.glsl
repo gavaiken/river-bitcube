@@ -1,8 +1,8 @@
 // panel_layout.glsl: GLSL TOP pixel shader for /project1/panels/layout.
 // Places up to four 256x128 quad images into the HDMI output that the Colorlight sender samples (top-left).
-// Inputs: 0..3 = quads 1..4 (each already switched between canvas crop and test pattern); a file with two
-// quads wires only two inputs.
-// uQuad0..uQuad3 = (x, y, w, h) in output pixels, origin TOP-LEFT (as in Colorlight/LEDVision).
+// Inputs: 0 = quad 1, 1 = quad 2, and with four quads 2 = quads 3+4 side by side (panel_pair.glsl, 512 wide),
+// because a GLSL TOP takes at most 3 inputs. Each is already switched between canvas crop and test pattern.
+// uQuad0..uQuad2 = (x, y, w, h) in output pixels, origin TOP-LEFT (as in Colorlight/LEDVision); uQuad3 unused.
 // uMode.x = 2 for black, uMode.y = brightness gain, uMode.z = 1 to blank quad 2.
 //
 // Sampler arrays are indexed with literal constants only, and only for inputs that exist.
@@ -42,10 +42,6 @@ void main()
 #if TD_NUM_2D_INPUTS > 2
     vec2 q3 = local(uQuad2, px);
     if (q3.x >= 0.0) c = texture(sTD2DInputs[2], q3).rgb;
-#endif
-#if TD_NUM_2D_INPUTS > 3
-    vec2 q4 = local(uQuad3, px);
-    if (q4.x >= 0.0) c = texture(sTD2DInputs[3], q4).rgb;
 #endif
 
     if (uMode.x > 1.5) c = vec3(0.0);
