@@ -65,3 +65,5 @@ Notes kept here while another session is editing the shared docs; folded into th
   5. Save, toeexpand secret check, commit; `Start-River.cmd` → seasons file; restart TD via the interactive task and confirm it comes up on its own.
 - 22 Oct 22:50 (session A): bitcube online at Gray Area. Added river@gav-m1-mini (mission control) to bitcube administrators_authorized_keys, pulled the repo on bitcube (autostash), ran the read-only mission probe. Not touching devices: session N owns bitcube tonight.
 - 22 Oct 23:45 (session A): rigging layout from Gavin logged in the execution plan (photo, points 1-3), new steps S21 (self-recovery after a power cut, BIOS), S22 (gallery cam keeps .76 on Ethernet: reservation is for the Wi-Fi MAC only), S23 (cam position), S24 (map for the rig).
+
+## 23 Oct 00:35 start: Mac mini · session A · S1 (deploy the seasons show file), then S20 + final S26 power cut with Gavin. Session N has ended; bitcube is free.
