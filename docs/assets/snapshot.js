@@ -43,7 +43,7 @@
 
   /* riverSnapshot({img, time, note, every[, prefix, ext, latest]}): load the newest still into img; write when it
    * was taken into time; every = seconds between refreshes (0 = once). If nothing loads, img keeps its src.
-   * The TD preview: prefix 't/', ext '.png', latest 'td.png'. */
+   * The TD preview: prefix 't/', latest 'td.jpg'. */
   window.riverSnapshot = function (o) {
     var taken = null;
     function show() {

@@ -3,7 +3,7 @@
 # parentless commit, so the branch never grows history) as
 #   gallery.jpg                 the newest still
 #   m/<UTC yyyyMMdd-HHmm>.jpg   one per minute, the last $Keep minutes
-#   td.png, t/<minute>.png      what TouchDesigner sends: the 20 ropes and the four screens upright (the show
+#   td.jpg, t/<minute>.jpg      what TouchDesigner sends: the 20 ropes and the four screens upright (the show
 #                               file's screens_preview TOP, via the Claude bridge; phase G7). Skipped, with the
 #                               camera still pushed anyway, if TD isn't answering.
 # raw.githubusercontent.com caches every path for 5 minutes and ignores query strings, so gallery.jpg can
@@ -50,16 +50,23 @@ function Get-MinuteName([datetime]$Utc) {
 
 function Get-TdMinuteName([datetime]$Utc) {
     # Path of one minute's TD preview on the branch; docs/assets/snapshot.js builds the same name (prefix t/).
-    return 't/' + $Utc.ToString('yyyyMMdd-HHmm', [Globalization.CultureInfo]::InvariantCulture) + '.png'
+    return 't/' + $Utc.ToString('yyyyMMdd-HHmm', [Globalization.CultureInfo]::InvariantCulture) + '.jpg'
 }
 
-function Get-TdPreview([string]$Out) {
-    # Ask the running show file for its screens_preview TOP. $true if a PNG was written.
+function Get-TdPreview([string]$Out, [string]$Ffmpeg) {
+    # Ask the running show file for its screens_preview TOP (TD writes a PNG, ~800 KB) and keep it as a JPEG
+    # (~40 KB: this goes up the gallery's internet every minute). $true if $Out was written.
+    $png = [IO.Path]::ChangeExtension($Out, '.png')
     foreach ($top in '/project1/seasons/screens_preview', '/project1/river_local/screens_preview') {
         try {
-            $q = 'op=' + [uri]::EscapeDataString($top) + '&path=' + [uri]::EscapeDataString(($Out -replace '\\', '/'))
+            Remove-Item $png -ErrorAction SilentlyContinue
+            $q = 'op=' + [uri]::EscapeDataString($top) + '&path=' + [uri]::EscapeDataString(($png -replace '\\', '/'))
             $r = Invoke-RestMethod -Uri "http://127.0.0.1:9980/screenshot?$q" -Method Get -TimeoutSec 8
-            if ($r.ok -ne $false -and (Test-Path $Out) -and (Get-Item $Out).Length -gt 0) { return $true }
+            if ($r.ok -ne $false -and (Test-Path $png) -and (Get-Item $png).Length -gt 0) {
+                & $Ffmpeg -hide_banner -loglevel error -y -i $png -q:v 4 $Out 2>&1 | Out-Null
+                Remove-Item $png -ErrorAction SilentlyContinue
+                return (Test-Path $Out)
+            }
         } catch { }
     }
     return $false
@@ -145,17 +152,18 @@ if ($MyInvocation.InvocationName -ne '.') {
         foreach ($old in $all) { if ($kept -notcontains $old) { Remove-Item (Join-Path $work $old) } }
         $files = @{ 'gallery.jpg' = $jpeg }
         foreach ($k in $kept) { $files[$k] = Join-Path $work $k }
-        $tdOut = Join-Path $work 'td.png'
+        $tdOut = Join-Path $work 'td.jpg'
         Remove-Item $tdOut -ErrorAction SilentlyContinue
         $tdNote = 'no TD preview'
-        if (Get-TdPreview $tdOut) {
+        if (Get-TdPreview $tdOut $ffmpeg) {
             $tdDir = Join-Path $work 't'
             New-Item -ItemType Directory -Force $tdDir | Out-Null
             Copy-Item $tdOut (Join-Path $work (Get-TdMinuteName $now.ToUniversalTime())) -Force
-            $allTd = @(Get-ChildItem $tdDir -Filter '*.png' | ForEach-Object { 't/' + $_.Name })
+            Get-ChildItem $tdDir -Filter '*.png' | Remove-Item -ErrorAction SilentlyContinue
+            $allTd = @(Get-ChildItem $tdDir -Filter '*.jpg' | ForEach-Object { 't/' + $_.Name })
             $keptTd = Select-KeptMinutes $allTd $Keep
             foreach ($old in $allTd) { if ($keptTd -notcontains $old) { Remove-Item (Join-Path $work $old) } }
-            $files['td.png'] = $tdOut
+            $files['td.jpg'] = $tdOut
             foreach ($k in $keptTd) { $files[$k] = Join-Path $work $k }
             $tdNote = 'TD preview ' + (Get-Item $tdOut).Length + ' bytes'
         }

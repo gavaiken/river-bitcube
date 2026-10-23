@@ -27,7 +27,7 @@ The same minute from inside the show: the 20 ropes (left, one column each) and t
 
 <script>
 riverSnapshot({ img: document.getElementById('td'), time: document.getElementById('td-time'),
-                note: document.getElementById('td-note'), every: 60, prefix: 't/', ext: '.png', latest: 'td.png',
+                note: document.getElementById('td-note'), every: 60, prefix: 't/', ext: '.jpg', latest: 'td.jpg',
                 failText: 'No preview from TouchDesigner right now (TD restarting, or outside 08:00-02:00).' });
 </script>
 
