@@ -4,7 +4,7 @@ title: "A River Becoming: network and power at Gray Area"
 
 # A River Becoming at Gray Area: network and power
 
-For Seabrook and the Gray Area team. What we plug in, what it needs from the building, and how it connects. (Updated 22 Oct 2026.)
+For Seabrook and the Gray Area team. What we plug in, what it needs from the building, and how it connects. (Updated 22 Oct 2026, 21:45.)
 
 **Detailed map of every device, address and connection:** [system map](system/) (interactive; tap any box or line).
 
@@ -39,15 +39,15 @@ One AC input to a power strip on a board, feeding four 5 V 350 W supplies (one p
   <path class="w" d="M380,100 V66" marker-end="url(#a)"/>
   <rect class="g" x="250" y="185" width="260" height="56" rx="8"/>
   <text class="t" x="380" y="208" text-anchor="middle">Our router (GL.iNet)</text>
-  <text class="s" x="380" y="227" text-anchor="middle">our own small network behind it</text>
+  <text class="s" x="380" y="227" text-anchor="middle">our own network (Wi-Fi “river”)</text>
   <path class="w" d="M380,185 V150" marker-end="url(#a)"/>
   <rect class="g" x="60" y="290" width="230" height="56" rx="8"/>
   <text class="t" x="175" y="313" text-anchor="middle">Gallery camera</text>
-  <text class="s" x="175" y="332" text-anchor="middle">Wi-Fi to our router</text>
+  <text class="s" x="175" y="332" text-anchor="middle">cable to our router</text>
   <path class="w" d="M250,228 L175,290"/>
   <rect class="g" x="440" y="290" width="260" height="56" rx="8"/>
   <text class="t" x="570" y="313" text-anchor="middle">Show computer "bitcube"</text>
-  <text class="s" x="570" y="332" text-anchor="middle">TouchDesigner; Wi-Fi + cable to router</text>
+  <text class="s" x="570" y="332" text-anchor="middle">TouchDesigner; cable to our router</text>
   <path class="w" d="M510,228 L570,290"/>
   <rect class="l" x="300" y="395" width="215" height="62" rx="8"/>
   <text class="t" x="407" y="418" text-anchor="middle">Switch → LED controller</text>
