@@ -8,7 +8,8 @@ const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\
 const PROBE = PS + 'probe.ps1';
 export const CAMERAS = ['gallery', 'river'];
 const SNAP_CACHE_MS = 45_000;
-export const BOOT_FILES = ['river-local-oct-22-seasons.toe', 'river-online-oct-20.toe'];
+// Show files mission control may open (the online one keeps its old name until step S1.1 renames it).
+export const BOOT_FILES = ['river-local-oct-22-seasons.toe', 'river-online-oct-20.toe', 'river-local-oct-18.toe'];
 export const MODES = ['automatic', 'dynamic', 'manual'];
 export const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
 
@@ -137,9 +138,9 @@ export class Mission {
         if (!(x >= 0 && x <= 1)) throw bad('brightness is 0 to 1');
         return this.#probeAction(`-Action hub75 -Brightness ${x.toFixed(2)}`);
       }
-      case 'bootfile': {
+      case 'bootfile': case 'switch': {
         if (!BOOT_FILES.includes(body.file)) throw bad('unknown show file');
-        return this.#probeAction(`-Action bootfile -BootFile ${body.file}`);
+        return this.#probeAction(`-Action ${action} -BootFile ${body.file}`);
       }
       default: throw bad('unknown action');
     }

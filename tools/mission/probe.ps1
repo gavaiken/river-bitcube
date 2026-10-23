@@ -1,22 +1,38 @@
 # Mission control's status probe for bitcube (docs/mission-plan.md). Read-only unless -Action is given.
 # Prints ONE line of JSON. Run from the Mac mini as:  ssh bitcube powershell -NoProfile -ExecutionPolicy Bypass
 #   -File C:\Users\user\River\river-bitcube\tools\mission\probe.ps1 [-Action ropes -Dark] [-Action hub75 -Brightness 0.6]
-#   [-Action bootfile -BootFile river-local-oct-22-seasons.toe]
+#   [-Action bootfile -BootFile river-local-oct-22-seasons.toe]   which show file opens at boot
+#   [-Action switch -BootFile river-online-oct-20.toe]            also restart TouchDesigner on it now (~1 min dark)
 param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile)
 $ErrorActionPreference = 'Continue'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $river = Split-Path $repo -Parent
 $out = [ordered]@{ ok = $true; time = (Get-Date).ToString('s') }
 
-$BOOT_FILES = @('river-local-oct-22-seasons.toe', 'river-online-oct-20.toe')
-if ($Action -eq 'bootfile') {
-    if ($BOOT_FILES -notcontains $BootFile) { $out.ok = $false; $out.error = "unknown show file $BootFile" }
+$BOOT_FILES = @('river-local-oct-22-seasons.toe', 'river-online-oct-20.toe', 'river-local-oct-18.toe')
+$out.show_files = @($BOOT_FILES | Where-Object { Test-Path (Join-Path $repo $_) })
+if ($Action -in 'bootfile', 'switch') {
+    if ($out.show_files -notcontains $BootFile) { $out.ok = $false; $out.error = "no show file $BootFile on bitcube"; $Action = 'status' }
     else { Set-Content -Path (Join-Path $river 'boot-file.txt') -Value $BootFile -Encoding ascii }
+}
+if ($Action -eq 'switch') {
+    # Quit TouchDesigner (unsaved changes are lost; its camera relays exit with it) and start the launcher in the
+    # desktop session through a one-off interactive task, as at login. Start-River.cmd waits 10 s, then opens it.
+    Get-Process TouchDesigner -ErrorAction SilentlyContinue | Stop-Process -Force
+    Start-Sleep 3
+    $act = New-ScheduledTaskAction -Execute (Join-Path $repo 'Start-River.cmd') -WorkingDirectory $repo
+    $prin = New-ScheduledTaskPrincipal -UserId "$env:COMPUTERNAME\$env:USERNAME" -LogonType Interactive
+    Register-ScheduledTask -TaskName 'MissionSwitchShow' -Action $act -Principal $prin -Force | Out-Null
+    Start-ScheduledTask -TaskName 'MissionSwitchShow'
+    Start-Sleep 3
+    Unregister-ScheduledTask -TaskName 'MissionSwitchShow' -Confirm:$false
+    $out.switched_to = $BootFile
 }
 
 # TouchDesigner (via the bridge): status, or one of its fixed actions
 $td = $null
-if (Get-Process TouchDesigner -ErrorAction SilentlyContinue) {
+if ($Action -eq 'switch') { $td = @{ ok = $false; error = "restarting on $BootFile" } }
+elseif (Get-Process TouchDesigner -ErrorAction SilentlyContinue) {
     $req = @{ action = $(if ($Action -in 'ropes', 'hub75') { $Action } else { 'status' }) }
     if ($Action -eq 'ropes') { $req.dark = [bool]$Dark }
     if ($Action -eq 'hub75') { $req.brightness = $Brightness }

@@ -20,12 +20,15 @@
     <div class="err" id="serr"></div>
   </section>
 
-  <section class="panel"><h2>Lights and show file</h2>
+  <section class="panel"><h2>Show file</h2>
+    <div class="dim">Which version of the piece runs on bitcube. <b>Switch now</b> restarts TouchDesigner on it (the lights go dark for about a minute; unsaved changes in TouchDesigner are lost). <b>Open at boot</b> only changes what opens next time bitcube starts.</div>
+    <div id="showfiles" style="margin-top:8px"></div>
+    <div class="err" id="ferr"></div>
+  </section>
+
+  <section class="panel"><h2>Lights</h2>
     <div class="row"><span>Ropes:</span><button id="ropeson">On</button><button id="ropesdark">Dark (send black)</button><span class="dim" id="ropesnote"></span></div>
     <div class="row" style="margin-top:10px"><span>HUB75 brightness:</span><input type="range" id="hub" min="0" max="1" step="0.05" style="max-width:240px"><span id="hubval" class="dim"></span></div>
-    <div class="row" style="margin-top:10px"><span>Opens at boot:</span>
-      <select id="boot"><option value="river-local-oct-22-seasons.toe">Seasons (local-only)</option><option value="river-online-oct-20.toe">Online (live river + Modal)</option></select>
-      <button id="bootset">Set</button><span class="dim" id="bootnote"></span></div>
     <div class="err" id="lerr"></div>
   </section>
 
@@ -59,7 +62,7 @@ function render(s) {
   if (!seasonsUp) $('modenote').textContent = 'the seasons file isn’t running on bitcube yet (step S1)';
   if (td?.hub75 && document.activeElement !== $('hub')) { $('hub').value = td.hub75.brightness; $('hubval').textContent = td.hub75.brightness; }
   $('ropesnote').textContent = td?.ropes ? (td.ropes.source === 'black' ? 'dark now' : 'showing the river') : '';
-  $('bootnote').textContent = pr?.boot_file ? `now: ${pr.boot_file}` : '';
+  drawShowFiles(pr);
 }
 function drawRules(rules) {
   $('rules').innerHTML = Object.entries(rules).map(([k, r]) => `<div class="row" style="justify-content:space-between;margin-top:6px">
@@ -80,7 +83,26 @@ $('reset').onclick = () => act('/api/control/rules-reset', {}, 'serr').then(() =
 $('ropeson').onclick = () => act('/api/control/ropes', { dark: false }, 'lerr');
 $('ropesdark').onclick = () => act('/api/control/ropes', { dark: true }, 'lerr');
 $('hub').onchange = () => act('/api/control/hub75', { brightness: +$('hub').value }, 'lerr');
-$('bootset').onclick = () => act('/api/control/bootfile', { file: $('boot').value }, 'lerr');
+const LABEL = {
+  'river-local-oct-22-seasons.toe': ['Seasons', 'local-only: the river library through the four seasons; works with no internet'],
+  'river-online-oct-20.toe': ['Online', "the live river camera plus Dave's Modal agent and his canvas; needs internet"],
+  'river-local-oct-18.toe': ['Online', "the live river camera plus Dave's Modal agent and his canvas (old file name until the rename); needs internet"],
+};
+function drawShowFiles(pr) {
+  const files = pr?.show_files ?? [], running = pr?.td?.file, boot = pr?.boot_file;
+  $('showfiles').innerHTML = files.length ? files.map((f) => {
+    const [name, what] = LABEL[f] ?? [f, ''];
+    return `<div class="row" style="justify-content:space-between;border-top:1px solid var(--line);padding:8px 0">
+      <span><b>${esc(name)}</b> <span class="dim">${esc(f)}</span><br><span class="dim">${esc(what)}</span>
+        ${running === f ? '<br><span style="color:var(--ok)">● running now</span>' : ''}${boot === f ? ' <span class="dim">· opens at boot</span>' : ''}</span>
+      <span class="row"><button data-switch="${esc(f)}" ${running === f ? 'disabled' : ''}>Switch now</button><button data-boot="${esc(f)}" ${boot === f ? 'disabled' : ''}>Open at boot</button></span></div>`;
+  }).join('') : '<span class="dim">waiting for bitcube…</span>';
+  document.querySelectorAll('[data-switch]').forEach((b) => b.onclick = () => {
+    if (confirm(`Restart TouchDesigner on ${b.dataset.switch}? The lights go dark for about a minute.`))
+      act('/api/control/switch', { file: b.dataset.switch }, 'ferr');
+  });
+  document.querySelectorAll('[data-boot]').forEach((b) => b.onclick = () => act('/api/control/bootfile', { file: b.dataset.boot }, 'ferr'));
+}
 async function poll() { try { render(await api('/api/status')); } catch { /* shown next time */ } }
 poll(); setInterval(poll, 3000);
 </script>

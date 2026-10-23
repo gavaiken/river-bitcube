@@ -82,8 +82,9 @@ setInterval(async () => {
 }, 5 * 60_000).unref();
 
 // ---- helpers ---------------------------------------------------------------------------------------------
-const PAGES = { '/status': 'status.html', '/chat': 'chat.html', '/mission': 'mission.html', '/login': 'login.html' };
+const PAGES = { '/status': 'status.html', '/map': 'map.html', '/chat': 'chat.html', '/mission': 'mission.html', '/login': 'login.html' };
 const STATIC = { '/app.css': ['app.css', 'text/css'], '/app.js': ['app.js', 'text/javascript'] };
+const MAP_DIR = join(REPO, 'docs', 'system');      // the interactive system map, served with live status
 const page = (name) => readFileSync(join(HERE, 'public', name));
 
 function send(res, status, body, type = 'application/json', headers = {}) {
@@ -144,6 +145,13 @@ const server = createServer(async (req, res) => {
     }
     if (path === '/') return send(res, 302, '', 'text/plain', { location: '/status' });
     if (PAGES[path]) return send(res, 200, page(PAGES[path]), 'text/html; charset=utf-8');
+    if (path === '/map/' || path === '/map/index.html') {
+      const html = readFileSync(join(MAP_DIR, 'index.html'), 'utf8')
+        .replace('</body>', '<script>' + readFileSync(join(HERE, 'public', 'map-live.js'), 'utf8') + '</script></body>');
+      return send(res, 200, html, 'text/html; charset=utf-8', { 'x-frame-options': 'SAMEORIGIN' });
+    }
+    if (path === '/map/system.json') return send(res, 200, readFileSync(join(MAP_DIR, 'system.json')));
+    if (path === '/map/system.html') return send(res, 302, '', 'text/plain', { location: 'https://gavaiken.github.io/river-bitcube/system/system.html' });
 
     // studio chat
     if (path === '/api/chat/history') return send(res, 200, { events: studio.history(Number(url.searchParams.get('limit') || 500)), status: studio.status() });
