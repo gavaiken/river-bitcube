@@ -25,12 +25,12 @@ bitcube DisplayPort ◄── dummy display plug (recommended: a desktop VNC can
 |---|---|
 | Gray Area's drop isn't connected or fails | the router uses Gray Area's staff Wi-Fi (Repeater), by itself |
 | bitcube's router cable is missing or fails | bitcube uses its Wi-Fi (`gray-river`), by itself |
-| the power goes off and on | the router starts by itself; bitcube does too **once the BIOS setting below is made** |
+| the power goes off and on | the router and bitcube start by themselves (bitcube's BIOS *Auto Power On* is on) |
 | the ROUTER and LIGHTS cables are swapped | bitcube stays online over Wi-Fi; the lights are dark until the roles are swapped (remotely, or automatically: S22) |
 | the internet is down | the show keeps running from bitcube's disk; the team on site reaches it on `gray-river` |
 
 ## Before lifting (on the ground, with a monitor and keyboard)
-1. **BIOS: power on after a power cut.** Restart bitcube and press **Del** (or F2) as it starts. Find *Restore on AC Power Loss* (or *State After G3*, or *AC Back*; usually under Advanced → Power or Chipset). Set it to **Power On**. Save with **F10**.
+1. **BIOS: power on after a power cut.** Already set (checked 22 Oct): Advanced → Customer Exclusive Functions → **Auto Power On = Enabled**, and Wake On LAN is Enabled. To check again, press **Del** as bitcube starts.
 2. **Label bitcube's two network ports:** **ROUTER** is the one the router cable is in now; **LIGHTS** is the other. (S22 may make either work.)
 3. **Pull-the-plug test:** switch off bitcube's and the router's power at the wall, wait 10 s, switch back on, touch nothing. Within about 2 minutes:
    - the router's Clients page shows BITCUBE at 192.168.9.79;
@@ -60,6 +60,7 @@ bitcube DisplayPort ◄── dummy display plug (recommended: a desktop VNC can
    - and does it by camera.
 
 ## Already set on bitcube (checked 22 Oct)
+- The BIOS powers bitcube on after a power cut (*Auto Power On*).
 - Windows starts first.
 - It logs in by itself.
 - Sleep and hibernate are off.

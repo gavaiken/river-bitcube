@@ -36,9 +36,10 @@ Keep the lighting switch and the Colorlight cable off the router.
 - 22:40 S3 ✅ Modal link restarted through a one-off interactive scheduled task; gallery clips post again (first `gallery/video` at 22:39). The river cam still fails (river site down).
 - 22:48 Forced bitcube's Wi-Fi to reconnect: it kept 192.168.9.194 until a full release; now **192.168.9.80** (reserved). VNC from the mini works (1920×1080, borrowed ASUS monitor).
 - 22:50 Ceiling plan (Gavin: router and bitcube go in the ceiling, with no monitor up there): checked what's already set for unattended boot (Windows first, auto-login, SSH/Tailscale/TightVNC automatic, sleep off, updates paused to 15 Nov, `gray-river` for all users). Missing: the BIOS power-on-after-power-cut setting (S21). Wrote [ceiling.md](../ceiling.md) and steps S21–S24, R16. TD's Art-Net sender binds to `2.0.0.8`, so it follows whichever port holds that address: the basis for S22 (either port works).
+- 22:58 S21 ✅ BIOS (Aptio, Advanced → Customer Exclusive Functions): **Auto Power On already Enabled**, Wake On LAN Enabled. Nothing changed. Next: the S23 pull-the-plug test.
 
 ### Waiting on Gavin
-- S21 BIOS setting (needs the monitor). OK for S22 (either-port watcher)? Go-ahead for S1 and who runs it. S16 when the wired drop arrives.
+- S23 pull-the-plug test. OK for S22 (either-port watcher)? Go-ahead for S1 and who runs it. S16 when the wired drop arrives.
 
 ### Waiting on Gavin (earlier)
 - S2.1/S2.2 on site. Tell session N when bitcube is cabled and powered.
