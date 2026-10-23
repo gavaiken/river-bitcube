@@ -13,23 +13,23 @@ Once they're up there, nobody can reach a screen or a power button. So everythin
 |---|---|---|---|
 | ![front](img/ceiling-asbuilt-2026-10-23-1.jpg) | ![back](img/ceiling-asbuilt-2026-10-23-2.jpg) | ![back left](img/ceiling-asbuilt-2026-10-23-3.jpg) | ![close-up](img/ceiling-asbuilt-2026-10-23-4.jpg) |
 
-**Live check 23 Oct 11:23:** bitcube rebooted by itself at 11:14:25 and TouchDesigner opened the seasons file 34 s later (60 fps, panel window open); Wi-Fi, internet, the gallery cam (`.76`) and the Modal link all work; **every wired link is down** (rows 1, 2, 4–6, 8). **Recheck 11:35, after reseating: every wired link is up except the WAN drop** (row 1); TouchDesigner had stalled and was restarted on the seasons file at 11:32 (ropes sending, panels window on the LED display). Rows 9–11 still need eyes on the panels and ropes: the gallery cam is lying on the floor.
+**Live check 23 Oct 11:23:** bitcube rebooted by itself at 11:14:25 and TouchDesigner opened the seasons file 34 s later (60 fps, panel window open); Wi-Fi, internet, the gallery cam (`.76`) and the Modal link all work; **every wired link is down** (rows 1, 2, 4–6, 8). **Recheck 11:35, after reseating: every wired link is up except the WAN drop** (row 1); TouchDesigner had stalled and was restarted on the seasons file at 11:32 (ropes sending, panels window on the LED display). **Live check 11:48: every row confirmed** except row 10 (which rope sits on which output: the re-map, S4) and the panels' placement in space (once hung).
 
 **Connections as cabled** (read from the photos; "live" is filled in once bitcube and the router are back online and Claude has checked each link from the Mac mini):
 
 | # | From | To | Cable | Live |
 |---|---|---|---|---|
-| 1 | Gray Area's drop | router **WAN** (rightmost port) | black flat Cat 6 | ✅ 11:41: 1 Gbps, `10.1.0.90` from Gray Area; internet over the cable, staff Wi-Fi kept as backup |
-| 2 | bitcube **ROUTER** port (blue tape) | router port taped **blue** (LAN2) | blue-taped black cable | ✅ 11:35: 1 Gbps both ends; bitcube `Ethernet 2` = `192.168.9.79`, Wi-Fi on standby |
-| 3 | router **LAN1** (middle) | nothing | | correct: LAN1 is off (the old camera cable) |
-| 4 | bitcube **LIGHTS** port (white) | rack controller **NET1** | black (white tape at bitcube) | ✅ 11:35: up at 100 Mbps, `2.0.0.8` |
-| 5 | rack controller **NET2** | PSAC10 **left** box **NET1** | green | ✅ 11:35: left box `2.0.0.10` answers |
-| 6 | PSAC10 left box **NET2** | PSAC10 **right** box **NET1** | black | ✅ 11:35: right box `2.0.0.11` answers; rope sender open, no error, ~80 packets a frame |
+| 1 | Gray Area's drop | router **WAN** (rightmost port) | black flat Cat 6 | ✅ 11:48: 1 Gbps, `10.1.0.90` from Gray Area; internet over the cable, staff Wi-Fi as backup |
+| 2 | bitcube **ROUTER** port (blue tape) | router port taped **blue** (LAN2) | blue-taped black cable | ✅ 11:48: 1 Gbps both ends (router `eth2`, bitcube `Ethernet 2` = `192.168.9.79`); Wi-Fi on standby |
+| 3 | router **LAN1** (middle) | nothing | | ✅ 11:48: LAN1 has no link (empty, as intended) |
+| 4 | bitcube **LIGHTS** port (white) | rack controller **NET1** | black (white tape at bitcube) | ✅ 11:48: up at 100 Mbps, `2.0.0.8` |
+| 5 | rack controller **NET2** | PSAC10 **left** box **NET1** | green | ✅ 11:48: left box `2.0.0.10` answers |
+| 6 | PSAC10 left box **NET2** | PSAC10 **right** box **NET1** | black | ✅ 11:48: right box `2.0.0.11` answers; rope sender open, no error, 80 packets a frame, ropes show the river on the gallery cam |
 | 7 | PSAC10 right box **NET2** | nothing | | end of the chain |
-| 8 | bitcube **HDMI** | Colorlight sender **DVI** | HDMI-to-DVI (blue band) | ✅ 11:35: display "LED 1920X1080"; TD's panels window covers it, panel output shows the river |
-| 9 | Colorlight sender **LAN1** | the receive card at point 2 (panels) | long black Ethernet | to confirm (panels show the river) |
+| 8 | bitcube **HDMI** | Colorlight sender **DVI** | HDMI-to-DVI (blue band) | ✅ 11:48: display "LED 1920X1080"; TD on the seasons file at 60 fps, panels window open on it |
+| 9 | Colorlight sender **LAN1** | the receive card at point 2 (panels) | long black Ethernet | ✅ 11:48 in TD (panel output = the river in four blocks); placement in space to check once the panels are hung |
 | 10 | ropes (male round plugs) | PSAC10 OUT1–OUT10 on both boxes, via the XLR adapters | rope leads (labelled B1, B3…) | to confirm by camera at the re-map (S4) |
-| 11 | mains | router, bitcube, rack controller (IEC), Colorlight sender (IEC, red switch), each PSAC10 (blue powerCON, breaker ON) | | to confirm |
+| 11 | mains | router, bitcube, rack controller (IEC), Colorlight sender (IEC, red switch), each PSAC10 (blue powerCON, breaker ON) | | ✅ 11:48: everything answers (router, bitcube, both PSAC10s through the rack controller, Colorlight sender seen as a display) |
 
 *Left and right are as seen from the back. Which PSAC10 is box 001 (`2.0.0.10`, ropes 1–10) and which is 002 shows on each box's front display (`ID:001` / `ID:002`); the rope labels B1… suggest the left box is box 1. The gallery camera has no cable (Wi-Fi only).*
 
