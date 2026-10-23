@@ -2,6 +2,11 @@
 
     python tools/cameras/ptz.py gallery Down 0.4      # op: Left Right Up Down; seconds of movement
     python tools/cameras/ptz.py gallery Stop
+    python tools/cameras/ptz.py gallery save 1 map    # remember where it points now as preset 1 ("map")
+    python tools/cameras/ptz.py gallery goto 1        # go back there (then wait ~5 s)
+    python tools/cameras/ptz.py gallery presets       # list the saved ones
+Presets on the gallery cam (23 Oct): 1 "map" = the framing the rope map and screen positions were captured
+from (use it for any re-map); 2 "room" = tilted down to see the people near the piece (counter, Dave's agent).
 
 Camera host and password come from the untracked secrets.local.json (cameras.<name> RTSP URL).
 Based on Will's tools/cameras/test_cam_move.py (Reolink HTTPS JSON API, self-signed cert).
@@ -75,5 +80,31 @@ def main(name, op, seconds=0.0):
     print(f'{name}: {op} {seconds}s done')
 
 
+def preset(name, action, pid=None, label=None):
+    host, user, password = camera(name)
+    api = Api(host)
+    token = api.call('Login', {'User': {'userName': user, 'password': password}})['value']['Token']['name']
+    try:
+        if action == 'save':
+            api.call('SetPtzPreset', {'PtzPreset': {'channel': 0, 'enable': 1, 'id': int(pid), 'name': label or f'preset{pid}'}}, token)
+            print(f'{name}: saved preset {pid} ({label})')
+        elif action == 'goto':
+            api.call('PtzCtrl', {'channel': 0, 'op': 'ToPos', 'id': int(pid), 'speed': 32}, token)
+            print(f'{name}: going to preset {pid}')
+        else:
+            res = api.call('GetPtzPreset', {'channel': 0}, token)
+            for p in res['value']['PtzPreset']:
+                if p.get('enable'):
+                    print(p['id'], p.get('name', ''))
+    finally:
+        try:
+            api.call('Logout', {}, token)
+        except Exception:
+            pass
+
+
 if __name__ == '__main__':
-    main(sys.argv[1], sys.argv[2], float(sys.argv[3]) if len(sys.argv) > 3 else 0.0)
+    if sys.argv[2] in ('save', 'goto', 'presets'):
+        preset(sys.argv[1], sys.argv[2], *sys.argv[3:5])
+    else:
+        main(sys.argv[1], sys.argv[2], float(sys.argv[3]) if len(sys.argv) > 3 else 0.0)
