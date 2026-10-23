@@ -3,6 +3,9 @@
 # parentless commit, so the branch never grows history) as
 #   gallery.jpg                 the newest still
 #   m/<UTC yyyyMMdd-HHmm>.jpg   one per minute, the last $Keep minutes
+#   td.png, t/<minute>.png      what TouchDesigner sends: the 20 ropes and the four screens upright (the show
+#                               file's screens_preview TOP, via the Claude bridge; phase G7). Skipped, with the
+#                               camera still pushed anyway, if TD isn't answering.
 # raw.githubusercontent.com caches every path for 5 minutes and ignores query strings, so gallery.jpg can
 # look 5 minutes old; a per-minute name is a new path, so docs/assets/snapshot.js loads the newest minute
 # that exists and is never stale. Run by the scheduled task RiverSnapshot (every minute, 08:00-02:00;
@@ -43,6 +46,23 @@ function Get-SnapshotCacheInfo([string]$BlobSha, [string]$Name = 'gallery.jpg') 
 function Get-MinuteName([datetime]$Utc) {
     # Path of one minute's still on the branch; docs/assets/snapshot.js builds the same name.
     return 'm/' + $Utc.ToString('yyyyMMdd-HHmm', [Globalization.CultureInfo]::InvariantCulture) + '.jpg'
+}
+
+function Get-TdMinuteName([datetime]$Utc) {
+    # Path of one minute's TD preview on the branch; docs/assets/snapshot.js builds the same name (prefix t/).
+    return 't/' + $Utc.ToString('yyyyMMdd-HHmm', [Globalization.CultureInfo]::InvariantCulture) + '.png'
+}
+
+function Get-TdPreview([string]$Out) {
+    # Ask the running show file for its screens_preview TOP. $true if a PNG was written.
+    foreach ($top in '/project1/seasons/screens_preview', '/project1/river_local/screens_preview') {
+        try {
+            $q = 'op=' + [uri]::EscapeDataString($top) + '&path=' + [uri]::EscapeDataString(($Out -replace '\\', '/'))
+            $r = Invoke-RestMethod -Uri "http://127.0.0.1:9980/screenshot?$q" -Method Get -TimeoutSec 8
+            if ($r.ok -ne $false -and (Test-Path $Out) -and (Get-Item $Out).Length -gt 0) { return $true }
+        } catch { }
+    }
+    return $false
 }
 
 function Select-KeptMinutes([string[]]$Names, [int]$Keep) {
@@ -120,8 +140,22 @@ if ($MyInvocation.InvocationName -ne '.') {
         foreach ($old in $all) { if ($kept -notcontains $old) { Remove-Item (Join-Path $work $old) } }
         $files = @{ 'gallery.jpg' = $jpeg }
         foreach ($k in $kept) { $files[$k] = Join-Path $work $k }
+        $tdOut = Join-Path $work 'td.png'
+        Remove-Item $tdOut -ErrorAction SilentlyContinue
+        $tdNote = 'no TD preview'
+        if (Get-TdPreview $tdOut) {
+            $tdDir = Join-Path $work 't'
+            New-Item -ItemType Directory -Force $tdDir | Out-Null
+            Copy-Item $tdOut (Join-Path $work (Get-TdMinuteName $now.ToUniversalTime())) -Force
+            $allTd = @(Get-ChildItem $tdDir -Filter '*.png' | ForEach-Object { 't/' + $_.Name })
+            $keptTd = Select-KeptMinutes $allTd $Keep
+            foreach ($old in $allTd) { if ($keptTd -notcontains $old) { Remove-Item (Join-Path $work $old) } }
+            $files['td.png'] = $tdOut
+            foreach ($k in $keptTd) { $files[$k] = Join-Path $work $k }
+            $tdNote = 'TD preview ' + (Get-Item $tdOut).Length + ' bytes'
+        }
         $commit = Publish-Snapshot $files (Join-Path $work 'repo.git') $now
-        Write-Log "pushed $size bytes as $name ($($kept.Count) minutes kept), $commit"
+        Write-Log "pushed $size bytes as $name ($($kept.Count) minutes kept), $tdNote, $commit"
     } catch {
         Write-Log "ERROR $($_.Exception.Message)"
         exit 1

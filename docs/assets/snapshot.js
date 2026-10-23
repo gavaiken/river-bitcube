@@ -9,25 +9,26 @@
   var TRIES = 15;          // minutes kept on the branch
 
   function two(n) { return (n < 10 ? '0' : '') + n; }
-  function minuteName(d) {
-    return 'm/' + d.getUTCFullYear() + two(d.getUTCMonth() + 1) + two(d.getUTCDate()) + '-' +
-      two(d.getUTCHours()) + two(d.getUTCMinutes()) + '.jpg';
+  function minuteName(d, prefix, ext) {
+    return (prefix || 'm/') + d.getUTCFullYear() + two(d.getUTCMonth() + 1) + two(d.getUTCDate()) + '-' +
+      two(d.getUTCHours()) + two(d.getUTCMinutes()) + (ext || '.jpg');
   }
 
   // done(url, takenDate or null) on success, fail() if nothing loads.
-  function newest(done, fail) {
+  function newest(done, fail, o) {
+    o = o || {};
     var start = Date.now() - LAG_MS, i = 0;
     function attempt() {
       if (i >= TRIES) { return fallback(); }
       var d = new Date(start - i * 60000);
       d.setUTCSeconds(0, 0);
-      var url = BASE + minuteName(d), probe = new Image();
+      var url = BASE + minuteName(d, o.prefix, o.ext), probe = new Image();
       probe.onload = function () { done(url, d); };
       probe.onerror = function () { i++; attempt(); };
       probe.src = url;
     }
     function fallback() {
-      var url = BASE + 'gallery.jpg', probe = new Image();
+      var url = BASE + (o.latest || 'gallery.jpg'), probe = new Image();
       probe.onload = function () { done(url, null); };
       probe.onerror = fail;
       probe.src = url;
@@ -40,8 +41,9 @@
     return m <= 0 ? 'just now' : m === 1 ? '1 minute ago' : m < 120 ? m + ' minutes ago' : Math.round(m / 60) + ' hours ago';
   }
 
-  /* riverSnapshot({img, time, note, every}): load the newest still into img; write when it was taken into
-   * time; every = seconds between refreshes (0 = once). If nothing loads, img keeps its src. */
+  /* riverSnapshot({img, time, note, every[, prefix, ext, latest]}): load the newest still into img; write when it
+   * was taken into time; every = seconds between refreshes (0 = once). If nothing loads, img keeps its src.
+   * The TD preview: prefix 't/', ext '.png', latest 'td.png'. */
   window.riverSnapshot = function (o) {
     var taken = null;
     function show() {
@@ -53,14 +55,14 @@
       newest(function (url, d) {
         o.img.src = url;
         taken = d;
-        if (!d && o.time) {   // gallery.jpg: ask the commit time once (60 requests/hour limit, so not every minute)
+        if (!d && o.time && !o.prefix) {   // gallery.jpg: ask the commit time once (60 requests/hour limit, so not every minute)
           fetch('https://api.github.com/repos/gavaiken/river-bitcube/commits/snapshot')
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (c) { if (c) { taken = new Date(c.commit.committer.date); show(); } })
             .catch(function () {});
         }
         show();
-      }, function () { if (o.note) { o.note.textContent = o.failText || 'The camera snapshot is unavailable right now.'; } });
+      }, function () { if (o.note) { o.note.textContent = o.failText || 'The camera snapshot is unavailable right now.'; } }, o);
     }
     refresh();
     if (o.every) { setInterval(refresh, o.every * 1000); setInterval(show, 15000); }

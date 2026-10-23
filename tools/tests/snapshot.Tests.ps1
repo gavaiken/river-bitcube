@@ -60,3 +60,9 @@ Describe 'Hide-Secrets' {
     }
     It 'leaves text without a login alone' { Hide-Secrets 'pushed 51234 bytes' | Should Be 'pushed 51234 bytes' }
 }
+
+Describe 'Get-TdMinuteName' {
+    It 'names the UTC minute under t/ as a PNG, as docs/assets/snapshot.js does' {
+        Get-TdMinuteName ([datetime]'2026-10-23 20:51:30') | Should Be 't/20261023-2051.png'
+    }
+}
