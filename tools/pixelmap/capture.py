@@ -17,6 +17,7 @@ Don't move the camera during a run; meta.json records the drift between the firs
 """
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -56,10 +57,19 @@ class Reader:
         self.p = subprocess.Popen(
             [ffmpeg, '-hide_banner', '-loglevel', 'error', '-rtsp_transport', 'tcp', '-i', url,
              '-vf', f'fps={fps},scale={W}:{H}', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'],
-            stdout=subprocess.PIPE, bufsize=W * H * 3 * 2)
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=W * H * 3 * 2)
         self.frames = []          # [(time, array)], newest last, short history
         self.lock = threading.Lock()
         threading.Thread(target=self._run, daemon=True).start()
+        threading.Thread(target=self._errors, daemon=True).start()
+
+    def _errors(self):
+        """ffmpeg's messages, without the camera's login: it prints the whole RTSP address when the input fails, and
+        calibrate.py keeps these lines in the progress file that mission control serves."""
+        for raw in iter(self.p.stderr.readline, b''):
+            line = re.sub(r'([a-z][a-z0-9+.-]*://)[^\s/@\'"<>]+@', r'\1***@', raw.decode('utf-8', 'replace'), flags=re.I)
+            sys.stderr.write(line)
+            sys.stderr.flush()
 
     def _run(self):
         n = W * H * 3

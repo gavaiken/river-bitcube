@@ -11,7 +11,13 @@
 #                   "source", "brightness": min(Brightness, Maxbrightness) (not baked into rgb), "watts": [box1, box2]},
 #        "panels": {"w": 256, "h": 32, "rgb": base64, a 4x box-downsample of panel_out (the 1024x128 atlas, four
 #                   256x128 quads in a row; brightness and black already applied by the layout shader), row 0 = top,
-#                   "source", "brightness", "output", "atlas": [w, h]}}
+#                   "source", "brightness", "output", "atlas": [w, h]},
+#        "screens": {"w": 128, "h": 64, "rgb": base64, "cells": 4: the four screens UPRIGHT AS SEEN, side by side (cell k-1 =
+#                   screen k, each its <prefix><k>_src 128x256 portrait downsampled 4x, times the panels' Brightness, black
+#                   when the panels' Source is black), what screens.py feeds quad k before turning it on its side for the
+#                   receive card (Gray Area stacks the quads: panel_out is 256x512, each quad flopped, flipped, and for
+#                   screens 3 and 4 row-swapped). Lights draws cell k on screen k; {"error"} while the panels show a test
+#                   pattern or a show file has no screens build}}
 #       Either part is {"error": ...} on its own failure. Packing: tools/mission/frames_pack.py (pure numpy, tested).
 import json
 import os
@@ -132,6 +138,21 @@ def panels_now(fp):
     return base | fp.pack_top(a, downsample=4) | {'atlas': [top.width, top.height], 'top': top.path}
 
 
+def screens_now(fp):
+    """The four screens upright as seen (see the header): the <prefix><k>_src beside each Quad<k> TOP the panels use."""
+    p = panels.par
+    if p.Source.eval() == 'test':
+        return {'error': 'the panels show a test pattern'}
+    tops = []
+    for k in range(1, 5):
+        par = getattr(p, f'Quad{k}', None)
+        out = op(par.eval()) if par is not None and par.eval() else None
+        src = out.parent().op(out.name[:-len('_out')] + '_src') if out is not None and out.name.endswith('_out') else None
+        tops.append(read_top(src) if src is not None else None)
+    gain = 0.0 if p.Source.eval() == 'black' else p.Brightness.eval()
+    return fp.pack_screens(tops, downsample=4, gain=gain)
+
+
 def frames_now():
     fp = pack_module()
     cfg = safe(lambda: ropes.op('artnet_out').module.load_config()) if ropes else None
@@ -139,7 +160,8 @@ def frames_now():
             'source': ropes.par.Source.eval() if ropes else None,
             'brightness': panels.par.Brightness.eval() if panels else None,
             'ropes': safe(lambda: ropes_now(fp, cfg)) if ropes else {'error': 'no /project1/ropes'},
-            'panels': safe(lambda: panels_now(fp)) if panels else {'error': 'no /project1/panels'}}
+            'panels': safe(lambda: panels_now(fp)) if panels else {'error': 'no /project1/panels'},
+            'screens': safe(lambda: screens_now(fp)) if panels else {'error': 'no /project1/panels'}}
 
 
 if act == 'frames':

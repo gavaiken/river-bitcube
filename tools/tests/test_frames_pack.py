@@ -128,3 +128,24 @@ def test_encode_decode_roundtrip_and_black():
         fp.decode({'w': 3, 'h': 3, 'rgb': d['rgb']})
     b = fp.pack_black(20, 400)
     assert (b['w'], b['h']) == (20, 400) and not fp.decode(b).any()
+
+
+def test_pack_screens_puts_the_four_upright_screens_side_by_side():
+    """Gray Area stacks the quads and turns each on its side, so Lights gets each screen upright too (cell k-1 = screen k)."""
+    def solid(rgb, h=256, w=128):
+        a = np.zeros((h, w, 4), np.float32)
+        a[:, :, :3] = rgb
+        a[-1, :, :3] = (1, 1, 1)                      # TD's LAST row is the top of the screen: white after the flip
+        a[:, :, 3] = 1
+        return a
+    tops = [solid((1, 0, 0)), solid((0, 1, 0)), None, solid((0, 0, 1), h=128, w=64)]
+    d = fp.pack_screens(tops, downsample=4, gain=0.5)
+    assert (d['w'], d['h'], d['cells']) == (128, 64, 4)
+    img = fp.decode(d)
+    assert tuple(img[10, 5]) == (128, 0, 0)            # screen 1 red, at half brightness
+    assert tuple(img[10, 32 + 5]) == (0, 128, 0)       # screen 2 green
+    assert tuple(img[10, 64 + 5]) == (0, 0, 0)         # screen 3 not cooked: black
+    assert tuple(img[10, 96 + 5]) == (0, 0, 128)       # screen 4 resampled to the same cell size
+    assert img[0, 5, 1] > 0 and img[63, 5, 1] == 0    # row 0 is the top of the screen (the white row)
+    with pytest.raises(ValueError):
+        fp.pack_screens([None] * 4)

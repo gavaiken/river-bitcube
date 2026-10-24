@@ -51,6 +51,22 @@ PASS_RE = re.compile(r'\bpass\s+(?P<p>[A-Z])\b')
 RETAKE_RE = re.compile(r'retaken,\s*(?P<takes>\d+)\s+takes')
 
 
+# The progress file's `reason`: why a run failed or was refused, in the team's words (docs/mission-ui.md, Calibrate >
+# Failure); `error` keeps the raw text (step ids, exit codes, the log tail) for Gavin and the tests.
+STAGE_WORDS = {'ropes-capture': 'Photographing the ropes', 'ropes-decode': 'Working out where each rope is',
+               'hub75-capture': 'Photographing the panels', 'hub75-locate': 'Finding the panels'}
+STAGE_CAUSE = {'ropes-capture': "the camera's pictures of the patterns couldn't be taken",
+               'ropes-decode': "the patterns couldn't be read from the pictures (someone in view, or light in the room)",
+               'hub75-capture': "the camera's pictures of the panels couldn't be taken",
+               'hub75-locate': "the panels couldn't be picked out in the picture"}
+
+
+def stage_reason(stage, cause=None):
+    """"Working out where each rope is failed: <cause>; run it again when the room is dark and empty"."""
+    what = STAGE_WORDS.get(stage, 'The run')
+    return f"{what} failed: {cause or STAGE_CAUSE.get(stage, 'it stopped with an error')}; run it again when the room is dark and empty"
+
+
 def drift_error(drift):
     """The words the portal shows when the camera moved (docs/mission-ui.md, Calibrate > Failure)."""
     return f'The camera moved during the run (drift {drift:.0f}): the map was not saved. Fix the camera and run again'
@@ -79,6 +95,12 @@ def parse_capture_line(line):
 KEEP = ('Active', 'Source', 'Brightness', 'Graybit', 'Grayinvert')      # what capture.py restores, in its order
 MAP_GLOB = 'pixelmap-????-??-??.json'
 LOG_LINES = 40
+_CREDS = re.compile(r'([a-z][a-z0-9+.-]*://)[^\s/?#"<>]*@', re.I)   # up to the authority's last @ (lib/scrub.mjs)
+
+
+def scrub(text):
+    """'rtsp://admin:pw@10.0.0.1/x' -> 'rtsp://***@10.0.0.1/x': no login in anything written or shown."""
+    return _CREDS.sub(r'\1***@', str(text))
 
 
 class Cancelled(Exception):
@@ -86,7 +108,10 @@ class Cancelled(Exception):
 
 
 class StageFailed(Exception):
-    pass
+    """A stage failed: str(e) is the raw text, e.reason the team's words (the raw text when it is already plain)."""
+    def __init__(self, error, reason=None):
+        super().__init__(error)
+        self.reason = reason or error
 
 
 # ---- small pure helpers ---------------------------------------------------------------------------------
@@ -135,6 +160,18 @@ def td_alive(bridge, timeout=5):
         return True, None
     except Exception as e:
         return False, f'TouchDesigner is not running or its bridge is not answering ({e.__class__.__name__}: {e})'[:200]
+
+
+# A refusal's raw text -> the words the portal shows (the raw text stays in the progress file's error and the answer's raw).
+def refusal_reason(why):
+    w = str(why or '')
+    if 'TouchDesigner' in w:
+        return "TouchDesigner isn't answering"
+    if 'already running' in w:
+        return 'a calibration is already running'
+    if 'meta.json' in w:
+        return "that capture can't be found on bitcube"
+    return "bitcube couldn't start it"
 
 
 def restore_code(before):
@@ -198,7 +235,7 @@ class Job:
         return {'running': True, 'pid': os.getpid(), 'mode': self.mode, 'stage': None, 'stage_index': -1,
                 'stages': list(self.stages) + ['done'], 'step': 0, 'of': 0, 'pass': None, 'retakes': 0, 'expected_s': None,
                 'started': round(self.now(), 3), 'updated': None, 'elapsed_s': 0, 'message': 'starting',
-                'ok': None, 'error': None, 'cancelled': False, 'dry_run': self.dry_run,
+                'ok': None, 'error': None, 'reason': None, 'cancelled': False, 'dry_run': self.dry_run,
                 'decode_only': str(self.decode_only) if self.decode_only else None, 'cam': self.cam,
                 'brightness_cap': self.brightness, 'max_drift': self.max_drift, 'before': None, 'restored': None,
                 'capture': None, 'hub75_capture': None, 'capture_info': None, 'result': None, 'log': []}
@@ -221,7 +258,9 @@ class Job:
                 time.sleep(0.05)
 
     def note(self, line):
-        self.log.append(line[:300])
+        # ffmpeg prints a failing camera's whole RTSP address, login included: never store it (the log reaches every
+        # logged-in browser through the full check, GET /api/calibration and mission control's history)
+        self.log.append(scrub(line)[:300])
 
     # -- lock --
     def take_lock(self):
@@ -259,7 +298,7 @@ class Job:
     def run(self):
         ok, why = self.take_lock()
         if not ok:
-            print(json.dumps({'ok': False, 'error': why}), flush=True)
+            print(json.dumps({'ok': False, 'error': refusal_reason(why), 'raw': why}), flush=True)
             return 3
         try:
             try:
@@ -289,13 +328,14 @@ class Job:
                        result=self.result(), restored=self.restored)
             return 4
         except StageFailed as e:
-            self.write(running=False, ok=False, error=str(e), message=str(e), result=self.result(), restored=self.restored)
+            self.write(running=False, ok=False, error=str(e), reason=e.reason, message=str(e), result=self.result(), restored=self.restored)
             return 1
         except Exception as e:
             self.stop_child()
             self.restore_if_needed()
             err = f'{e.__class__.__name__}: {e}'[:300]
-            self.write(running=False, ok=False, error=err, message=err, result=self.result(), restored=self.restored)
+            self.write(running=False, ok=False, error=err, reason='The run stopped with an error on bitcube; ask Gavin',
+                       message=err, result=self.result(), restored=self.restored)
             return 1
         finally:
             self.release_lock()
@@ -305,8 +345,9 @@ class Job:
                 pass
 
     def refuse(self, code, why):
-        self.write(running=False, ok=False, error=why, message=why)
-        print(json.dumps({'ok': False, 'error': why}), flush=True)
+        reason = refusal_reason(why)
+        self.write(running=False, ok=False, error=why, reason=reason, message=why)
+        print(json.dumps({'ok': False, 'error': reason, 'raw': why}), flush=True)
         return code
 
     def result(self):
@@ -336,7 +377,7 @@ class Job:
             return self.pretend([(k / 20, f'rope {k:2d}: decoded') for k in range(1, 21)])
         self.run_child([self.python, str(self.scripts / 'decode.py'), str(self.capture_dir)], 'ropes-decode', self.on_decode_line)
         if self.map_path is None:
-            raise StageFailed('ropes-decode: decode.py reported no map file')
+            raise StageFailed('ropes-decode: decode.py reported no map file', stage_reason('ropes-decode', 'no map came out of it'))
         self.write(step=STEPS['ropes-decode'], message=f'map written: {Path(self.map_path).name}')
 
     def stage_hub75_capture(self):
@@ -360,7 +401,7 @@ class Job:
         self.run_child(cmd, f'{mode}-capture', self.on_capture_line)
         folder = self.capture_dir if mode == 'ropes' else self.hub75_dir
         if not folder:
-            raise StageFailed(f'{mode}-capture: capture.py printed no OUT folder')
+            raise StageFailed(f'{mode}-capture: capture.py printed no OUT folder', stage_reason(f'{mode}-capture', "the pictures weren't saved"))
 
     def pretend(self, marks):
         """Dry run: wait self.dry_wait seconds in all, reporting the marks (fraction, message) on the way."""
@@ -411,7 +452,7 @@ class Job:
             self.restored = True                           # capture.py's finally: ran, whatever its exit code
             self.write(restored=True)
         if code != 0:
-            raise StageFailed(f'{stage} failed (exit {code}): ' + ' | '.join(self.log[-3:]))
+            raise StageFailed(f'{stage} failed (exit {code}): ' + ' | '.join(self.log[-3:]), stage_reason(stage))
 
     def stop_child(self):
         c = self.child

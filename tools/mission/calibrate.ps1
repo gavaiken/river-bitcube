@@ -70,7 +70,7 @@ if ($Action -eq 'start') {
     if ($Task) { Unregister-ScheduledTask -TaskName 'MissionCalibrate' -Confirm:$false -ErrorAction SilentlyContinue }
     if ($n -and $n.started -ge ($t0 - 1)) {
         if (-not $procId) { $procId = $n.pid }
-        Out-Json ([ordered]@{ ok = [bool]$n.running -or [bool]$n.ok; started = [bool]$n.running; pid = $procId; log = $log; calibration = $n; error = $n.error })
+        Out-Json ([ordered]@{ ok = [bool]$n.running -or [bool]$n.ok; started = [bool]$n.running; pid = $procId; log = $log; calibration = $n; error = $(if ($n.reason) { $n.reason } else { $n.error }); raw = $n.error })
     } else {
         $tail = @(if (Test-Path $log) { Get-Content $log -Tail 5 })
         Out-Json ([ordered]@{ ok = $false; error = 'the job did not report within 6 s'; pid = $procId; log = $log; log_tail = $tail; calibration = $n })

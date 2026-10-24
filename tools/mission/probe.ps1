@@ -82,6 +82,8 @@ elseif (Get-Process TouchDesigner -ErrorAction SilentlyContinue) {
     if ($line) { $td = $line | ConvertFrom-Json } else { $td = @{ ok = $false; error = 'no answer from the TD bridge' } }
 } else { $td = @{ ok = $false; error = 'TouchDesigner is not running' } }
 $out.td = $td
+# ropes / hub75 act through TouchDesigner: if it didn't carry the action out, the action failed (the page must not say done)
+if ($Action -in 'ropes', 'hub75' -and $td -and $td.ok -eq $false) { $out.ok = $false; $out.error = "$($td.error)" }
 
 # Boot file
 $bf = Join-Path $river 'boot-file.txt'

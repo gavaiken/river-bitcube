@@ -78,6 +78,20 @@ def pack_top(a, flip=True, downsample=1, size=None):
     return encode(quantise(f))
 
 
+def pack_screens(tops, downsample=4, gain=1.0):
+    """The four screens upright as seen: TOP numpyArrays (rows bottom-up), one per screen in order (None for a screen
+    that has not cooked) -> encode() of one image with the cells side by side, cell k-1 = screen k, row 0 = the top
+    of each screen as seen, plus 'cells': 4. Each cell is box-downsampled; a cell of another size is resampled to the
+    first one's, a missing one is black. gain scales every cell (the panels' Brightness; 0 for black)."""
+    cells = [None if a is None else box_downsample(as_float_rgb(a)[::-1], downsample) for a in tops]
+    shape = next((c.shape for c in cells if c is not None), None)
+    if shape is None:
+        raise ValueError('no screen has cooked yet')
+    h, w = shape[:2]
+    cells = [np.zeros((h, w, 3), np.float32) if c is None else c if c.shape[:2] == (h, w) else nearest(c, w, h) for c in cells]
+    return encode(quantise(np.concatenate(cells, axis=1) * float(gain))) | {'cells': len(cells)}
+
+
 def pack_frame(frame):
     """A sender frame [rope][pixel][rgb] (float 0..1, pixel 0 = plug end, as artnet_out builds them) ->
     encode() with columns = ropes and row 0 = pixel 0."""

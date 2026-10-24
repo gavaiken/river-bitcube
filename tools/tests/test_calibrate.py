@@ -287,6 +287,7 @@ def test_a_full_run_refuses_when_touchdesigner_does_not_answer(env):
     assert env.run(bridge=closed_port_url()) == 2
     p = env.progress()
     assert p['running'] is False and p['ok'] is False and 'TouchDesigner' in p['error']
+    assert p['reason'] == "TouchDesigner isn't answering"
     assert p['stage'] is None and p['result'] is None
     assert not (env.state / 'calibration.lock').exists()
     assert not (env.repo / 'frames').exists()                             # nothing ran
@@ -333,6 +334,9 @@ def test_a_failed_stage_is_recorded_and_the_ropes_were_restored_by_capture_itsel
     p = env.progress()
     assert p['running'] is False and p['ok'] is False and p['cancelled'] is False
     assert p['error'].startswith('ropes-decode failed (exit 1)') and 'decode exploded' in p['error']
+    # the portal shows the reason: the step in words and the next step, never a traceback or an exit code
+    assert p['reason'] == ("Working out where each rope is failed: the patterns couldn't be read from the pictures "
+                           "(someone in view, or light in the room); run it again when the room is dark and empty")
     assert p['stage'] == 'ropes-decode' and p['result'] is None
     assert p['restored'] is True                                           # capture.py ended by itself: its finally ran
     assert env.bridge.calls == ['1']                                       # no restore from this side
@@ -344,6 +348,7 @@ def test_a_capture_failure_before_any_pattern_needs_no_restore_from_us(env, monk
     assert env.run() == 1
     p = env.progress()
     assert p['error'].startswith('ropes-capture failed (exit 1)') and 'no camera frames' in p['error']
+    assert p['reason'].startswith('Photographing the ropes failed:') and 'exit' not in p['reason']
     assert p['restored'] is True and env.bridge.calls == ['1']
 
 
@@ -443,7 +448,7 @@ def test_a_moved_camera_fails_the_run_before_any_map_is_written(env, monkeypatch
     p = env.progress()
     assert p['running'] is False and p['ok'] is False and p['cancelled'] is False
     assert p['error'] == 'The camera moved during the run (drift 48): the map was not saved. Fix the camera and run again'
-    assert p['message'] == p['error'] and p['stage'] == 'ropes-capture' and p['result'] is None
+    assert p['message'] == p['error'] == p['reason'] and p['stage'] == 'ropes-capture' and p['result'] is None
     assert p['restored'] is True                                           # capture.py ended by itself: its finally ran
     assert p['capture_info']['drift'] == 48.3 and p['max_drift'] == 30.0
     assert not list(env.scripts.glob('pixelmap-*.json'))                   # decode.py never ran
@@ -453,3 +458,18 @@ def test_a_moved_camera_fails_the_run_before_any_map_is_written(env, monkeypatch
     assert env.run('--max-drift', '60') == 0
     assert env.progress()['ok'] is True and env.progress()['max_drift'] == 60.0
     assert cal.drift_error(29.6) == 'The camera moved during the run (drift 30): the map was not saved. Fix the camera and run again'
+
+
+def test_a_camera_login_never_reaches_the_log_or_the_error():
+    # ffmpeg prints the whole RTSP address (login included) when the camera fails; the log and the error carry it to the
+    # browser through the full check, GET /api/calibration and mission control's history
+    line = 'Error opening input file rtsp://admin:NOT-A-REAL-PW@192.168.9.76:554/Preview_01_main.'
+    assert cal.scrub(line) == 'Error opening input file rtsp://***@192.168.9.76:554/Preview_01_main.'
+    assert cal.scrub('no url here') == 'no url here'
+    # a raw @ or ' in the password is login too (ffmpeg takes the last @ before the path)
+    assert cal.scrub('rtsp://admin:p@ss@10.0.0.1/x') == 'rtsp://***@10.0.0.1/x'
+    assert cal.scrub("rtsp://admin:ab'cd@10.0.0.1:554/x") == 'rtsp://***@10.0.0.1:554/x'
+    assert cal.scrub('see https://example.org/a@b') == 'see https://example.org/a@b'
+    job = type('J', (), {'log': []})()
+    cal.Job.note(job, line)
+    assert 'NOT-A-REAL-PW' not in job.log[0] and 'admin' not in job.log[0]
