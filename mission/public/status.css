@@ -7,6 +7,7 @@
 .band .since { font-size: 15px; font-weight: 700; color: var(--muted); }
 .band .row-btns { margin-top: 12px; }
 .band .call-row { margin-top: 6px; }
+.band .row-btns + .call-row { margin-top: 12px; }   /* the jump and the Call line: 12 px apart, two targets */
 .band .todo .action { font-size: 17px; }
 .band .stale-note { font-size: 15px; font-weight: 600; color: var(--unk-text); margin-top: 8px; }
 .band .check-line .btn.link { margin-left: auto; }
@@ -51,7 +52,7 @@ details.sub .sub-body { padding-top: 2px; }
 .rules { display: grid; gap: 10px; }
 .rule { display: grid; grid-template-columns: 1fr 112px; gap: 10px; align-items: center; font-size: 14px; }
 .rule input { min-height: 44px; width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; font: inherit; font-size: 16px; background: var(--panel-solid); color: var(--text); }
-.rule .unit { color: var(--muted); font-size: 14px; }
+.rule .unit { display: block; color: var(--muted); font-size: 14px; }   /* the range, on its own muted line */
 .ctl .row-btns { margin-top: 0; }
 .ctl .ctl-why { order: -1; }       /* "Not possible now: …" reads above the greyed control */
 .ctl .ctl-h { order: -2; }

@@ -99,7 +99,7 @@ test('specific verdicts: slow TD is a warning, dark ropes name the way back, the
   assert.equal(m.controls.mode.possible, false);
   assert.match(m.controls.mode.why, /switch to it first/);
   assert.equal(m.controls.ropes.possible, true);
-  assert.match(m.overall.action, /Switch now/);
+  assert.match(m.overall.action, /Switch to the river.s year/);
   m = run(byName['river-cam-stale']);
   assert.equal(m.overall.cause, 'river-stale', 'the camera matters more than the file choice');
   assert.match(m.overall.headline, /30 min/);
@@ -239,7 +239,7 @@ test("Dave's agent: a past next tick is normal overnight, a fault after 15 dayti
   s.now = pdt('2026-10-23T07:10:00'); for (const k of ['bitcube', 'seasons', 'modal', 'probe']) s[k].at = s.now - 5000;
   m = derive(s, s.now + 2000);
   assert.equal(m.overall.level, 'ok');
-  assert.match(m.items.find((x) => x.id === 'modal agent').summary, /Tick due/);
+  assert.match(m.items.find((x) => x.id === 'modal agent').summary, /Update due/);
   // unreachable is a warning; it comes first in the list only when the live river (which shows his scene) runs
   s.modal = { at: s.now - 9000, error: 'fetch failed' };
   m = derive(s, s.now + 2000);
@@ -279,7 +279,8 @@ test('controls say why they are not possible, in plain words', () => {
   assert.equal(m.controls.switch.possible, true, 'Switch now is the way out of a frozen TouchDesigner');
   m = run(byName['nothing-known-yet']);
   assert.equal(m.controls.mode.why, "the river's year page hasn't been checked yet");
-  assert.equal(m.controls.bootfile.possible, true);
+  assert.equal(m.controls.bootfile.possible, false, "what the boot file is isn't known before the full check");
+  assert.equal(m.controls.lightsroute.why, "bitcube's full check hasn't run yet");
   for (const [, fx] of fixtures) for (const c of Object.values(run(fx).controls)) assert.doesNotMatch(c.why ?? '', JARGON);
 });
 
@@ -347,5 +348,121 @@ test('the panels, like the ropes, carry a state word and plain words for the pag
     assert.ok(['unknown', 'no-sender', 'restarting', 'frozen', 'gone', 'no-output', 'off', 'river'].includes(x.state), `${name}: ${x.state}`);
     assert.ok(x.words && x.summary, name);
     assert.doesNotMatch(x.words, JARGON, `${name}: ${x.words}`);
+  }
+});
+
+test('a stale full check invents no fault: the clips are not judged failing, and "hasn\'t heard from bitcube" heads the band', () => {
+  for (const name of ['all-good', 'td-low-fps']) {
+    const fx = clone(byName[name]);
+    fx.status.probe.at = fx._scenario.now - 600_000;
+    delete fx.status.probe.age_s;
+    const m = run(fx);
+    assert.equal(m.overall.cause, 'probe-stale', `${name}: "${m.overall.headline}"`);
+    assert.match(m.overall.headline, /hasn't heard from bitcube for 10 min/);
+    assert.equal(m.problems.find((p) => p.id === 'link-failing'), undefined, `${name}: no clips fault from an old check`);
+    assert.notEqual(m.items.find((x) => x.id === 'modal link').level, 'down');
+  }
+  // a Down read from the old check still wins: it was true then and matters most
+  const fx = clone(byName['td-frozen']);
+  fx.status.probe.at = fx._scenario.now - 600_000; delete fx.status.probe.age_s;
+  const m = run(fx);
+  assert.equal(m.overall.cause, 'td-frozen');
+  assert.equal(m.problems.find((p) => p.id === 'link-failing'), undefined);
+});
+
+test('a failing full check says how long it has been failing, not how old its last attempt is', () => {
+  const fx = clone(byName['bitcube-offline']);
+  fx.status.probe = { at: fx._scenario.now - 20_000, error: "can't reach bitcube over SSH", failing_since: fx._scenario.now - 52 * 60_000 };
+  const m = run(fx);
+  assert.match(m.overall.detail, /has failed for 52 min/);
+  assert.equal(m.sources.probe.failing_s, 52 * 60, "on the server's clock");
+});
+
+test('controls stay off while what they change is in use: the ropes during a calibration', () => {
+  const fx = clone(byName['all-good']);
+  fx.status.probe.value.calibration = { running: true, stage: 'ropes-capture', expected_s: 170, elapsed_s: 20 };
+  const m = run(fx);
+  assert.equal(m.overall.cause, 'calibrating');
+  assert.equal(m.controls.ropes.possible, false);
+  assert.match(m.controls.ropes.why, /calibration is running/);
+  // the panels (in the picture), the show file (restarts TouchDesigner mid-run) and the lighting port (darkens every rope) too
+  for (const c of ['hub75', 'switch', 'lightsroute']) assert.match(m.controls[c].why ?? '', /calibration is running/, c);
+  // what doesn't touch the lights stays possible
+  assert.equal(m.controls.bootfile.possible, true);
+});
+
+test("the advice names the button that is there: 'Restart on the river's year' when it runs, 'Switch to' when another file runs", () => {
+  const slow = run(byName['td-low-fps']);
+  assert.equal(slow.show.file.kind, 'year');
+  assert.match(slow.overall.action, /press Restart on the river's year/);
+  assert.doesNotMatch(JSON.stringify(slow), /Switch to the river's year/);
+  const live = run(byName['seasons-not-running']);
+  assert.match(live.items.find((x) => x.id === 'seasons').action, /Switch to the river's year/);
+});
+
+test('a clip log line from yesterday at the same minute is a day old, not seconds: the file\'s own age is the floor', () => {
+  const fx = clone(byName['all-good']);
+  const g = fx.status.probe.value.modal_link.gallery;
+  g.last = '02:58:31 INFO    gallery/video -> media/gallery/video/2026-10-22T09-58-32-197Z.mp4 (50 KB)';
+  g.log_age_s = 86_520;                                   // nothing written since yesterday (the 19 Oct relay hang lasted 11 h)
+  const m = run(fx);
+  assert.notEqual(m.items.find((x) => x.id === 'modal link').level, 'ok', 'clips to Dave are not posting');
+  assert.notEqual(m.overall.level, 'ok', 'not "Everything is up"');
+});
+
+test('lost contact flips by the unrounded > 30 s rule, in the same second as the header (ui.js watchContact)', () => {
+  const fx = byName['all-good'];
+  const at = (ms) => derive({ ...fx.status, now: fx._scenario.now }, fx._scenario.now + ms);
+  assert.equal(at(30_000).problems.some((p) => p.id === 'page'), false, 'exactly 30 s: not yet');
+  assert.equal(at(30_400).problems.some((p) => p.id === 'page'), true, '30.4 s rounds to 30 but is past the rule');
+  assert.equal(at(30_400).overall.cause, 'page');
+});
+
+test("raw errors never reach the words: a failed full check, a year page's HTTP 500, an unreachable agent (the raw text stays in sources and raw)", () => {
+  const RAW = /\b(ssh|probe|exit \d|HTTP|fetch failed)\b/i;
+  for (const [err, want] of [["can't reach bitcube over SSH", /couldn't reach bitcube/], ['probe failed (exit 1)', /couldn't run the check/],
+    ['no answer from the probe', /couldn't run the check/], ['bitcube took too long to answer', /didn't answer the check in time/]]) {
+    const fx = clone(byName['all-good']);
+    fx.status.probe = { at: fx._scenario.now - 20_000, error: err };
+    const m = run(fx);
+    assert.equal(m.overall.cause, 'check-failed');
+    assert.match(m.overall.detail, want);
+    assert.match(m.overall.detail, /^[A-Zb]/, 'sentence case (bitcube stays lowercase)');
+    for (const x of m.items) { assert.doesNotMatch(x.summary, RAW, x.id); assert.doesNotMatch(x.detail, RAW, `${x.id}: ${x.detail}`); }
+    assert.doesNotMatch(m.overall.detail, RAW);
+    assert.equal(m.items.find((x) => x.id === 'bitcube').raw, err, 'the raw text is kept for Addresses and links');
+  }
+  const yp = clone(byName['all-good']);
+  yp.status.seasons = { at: yp._scenario.now - 2000, error: 'HTTP 500' };
+  let m = run(yp);
+  assert.equal(m.overall.cause, 'year-page');
+  assert.doesNotMatch(m.overall.detail + m.items.find((x) => x.id === 'seasons').detail, /HTTP/);
+  assert.equal(m.sources.seasons.error, 'HTTP 500');
+  const md = clone(byName['all-good']);
+  md.status.modal = { at: md._scenario.now - 2000, error: 'fetch failed' };
+  m = run(md);
+  const p = m.problems.find((x) => x.id === 'modal-unreachable');
+  assert.match(p.detail, /^The connection failed/);
+  assert.doesNotMatch(p.detail, /port/, 'one fault, one explanation: no port for a service on the internet');
+});
+
+test('the show file can not be switched again while TouchDesigner restarts, nor from a full check too old to say what runs', () => {
+  const fx = clone(byName['all-good']);
+  fx.status.probe.value.td = { ok: false, error: 'restarting on river-local-oct-22-seasons.toe' };
+  let m = run(fx);
+  assert.equal(m.controls.switch.possible, false);
+  assert.match(m.controls.switch.why, /restarting/);
+  const old = clone(byName['all-good']);
+  old.status.probe.at = old._scenario.now - 10 * 60_000;
+  m = run(old);
+  for (const c of ['switch', 'lightsroute']) assert.match(m.controls[c].why ?? '', /hasn't heard from bitcube for 10 min/, c);
+});
+
+test('summaries say what the ropes do, never a measurement; the watts stay in the detail', () => {
+  for (const name of ['all-good', 'river-cam-stale', 'gallery-cam-down']) {
+    const r = run(byName[name]).items.find((x) => x.id === 'ropes');
+    if (r.level !== 'ok') continue;
+    assert.doesNotMatch(r.summary, /\bW\b|\(/, `${name}: ${r.summary}`);
+    assert.match(r.detail, /\d+ \+ \d+ W/, name);
   }
 });

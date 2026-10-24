@@ -25,7 +25,7 @@
   }
   .login input:focus-visible { outline: 3px solid var(--accent); border-color: var(--accent); }
   .login input[aria-invalid="true"] { border-color: var(--down); }
-  .login .showpw { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; font-size: 15px; font-weight: 600; cursor: pointer; width: fit-content; color: var(--text); }
+  .login .showpw { margin-top: 6px; display: inline-flex; align-items: center; gap: 10px; min-height: 44px; font-size: 15px; font-weight: 600; cursor: pointer; width: fit-content; color: var(--text); }
   .login .showpw input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); cursor: pointer; }
   .login .err { font-size: 15px; font-weight: 700; color: var(--down-text); line-height: 1.4; display: flex; gap: 8px; align-items: flex-start; }
   .login .err:empty { display: none; }
@@ -49,7 +49,8 @@
       <label class="showpw"><input type="checkbox" id="show"> Show password</label>
     </div>
     <button class="btn primary wide" type="submit" id="go">Log in</button>
-    <div class="err" id="err" role="alert" aria-live="assertive"></div>
+    <div class="err" id="err"></div>
+    <div class="sr-only" id="err-live" role="alert"></div>
     <p class="nopw" id="nopw">No password? Call <b>Gavin</b> (bitcube, TouchDesigner, the show file and mission control).</p>
   </form>
   <footer class="foot links"><a href="https://gavaiken.github.io/river-bitcube/" target="_blank" rel="noopener">About the piece</a></footer>
@@ -62,9 +63,13 @@
   const MARK = '<span class="mk lv-down" aria-hidden="true">✕</span>';
   show.addEventListener('change', () => { const at = pw.selectionStart; pw.type = show.checked ? 'text' : 'password'; try { pw.setSelectionRange(at, at); } catch {} pw.focus(); });
   let waitTimer = null;
+  // a screen reader hears each failure once (a hidden alert), never the countdown: the visible line ticks without a live region
+  const live = document.getElementById('err-live');
+  const say = (text) => { live.textContent = ''; setTimeout(() => { live.textContent = text; }, 50); };
   function fail(text) {
     clearInterval(waitTimer);
     err.innerHTML = `${MARK}<span>${esc(text)}</span>`;
+    say(text);
     pw.setAttribute('aria-invalid', 'true');
     pw.focus(); pw.select();
   }
@@ -72,13 +77,14 @@
     let left = Math.ceil(waitMs / 1000);
     const paint = () => { err.innerHTML = `${MARK}<span>${esc(lead)} ${left > 0 ? `Wait ${left} s, then try again.` : 'Try again now.'}</span>`; };
     clearInterval(waitTimer); paint();
+    say(left > 0 ? `${lead} Wait ${left} s, then try again.` : `${lead} Try again now.`);
     pw.setAttribute('aria-invalid', 'true'); pw.focus(); pw.select();
-    if (left > 0) waitTimer = setInterval(() => { left -= 1; paint(); if (left <= 0) clearInterval(waitTimer); }, 1000);
+    if (left > 0) waitTimer = setInterval(() => { left -= 1; paint(); if (left <= 0) { clearInterval(waitTimer); say('You can try again now.'); } }, 1000);
   }
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!pw.value) return fail('Type the team password first.');
-    go.disabled = true; go.textContent = 'Logging in…'; err.textContent = ''; pw.removeAttribute('aria-invalid');
+    go.disabled = true; go.textContent = 'Logging in…'; clearInterval(waitTimer); err.textContent = ''; live.textContent = ''; pw.removeAttribute('aria-invalid');
     let r, j = {};
     try {
       r = await fetch('/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pw.value }) });
@@ -90,7 +96,8 @@
     if (r.status === 429) return failWait('Too many tries.', j.wait_ms ?? 30_000);
     if (r.status === 401) return j.wait_ms > 1500 ? failWait('Wrong password.', j.wait_ms) : fail('Wrong password. Try again.');
     if (r.status === 403) return fail("Mission control didn't accept the request from this address. Open the page from its own link and try again.");
-    fail(`Could not log in${j.error ? `: ${j.error}` : ''}. Try again, or call Gavin.`);
+    // never the server's raw reason (an exit code, a stack): the team's words, the raw text stays in the server's log
+    fail(r.status >= 500 ? "Mission control couldn't check the password just now. Try again, or call Gavin." : "Mission control didn't accept the request. Try again, or call Gavin.");
   });
   // Who to call when there is no password: names and what they own from model.js. GET /api/contacts holds the numbers but sits
   // behind the login today; set CONTACTS_PUBLIC true once the server serves it (or a public subset) to a logged-out browser.

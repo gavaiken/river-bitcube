@@ -17,9 +17,14 @@ test('planControl: the whitelist accepts the fixed actions and rejects everythin
   assert.deepEqual(probes.map((p) => p.args), ['-Action ropes -Dark', '-Action hub75 -Brightness 0.50', '-Action bootfile -BootFile river-online-oct-20.toe',
                                                '-Action switch -BootFile river-local-oct-18.toe', '-Action lightsroute -LightsRoute router', '-Action rebuild -BootFile river-local-oct-22-seasons.toe']);
   assert.ok(probes[5].timeout >= 300_000, 'a rebuild builds, saves and restarts: minutes');
+  for (const dark of ['no', 1, 'true', {}]) assert.equal(planControl('ropes', { dark }).args, '-Action ropes', `dark: ${JSON.stringify(dark)} is not true`);
   for (const [a, b] of [['mode', { mode: 'chaos' }], ['target', { season: 'monsoon' }], ['hub75', { brightness: 3 }],
                         ['bootfile', { file: 'evil.toe; rm -rf' }], ['lightsroute', { route: 'both' }], ['rules', { rules: { 'x; y': 1 } }], ['shell', {}],
-                        ['ropes', null], ['mode', 'manual'], ['rebuild', { file: 'river-online-oct-23.toe' }], ['rebuild', {}]]) {
+                        ['ropes', null], ['mode', 'manual'], ['rebuild', { file: 'river-online-oct-23.toe' }], ['rebuild', {}],
+                        // a half-filled form or a buggy client gets a 400, never "0" (panels dark, intensity 0)
+                        ['hub75', { brightness: null }], ['hub75', { brightness: '' }], ['hub75', { brightness: false }], ['hub75', { brightness: [] }],
+                        ['hub75', { brightness: [0.5] }], ['hub75', { brightness: true }], ['hub75', {}], ['target', { intensity: null }], ['target', { intensity: '' }],
+                        ['rules', { rules: { cycle_seconds: null } }]]) {
     assert.throws(() => planControl(a, b), (e) => e.status === 400, a);
   }
 });
@@ -166,13 +171,16 @@ test('lights: a season-coloured frame in the real frames shape, black ropes when
   // the shape lib/lights.mjs documents (td_mission.py's answer with frames), so a page reads one thing in both modes
   assert.deepEqual([l.ok, l.action, l.file, l.fps, l.synthetic, l.age_s], [true, 'frames', 'river-local-oct-22-seasons.toe', 60, true, 0]);
   const f = l.frames;
-  assert.deepEqual([f.at, f.source, f.brightness, f.ropes.w, f.ropes.h, f.panels.w, f.panels.h], [5000, 'canvas', 0.8, 20, 400, 256, 32]);
+  // the Gray Area shape: the atlas stacked (256 × 512 → 64 × 128) and the four screens upright, side by side
+  assert.deepEqual([f.at, f.source, f.brightness, f.ropes.w, f.ropes.h, f.panels.w, f.panels.h, f.screens.w, f.screens.h], [5000, 'canvas', 0.8, 20, 400, 64, 128, 128, 64]);
   assert.deepEqual([f.ropes.source, f.ropes.brightness, f.ropes.watts, f.panels.source, f.panels.brightness, f.panels.output, f.panels.atlas],
-                   ['canvas', 0.4, [182, 191], 'canvas', 0.8, true, [1024, 128]]);
+                   ['canvas', 0.4, [182, 191], 'canvas', 0.8, true, [256, 512]]);
   const dec = decodeFrames(l);
-  assert.ok(!dec.ropes.error && !dec.panels.error, 'decodes like the real payload');
+  assert.ok(!dec.ropes.error && !dec.panels.error && !dec.screens.error, 'decodes like the real payload');
   const ropes = Buffer.from(f.ropes.rgb, 'base64'), panels = Buffer.from(f.panels.rgb, 'base64');
-  assert.deepEqual([ropes.length, panels.length], [20 * 400 * 3, 256 * 32 * 3]);
+  assert.deepEqual([ropes.length, panels.length], [20 * 400 * 3, 64 * 128 * 3]);
+  const { uprightsFromAtlas } = await import('../public/screens.js');
+  assert.deepEqual(Buffer.from(uprightsFromAtlas(panels, 64, 128).bytes), Buffer.from(f.screens.rgb, 'base64'), 'the atlas undone is the upright screens');
   let r = 0, g = 0;
   for (let i = 0; i < ropes.length; i += 3) { r += ropes[i]; g += ropes[i + 1]; }
   assert.ok(g > r, 'spring is green');
@@ -204,7 +212,7 @@ test('lights: a season-coloured frame in the real frames shape, black ropes when
 });
 
 test('the scripted calibration: the progress file\'s shape and stages, cancel, the drift and decode failures, the probe mirror', async () => {
-  const { FixtureCalibration, DRIFT_ERROR, DECODE_ERROR, mapResult } = await import('../lib/fixtures.mjs');
+  const { FixtureCalibration, DRIFT_ERROR, DECODE_ERROR, DECODE_REASON, mapResult } = await import('../lib/fixtures.mjs');
   const { readLocalPixelmap } = await import('../lib/lights.mjs');
   const dir = new URL('../../tools/pixelmap/', import.meta.url).pathname;
   const map = readLocalPixelmap(dir);
@@ -221,7 +229,7 @@ test('the scripted calibration: the progress file\'s shape and stages, cancel, t
   const started = c.start({ outcome: 'ok' });
   assert.deepEqual([started.ok, started.started, typeof started.pid, started.calibration.running, started.calibration.stage, started.calibration.mode], [true, true, 'number', true, null, 'full']);
   assert.deepEqual(Object.keys(started.calibration).sort(), ['alive', 'before', 'brightness_cap', 'cam', 'cancelled', 'capture', 'capture_info', 'decode_only', 'dry_run', 'elapsed_s', 'error', 'expected_s',
-    'hub75_capture', 'log', 'max_drift', 'message', 'mode', 'of', 'ok', 'pass', 'pid', 'restored', 'result', 'retakes', 'running', 'stage', 'stage_index', 'stages', 'started', 'step', 'updated']);
+    'hub75_capture', 'log', 'max_drift', 'message', 'mode', 'of', 'ok', 'pass', 'pid', 'reason', 'restored', 'result', 'retakes', 'running', 'stage', 'stage_index', 'stages', 'started', 'step', 'updated']);
   assert.deepEqual(c.start(), { ok: false, error: 'a calibration is already running', calibration: c.status() });
   const seen = [];
   for (let i = 0; i < 700; i++) { advance(100); const p = c.status(); seen.push([p.stage, p.step, p.of, p.pass, p.retakes, p.message]); if (!p.running) break; }
@@ -258,6 +266,8 @@ test('the scripted calibration: the progress file\'s shape and stages, cancel, t
   assert.equal(c3.status().capture_info.drift, 48.3);
   const c4 = run(); c4.start({ outcome: 'decode' }); advance(120_000);
   assert.deepEqual([c4.status().ok, c4.status().stage, c4.status().error, c4.status().step], [false, 'ropes-decode', DECODE_ERROR, 6]);
+  assert.equal(c4.status().reason, DECODE_REASON, 'the raw text stays in error; the page shows the reason');
+  assert.ok(!/exit|Traceback|\.py|ropes-decode/.test(c4.status().reason));
   // a dry run has no lights to restore and flags its result
   const c5 = run(); c5.start({ dry_run: true }); advance(120_000);
   assert.deepEqual([c5.status().mode, c5.status().before, c5.status().restored, c5.status().result.dry_run], ['dry-run', null, null, true]);
@@ -275,7 +285,13 @@ test('the scripted calibration: the progress file\'s shape and stages, cancel, t
   assert.equal(fm.snapshot('bitcube-offline').probe.value, undefined);              // and never behind an offline bitcube
   assert.equal(fm.calibration('all-good').running, true);
   assert.deepEqual(fm.calibration('td-low-fps'), { running: false, none: true });
+  // while the scenario's run is on, its controls answer 409 as the live server's do (a rebuild restarts TouchDesigner too)
+  for (const [action, body] of [['ropes', { dark: true }], ['switch', { file: 'river-local-oct-22-seasons.toe' }], ['rebuild', { file: 'river-local-oct-22-seasons.toe' }]]) {
+    await assert.rejects(fm.control(action, body, 'all-good'), (e) => e.status === 409 && /calibration is running/.test(e.message), action);
+  }
+  assert.equal((await fm.control('rebuild', { file: 'river-local-oct-22-seasons.toe' }, 'td-low-fps')).ok, true, 'another scenario is another world');
   assert.equal((await fm.calibrate('cancel', {}, { scenario: 'all-good' })).cancelled, true);
+  assert.equal((await fm.control('rebuild', { file: 'river-local-oct-22-seasons.toe' }, 'all-good')).ok, true, 'a stopped run blocks nothing');
   await assert.rejects(fm.calibrate('explode', {}, { scenario: 'all-good' }), (e) => e.status === 400);
   fm.stop();
 });

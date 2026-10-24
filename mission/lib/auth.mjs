@@ -11,6 +11,9 @@ const SESSION_DAYS = 30;
 const MAX_DELAY_MS = 60_000;
 const GLOBAL_WINDOW_MS = 10 * 60_000;
 const GLOBAL_LIMIT = 30;
+// one counted guess per GLOBAL_WINDOW_MS / GLOBAL_LIMIT (20 s) once the window is full: the same 30-per-10-min cap as a
+// lockout gives, without ever locking the team out for more than seconds
+const GLOBAL_DELAY_MS = GLOBAL_WINDOW_MS / GLOBAL_LIMIT;
 
 export function readPasswordFile(path) {
   const pw = readFileSync(path, 'utf8').replace(/\r?\n$/, '');
@@ -42,7 +45,9 @@ export class Auth {
     const f = this.failures.get(client);
     let wait = 0;
     if (f && f.count > 0) wait = Math.max(0, f.last + Math.min(MAX_DELAY_MS, 1000 * 2 ** (f.count - 1)) - t);
-    if (this.recent.length >= GLOBAL_LIMIT) wait = Math.max(wait, 5000);
+    // many failures from everywhere: everyone waits 20 s after the LAST failure (a slowdown, never a lockout:
+    // throttled tries don't count, so a burst of guesses can't keep the team out for the whole window)
+    if (this.recent.length >= GLOBAL_LIMIT) wait = Math.max(wait, this.recent[this.recent.length - 1] + GLOBAL_DELAY_MS - t);
     return wait;
   }
 
@@ -94,6 +99,14 @@ export class Auth {
 export const SESSION_MAX_AGE_S = SESSION_DAYS * 86_400;
 
 function sha(s) { return createHash('sha256').update(s).digest('hex'); }
+
+/** Who is asking, for the per-client backoff. Funnel forwards the visitor's address; locally it's the socket's. The LAST
+ *  X-Forwarded-For entry is the one the proxy in front of us added; earlier entries are whatever the client claimed, so a
+ *  rotating header can't reset its own backoff. */
+export function clientOf(xff, socketAddr) {
+  const parts = String(xff ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : String(socketAddr || '?');
+}
 
 export function parseCookies(header) {
   const out = {};

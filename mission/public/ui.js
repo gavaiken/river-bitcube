@@ -116,29 +116,90 @@ export const fmt = {
     return `${pad(p.h)}:${pad(p.mi)}` + (diff === 0 ? '' : diff === 1 ? ' yesterday' : ` on ${p.d} ${MONTHS[p.mo - 1]}`);
   },
   /** nb(text) keeps a number with its unit on one line ("20 s", "100 %", "3 min", "180 W") with a no-break space. */
-  nb: (s) => String(s ?? "").replace(/(\d) (s|min|h|days|W|%|px|of)\b/g, "$1\u00a0$2"),
+  nb: (s) => String(s ?? "").replace(/(\d) (s|min|h|days|W|%|px|of)(?![A-Za-z])/g, "$1\u00a0$2"),
   /** pct(0.9) → "90 %" (a fraction 0–1, or a number over 1 taken as percent already); null → "not known". */
   pct: (x) => (x == null || !Number.isFinite(x) ? 'not known' : `${Math.round(x <= 1 ? x * 100 : x)} %`),
 };
 
 // ---- api: POST through app.js, with ok:false a failure and 401 → /login -------------------------------------
 /** api(path) GETs, api(path, body) POSTs JSON; a non-2xx, a 401 (→ /login) or `ok: false` throws an Error in words. */
-export async function api(path, body) {
-  const j = await rawApi(path, body);
-  if (j && j.ok === false) throw new Error(j.error || "bitcube didn't answer");
+export async function api(path, body, opts) {
+  const j = await rawApi(path, body, opts);
+  if (j && j.ok === false) throw Object.assign(new Error(j.error || "bitcube didn't answer"), { status: 200 });
+  // ropes and panels act through TouchDesigner: its own failure inside an otherwise good answer is a failure too
+  if (/\/api\/control\/(ropes|hub75)$/.test(path) && j?.td && j.td.ok === false) throw Object.assign(new Error(j.td.error || "TouchDesigner didn't answer"), { status: 200 });
   return j;
 }
-/** A failed request's reason in the team's words, never a library's ("mission control didn't answer"). */
+/** A failed request's reason in the team's words, never a library's ("mission control didn't answer"). An error that
+ *  came back inside an answer (e.status set) means mission control answered: what failed was its call to bitcube. */
 export function plainError(msg) {
   const m = String(msg?.message ?? msg ?? '');
+  if (msg?.noAnswer) return `no answer in ${modelDur(msg.waitedS)}`;
+  if (msg?.notOurs) return "mission control didn't answer";
+  const answered = typeof msg?.status === 'number';
+  // the river's year page's own refusal (td/seasons/seasons_td.py): its reason in the rules' words, not "didn't accept it"
+  if (/"quieter" must be below "busier"/i.test(m)) return "the river's year refused it: Quieter than usual must be below Busier than usual; change one and apply again";
+  // a slip in mission control's own code (a JavaScript message, which names no 'XxxError'): never shown as it is
+  if (/Cannot read propert|Cannot set propert|is not a function|is not defined|is not iterable|of (?:null|undefined)\b|\(reading '/i.test(m)) return "mission control couldn't do it";
   if (/logged out/i.test(m)) return 'you were logged out';
+  if (/TD bridge|bridge/i.test(m)) return "TouchDesigner didn't answer";
+  if (answered && /fetch failed|timeout|timed out|aborted/i.test(m)) return "bitcube didn't answer";
   if (/failed to fetch|fetch failed|networkerror|load failed/i.test(m)) return "mission control didn't answer";
   if (/can't reach bitcube|ssh/i.test(m)) return "bitcube didn't answer";
   if (/took too long|timeout|timed out|aborted/i.test(m)) return 'bitcube took too long to answer';
+  if (msg?.status === 429 || /checked \d+ s ago; wait/i.test(m)) return 'the full check ran a moment ago; try again in 20 s';
   if (/^HTTP 404/.test(m) || /not found/i.test(m)) return "this mission control can't do that yet";
   if (/^HTTP 50\d/.test(m)) return "mission control couldn't reach bitcube";
-  if (/^HTTP 4\d\d/.test(m)) return "mission control didn't accept it";
+  if (/^HTTP 4\d\d/.test(m) || msg?.status === 400) return "mission control didn't accept it";
+  if (/rebuild refused|is running .*\.toe, not /i.test(m)) return 'TouchDesigner is running a different show file, so it was refused';
+  if (/no show file/i.test(m)) return "that show file isn't on bitcube";
+  if (/nothing was saved/i.test(m)) return "bitcube couldn't save it; nothing was saved";
+  if (/probe failed|no answer from the probe|\(exit \d+\)|\bexit \d+\b/i.test(m)) return "bitcube couldn't do it";
+  // never a raw message: a step id, a script, a file name, a traceback or a code reads as "bitcube couldn't do it"
+  if (/Traceback|[A-Z][a-z]+Error\b|\.(ps1|py|toe|json|mjs)\b|[{}[\]|\\]|\bpid \d+/.test(m)) return "bitcube couldn't do it";
+  // a status code inside some other sentence ("… HTTP 503 …"): the code means nothing to the team
+  if (/\bHTTP \d{3}\b/.test(m)) return answered ? "bitcube couldn't do it" : "mission control didn't answer";
   return m.replace(/[.\s]+$/, '') || 'no answer';
+}
+
+/** A control whose POST got no answer in time: it may or may not have happened, so it never says "unchanged". */
+export function noAnswerText(e, where) {
+  return `No answer in ${modelDur(e.waitedS)}: it may or may not have happened; ${where} (${fmt.clock(Date.now())}).`;
+}
+
+// ---- "since": the server's history, only when it can't contradict the words beside it --------------------------------
+/** Seconds of every duration a sentence states ("for 30 min", "6 min ago"). */
+export function statedS(texts) {
+  const U = { s: 1, min: 60, h: 3600, days: 86400 }, out = [];
+  for (const t of texts) for (const x of String(t ?? '').matchAll(/(\d+(?:\.\d+)?) (s|min|h|days)\b/g)) out.push(Number(x[1]) * U[x[2]]);
+  return out;
+}
+/** Items whose state bitcube reports (so their "since" can't be longer than bitcube has been up). */
+export const NAMES_FROM_BITCUBE = new Set(['touchdesigner', 'seasons', 'ropes', 'rope box 1', 'rope box 2', 'hub75 panels', 'gallery camera', 'river camera', 'router', 'internet', 'modal link', 'recorder', 'people counter']);
+/** A "since" from the history (status.since.items[id]) is shown only when it can't contradict the words beside it: never
+ *  longer than bitcube has been up (for what bitcube reports; uptime_s from the model's show), never a first sighting
+ *  ("over …") next to a duration the sentence states itself, and never shorter than that duration. Status and the map share it. */
+export function sinceAgrees(s, texts, behindBitcube, uptime_s) {
+  if (behindBitcube && uptime_s != null && s.for_s > uptime_s + 60) return false;
+  const stated = statedS(texts);
+  if (stated.length && (s.at_least || s.for_s < Math.max(...stated) * 0.75)) return false;
+  return true;
+}
+
+// ---- headlines --------------------------------------------------------------------------------------------------
+/** "cause: consequence" -> [cause, consequence], splitting at the first top-level ":" or ";" (never inside parentheses),
+ *  or at a trailing parenthesis. Status's band and Lights' state line share it. */
+export function splitHeadline(h) {
+  h = String(h ?? '');
+  let depth = 0;
+  for (let i = 0; i < h.length; i++) {
+    const c = h[i];
+    if (c === '(') depth++; else if (c === ')') depth--;
+    else if (depth === 0 && (c === ':' || c === ';') && i >= 12) return [h.slice(0, i), h.slice(i + 1).trim()];
+  }
+  const q = h.indexOf(' (');
+  if (q >= 12 && h.endsWith(')')) return [h.slice(0, q), h.slice(q + 2, -1)];
+  return [h, ''];
 }
 
 // ---- the one-second ticker ----------------------------------------------------------------------------------
@@ -155,31 +216,61 @@ export function tick(fn) {
 /** poll(url, { every, onData(payload, receivedAt), onError(err, downForMs) }) → { stop, refresh, last, receivedAt, failedSince }.
  *  `last` is the last good JSON (with `now` filled in when the server sent none), `receivedAt` the performance.now()
  *  it arrived, so a page renders derive(p.last, p.last.now + (performance.now() - p.receivedAt)). 401 → /login. */
-export function poll(url, { every = 5000, onData, onError } = {}) {
-  const h = { last: null, receivedAt: null, failedSince: null, stop, refresh: once };
-  let timer = null, inflight = false, stopped = false;
-  async function once() {
-    if (inflight || stopped) return;
-    inflight = true;
+export const POLL_TIMEOUT_MS = 8000;   // a request that hangs this long counts as a failure (a phone's handover, a lock mid-fetch)
+export function poll(url, { every = 5000, onData, onError, timeout = POLL_TIMEOUT_MS } = {}) {
+  const h = { last: null, receivedAt: null, receivedWall: null, failedSince: null, startedAt: performance.now(), stop, refresh: () => once(true), elapsed };
+  let timer = null, ctrl = null, stopped = false;
+  /** ms since the last good answer: the larger of the monotonic and the wall clock's view, so a phone that slept (and
+   *  whose monotonic clock may have paused) never reads an old answer as new. null before the first answer. */
+  function elapsed() {
+    if (h.receivedAt == null) return null;
+    return Math.max(performance.now() - h.receivedAt, h.receivedWall != null ? Date.now() - h.receivedWall : 0, 0);
+  }
+  async function once(force = false) {
+    if (stopped) return;
+    if (ctrl) { if (!force) return; ctrl.abort(); }       // one request at a time; a forced refresh replaces a hung one
+    const mine = (ctrl = new AbortController());
+    const t = setTimeout(() => mine.abort(), timeout);
     try {
-      const r = await fetch(url, { cache: 'no-store' });
+      const r = await fetch(url, { cache: 'no-store', signal: mine.signal });
       if (r.status === 401) { location.href = '/login'; return; }
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = await r.json();
+      if (mine !== ctrl) return;                            // replaced meanwhile: the newer request reports
       if (typeof j.now !== 'number') j.now = Date.now();
-      h.last = j; h.receivedAt = performance.now(); h.failedSince = null;
+      h.last = j; h.receivedAt = performance.now(); h.receivedWall = Date.now(); h.failedSince = null;
       onData?.(j, h.receivedAt);
     } catch (e) {
+      if (mine !== ctrl) return;
       h.failedSince ??= performance.now();
       onError?.(e, performance.now() - h.failedSince);
-    } finally { inflight = false; }
+    } finally { clearTimeout(t); if (mine === ctrl) ctrl = null; }
   }
-  const onVisible = () => { if (!document.hidden) once(); };
+  const onVisible = () => { if (!document.hidden) once(true); };   // back from the background: never wait on a request from before
   document.addEventListener('visibilitychange', onVisible);
-  function stop() { stopped = true; clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); }
+  function stop() { stopped = true; clearInterval(timer); ctrl?.abort(); document.removeEventListener('visibilitychange', onVisible); }
   once();
-  timer = setInterval(once, every);
+  timer = setInterval(() => once(), every);
   return h;
+}
+export const WARN_MS = 12_000, LOST_MS = 30_000;   // docs/mission-ui.md: header amber from 12 s, lost contact from 30 s
+/** The one staleness rule every page shares, from the time since the last good answer (not from errors, which a hung
+ *  request never raises): ages the header ("No answer for N s", amber from 12 s, red from 30 s), toggles body.page-stale,
+ *  and calls onLost(lost) when contact is lost or comes back, so the page can re-render greyed. Ticks every second. */
+export function watchContact(p, shell, onLost = () => {}) {
+  let was = false;
+  const check = () => {
+    // before the first answer there is no age: the header says "No answer yet · N s", counted from when the page started
+    // asking (a hung first request counts as surely as a failed one), amber from 12 s, red from 30 s
+    const el = p.last ? p.elapsed() : performance.now() - p.startedAt;
+    if (p.last) shell.setAge(el); else { shell.setAge(null); shell.setWaiting(p.startedAt); }
+    shell.setStale(el > LOST_MS ? 'down' : el > WARN_MS ? 'warning' : null);
+    const lost = el > LOST_MS;
+    document.body.classList.toggle('page-stale', lost);
+    if (lost !== was) { was = lost; onLost(lost); }
+  };
+  tick(check);
+  return { check, get lost() { return was; } };
 }
 
 // ---- theme ---------------------------------------------------------------------------------------------------
@@ -240,52 +331,95 @@ export const art = {
 // ---- sheets --------------------------------------------------------------------------------------------------
 function dialog() {
   let d = $('dialog.sheet#mc-sheet');
-  if (!d) { d = el('<dialog id="mc-sheet" class="sheet" aria-label="Sheet"></dialog>'); document.body.append(d); }
+  if (!d) { d = el('<dialog id="mc-sheet" class="sheet" aria-labelledby="mc-sheet-title"></dialog>'); document.body.append(d); }
   return d;
 }
-/** sheet({ title, body, actions }) opens the bottom sheet (body: HTML string or a Node; actions: [{ label, kind: 'primary'|'danger'|'plain',
+// ---- focus that survives a re-render ------------------------------------------------------------------------------
+const KEY_ATTRS = ['data-ctl-status', 'data-act', 'data-dark', 'data-mode', 'data-file', 'data-route', 'data-season', 'data-d', 'data-target', 'data-theme', 'data-m', 'data-cal', 'data-rope', 'data-view', 'data-box', 'data-id'];
+/** A selector that finds "the same control" again after its markup was replaced (its data-* identity, else its id). */
+export function focusKey(node) {
+  if (!(node instanceof Element) || node === document.body) return null;
+  if (node.id) return `#${CSS.escape(node.id)}`;
+  const parts = KEY_ATTRS.filter((a) => node.hasAttribute(a)).map((a) => `[${a}="${CSS.escape(node.getAttribute(a))}"]`);
+  if (!parts.length) { const s = node.closest('summary'); return s && s !== node ? focusKey(s) : node.tagName === 'SUMMARY' && node.parentElement?.dataset.id ? `details[data-id="${CSS.escape(node.parentElement.dataset.id)}"] > summary` : null; }
+  return node.tagName.toLowerCase() + parts.join('');
+}
+/** Puts focus back on the control `key` names inside root, or, when it is disabled now, on the nearest status line. */
+export function refocus(key, root = document, fallback = null) {
+  if (!key) return false;
+  let t = null;
+  try { t = root.querySelector(key); } catch { /* a stale key */ }
+  if (t && !t.disabled) {
+    if (!t.matches('a[href], button, input, select, textarea, summary, [tabindex]')) t.setAttribute('tabindex', '-1');
+    t.focus({ preventScroll: true }); return document.activeElement === t;
+  }
+  const near = t?.closest('.ctl')?.querySelector('.ctl-status') ?? t?._mcStatus ?? fallback;
+  if (near) { if (!near.hasAttribute('tabindex')) near.setAttribute('tabindex', '-1'); near.focus({ preventScroll: true }); return true; }
+  return false;
+}
+/** sheet({ title, body, actions, focus }) opens the bottom sheet (body: HTML string or a Node; actions: [{ label, kind: 'primary'|'danger'|'plain',
  *  onClick, keep }] stacked full width, each closes the sheet unless `keep`); a Close button when there are no actions.
- *  Returns { close, el }; a click on the backdrop or Escape closes it. A sheet opened over another replaces it. */
-export function sheet({ title, body = '', actions = null, onClose = null } = {}) {
+ *  `focus`: the index of the action that takes focus when it opens (default: the browser's choice, the first control).
+ *  Returns { close, el }; a click on the backdrop or Escape closes it. A sheet opened over another replaces it. On close,
+ *  focus goes back to what opened it, found again by its data-* identity when a re-render replaced it meanwhile. */
+export function sheet({ title, body = '', actions = null, onClose = null, focus = null } = {}) {
   const d = dialog();
+  const opener = d.open ? d._mcOpener : document.activeElement;
+  const openerKey = d.open ? d._mcOpenerKey : focusKey(document.activeElement);
   d._mcReplaced?.();            // the sheet this one replaces: its promise (a confirm) resolves false; the dialog stays open
   d.innerHTML = '';
   const inner = el('<div class="sheet-in" role="document"></div>');
-  if (title) inner.append(el(`<h3>${esc(title)}</h3>`));
+  if (title) inner.append(el(`<h3 id="mc-sheet-title" tabindex="-1">${esc(title)}</h3>`));
   if (body instanceof Node) inner.append(body); else if (body) inner.insertAdjacentHTML('beforeend', body);
+  const desc = inner.querySelector(':scope > p, :scope > div > p');
+  if (desc) { desc.id ||= 'mc-sheet-desc'; d.setAttribute('aria-describedby', desc.id); } else d.removeAttribute('aria-describedby');
+  if (title) { d.setAttribute('aria-labelledby', 'mc-sheet-title'); d.removeAttribute('aria-label'); } else { d.removeAttribute('aria-labelledby'); d.setAttribute('aria-label', 'Details'); }
   const acts = actions ?? [{ label: 'Close', kind: 'plain' }];
   const stack = el('<div class="stack"></div>');
+  const btns = [];
   for (const a of acts) {
     const b = el(`<button class="btn ${a.kind === 'primary' ? 'primary' : a.kind === 'danger' ? 'danger' : ''}" type="button">${esc(a.label)}</button>`);
     b.onclick = async () => { try { await a.onClick?.(b); } finally { if (!a.keep) close(); } };
-    stack.append(b);
+    stack.append(b); btns.push(b);
   }
   inner.append(stack);
   d.append(inner);
   let closed = false;
   const mine = {};
-  d._mcToken = mine;
+  d._mcToken = mine; d._mcOpener = opener; d._mcOpenerKey = openerKey;
   d._mcReplaced = () => { if (closed) return; closed = true; onClose?.(); };
   function close() {
     if (closed) return;
     closed = true;
-    if (d._mcToken === mine) { d._mcToken = null; d._mcReplaced = null; d.onclick = null; d.oncancel = null; if (d.open) d.close(); }
+    if (d._mcToken === mine) {
+      d._mcToken = null; d._mcReplaced = null; d.onclick = null; d.oncancel = null;
+      if (d.open) d.close();
+      // the button that opened it may have been replaced by a re-render while the sheet was up: find its successor
+      // a disabled opener (the run ended while its confirm was up) can't hold focus: its status line takes it, never <body>
+      if (!(opener instanceof Element && opener.isConnected) || opener.disabled) refocus(openerKey);
+    }
     onClose?.();
   }
   d.onclick = (e) => { if (e.target === d || e.target.closest('[data-sheet="close"]')) close(); };
   d.oncancel = (e) => { e.preventDefault(); close(); };
   if (!d.open) d.showModal();
+  if (focus != null && btns[focus]) btns[focus].focus();
   return { close, el: inner };
 }
 /** confirm({ title, body, ok, cancel, destructive }) → Promise<boolean>: a bottom sheet naming the cost, the costly button first
- *  (red-tinted when destructive, default true), then the safe one; backdrop and Escape mean no. */
+ *  (red-tinted when destructive, default true), then the safe one, which has the focus: a second Enter or a screen
+ *  reader's double-tap never confirms by accident. Backdrop and Escape mean no. */
 export function confirm({ title, body = '', ok = 'OK', cancel = 'Not now', destructive = true } = {}) {
-  return new Promise((resolve) => {
+  let s = null;
+  const pr = new Promise((resolve) => {
     let answered = false;
     const done = (v) => { if (!answered) { answered = true; resolve(v); } };
-    sheet({ title, body: body instanceof Node ? body : `<p>${esc(body)}</p>`, onClose: () => done(false),
+    s = sheet({ title, body: body instanceof Node ? body : `<p>${esc(body)}</p>`, onClose: () => done(false), focus: 1,
       actions: [{ label: ok, kind: destructive ? 'danger' : 'primary', onClick: () => done(true) }, { label: cancel, kind: 'plain', onClick: () => done(false) }] });
   });
+  /** close(): withdraw the question (the answer is no), e.g. when what it asks about became impossible meanwhile. */
+  pr.close = () => s?.close();
+  return pr;
 }
 
 // ---- controls: before / confirm / pending / result / failure on the control itself ---------------------------
@@ -319,7 +453,8 @@ export function control(target, opts = {}) {
     status = el('<div class="ctl-status" aria-live="polite"></div>');
     host.append(beforeEl, whyEl, button, status);
   }
-  let state = 'before';
+  button._mcStatus = status;     // refocus(): where focus goes when this button is disabled under it (the status may move)
+  let state = 'before', asking = null;
   function paint() {
     button.textContent = o.label;
     button.className = `btn ${o.kind === 'primary' ? 'primary' : o.kind === 'danger' ? 'danger' : ''}`.trim();
@@ -340,7 +475,14 @@ export function control(target, opts = {}) {
   }
   button.addEventListener('click', async () => {
     if (button.disabled || state === 'pending') return;
-    if (o.confirm && !(await confirm(o.confirm))) return;
+    if (o.confirm) {
+      asking = confirm(o.confirm);
+      const yes = await asking;
+      asking = null;
+      if (!yes) return;
+    }
+    // the confirm may have been open for a while: if the control became impossible meanwhile, nothing is sent
+    if (o.why) { show('failed', `Not sent: ${o.why} (${fmt.clock(Date.now())}).`); return; }
     show('pending', o.pending ?? 'Sending to bitcube…');
     try {
       const r = await o.run?.();
@@ -349,11 +491,17 @@ export function control(target, opts = {}) {
       show('done', `${text} · ${fmt.clock(Date.now())}${r?.fixture ? ' (fixture mode: nothing really changed)' : ''}`);
       o.onDone?.(r);
     } catch (e) {
-      show('failed', `${o.fail}: ${plainError(e)} (${fmt.clock(Date.now())}). Try again, or check Status.`);
+      show('failed', e?.noAnswer && e.posted ? noAnswerText(e, o.noAnswer ?? 'the page shows what bitcube reports') : `${o.fail}: ${plainError(e)} (${fmt.clock(Date.now())}). Try again, or check Status.`);
     }
   });
   paint();
-  return { button, host, show, update(n) { Object.assign(o, n); paint(); }, get state() { return state; } };
+  function update(n) {
+    Object.assign(o, n);
+    // a confirm still open for a control that just became impossible is withdrawn, with the reason on the control
+    if (o.why && asking) { const a = asking; asking = null; show('failed', `Not sent: ${o.why} (${fmt.clock(Date.now())}).`); a.close(); return; }
+    paint();
+  }
+  return { button, host, show, update, get state() { return state; } };
 }
 
 // ---- goto: open a card's ancestors, scroll, flash -------------------------------------------------------------
@@ -419,9 +567,9 @@ function openMenu(shell) {
   const t = getTheme();
   const body = el(`<div class="stack">
     <div class="menu-row">
-      <button class="btn" type="button" data-m="contacts">Who to call <span class="chev">›</span></button>
-      <button class="btn" type="button" data-m="recent">Recent <span class="chev">›</span></button>
-      <div class="ctl" data-m="check-host"><div class="ctl-h">The full check</div><div class="ctl-before">Asks bitcube to check everything now instead of waiting for the next minute.</div><button class="btn" type="button" data-m="check">Check now</button><div class="ctl-status" aria-live="polite"></div></div>
+      <button class="btn" type="button" data-m="contacts">Who to call <span class="chev" aria-hidden="true">›</span></button>
+      <button class="btn" type="button" data-m="recent">Recent <span class="chev" aria-hidden="true">›</span></button>
+      <div class="ctl" data-m="check-host"><div class="ctl-h">The full check</div><div class="ctl-before">Asks bitcube to check everything now instead of waiting for the next minute.</div><button class="btn" type="button" data-m="check">Check now</button><div class="ctl-status" role="status"></div></div>
     </div>
     <div><div class="ctl-h">Theme</div><div class="seg" role="group" aria-label="Theme">${['auto', 'light', 'dark'].map((x) => `<button type="button" data-theme="${x}" class="${t === x ? 'lit' : ''}" aria-pressed="${t === x}">${cap(x)}</button>`).join('')}</div></div>
     <div class="links">${DOC_LINKS.map(([l, h]) => `<a href="${h}" ${h.startsWith('/') ? '' : 'target="_blank" rel="noopener"'}>${esc(l)}</a>`).join('')}</div>
@@ -435,7 +583,7 @@ function openMenu(shell) {
     onDone: () => document.dispatchEvent(new CustomEvent('mc:check')) });
 }
 async function logout() {
-  if (!(await confirm({ title: 'Log out?', body: 'You will need the team password to get back in, in the dark.', ok: 'Log out', cancel: 'Stay logged in', destructive: false }))) return;
+  if (!(await confirm({ title: 'Log out?', body: "You'll need the team password to log back in.", ok: 'Log out', cancel: 'Stay logged in', destructive: false }))) return;
   try { await fetch('/logout', { method: 'POST' }); } catch { /* the login page is the answer either way */ }
   location.href = '/login';
 }
@@ -447,20 +595,30 @@ async function logout() {
  *  null/'ok' → "Updated N s ago"; 'warning' (amber, from 12 s) or 'down' (red, from 30 s) → "No answer for N s". */
 export function mountShell({ page = 'status', title = '' } = {}) {
   art.mount();
+  const titleTag = page === 'status' ? 'span' : 'h1';   // Status's h1 is the verdict; every other page is named by its title
   if (!art.current) art.setSeason(null);
   const header = el(`<header class="top">
-    <div class="brand"><span class="wordmark">Mission control</span><span class="title">${esc(title || TABS.find((t) => t[0] === page)?.[1] || '')}</span></div>
-    <div class="fresh" id="mc-fresh" aria-live="polite">Connecting…</div>
+    <div class="brand"><span class="wordmark">Mission control</span><${titleTag} class="title">${esc(title || TABS.find((t) => t[0] === page)?.[1] || '')}</${titleTag}></div>
+    <div class="fresh" id="mc-fresh">Connecting…</div>
     <button class="menu-btn" type="button" aria-label="Menu" aria-haspopup="dialog" title="Menu">⋯</button></header>`);
   const main = $('main');
   if (main) main.before(header); else document.body.prepend(header);
+  // the System map has no tab of its own: it is reached from Status, so Status is marked as where you are (its parent)
+  const tabOf = page === 'map' ? 'status' : page;
   if (!$('nav.tabs')) document.body.append(el(`<nav class="tabs" aria-label="Pages">${TABS.map(([k, l, h, svg]) =>
-    `<a href="${h}" class="${k === page ? 'on' : ''}" ${k === page ? 'aria-current="page"' : ''}>${svg}${esc(l)}</a>`).join('')}</nav>`));
+    `<a href="${h}" class="${k === tabOf ? 'on' : ''}" ${k === tabOf ? `aria-current="${k === page ? 'page' : 'true'}"` : ''}>${svg}${esc(l)}</a>`).join('')}</nav>`));
+  // the focus order follows where the tabs are drawn: last on a phone (the bar at the bottom), right after the header from
+  // 900 px (the pill at the top), so a keyboard reaches them beside the menu instead of after the whole page
+  const nav = $('nav.tabs'), wide = matchMedia('(min-width: 900px)');
+  const placeTabs = () => { if (wide.matches) { if (header.nextElementSibling !== nav) header.after(nav); } else if (document.body.lastElementChild !== nav) document.body.append(nav); };
+  placeTabs(); wide.addEventListener('change', placeTabs);
   dialog();
   const fresh = header.querySelector('#mc-fresh');
-  const st = { ageMs: null, setAt: null, stale: null, checking: false };
+  const st = { ageMs: null, setAt: null, stale: null, checking: false, waitingSince: null };
   const shell = {
-    setAge(ms) { st.ageMs = ms == null ? null : Math.max(0, ms); st.setAt = performance.now(); paint(); },
+    setAge(ms) { st.ageMs = ms == null ? null : Math.max(0, ms); st.setAt = performance.now(); if (ms != null) st.waitingSince = null; paint(); },
+    /** Before the first answer: when the page started asking (performance.now()), for "No answer yet · N s". */
+    setWaiting(since) { st.waitingSince = since ?? null; paint(); },
     setStale(level) { st.stale = level === 'warning' || level === 'down' ? level : null; paint(); },
     setChecking(on) { st.checking = !!on; paint(); },
     openMenu: () => openMenu(shell),
@@ -470,7 +628,7 @@ export function mountShell({ page = 'status', title = '' } = {}) {
     const a = age();
     let text, cls = 'fresh';
     if (st.checking) text = 'Checking…';
-    else if (st.stale) { text = a == null ? 'No answer yet' : `No answer for ${nbsp(modelDur(a / 1000))}`; cls += ` lv-${st.stale}`; }
+    else if (st.stale) { text = a == null ? `No answer yet${st.waitingSince != null ? ` · ${nbsp(modelDur((performance.now() - st.waitingSince) / 1000))}` : ''}` : `No answer for ${nbsp(modelDur(a / 1000))}`; cls += ` lv-${st.stale}`; }
     else text = a == null ? 'Connecting…' : `Updated ${nbsp(modelDur(a / 1000))} ago`;
     if (fresh.textContent !== text) fresh.textContent = text;
     if (fresh.className !== cls) fresh.className = cls;

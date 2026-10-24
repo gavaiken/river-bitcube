@@ -76,6 +76,10 @@ button { font: inherit; color: inherit; }
 .tabs { display: flex; gap: 2px; overflow-x: auto; margin-top: 8px; scrollbar-width: none; }
 .tabs button { border: 0; background: none; padding: 8px 12px; border-bottom: 2px solid transparent; cursor: pointer; color: var(--muted); white-space: nowrap; font-size: 14px; }
 .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+@media (pointer: coarse), (max-width: 600px) {   /* a finger: 44 px targets, 8 px apart (mission control's map embeds this page) */
+  .icon-btn, .tabs button, .seg button { min-height: 44px; min-width: 44px; }
+  .tabs { gap: 8px; }
+}
 
 main { padding-block: 14px 40px; }
 body.panel-open main { margin-right: 420px; }

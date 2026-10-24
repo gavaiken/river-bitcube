@@ -11,13 +11,18 @@
 //   { ok: true, action: 'frames', file, fps, cook_rate, ropes: {...}, hub75: {...}, ...,       <- td_mission.py's usual status
 //     frames: { at: <unix seconds>, source: <ropes Source>, brightness: <panels Brightness>,
 //               ropes:  { w: 20, h: 400, rgb: <base64 of w*h*3 uint8>, source, brightness, watts: [box1, box2] | null, top?, note? },
-//               panels: { w: 256, h: 32, rgb: <base64 of w*h*3 uint8>, source, brightness, output, atlas: [1024, 128], top? } },
+//               panels: { w: 64, h: 128, rgb: <base64 of w*h*3 uint8>, source, brightness, output, atlas: [256, 512], top? },
+//               screens: { w: 128, h: 64, rgb: <base64>, cells: 4 } },
 //     age_s }                                                                                  <- added here
 //   ropes.rgb: row 0 = plug end (Art-Net pixel 0), column c = rope c+1; byte offset of (x, y) = (y*w + x)*3. The canvas colours
 //   are as TD holds them; the sender multiplies by ropes.brightness (and the per-box power cap) before Art-Net. With a test or
 //   calibration Source (gray, identify, ...) rgb is that pattern, so the simulator shows a calibration as it runs.
-//   panels.rgb: a 4x box-downsample of panel_out (the 1024x128 HUB75 atlas, four 256x128 quads in a row), row 0 = top;
-//   brightness and black mode are already in it (the layout shader applies them). Either part may be { error } on its own.
+//   panels.rgb: a 4x box-downsample of panel_out, row 0 = top; brightness and black mode are already in it (the layout shader
+//   applies them). At Gray Area panel_out is 256x512: the four 256x128 quads stacked down the left edge, each the screen's
+//   upright portrait turned on its side (screens 3 and 4 row-swapped, screen 3 half-turned): public/screens.js. Before Gray
+//   Area it was 1024x128, four quads in a row. screens.rgb: the four screens UPRIGHT AS SEEN, side by side (cell k-1 = screen
+//   k, 32x64 each), times the panels' brightness; what Lights draws (td_mission.py from 24 Oct; older ones send no screens,
+//   and the page undoes the atlas instead). Any part may be { error } on its own.
 //   Failure: { ok: false, error }. decodeFrames() turns the base64 into Uint8Arrays and checks the sizes.
 //
 // GET /api/pixelmap -> Lights.pixelmap(probe.pixelmap) -> sshPixelmap(): tools/mission/pixelmap.ps1 (newest tools/pixelmap/pixelmap-YYYY-MM-DD.json)
@@ -49,7 +54,7 @@
 //   { running, pid, alive?, stale?, mode: 'full' | 'dry-run' | 'decode-only',
 //     stage: null | 'ropes-capture' | 'ropes-decode' | 'hub75-capture' | 'hub75-locate' | 'done', stage_index, stages: [...],
 //     step, of, expected_s (typical seconds for the stage, for a bar), started, updated (unix s), elapsed_s, message, log: [last lines],
-//     ok: null | bool, error: null | string, cancelled, dry_run, decode_only, cam, brightness_cap,
+//     ok: null | bool, error: null | string (raw), reason: null | string (the same in the team's words), cancelled, dry_run, decode_only, cam, brightness_cap,
 //     before: { Active, Source, Brightness, Graybit, Grayinvert, Panels, Maxbrightness } | null, restored: null | bool,
 //     capture: 'pixelmap-YYYYMMDD-HHMMSS' | null, hub75_capture: 'hub75-YYYYMMDD-HHMMSS' | null,
 //     capture_info: { mode, drift, lit_camera_px, settle, brightness_cap } | null,
@@ -58,6 +63,7 @@
 import { execFile } from 'node:child_process';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { scrubCreds } from './scrub.mjs';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 export const FRAMES_CACHE_MS = 8_000;
@@ -92,6 +98,8 @@ function readLocalJson(dir, re, kind) {
 export function readLocalPixelmap(dir) { return readLocalJson(dir, MAP_FILE, 'pixelmap'); }
 /** The newest screens file (where each HUB75 screen hangs in the camera's view; tools/pixelmap/screens.py), or null. */
 export function readLocalScreens(dir) { return readLocalJson(dir, SCREENS_FILE, 'screens'); }
+/** The fields of a calibrate request (planCalibrate reads these and nothing else). */
+export const CALIBRATE_FIELDS = ['dry_run', 'decode_only', 'cam', 'task'];
 const CAPTURE_DIR = /^(pixelmap|hub75)-\d{8}-\d{6}$/;
 
 /** Run one tools/mission script on bitcube and parse its JSON line (sshProbe's pattern). Never rejects. */
@@ -133,16 +141,16 @@ export function planCalibrate(action, body = {}) {
   if (!CALIBRATE_ACTIONS.includes(action)) throw bad('action is start, cancel or status');
   if (action !== 'start') return `-Action ${action}`;
   let args = '-Action start';
-  if (body.dry_run) args += ' -DryRun';
+  if (body.dry_run === true) args += ' -DryRun';
   if (body.decode_only != null && body.decode_only !== '') {
-    if (!CAPTURE_DIR.test(String(body.decode_only))) throw bad('decode_only is a frames folder name like pixelmap-20261018-154155');
+    if (typeof body.decode_only !== 'string' || !CAPTURE_DIR.test(body.decode_only)) throw bad('decode_only is a frames folder name like pixelmap-20261018-154155');
     args += ` -DecodeOnly ${body.decode_only}`;
   }
   if (body.cam !== undefined) {
     if (!['gallery', 'river'].includes(body.cam)) throw bad('cam is gallery or river');
     args += ` -Cam ${body.cam}`;
   }
-  if (body.task) args += ' -Task';
+  if (body.task === true) args += ' -Task';
   return args;
 }
 
@@ -160,7 +168,7 @@ export function decodeFrames(payload) {
     if (bytes.length !== w * h * 3) return { ...rest, w, h, error: `rgb holds ${bytes.length} bytes, expected ${w * h * 3}` };
     return { ...rest, w, h, rgb: new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.length) };
   };
-  return { at: f.at, source: f.source, brightness: f.brightness, ropes: part(f.ropes), panels: part(f.panels) };
+  return { at: f.at, source: f.source, brightness: f.brightness, ropes: part(f.ropes), panels: part(f.panels), ...(f.screens ? { screens: part(f.screens) } : {}) };
 }
 
 /** [r, g, b] of pixel (x, y) in a decoded part, or null outside it / without rgb. */
@@ -258,12 +266,15 @@ export class Lights {
   }
 
   /** Live progress of the calibration job (calibrate.ps1 -Action status), cached calibrationCacheMs. */
-  calibration() { return this.#cached('calibration', this.calibrationCacheMs, () => this.fetchCalibrate(this.sshHost, 'status')); }
+  calibration() { return this.#cached('calibration', this.calibrationCacheMs, () => this.fetchCalibrate(this.sshHost, 'status').then(scrubCreds)); }
 
   /** start | cancel (| status). The whitelist is planCalibrate (throws 400); the answer's progress refreshes the status cache. */
   async calibrate(action, body = {}) {
     planCalibrate(action, body);
-    const r = await this.fetchCalibrate(this.sshHost, action, { ...body });
+    // only the request's own fields go on: a body key named timeout, maxBuffer or exec must never reach the ssh call's options
+    const pick = {};
+    for (const k of CALIBRATE_FIELDS) if (body[k] !== undefined) pick[k] = body[k];
+    const r = scrubCreds(await this.fetchCalibrate(this.sshHost, action, pick));
     this.cache.calibration = r && r.calibration && typeof r.calibration === 'object' ? { value: r.calibration, at: this.now() } : {};
     return r;
   }

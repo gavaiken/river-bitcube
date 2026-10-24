@@ -178,8 +178,8 @@ test('the v2 routes on the real fixtures: lights, pixelmap, calibration (scripte
 
   // the lights: one shape in both modes (the contract in lib/lights.mjs), 503 in plain words where there are no frames
   const lights = await (await get('/api/lights', on('all-good'))).json();
-  assert.deepEqual([lights.ok, lights.action, lights.synthetic, lights.frames.ropes.w, lights.frames.ropes.h, lights.frames.panels.w, lights.frames.panels.h, lights.frames.source],
-                   [true, 'frames', true, 20, 400, 256, 32, 'canvas']);
+  assert.deepEqual([lights.ok, lights.action, lights.synthetic, lights.frames.ropes.w, lights.frames.ropes.h, lights.frames.panels.w, lights.frames.panels.h, lights.frames.screens.w, lights.frames.screens.h, lights.frames.source],
+                   [true, 'frames', true, 20, 400, 64, 128, 128, 64, 'canvas']);
   assert.equal(Buffer.from(lights.frames.ropes.rgb, 'base64').length, 20 * 400 * 3);
   assert.equal((await (await get('/api/lights', on('ropes-dark-on-purpose'))).json()).frames.source, 'black');
   const off = await get('/api/lights', on('bitcube-offline'));
@@ -219,6 +219,19 @@ test('the v2 routes on the real fixtures: lights, pixelmap, calibration (scripte
   // the scripted calibration: none -> start -> progress -> done; the probe mirrors it; cancel; the drift flag
   assert.deepEqual(await (await get('/api/calibration', on('all-good'))).json(), { running: false, none: true });
   assert.equal((await post('/api/control/calibrate', { action: 'explode' }, on('all-good'))).status, 400);
+  // a body that is not a JSON object is refused before anything runs or is recorded (it threw a TypeError, recorded as a failed start)
+  const histBefore = (await (await get('/api/history?kinds=action', on('all-good'))).json()).count;
+  for (const junk of [null, [1], 7, 'start']) {
+    const r = await post('/api/control/calibrate', junk, on('all-good'));
+    assert.equal(r.status, 400, JSON.stringify(junk));
+    assert.doesNotMatch((await r.json()).error, /Cannot read|TypeError/);
+  }
+  assert.equal((await post('/api/control/ropes', null, on('all-good'))).status, 400);
+  assert.equal((await (await get('/api/history?kinds=action', on('all-good'))).json()).count, histBefore, 'nothing recorded');
+  // fixture mode checks calibrate's arguments with the live whitelist (planCalibrate): a bad one is a 400 here as it is live
+  assert.equal((await post('/api/control/calibrate', { action: 'start', decode_only: 'pixelmap-20261018-154155; calc' }, on('all-good'))).status, 400);
+  assert.equal((await post('/api/control/calibrate', { action: 'start', decode_only: { toString: 1 } }, on('all-good'))).status, 400);
+  assert.equal((await post('/api/control/calibrate', { action: 'start', cam: 'kitchen' }, on('all-good'))).status, 400);
   const refused = await (await post('/api/control/calibrate', { action: 'start' }, on('bitcube-offline'))).json();
   assert.equal(refused.error, "bitcube is offline: calibration can't start");
   const started = await (await post('/api/control/calibrate', { action: 'start' }, on('all-good'))).json();
@@ -242,7 +255,8 @@ test('the v2 routes on the real fixtures: lights, pixelmap, calibration (scripte
   const viaCookie = await (await post('/api/control/calibrate', { action: 'start' }, { cookie: `${mc}; scenario=all-good; calib=decode` })).json();
   assert.equal(viaCookie.ok, true);
   for (let i = 0; i < 200; i++) { await sleep(50); cal = await (await get('/api/calibration', on('all-good'))).json(); if (!cal.running) break; }
-  assert.match(cal.error, /^Decoding failed/);
+  assert.match(cal.error, /^ropes-decode failed \(exit 1\)/);
+  assert.match(cal.reason, /^Working out where each rope is failed: /);
   // every control left a line in this scenario's history, in words; a refused one (400, 429) did not
   const hist = await (await get('/api/history?kinds=action&limit=20', on('all-good'))).json();
   const words = hist.events.map((e) => e.words);
@@ -253,4 +267,7 @@ test('the v2 routes on the real fixtures: lights, pixelmap, calibration (scripte
   assert.equal(hist.events.filter((e) => e.action === 'check').length, 1);
   assert.equal(hist.events.filter((e) => e.action === 'rebuild').length, 1);
   for (const e of hist.events) assert.ok(!/toe|ssh|fps/i.test(e.words), e.words);
+  // another site can't log a teammate out: /logout is a state-changing POST like the rest
+  assert.equal((await post('/logout', {}, { cookie: mc, origin: 'https://evil.example' })).status, 403);
+  assert.equal((await get('/api/status', { cookie: mc })).status, 200, 'still logged in');
 });

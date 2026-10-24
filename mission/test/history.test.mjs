@@ -146,7 +146,7 @@ test("bitcube offline: one line; the pieces behind it keep their last known stat
   assert.deepEqual(h.observe(payload('bitcube-offline'), T0 + 2 * MIN), []);
   const back = h.observe(payload('all-good'), T0 + 3 * MIN);
   assert.deepEqual(back.map((e) => [e.kind, e.level ?? e.to]), [['overall', 'ok'], ['item', 'ok']]);
-  assert.equal(describeEvent(back[1]), 'bitcube is back: online; up 3.1 h, 676 GB free');
+  assert.equal(describeEvent(back[1]), 'bitcube is back: online');
   assert.equal(h.since('ropes', T0 + 3 * MIN).since, T0, 'the ropes never changed');
   // the server has just started: nothing is known, so nothing is written but the one piece it can see
   const g = new History({ now: () => T0 });
@@ -172,14 +172,14 @@ test("stale: a source going quiet is one 'lost contact' line (stale: true) that 
   const b = h.observe(box, T0 + 7 * MIN);
   assert.deepEqual([item(b, 'rope box 1').from, item(b, 'rope box 1').to, item(b, 'rope box 1').stale], ['ok', 'down', true]);
   assert.equal(describeEvent(item(b, 'rope box 1')), 'Rope box 1 stopped answering');
-  assert.deepEqual([b[0].kind, b[0].level, b[0].cause, b[0].stale], ['overall', 'warning', 'box', true]);
-  assert.equal(describeEvent(b[0]), "Rope box 1 (ropes 1-10) isn't answering: those ropes may be dark (and no word from bitcube)");
+  // the band keeps saying the check is old: a warning read from that same old check doesn't head it (model.js staleHead)
+  assert.equal(b.find((e) => e.kind === 'overall'), undefined, b.map(describeEvent).join('\n'));
   // back in touch, all good
   const c = h.observe(payload('all-good'), T0 + 10 * MIN);
   assert.deepEqual([c[0].level, c[0].stale, c[0].from.stale], ['ok', false, true]);
-  assert.equal(describeEvent(c[0]), "Back in touch with bitcube: everything is up; the river's year is in spring (automatic); lights and cameras fine");
+  assert.equal(describeEvent(c[0]), "Back in touch with bitcube: everything is up; the river's year is in spring; lights and cameras fine");
   assert.equal(describeEvent(item(c, 'rope box 1')), 'Rope box 1 is back: answers');
-  assert.equal(h.since('overall', T0 + 10 * MIN).since, T0 + 10 * MIN);
+  assert.equal(h.since('overall', T0 + 10 * MIN).since, T0, 'the band never left OK as far as anyone could tell: since stands');
   // which source went quiet is named in words
   for (const [patch, who] of [[(p) => { p.bitcube.at = T0 - 60_000; }, 'bitcube'], [(p) => { p.seasons.at = T0 - 60_000; }, "the river's year page"], [(p) => { p.modal.at = T0 - 300_000; }, "Dave's agent"]]) {
     const g = new History({ now: () => T0 });
@@ -323,29 +323,29 @@ test('action(): what was done, from where, whether it worked; the body cut to a 
 test('describeEvent: one plain sentence for every kind, in glossary words', () => {
   const h = new History({ now: () => T0 });
   const a = h.observe(payload('all-good'), T0);
-  assert.equal(describeEvent(a[0]), "Everything is up: the river's year is in spring (automatic); lights and cameras fine");
-  assert.equal(describeEvent(item(a, 'bitcube')), 'bitcube is fine: online; up 3.1 h, 676 GB free');
+  assert.equal(describeEvent(a[0]), "Everything is up: the river's year is in spring; lights and cameras fine");
+  assert.equal(describeEvent(item(a, 'bitcube')), 'bitcube is fine: online', 'no age frozen at the time ("up 3 h") beside the feed\'s own');
   assert.equal(describeEvent(item(a, 'touchdesigner')), "TouchDesigner is fine: running the river's year at 60 frames a second");
-  assert.equal(describeEvent(item(a, 'seasons')), "The river's year is fine: automatic, spring, flowing (0.46)");
-  assert.equal(describeEvent(item(a, 'modal agent')), "Dave's agent is fine: ticked 1 min ago (attentive)");
+  assert.equal(describeEvent(item(a, 'seasons')), "The river's year is fine: automatic, spring, flowing");
+  assert.equal(describeEvent(item(a, 'modal agent')), "Dave's agent is fine");
   assert.equal(describeEvent(show(a, 'file')), "TouchDesigner is showing the river's year");
   assert.equal(describeEvent(show(a, 'mode')), 'The year runs in automatic mode: the clock turns the year, one season a minute');
   assert.equal(describeEvent(show(a, 'season')), 'The season is spring');
   assert.equal(describeEvent(show(a, 'ropes')), 'The ropes show the river');
   const b = h.observe(payload('lights-not-connected'), T0 + MIN);
-  assert.equal(describeEvent(b[0]), "The lights aren't connected: neither rope box answers and bitcube sees no LED display");
-  assert.equal(describeEvent(item(b, 'ropes')), 'The ropes are not reaching the lights: sender closed, both boxes silent');
+  assert.equal(describeEvent(b[0]), "The lights aren't connected: neither rope box answers and bitcube sees no panel sender");
+  assert.equal(describeEvent(item(b, 'ropes')), 'The ropes are not reaching the lights: sender retrying, both boxes silent');
   assert.equal(describeEvent(item(b, 'rope box 1')), 'Rope box 1 stopped answering');
   assert.equal(describeEvent(item(b, 'hub75 panels')), 'The panels have no sender: bitcube does not see one');
   assert.equal(describeEvent(item(b, 'river camera')), 'The river camera stopped answering: the river site is down');
-  assert.equal(describeEvent(item(b, 'modal link')), "The link to Dave's agent is not posting river clips (none lately); gallery fine");
+  assert.equal(describeEvent(item(b, 'modal link')), "River clips to Dave are failing for a while; gallery fine");
   assert.equal(describeEvent(item(b, 'recorder')), "The river recorder can't reach the river camera");
   assert.equal(describeEvent(show(b, 'mode')), "The year's mode changed to manual: someone is steering the year by hand");
   assert.equal(describeEvent(show(b, 'season')), 'The season turned to summer');
   assert.equal(describeEvent(show(b, 'ropes')), 'The ropes stopped getting the river');
   const c = h.observe(payload('all-good'), T0 + 2 * MIN);
-  assert.equal(describeEvent(item(c, 'ropes')), 'The ropes are back: showing the river; 182 + 191 W');
-  assert.equal(describeEvent(item(c, 'modal link')), "The link to Dave's agent is OK again: 8 processes; clips seconds old");
+  assert.equal(describeEvent(item(c, 'ropes')), 'The ropes are back: showing the river');
+  assert.equal(describeEvent(item(c, 'modal link')), "Clips to Dave is OK again: posting");
   assert.equal(describeEvent(show(c, 'ropes')), 'The ropes show the river again');
   // the other scenarios' first lines
   const first = (name, id) => { const g = new History({ now: () => T0 }); const evs = g.observe(payload(name), T0); return describeEvent(id === 'overall' ? evs[0] : item(evs, id)); };
@@ -354,16 +354,16 @@ test('describeEvent: one plain sentence for every kind, in glossary words', () =
   assert.equal(first('td-frozen', 'hub75 panels'), 'The panels hold a frozen picture');
   assert.equal(first('td-low-fps', 'touchdesigner'), 'TouchDesigner is running slowly: 4 of 60 frames a second');
   assert.equal(first('td-low-fps', 'ropes'), 'The ropes are driven at only 4 frames a second');
-  assert.equal(first('ropes-dark-on-purpose', 'ropes'), 'The ropes are dark on purpose (sending black)');
+  assert.equal(first('ropes-dark-on-purpose', 'ropes'), 'The ropes are dark on purpose: sending black');
   assert.equal(first('seasons-not-running', 'seasons'), "The river's year stopped running: TouchDesigner is showing the live river");
   assert.equal(first('seasons-not-running', 'overall'), "TouchDesigner is showing the live river, not the river's year: the year and its controls are unavailable");
   assert.equal(first('river-cam-stale', 'river camera'), 'The river camera answers, but no frames for 30 min');
   assert.equal(first('gallery-cam-down', 'gallery camera'), 'The gallery camera stopped answering');
-  assert.equal(first('gallery-cam-down', 'modal link'), "The link to Dave's agent is not posting gallery clips since 02:43; river fine");
+  assert.equal(first('gallery-cam-down', 'modal link'), "Gallery clips to Dave are failing since 02:43; river fine");
   assert.equal(first('no-internet', 'internet'), 'The internet at Gray Area is down: bitcube cannot reach it');
   assert.equal(first('no-internet', 'river camera'), 'The river camera became unreachable: no internet at Gray Area');
-  assert.equal(first('modal-scene-old', 'modal agent'), "Dave's agent hasn't ticked for 9 h");
-  assert.equal(first('just-booted', 'modal link'), "The link to Dave's agent hasn't started yet (bitcube just restarted)");
+  assert.equal(first('modal-scene-old', 'modal agent'), "Dave's agent hasn't updated for 9 h");
+  assert.equal(first('just-booted', 'modal link'), "Clips to Dave hasn't started yet: bitcube just restarted");
   assert.equal(first('bitcube-offline', 'overall'), 'bitcube is offline: nothing behind it can be checked');
   assert.equal(first('nothing-known-yet', 'bitcube'), 'bitcube is fine: reachable; full check still to come');
 
@@ -461,4 +461,56 @@ test('a broken payload never throws, in memory or on disk, and the next good one
   }
   const g = new History({ file, now: () => T0 });
   assert.equal(g.since('overall').level, 'ok', 'what was written reads back');
+});
+
+test('after a two-hour outage, a fault found when contact returns reads as a first sighting ("for over"), never "for 1 min"', async () => {
+  const { readFileSync } = await import('node:fs');
+  const fx = (n) => { const j = JSON.parse(readFileSync(new URL(`./fixtures/${n}.json`, import.meta.url), 'utf8')); return { ...j.status, now: j._scenario.now }; };
+  const at = (j, T) => { const d = T - j.now; const c = structuredClone(j); c.now = T; for (const k of ['bitcube', 'seasons', 'modal', 'probe']) if (c[k]?.at) { c[k].at += d; if (c[k].failing_since) c[k].failing_since += d; } return c; };
+  let T = 1_792_749_540_000;
+  const h = new History({ file: null, now: () => T });
+  h.observe(at(fx('all-good'), T), T);
+  for (let i = 0; i < 25; i++) { T += 5 * 60e3; h.observe(at(fx('bitcube-offline'), T), T); }
+  T += 60e3; h.observe(at(fx('gallery-cam-down'), T), T);
+  T += 60e3; h.observe(at(fx('gallery-cam-down'), T), T);
+  const g = h.since('gallery camera', T), o = h.since('overall', T);
+  assert.equal(g.at_least, true, JSON.stringify(g));
+  assert.equal(o.at_least, true, JSON.stringify(o));
+  // a fault that begins while everything is watched keeps its exact since
+  T += 60e3; h.observe(at(fx('all-good'), T), T);
+  T += 60e3; h.observe(at(fx('gallery-cam-down'), T), T);
+  assert.equal(h.since('gallery camera', T).at_least, false);
+});
+
+test("a new reason at the same level restarts its since: running slowly for 2 h, then Ropes → Dark, is 'Attention for 0 s', not 2 h", () => {
+  const h = new History({ now: () => T0 });
+  h.observe(payload('td-low-fps'), T0);
+  assert.equal(h.since('ropes', T0 + 2 * H).level, 'warning');
+  // the same reason with other numbers (4 then 5 frames a second) is no news
+  const slower = payload('td-low-fps'); slower.probe.value.td.fps = Number(slower.probe.value.td.fps) + 1;
+  assert.equal(item(h.observe(slower, T0 + H), 'ropes'), undefined, 'a number moving inside the same reason');
+  const dark = { ...payload('ropes-dark-on-purpose'), now: T0 + 2 * H };
+  for (const k of ['bitcube', 'seasons', 'modal', 'probe']) dark[k].at += T0 + 2 * H - fixtures['ropes-dark-on-purpose']._scenario.now;
+  const evs = h.observe(dark, T0 + 2 * H);
+  const ev = item(evs, 'ropes');
+  assert.ok(ev, 'the ropes changed reason: an item event');
+  assert.deepEqual([ev.from, ev.to], ['warning', 'warning']);
+  const s = h.since('ropes', T0 + 2 * H + 5000);
+  assert.equal(s.for_s, 5, 'since the new reason, not since the level began');
+  assert.equal(s.at_least, false);
+  // a file written before this rule (item events without a reason change) still loads: the reason comes from the summary
+  assert.equal(h.summary(T0 + 2 * H).since.items.ropes.for_s, 0);
+});
+
+test('never a login in the history: a calibration error carrying an RTSP address is scrubbed; an audit line follows what ran', () => {
+  const h = new History({ now: () => T0 });
+  const p = payload('all-good');
+  p.probe.value.calibration = { running: false, stage: 'ropes-capture', ok: false, error: 'ropes-capture failed (exit 1): Error opening input file rtsp://admin:NOT-A-REAL-PW@192.168.9.76:554/Preview_01_main.' };
+  const ev = byKind(h.observe(p, T0), 'calibration')[0];
+  assert.ok(ev);
+  assert.doesNotMatch(JSON.stringify(ev), /NOT-A-REAL-PW|admin:/);
+  assert.match(ev.error, /rtsp:\/\/\*\*\*@192\.168\.9\.76/);
+  // planControl turns the ropes dark only for a real true, and planCalibrate dry-runs only for a real true: the feed says what ran
+  assert.equal(describeEvent(h.action({ action: 'ropes', body: { dark: 'true' } })), 'Turned the ropes on from mission control');
+  assert.equal(describeEvent(h.action({ action: 'calibrate', body: { action: 'start', dry_run: 'yes' } })), 'Started a calibration from mission control');
 });

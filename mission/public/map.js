@@ -4,11 +4,11 @@
 // /model.js (never the worst of a bundle); every link pill is that link's item in a word or two; a tap opens the
 // item's sheet with "Addresses and links (for Will)". Below it, the engineers' full diagram (/map/) in a frame.
 // Plain ES module, no build, no framework, no external scripts.
-import { mountShell, poll, tick, art, fmt, sheet, esc, mark, chip, WORD, MARK, DOC_LINKS } from '/ui.js';
+import { mountShell, poll, tick, watchContact, art, fmt, sheet, esc, mark, chip, WORD, MARK, DOC_LINKS, sinceAgrees, NAMES_FROM_BITCUBE, WARN_MS } from '/ui.js';
 import { derive, dur } from '/model.js';
 
-const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: 'Modal' };
-const CHECK = { mini: 'mission control (the Mac mini)', bitcube: "bitcube's full check", modal: 'the Mac mini, asking Modal' };
+const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
+const CHECK = { mini: 'the Mac mini', bitcube: "bitcube's full check", modal: "the Mac mini, asking Dave's agent" };
 const SOURCE_OF = { bitcube: 'bitcube', seasons: 'seasons', 'mission control': null };   // which source an item's raw error lives in
 const $ = (sel, root = document) => root.querySelector(sel);
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s ?? '');
@@ -21,20 +21,20 @@ const BOXES = [
     lead: "Watches the room: the still on Status and the clips to Dave. On our router's Wi-Fi." },
   { id: 'river', item: 'river camera', name: 'River camera', title: 'River camera (the river site)', map: 'cam-river',
     lead: 'At the real river, on solar power and Starlink. The live river shows it; the recorder and the clips to Dave use it in any show file.' },
-  { id: 'internet', item: 'internet', name: 'Internet', title: 'Internet at Gray Area', subs: ['router'], map: 'public-internet',
-    lead: "Gray Area's uplink through our router in the ceiling. The show runs without it; the clips to Dave and the river camera need it." },
+  { id: 'internet', item: 'internet', name: 'Internet at Gray Area', title: 'Internet at Gray Area', subs: ['router'], map: 'public-internet',
+    lead: "Gray Area's internet connection, through our router in the ceiling. The show runs without it; the clips to Dave and the river camera need it." },
   { id: 'bitcube', item: 'bitcube', name: 'bitcube', title: 'bitcube (the show PC)', subs: ['recorder', 'people counter'], map: 'bitcube',
-    lead: 'The show PC in the ceiling. Mission control reaches it over Tailscale; its full check reports everything behind it about once a minute. The river recorder and the people counter run on it.' },
+    lead: 'The show PC in the ceiling. Mission control reaches it from the Mac mini; its full check reports everything behind it about once a minute. The river recorder and the people counter run on it.' },
   { id: 'td', item: 'touchdesigner', name: 'TouchDesigner', title: 'TouchDesigner', subs: ['seasons'], map: 'bitcube',
     lead: "Runs the show file on bitcube and drives the ropes and the panels. The river's year has its own page, which mission control reads too." },
   { id: 'dave', item: 'modal agent', name: "Dave's agent", title: "Dave's agent", map: 'modal-app',
-    lead: "Dave's agent on Modal gets clips from both cameras and makes a scene. Only the live river shows the scene." },
+    lead: "Dave's agent gets clips from both cameras and makes a scene. Only the live river shows the scene." },
   { id: 'ropes', item: 'ropes', name: 'Ropes', title: 'Ropes (the sender)', subs: ['rope box 1', 'rope box 2'], map: 'gallery-switch',
     lead: "The 20 LED ropes, fed from bitcube's LIGHTS port through the two rope boxes (ropes 1–10 and 11–20)." },
   { id: 'panels', item: 'hub75 panels', name: 'Panels', title: 'Panels (HUB75 LED panels)', map: 'colorlight-sender',
     lead: "The four screens, fed from bitcube's HDMI through the panel sender." },
   { id: 'mini', item: 'mission control', name: 'Mission control', title: 'Mission control (the Mac mini)', map: 'mission-control',
-    lead: 'This app, on the Mac mini at Agape: it checks bitcube over Tailscale and Modal directly, and serves these pages.' },
+    lead: "This app, on the Mac mini at Agape. Mission control checks bitcube and Dave's agent from the Mac mini, and serves these pages." },
 ];
 const BOX = Object.fromEntries(BOXES.map((b) => [b.id, b]));
 // The links: each carries one item; `word()` is its pill. Clips to Dave sit on the arrow to Dave's agent.
@@ -48,6 +48,7 @@ const LINKS = [
   { from: 'bitcube', to: 'dave', item: 'modal link' },
 ];
 const SUB_MAP = { recorder: 'bitcube', router: 'router-gallery', 'people counter': 'bitcube', seasons: 'bitcube', 'rope box 1': 'psac10-1', 'rope box 2': 'psac10-2', 'modal link': 'ep-ingest' };
+const SUB_OF_MAP = Object.fromEntries(Object.entries(SUB_MAP).map(([k, v]) => [v, k]));   // a full-map node back to the item it shows
 const wide = () => matchMedia('(min-width: 760px)').matches;
 
 // ---- state -------------------------------------------------------------------------------------------------
@@ -55,15 +56,17 @@ const S = { m: null, nodesHtml: '', openBox: null, sheetHtml: '', sheetEl: null 
 const shell = mountShell({ page: 'map', title: 'System map' });
 const p = poll('/api/status', { every: 5000,
   onData: () => { shell.setAge(0); shell.setStale(null); render(); },
-  onError: (e, downForMs) => { shell.setStale(downForMs > 30_000 ? 'down' : downForMs > 12_000 ? 'warning' : null); render(); } });
+  onError: () => render() });   // before any answer, watchContact's header says "No answer yet · N s"
+// the shared rule (ui.js): from the time since the last answer, so a hung request greys every box as surely as an error
+const contact = watchContact(p, shell, () => render());
 document.addEventListener('mc:check', () => p.refresh());
 document.addEventListener('mc:theme', () => requestAnimationFrame(drawLinks));
 
 /** The model on the server's clock, carried forward by this phone's monotonic clock. */
-function model() { return p.last ? derive(p.last, p.last.now + (performance.now() - p.receivedAt)) : null; }
+function model() { return p.last ? derive(p.last, p.last.now + p.elapsed()) : null; }
 const itemOf = (m, id) => m?.items.find((x) => x.id === id) ?? null;
-const lost = () => (S.m && S.m.overall.cause === 'page') || (p.failedSince != null && performance.now() - p.failedSince > 30_000);
-const elapsedS = () => (p.receivedAt == null ? 0 : (performance.now() - p.receivedAt) / 1000);
+const lost = () => contact.lost || (S.m && S.m.overall.cause === 'page');
+const elapsedS = () => (p.receivedAt == null ? 0 : p.elapsed() / 1000);
 
 // ---- words -------------------------------------------------------------------------------------------------
 /** The pill on a link: the spec's words ("no answer", "no frames", "no internet", "not driven", "picture frozen",
@@ -100,7 +103,7 @@ function linkWord(link, it, m) {
     case 'modal link':
       if (/not running|not started/i.test(s)) return 'not running';
       if (/failing/i.test(s)) return 'clips failing';
-      if (/sync/i.test(s)) return 'sync quiet';
+      if (/nothing new/i.test(s)) return 'agent quiet';
       return L === 'ok' ? 'clips posting' : 'see details';
   }
   return WORD[L].toLowerCase();
@@ -115,15 +118,20 @@ function fromLine(it) {
 /** "Down for 9 min" from the server's history (status.since), carried forward; never this page's own watch start. */
 function sinceLine(it) {
   const s = p.last?.since?.items?.[it.id];
-  if (!s || s.for_s == null || s.level !== it.level) return '';
+  // as Status: never for an OK item, and never when it would contradict the words beside it (ui.js sinceAgrees)
+  if (!s || s.for_s == null || s.level !== it.level || it.level === 'ok' || !sinceAgrees(s, [it.summary, it.detail], NAMES_FROM_BITCUBE.has(it.id), S.m?.show.uptime_s)) return '';
   return `<div class="since">${WORD[it.level]} for ${s.at_least ? 'over ' : ''}${fmt.nb(dur(s.for_s + elapsedS()))}</div>`;
 }
 
 // ---- the chain -----------------------------------------------------------------------------------------------
+/** A sub-item that is not there yet (the people counter) is a known, normal absence: the grey '·' mark Status uses and
+ *  "Not available yet"; never a green ✓. An unknown one (behind an offline bitcube) says Unknown, never "not available". */
+const notYet = (it) => !!it?.muted && it.level !== 'unknown';
 function subRow(m, id) {
   const it = itemOf(m, id);
   const lvl = it?.level ?? 'unknown';
-  return `<span class="sub lv-${lvl} ${it?.muted ? 'muted-sub' : ''}">${mark(lvl)}<span>${esc(shortName(id, it)).replace(/ /g, '\u00a0')}</span><span class="w">${it?.muted ? 'Not available yet' : WORD[lvl]}</span></span>`;
+  const mk = notYet(it) ? '<span class="mk lv-unknown" aria-hidden="true">·</span>' : mark(lvl);
+  return `<span class="sub lv-${notYet(it) ? 'unknown' : lvl} ${it?.muted ? 'muted-sub' : ''}">${mk}<span>${esc(shortName(id, it))}</span><span class="w">${notYet(it) ? 'Not available yet' : WORD[lvl]}</span></span>`;
 }
 function shortName(id, it) {
   const n = { recorder: 'River recorder', router: 'Router', 'people counter': 'People counter', seasons: "The river's year (its page)", 'rope box 1': 'Rope box 1', 'rope box 2': 'Rope box 2', 'modal link': 'Clips to Dave' }[id];
@@ -132,7 +140,9 @@ function shortName(id, it) {
 function boxHtml(m, b) {
   const it = itemOf(m, b.item), lvl = it?.level ?? 'unknown';
   const sum = it ? it.summary : 'Not known yet';
-  const label = `${b.name}: ${WORD[lvl]}${it?.stale ? ' (last answer)' : ''}. ${sum}`;
+  // the name a screen reader hears: the box, its own state, and every row inside it (a sub-item can be the one not OK)
+  const subs = (b.subs ?? []).map((id) => { const s = itemOf(m, id); return `${shortName(id, s)}: ${notYet(s) ? 'not available yet' : WORD[s?.level ?? 'unknown']}`; });
+  const label = `${b.name}: ${WORD[lvl]}${it?.stale ? ' (last answer)' : ''}. ${sum}${subs.length ? `. ${subs.join('; ')}` : ''}`;
   return `<button type="button" class="node ${b.id} lv-${lvl} ${it?.stale ? 'stale' : ''}" data-box="${b.id}" aria-haspopup="dialog" aria-label="${esc(label)}">
     <span class="nname">${esc(b.name)}</span>
     <span class="nstate">${mark(lvl)}<span>${WORD[lvl]}</span>${it?.stale ? '<span class="last">· last answer</span>' : ''}</span>
@@ -144,26 +154,40 @@ function render() {
   art.setSeason(m?.show.weights ?? null);
   $('#connecting').hidden = !!m;
   const mini = itemOf(m, 'mission control'), miniLvl = mini?.level ?? 'unknown';
-  const miniHtml = `<span class="nname">Mission control</span>${mark(miniLvl)}<span class="w">${WORD[miniLvl]}</span><span class="nsum">${esc(mini ? `${mini.summary}; checks bitcube from the Mac mini` : 'Connecting…')}</span>`;
-  const miniEl = $('#mini');
-  if (miniEl.innerHTML !== miniHtml) { miniEl.innerHTML = miniHtml; miniEl.className = `mini-bar lv-${miniLvl}`; }
-  const html = '<svg class="lks" id="lks" aria-hidden="true"></svg>' + BOXES.filter((b) => b.id !== 'mini').map((b) => boxHtml(m, b)).join('');
+  renderMini(m);
+  // the arrows' words for a screen reader (the drawn links are aria-hidden): "TouchDesigner to Ropes: not driven"
+  const words = m ? `<ul class="sr-only" aria-label="The links">${LINKS.map((l) => `<li>${esc(`${BOX[l.from].name} to ${BOX[l.to].name}: ${linkWord(l, itemOf(m, l.item), m)}`)}</li>`).join('')}</ul>` : '';
+  const html = '<svg class="lks" id="lks" aria-hidden="true"></svg>' + BOXES.filter((b) => b.id !== 'mini').map((b) => boxHtml(m, b)).join('') + words;
   if (html !== S.nodesHtml) { $('#nodes').innerHTML = html; S.nodesHtml = html; }
   requestAnimationFrame(drawLinks);
   renderAges();
 }
+/** Before the first answer: the header's words for the wait ("Connecting…" under 12 s, then "No answer yet"). */
+const waitWords = () => (lost() ? 'No answer yet' : performance.now() - p.startedAt > WARN_MS ? 'No answer yet' : 'Connecting…');
+/** The Mission control bar (its "No answer for N s" ticks with the banner while contact is lost). */
+function renderMini(m) {
+  const mini = itemOf(m, 'mission control'), miniLvl = mini?.level ?? 'unknown';
+  const miniHtml = `<span class="nname">Mission control</span>${mark(miniLvl)}<span class="w">${WORD[miniLvl]}</span><span class="nsum">${esc(mini ? `${mini.summary}; checks bitcube from the Mac mini` : waitWords())}</span>`;
+  const miniEl = $('#mini');
+  if (miniEl.innerHTML !== miniHtml) { miniEl.innerHTML = miniHtml; miniEl.className = `mini-bar lv-${miniLvl}`; }
+}
 /** Once a second: the banner, the "bitcube checked N s ago" line and the open sheet's ages; never the boxes. */
 function renderAges() {
   const m = S.m;
-  if (p.failedSince != null) { const d = performance.now() - p.failedSince; shell.setStale(d > 30_000 ? 'down' : d > 12_000 ? 'warning' : null); }   // between polls too
-  document.body.classList.toggle('page-stale', lost());
-  const banner = $('#banner');
-  if (lost()) {
-    const f = p.receivedAt != null ? (performance.now() - p.receivedAt) / 1000 : p.failedSince != null ? (performance.now() - p.failedSince) / 1000 : null;
-    const at = p.receivedAt != null ? fmt.clock(Date.now() - (performance.now() - p.receivedAt)) : null;
-    banner.innerHTML = `${mark('unknown')}<span><b>No contact with mission control${f != null ? ` for ${fmt.nb(dur(f))}` : ''}.</b> ${at ? `Everything below is as it was at ${at}; every box shows its last answer.` : 'Nothing below is known until it answers.'}</span>`;
+  const banner = $('#banner'), isLost = lost();
+  // the banner ticks every second, so it is not a live region: #map-live says "No contact" once, and clears on return
+  const said = isLost ? 'No contact with mission control.' : '';
+  if ($('#map-live').textContent !== said) $('#map-live').textContent = said;
+  if (isLost) {
+    // before the first answer, from when the page started asking (as the header and Status count), never from the first abort
+    const f = p.receivedAt != null ? p.elapsed() / 1000 : (performance.now() - p.startedAt) / 1000;
+    const at = p.last ? fmt.clock(p.last.now, p.last.now) : null;   // the server's clock, as Status says it
+    banner.innerHTML = `${mark('unknown')}<span><b>No contact with mission control for ${fmt.nb(dur(f))}.</b> ${at ? `Everything below is as it was at ${at}; every box shows its last answer.` : 'Nothing below is known until it answers.'}</span>`;
     banner.hidden = false;
   } else banner.hidden = true;
+  renderMini(model());
+  const conn = $('#connecting');
+  if (!p.last) conn.textContent = isLost ? "This page can't reach mission control." : performance.now() - p.startedAt > WARN_MS ? 'No answer from mission control yet…' : 'Connecting to mission control…';
   const fromEl = $('#chainFrom');
   if (m) {
     const bc = itemOf(m, 'bitcube'), pr = m.sources.probe;
@@ -220,13 +244,13 @@ addEventListener('resize', () => requestAnimationFrame(drawLinks));
 // ---- the sheet: the box's own item, its sub-items, the link on its arrow, and the lines for Will ----------------
 const srcKey = (it) => (it.checked_from === 'bitcube' ? 'probe' : it.checked_from === 'modal' ? 'modal' : SOURCE_OF[it.id] ?? null);
 function itemRow(m, id, extra = '') {
-  const it = itemOf(m, id), lvl = it?.level ?? 'unknown';
-  return `<div class="r lv-${lvl} ${it?.muted ? 'muted-sub' : ''} ${extra}">${mark(lvl)}<span class="n">${esc(it?.name ?? shortName(id, null))}</span><span class="w">${it?.muted ? 'Not available yet' : WORD[lvl]}${it?.stale ? ' · last answer' : ''}</span>
+  const it = itemOf(m, id), lvl = it?.level ?? 'unknown', ny = notYet(it);
+  return `<div class="r lv-${ny ? 'unknown' : lvl} ${it?.muted ? 'muted-sub' : ''} ${extra}">${ny ? '<span class="mk lv-unknown" aria-hidden="true">·</span>' : mark(lvl)}<span class="n">${esc(it?.name ?? shortName(id, null))}</span><span class="w">${ny ? 'Not available yet' : WORD[lvl]}${it?.stale ? ' · last answer' : ''}</span>
     <span class="s">${esc(fmt.nb(it?.summary ?? 'Not known yet'))}${it && !it.muted && it.age_s != null ? ` · ${fmt.nb(dur(it.age_s + elapsedS()))} ago` : ''}</span></div>`;
 }
 function sheetBody(b) {
   const m = S.m, it = itemOf(m, b.item), lvl = it?.level ?? 'unknown';
-  const outLinks = LINKS.filter((l) => l.from === b.id), inLink = LINKS.find((l) => l.to === b.id);
+  const outLinks = LINKS.filter((l) => l.from === b.id), inLinks = LINKS.filter((l) => l.to === b.id);   // every arrow in, not the first
   const linkRows = outLinks.filter((l) => l.item !== b.item && !(b.subs ?? []).includes(l.item)).map((l) => itemRow(m, l.item, 'lnk-row'));   // clips to Dave: on the arrow
   let html = `<div class="sh">
     <div class="sh-top">${chip(lvl, WORD[lvl], it?.stale ? 'stale' : '')}${fromLine(it)}</div>
@@ -246,19 +270,20 @@ function sheetBody(b) {
   for (const l of linkRows.length ? outLinks.filter((l) => l.item !== b.item) : []) { const s = itemOf(m, l.item); if (s) line(s.name, s.address); }
   if (it) addr.push(`<div>Checked from: ${esc(CHECK[it.checked_from] ?? it.checked_from)}${it.age_s != null ? ` · ${fmt.nb(dur(it.age_s + elapsedS()))} ago` : ''}${it.stale ? ' · <span class="old">older than it should be</span>' : ''}</div>`);
   const words = [];
-  if (inLink && m) words.push(`in from ${BOX[inLink.from].name}: “${linkWord(inLink, itemOf(m, inLink.item), m)}”`);
+  if (m) for (const l of inLinks) words.push(`in from ${BOX[l.from].name}: “${linkWord(l, itemOf(m, l.item), m)}”`);
   for (const l of outLinks) if (m) words.push(`out to ${BOX[l.to].name}: “${linkWord(l, itemOf(m, l.item), m)}”`);
   if (words.length) addr.push(`<div>On the arrows: ${esc(words.join(' · '))}</div>`);
   if (it && m) {
     // the raw error text, from every source this box's answers come through
     const keys = b.id === 'bitcube' ? ['bitcube', 'probe', 'seasons'] : b.id === 'td' ? ['probe', 'seasons'] : b.id === 'mini' ? ['bitcube', 'seasons', 'probe', 'modal'] : [srcKey(it)].filter(Boolean);
-    const SRC = { bitcube: 'the port check', probe: 'the full check', seasons: "the river's year page", modal: 'Modal' };
+    const SRC = { bitcube: "bitcube's quick check", probe: 'the full check', seasons: "the river's year page", modal: 'Modal' };
     const raws = keys.filter((k) => m.sources[k]?.error).map((k) => `<div>raw (${SRC[k]}): <code>${esc(m.sources[k].error)}</code></div>`);
+    for (const x of [it, ...(b.subs ?? []).map((id) => itemOf(m, id))]) if (x?.raw) raws.push(`<div>raw (${esc(shortName(x.id, x))}): <code>${esc(x.raw)}</code></div>`);
     if (raws.length) addr.push(...raws);
     else if (it.level !== 'ok' && it.level !== 'unknown') addr.push(`<div class="muted">raw: no error text; the state is read from the answer itself</div>`);
   }
   const mapIds = [b.map, ...(b.subs ?? []).map((id) => SUB_MAP[id])].filter((x, i, a) => x && a.indexOf(x) === i);
-  const links = mapIds.map((id, i) => `<a href="/map/#node=${encodeURIComponent(id)}" target="_blank" rel="noopener">${i === 0 ? 'Show on the full map' : `${esc(id)} on the full map`}</a>`);
+  const links = mapIds.map((id, i) => `<a href="/map/#node=${encodeURIComponent(id)}" target="_blank" rel="noopener">${i === 0 ? `${esc(b.name)} on the full map` : `${esc(shortName(SUB_OF_MAP[id], itemOf(m, SUB_OF_MAP[id])))} on the full map`}</a>`);
   links.push('<a href="/status">Status</a>');
   html += `<div class="addr"><div class="label">Addresses and links (for Will)</div>${addr.join('')}<div class="links">${links.join('')}</div></div></div>`;
   return html;
@@ -290,9 +315,11 @@ $('#legend').innerHTML = ['ok', 'warning', 'down', 'unknown'].map((l) => chip(l,
   '<span class="note">Each box is its own piece; the word on an arrow is what flows along it. A greyed box or arrow shows its last answer: it is older than it should be.</span>';
 $('#footLinks').innerHTML = DOC_LINKS.filter(([, h]) => h !== '/map').map(([l, h]) => `<a href="${h}" ${h.startsWith('/') ? '' : 'target="_blank" rel="noopener"'}>${esc(l)}</a>`).join('');
 // A deep link: /map#ropes opens that box once the first answer is in (the Status page's "Show on the system map").
-const wanted = location.hash.replace(/^#/, '');
-if (BOX[wanted] || BOXES.some((b) => b.item === wanted || (b.subs ?? []).includes(wanted))) {
-  const id = BOX[wanted] ? wanted : BOXES.find((b) => b.item === wanted || (b.subs ?? []).includes(wanted)).id;
+// Status links /map#gallery%20camera: decoded first. A link's item (clips to Dave) opens the box its row is in.
+const wanted = (() => { try { return decodeURIComponent(location.hash.replace(/^#/, '')); } catch { return ''; } })();
+const wantedBox = BOX[wanted] ? wanted : BOXES.find((b) => b.item === wanted || (b.subs ?? []).includes(wanted))?.id ?? LINKS.find((l) => l.item === wanted)?.from ?? null;
+if (wantedBox) {
+  const id = wantedBox;
   const t = setInterval(() => { if (p.last) { clearInterval(t); openBox(id); } }, 200);
   setTimeout(() => clearInterval(t), 15_000);
 }

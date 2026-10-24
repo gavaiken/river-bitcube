@@ -20,7 +20,8 @@
 // GET /api/lights (what TouchDesigner is sending to the lights right now) is answered here by synthesising season-coloured
 // flowing water from the scenario's seasons state (renderLights), wrapped in the SAME shape lib/lights.mjs documents for
 // the real frames (its CONTRACT: { ok, action: 'frames', file, fps, frames: { at, source, brightness, ropes { w, h, rgb,
-// source, brightness, watts }, panels { w, h, rgb, source, brightness, output, atlas } }, age_s }), plus synthetic: true.
+// source, brightness, watts }, panels { w, h, rgb, source, brightness, output, atlas }, screens { w, h, rgb, cells } }, age_s }),
+// plus synthetic: true. The panels part is the Gray Area atlas (stacked quads) made from the upright screens.
 // 503 { error } when there is nothing to show: bitcube offline, TouchDesigner not answering, or not checked yet.
 //
 // The calibration (POST /api/control/calibrate, GET /api/calibration) is a scripted run (FixtureCalibration): about 60 s
@@ -32,8 +33,9 @@
 // as `calibration`, so the Status band can say "Calibrating the lights".
 import { readFileSync, readdirSync, existsSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { CAMERAS, planControl } from './mission.mjs';
-import { readLocalPixelmap, summarizePixelmap } from './lights.mjs';
+import { CAMERAS, planControl, calBlocked } from './mission.mjs';
+import { readLocalPixelmap, summarizePixelmap, planCalibrate } from './lights.mjs';
+import { atlasFromUprights } from '../public/screens.js';
 
 const NAME = /^[a-z0-9-]+$/;
 const STILL_AGE_S = 20;
@@ -131,8 +133,11 @@ export class FixtureMission {
   }
 
   /** Same whitelist and argument checks as Mission.control; then the request is logged instead of acted on. */
-  async control(action, body = {}) {
+  async control(action, body = {}, scenario = null) {
     planControl(action, body);
+    // the scenario's own scripted run blocks what the live server blocks (Mission.control)
+    const blocked = calBlocked(action, this.calibFor(scenario).status());
+    if (blocked) throw blocked;
     this.#log(action, body);
     return { ok: true, fixture: true, action, body, note: 'fixture mode: nothing was changed' };
   }
@@ -149,7 +154,8 @@ export class FixtureMission {
   /** POST /api/control/calibrate: the scripted run, refused for the reasons the real one would give in this scenario
    *  (bitcube offline, TouchDesigner not answering, the gallery camera unreachable). outcome: 'ok' | 'drift' | 'decode'. */
   async calibrate(action, body = {}, { scenario, outcome = 'ok' } = {}) {
-    const args = { ...(body && typeof body === 'object' ? body : {}) };
+    planCalibrate(action, body);   // the live whitelist, so a page sending bad arguments fails here exactly as it would live
+    const args = { ...body };
     this.#log('calibrate', { action, ...args });
     const calib = this.calibFor(scenario);
     if (action === 'cancel') return calib.cancel();
@@ -159,12 +165,12 @@ export class FixtureMission {
     const st = f.status ?? {}, pr = st.probe?.value, td = pr?.td;
     const refuse = (error) => ({ ok: false, error, calibration: calib.status() });
     if (st.bitcube?.value?.online === false) return refuse("bitcube is offline: calibration can't start");
-    if (!args.dry_run) {
+    if (args.dry_run !== true) {     // as planCalibrate: only a real true is a dry run
       if (!pr) return refuse("bitcube hasn't been checked yet: calibration can't start");
       if (!td || td.ok === false || typeof td.file !== 'string') return refuse("TouchDesigner isn't answering: calibration can't start");
       if (pr.devices?.gallery_cam === false) return refuse("The gallery camera isn't reachable: calibration can't start");
     }
-    return calib.start({ dry_run: !!args.dry_run, cam: args.cam === 'river' ? 'river' : 'gallery', outcome });
+    return calib.start({ dry_run: args.dry_run === true, cam: args.cam ?? 'gallery', decode_only: args.decode_only || null, outcome });
   }
 
   #log(action, body) {
@@ -191,7 +197,8 @@ export class FixtureMission {
     return { ok: true, action: 'frames', file: td.file, fps: td.fps ?? null, synthetic: true, age_s: 0,
              frames: { at: r.at / 1000, source: r.source, brightness: panelBrightness,
                        ropes: { ...r.ropes, source: r.source, brightness: 0.4, watts },
-                       panels: { ...r.panels, source: 'canvas', brightness: panelBrightness, output: hub.output !== false, atlas: [1024, 128] } } };
+                       panels: { ...r.panels, source: 'canvas', brightness: panelBrightness, output: hub.output !== false, atlas: [256, 512] },
+                       screens: r.screens } };
   }
 
   #scenario(name) {
@@ -235,12 +242,16 @@ export function renderLights({ at, source = 'canvas', weights = null, intensity 
     const u = led / 400;
     put(ropes, (led * 20 + r) * 3, 0.5 + 0.25 * Math.sin(u * 18 + t * 1.7 + r * 0.9) + 0.15 * Math.sin(u * 41 - t * 2.3 + r * 2.1) + 0.1 * Math.sin(u * 7 + t * 0.7 + r * 0.3));
   }
-  const panels = Buffer.alloc(256 * 32 * 3);
-  for (let y = 0; y < 32; y++) for (let x = 0; x < 256; x++) {
-    const X = (x % 64) / 64, Y = y / 32, q = Math.floor(x / 64);
-    put(panels, (y * 256 + x) * 3, 0.5 + 0.25 * Math.sin(X * 6 + t * 1.3 + Y * 2 + q) + 0.15 * Math.sin(X * 15 - t * 2.1 + Y * 5) + 0.1 * Math.sin(Y * 9 + t + q * 1.7));
+  // the four screens upright as seen (32 × 64 each after the 4× downsample, side by side), and the Gray Area atlas made
+  // from them the way screens.py and the receive card stack them (public/screens.js), so both of the page's paths draw
+  const screens = Buffer.alloc(128 * 64 * 3);
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 128; x++) {
+    const X = (x % 32) / 32, Y = y / 64, q = Math.floor(x / 32);
+    put(screens, (y * 128 + x) * 3, 0.5 + 0.25 * Math.sin(Y * 6 + t * 1.3 + X * 2 + q) + 0.15 * Math.sin(Y * 15 - t * 2.1 + X * 5) + 0.1 * Math.sin(X * 9 + t + q * 1.7));
   }
-  return { at, source, ropes: { w: 20, h: 400, rgb: ropes.toString('base64') }, panels: { w: 256, h: 32, rgb: panels.toString('base64') } };
+  const atlas = atlasFromUprights(screens, 128, 64);
+  return { at, source, ropes: { w: 20, h: 400, rgb: ropes.toString('base64') }, panels: { w: atlas.w, h: atlas.h, rgb: Buffer.from(atlas.bytes).toString('base64') },
+           screens: { w: 128, h: 64, cells: 4, rgb: screens.toString('base64') } };
 }
 
 function svgStill(cam) {
@@ -305,7 +316,9 @@ const BEFORE = { Active: true, Source: 'canvas', Brightness: 0.4, Graybit: 0, Gr
 const PATTERN_NAMES = ['black', ...Array.from({ length: 14 }, (_, b) => [`b${String(b).padStart(2, '0')}`, `b${String(b).padStart(2, '0')}n`]).flat()];
 export const CALIBRATION_OUTCOMES = ['ok', 'drift', 'decode'];
 export const DRIFT_ERROR = 'The camera moved during the run (drift 48): the map was not saved. Fix the camera and run again';
-export const DECODE_ERROR = 'Decoding failed: rope 7 has no usable patterns; the ropes are back on the river';
+// calibrate.py's real shape: `error` the raw text (the step id, the exit code, the log tail), `reason` the team's words
+export const DECODE_ERROR = 'ropes-decode failed (exit 1): rope  6: visible 162  filled 400 | Traceback (most recent call last): | ValueError: rope 7 has no usable patterns';
+export const DECODE_REASON = "Working out where each rope is failed: the patterns couldn't be read from the pictures (someone in view, or light in the room); run it again when the room is dark and empty";
 const clockOf = (s) => { const d = new Date(s * 1000); const p = (n) => String(n).padStart(2, '0'); return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; };
 
 /** calibrate.py's result block for a map (summarize_map), from the map as lib/lights.mjs reads it. */
@@ -335,14 +348,14 @@ export class FixtureCalibration {
     return { ...this.p, alive: this.p.running };
   }
 
-  start({ dry_run = false, cam = 'gallery', outcome = 'ok' } = {}) {
+  start({ dry_run = false, cam = 'gallery', decode_only = null, outcome = 'ok' } = {}) {
     if (this.p?.running) return { ok: false, error: 'a calibration is already running', calibration: this.status() };
     const t0 = this.now() / 1000;
     this.log = [];
     const stages = ['ropes-capture', 'ropes-decode', 'hub75-capture', 'hub75-locate'];
-    this.p = { running: true, pid: this.pid, mode: dry_run ? 'dry-run' : 'full', stage: null, stage_index: -1, stages: [...stages, 'done'],
+    this.p = { running: true, pid: this.pid, mode: dry_run ? 'dry-run' : decode_only ? 'decode-only' : 'full', stage: null, stage_index: -1, stages: [...stages, 'done'],
                step: 0, of: 0, pass: null, retakes: 0, expected_s: null, started: round3(t0), updated: round3(t0), elapsed_s: 0, message: 'starting',
-               log: [], ok: null, error: null, cancelled: false, dry_run, decode_only: null, cam, brightness_cap: 0.4, max_drift: 30,
+               log: [], ok: null, error: null, reason: null, cancelled: false, dry_run, decode_only, cam, brightness_cap: 0.4, max_drift: 30,
                before: null, restored: null, capture: null, hub75_capture: null, capture_info: null, result: null };
     this.steps = this.#timetable({ dry_run, outcome, t0 });
     this.#write();
@@ -436,7 +449,7 @@ export class FixtureCalibration {
       });
       t = at + 3 * per;
       if (outcome === 'drift') {
-        add(t, () => ({ running: false, ok: false, error: DRIFT_ERROR, message: DRIFT_ERROR, result: null }));
+        add(t, () => ({ running: false, ok: false, error: DRIFT_ERROR, reason: DRIFT_ERROR, message: DRIFT_ERROR, result: null }));
         return steps;
       }
     }
@@ -449,7 +462,7 @@ export class FixtureCalibration {
     for (let r = 1; r <= N_ROPES; r++) {
       const failHere = outcome === 'decode' && r === 7;
       add(t + perRope * r, () => {
-        if (failHere) { note('Traceback (most recent call last):'); note('ValueError: rope 7 has no usable patterns'); return { running: false, ok: false, error: DECODE_ERROR, message: DECODE_ERROR, result: null, restored: dry_run ? null : true }; }
+        if (failHere) { note('Traceback (most recent call last):'); note('ValueError: rope 7 has no usable patterns'); return { running: false, ok: false, error: DECODE_ERROR, reason: DECODE_REASON, message: DECODE_ERROR, result: null, restored: dry_run ? null : true }; }
         const s = ropes[String(r - 1)];
         const l = `rope ${String(r).padStart(2)}: ` + (s && s.visible > 0 ? `visible ${String(s.visible).padStart(3)}  filled ${String(s.filled).padStart(3)}` : 'not seen');
         note(l);

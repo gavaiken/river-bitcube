@@ -1,9 +1,29 @@
 // Shared helpers for mission control's pages (ui.js builds on these: api, esc, md).
-export async function api(path, body) {
-  const r = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+/** How long a request may go unanswered before the page gives up: a little past the server's own limit for the action
+ *  (about 60 s; a rebuild builds, saves and restarts, up to 400 s), so a hung POST never leaves a control pending for good. */
+export function apiTimeout(path, body) {
+  if (body === undefined) return 30_000;
+  return /\/api\/control\/rebuild$/.test(path) ? 420_000 : 75_000;
+}
+export async function api(path, body, { timeout = apiTimeout(path, body) } = {}) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  let r;
+  try {
+    r = await fetch(path, body === undefined ? { signal: ctrl.signal } : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal });
+  } catch (e) {
+    // no answer in time: the request may or may not have reached bitcube (noAnswer tells the control to say so)
+    if (ctrl.signal.aborted) throw Object.assign(new Error(`no answer in ${Math.round(timeout / 1000)} s`), { noAnswer: true, waitedS: timeout / 1000, posted: body !== undefined });
+    throw e;
+  } finally { clearTimeout(timer); }
   if (r.status === 401) { location.href = '/login'; throw new Error('logged out'); }
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+  const j = await r.json().catch(() => null);
+  // an error that isn't mission control's JSON (a proxy's 502 page while the server is down) means mission control itself
+  // didn't answer: never "couldn't reach bitcube", which would send someone to check bitcube's power
+  if (!r.ok && (j == null || typeof j !== 'object')) throw Object.assign(new Error("mission control didn't answer"), { status: r.status, notOurs: true });
+  if (!r.ok) throw Object.assign(new Error(j?.error || `HTTP ${r.status}`), { status: r.status });
+  // a 2xx that isn't our JSON (a proxy's page, a cut-off body) is not a success
+  if (j == null || typeof j !== 'object') throw new Error("mission control's answer couldn't be read");
   return j;
 }
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

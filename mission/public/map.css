@@ -33,24 +33,34 @@ main.map { max-width: 760px; }
 .node {
   position: relative; z-index: 1; min-height: 88px; min-width: 0; padding: 12px 10px 10px; text-align: left; cursor: pointer;
   display: flex; flex-direction: column; gap: 5px; border-radius: var(--radius-btn); border: 1px solid var(--line);
-  background: var(--panel-solid); color: var(--text); box-shadow: var(--shadow); font: inherit; overflow: hidden;
+  background: var(--panel-solid); color: var(--text); box-shadow: var(--shadow); font: inherit;
 }
-.node::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 5px; background: var(--lv); }
+.node::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 5px; background: var(--lv); border-radius: var(--radius-btn) var(--radius-btn) 0 0; }
 .node.lv-unknown { border-style: dashed; }
 .node.lv-down { background: color-mix(in srgb, var(--down-soft) 55%, var(--panel-solid)); }
 .node.lv-warning { background: color-mix(in srgb, var(--warn-soft) 55%, var(--panel-solid)); }
-.node, .mini-bar { overflow-wrap: normal; }
+.node, .mini-bar { overflow-wrap: break-word; }
 .node .nname { font-weight: 750; font-size: 15px; line-height: 1.2; }
 .node .nstate { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; font-weight: 750; color: var(--lv-text); line-height: 1.2; }
 .node .nstate .last { font-weight: 600; color: var(--muted); }
 .node .nsum { font-size: 14px; line-height: 1.3; color: var(--muted); }
 .node .subs { display: grid; gap: 5px; margin-top: 3px; padding-top: 6px; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.3; }
-.node .subs .sub { display: block; min-width: 0; color: var(--text); }
-.node .subs .sub .mk { width: 16px; height: 16px; font-size: 11px; vertical-align: -3px; margin-right: 5px; }
-.node .subs .sub .w { color: var(--lv-text); font-weight: 750; margin-left: 6px; }
+/* mark | name | state word; on narrow boxes the state word wraps under the name instead of being cut off */
+.node .subs .sub { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; column-gap: 6px; align-items: start; min-width: 0; color: var(--text); }
+.node .subs .sub .mk { width: 16px; height: 16px; font-size: 11px; margin-top: 1px; }
+.node .subs .sub .w { color: var(--lv-text); font-weight: 750; }
+@media (max-width: 899px) { .node .subs .sub { grid-template-columns: 16px minmax(0, 1fr); } .node .subs .sub .w { grid-column: 1 / -1; } }
+.node .subs .sub .w { overflow-wrap: normal; }
 .node .subs .sub.muted-sub, .node .subs .sub.muted-sub .w { color: var(--muted); font-weight: 500; }
-.node.stale, .page-stale .node { filter: saturate(0.35); opacity: 0.72; }
-.page-stale .nodes svg.lks { opacity: 0.6; filter: saturate(0.35); }
+/* a last answer: grey marks, top bar and state word, and a dashed border; the words at full contrast (never faded below
+   4.5:1). No green survives a lost contact, as Status's stale tiles. */
+.node.stale, .page-stale .node { border-style: dashed; }
+.node.stale, .page-stale .node, .page-stale .mini-bar,
+.node.stale .mk, .page-stale .node .mk, .page-stale .mini-bar .mk,
+.node.stale .sub, .page-stale .node .sub { --lv: var(--unk); --lv-ink: var(--unk-ink); --lv-text: var(--muted); }
+.page-stale .node.lv-down, .page-stale .node.lv-warning, .node.stale.lv-down, .node.stale.lv-warning { background: var(--panel-solid); }
+.page-stale .nodes svg.lks .lk { stroke: var(--unk); stroke-dasharray: 2 5; }
+.page-stale .nodes svg.lks .arrow { fill: var(--unk); }
 
 /* phone placement: inputs across the top, bitcube, then TouchDesigner beside Dave's agent, then the lights */
 .node.gallery { grid-column: 1 / 3; } .node.river { grid-column: 3 / 5; } .node.internet { grid-column: 5 / 7; }
@@ -62,12 +72,13 @@ main.map { max-width: 760px; }
 /* links: a bezier with an arrowhead, a pill with the link's word at its middle */
 .lk { fill: none; stroke: var(--lv); stroke-width: 2.5; }
 .lk.lv-unknown { stroke-dasharray: 5 5; }
-.lk.stale { opacity: 0.5; stroke-dasharray: 2 5; }
+.lk.stale { stroke: var(--unk); stroke-dasharray: 2 5; }
 .arrow { fill: var(--lv); }
 .pill text { font-size: 14px; font-weight: 700; fill: var(--lv-text); }
 .pill rect { fill: var(--panel-solid); stroke: var(--lv); stroke-width: 1.5; }
 .pill.lv-unknown rect { stroke-dasharray: 3 3; }
-.pill.stale { opacity: 0.6; }
+.pill.stale rect, .page-stale .pill rect { stroke: var(--unk); stroke-dasharray: 3 3; }
+.pill.stale text, .page-stale .pill text { fill: var(--muted); }
 
 .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
 .legend .chip.small { font-size: 14px; }
@@ -113,3 +124,10 @@ main.map { max-width: 760px; }
 
 /* ---- the lost-contact banner and the first load ---- */
 .connecting { font-size: 16px; color: var(--muted); padding: 6px 0 2px; }
+
+/* under 600 px the diagram's cable links are 6-75 px targets: it opens full screen instead of in a frame (the box list above is the phone's path) */
+.diagram .phone-only { display: none; }
+@media (max-width: 599px) {
+  .diagram iframe { display: none; }
+  .diagram .phone-only { display: block; }
+}

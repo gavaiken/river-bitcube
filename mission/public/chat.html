@@ -16,16 +16,18 @@
 </head>
 <body>
 <main class="chat">
+  <a class="skip" href="#text" id="skip">Write a request</a>
   <div class="share" role="note"><span class="share-ic" aria-hidden="true">💬</span><div><b>Everyone shares this conversation;</b> say who you are. The agent can look at the installation and change it, and what it does shows on Status.</div></div>
-  <section id="thread" class="thread" aria-live="polite" aria-label="Requests and replies">
+  <section id="thread" class="thread" role="log" aria-live="polite" aria-relevant="additions" aria-label="Requests and replies" aria-busy="true">
     <p class="muted thread-note" id="thread-note">Loading the conversation…</p>
   </section>
 </main>
-<div class="composer" id="composer">
+<section class="composer" id="composer" aria-label="Ask the agent">
   <div class="composer-in">
     <div class="pinned" id="pinned">
       <span class="mk lv-unknown" id="pin-mark" aria-hidden="true">?</span>
       <span class="pin-text" id="pin-text">Connecting…</span>
+      <span id="pin-live" class="sr-only" aria-live="polite"></span>
       <div class="stop-host" id="stop-host"><button class="btn danger" id="stop" type="button" disabled>Stop</button></div>
     </div>
     <div class="ctl-status" id="stop-status" aria-live="polite"></div>
@@ -35,7 +37,7 @@
     </div>
     <div class="ctl-status" id="send-status" aria-live="polite"></div>
   </div>
-</div>
+</section>
 <script type="module" src="/chat.js"></script>
 </body>
 </html>

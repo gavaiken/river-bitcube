@@ -33,7 +33,7 @@ import { execFileSync } from 'node:child_process';
 import { userInfo } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Auth, readPasswordFile, parseCookies, SESSION_MAX_AGE_S } from './lib/auth.mjs';
+import { Auth, readPasswordFile, parseCookies, clientOf, SESSION_MAX_AGE_S } from './lib/auth.mjs';
 import { Studio } from './lib/studio.mjs';
 import { Mission } from './lib/mission.mjs';
 import { FixtureMission, CALIBRATION_OUTCOMES } from './lib/fixtures.mjs';
@@ -178,10 +178,7 @@ function send(res, status, body, type = 'application/json', headers = {}) {
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 
-function client(req) {
-  // Funnel forwards the visitor's address; locally it's the socket's.
-  return String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
-}
+function client(req) { return clientOf(req.headers['x-forwarded-for'], req.socket.remoteAddress); }
 
 async function body(req, limit = 64_000) {
   let b = '';
@@ -276,6 +273,7 @@ const server = createServer(async (req, res) => {
       return send(res, 302, '', 'text/plain', { location: '/login' });
     }
     if (path === '/logout' && req.method === 'POST') {
+      if (!sameOrigin(req)) return send(res, 403, { error: 'cross-origin' });
       auth.logout(token);
       return send(res, 200, { ok: true }, 'application/json', { 'set-cookie': `${COOKIE}=; Path=/; Max-Age=0` });
     }
@@ -309,7 +307,8 @@ const server = createServer(async (req, res) => {
       const onStatus = (s) => push('status', s);
       studio.on('event', onEvent); studio.on('status', onStatus);
       push('status', studio.status());
-      const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
+      // a named keepalive the page can see (a ": comment" is invisible to EventSource): the header's age means the connection
+      const ping = setInterval(() => res.write(`event: ping\ndata: {"t":${Date.now()}}\n\n`), 25_000);
       req.on('close', () => { clearInterval(ping); studio.off('event', onEvent); studio.off('status', onStatus); });
       return;
     }
@@ -365,13 +364,15 @@ const server = createServer(async (req, res) => {
     if (m && req.method === 'POST') {
       const action = m[1];
       const b = await body(req);
+      // a control's body is a JSON object; anything else (null, a list, a number) is refused before it is run or recorded
+      if (!b || typeof b !== 'object' || Array.isArray(b)) return send(res, 400, { error: "mission control didn't accept it: the request must be a JSON object" });
       try {
         let r;
         if (action === 'calibrate') {
           const outcome = CALIBRATION_OUTCOMES.includes(url.searchParams.get('calib')) ? url.searchParams.get('calib') : CALIBRATION_OUTCOMES.includes(cookies.calib) ? cookies.calib : 'ok';
           r = FIXTURES ? await mission.calibrate(b.action, b, { scenario, outcome }) : await lights.calibrate(b.action, b);
         } else if (action === 'check') r = await checkNow(scenario);
-        else r = await mission.control(action, b);
+        else r = await mission.control(action, b, scenario);   // fixture mode: that scenario's own world (a scripted calibration blocks as live)
         recordAction(scenario, action, b, r);
         return send(res, 200, r);
       } catch (e) {

@@ -42,17 +42,22 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { derive, FILES } from '../public/model.js';
+import { scrubCreds } from './scrub.mjs';
 
 export const KEEP_MS = 48 * 3600e3;
 export const MAX_EVENTS = 5000;
 export const BODY_MAX = 300;                 // an action's body, as JSON: a feed line, not a document
 export const SOURCES = ['mission control', 'studio chat'];
 const SHOW_FIELDS = ['file', 'mode', 'season', 'ropes'];
+const BLIND = ['page', 'bitcube-offline', 'bitcube-unchecked', 'probe-stale', 'not-checked', 'check-failed'];   // causes that hide what is behind them
 const obj = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : null);
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
 const str = (x, max) => (typeof x === 'string' ? x.slice(0, max) : null);
 /** The state a key is in is told by its latest event, so those are kept whatever their age (null: not a state). */
 const keyOf = (ev) => (ev.kind === 'item' ? `item:${ev.id}` : ev.kind === 'show' ? `show:${ev.field}` : ['overall', 'calibration', 'action'].includes(ev.kind) ? ev.kind : null);
+/** An item's reason, from its summary without the numbers that change with every answer ("Running slowly: 4 of 60 frames
+ *  a second" and "…: 5 of 60…" are one reason; "Dark on purpose: sending black" is another). */
+export const reasonOf = (summary) => String(summary ?? '').replace(/\d+(?:[.:]\d+)*\s*(?:s|min|h|days|%|W|GB)?(?![A-Za-z])/g, '#').trim();
 const forS = (t, now) => Math.max(0, Math.round((now - t) / 1000));
 /** Where a control was used: one of SOURCES, never a person's name (MD4: the chat is unattributed). */
 const sourceOf = (s) => (/studio|chat|agent/i.test(String(s ?? '')) ? 'studio chat' : 'mission control');
@@ -65,6 +70,8 @@ export class History {
     this.lines = 0;              // lines in the file, dropped ones included: decides when to compact
     this.torn = false;           // the file ends mid-line (the server died while writing): the next append starts a fresh line
     this.state = { overall: null, items: {}, show: {}, calibration: null, last_action: null };   // last known, each with its t
+    this.knownAt = {};           // item id -> the observation it was last known in (in memory: after a restart, a gap)
+    this.prevObs = null;         // the observation before this one
     this.#load();
   }
 
@@ -80,16 +87,25 @@ export class History {
 
       // The verdict: level, cause or contact changed. A plain unknown (not checked yet) is no news; a stale one is.
       const o = m.overall, stale = !!o.stale, cause = o.cause ?? null, prev = this.state.overall?.last ?? null;
+      // After a stretch where little could be seen (bitcube offline or unchecked, contact lost), a new cause may have begun
+      // at any moment of it: its since is "at least" (a first sighting), never "for 1 min".
+      const blind = !!prev && (prev.stale || BLIND.includes(prev.cause));
       if ((o.level !== 'unknown' || stale) && (!prev || prev.level !== o.level || prev.cause !== cause || prev.stale !== stale)) {
-        rec({ kind: 'overall', level: o.level, cause, headline: o.headline, stale, lost: stale ? lostWho(m) : null, from: prev });
+        rec({ kind: 'overall', level: o.level, cause, headline: o.headline, stale, lost: stale ? lostWho(m) : null, from: prev, ...(blind && !stale ? { gap: true } : {}) });
       }
-      // Each piece: unknown and muted (nothing to show) carry no knowledge, so they keep the last known level.
+      // Each piece: unknown and muted (nothing to show) carry no knowledge, so they keep the last known level. A piece that
+      // was not known in the previous observation changed at some moment of the gap: its since is "at least".
       for (const it of m.items) {
         if (it.level === 'unknown' || it.muted) continue;
         const p = this.state.items[it.id];
-        if (p && p.level === it.level) continue;
-        rec({ kind: 'item', id: it.id, from: p?.level ?? null, to: it.level, summary: it.summary, ...(it.stale ? { stale: true } : {}) });
+        const gap = !!p && (this.knownAt[it.id] == null || (this.prevObs != null && this.knownAt[it.id] < this.prevObs));
+        this.knownAt[it.id] = t;
+        // a new reason at the same level is news too ("Attention for 2 h" must never carry over from running slowly to dark
+        // on purpose); not for OK, whose words change with every answer and whose since is never shown
+        if (p && p.level === it.level && (it.level === 'ok' || p.reason === reasonOf(it.summary))) continue;
+        rec({ kind: 'item', id: it.id, from: p?.level ?? null, to: it.level, summary: it.summary, ...(it.stale ? { stale: true } : {}), ...(gap ? { gap: true } : {}) });
       }
+      this.prevObs = t;
       // The show's own moves; null (not known right now) keeps the last known value.
       const show = { file: m.show.file?.name, mode: m.show.mode?.id, season: m.show.season, ropes: m.show.ropes?.state === 'unknown' ? null : m.show.ropes?.state };
       for (const field of SHOW_FIELDS) {
@@ -103,7 +119,7 @@ export class History {
         const running = cal.running === true, stage = str(cal.stage, 40), calStale = cal.stale === true, p = this.state.calibration;
         if (!p || p.running !== running || p.stage !== stage || p.stale !== calStale) {
           rec({ kind: 'calibration', running, stage, ok: typeof cal.ok === 'boolean' ? cal.ok : null, cancelled: cal.cancelled === true,
-                mode: str(cal.mode, 20), error: str(cal.error, 120), stale: calStale, from: p ? { running: p.running, stage: p.stage } : null });
+                mode: str(cal.mode, 20), error: str(scrubCreds(cal.error), 120), stale: calStale, from: p ? { running: p.running, stage: p.stage } : null });
         }
       }
     } catch (e) { warn('observe failed', e); }           // derive() never throws; belt and braces: history must not stop the server
@@ -157,11 +173,11 @@ export class History {
       case 'overall': {
         // A stale unknown is lost contact, not a new state of the show: level, cause and since carry on through it.
         const p = S.overall, known = ev.level !== 'unknown' || !p, same = p && p.level === ev.level && p.cause === (ev.cause ?? null);
-        const base = known && !same ? { level: ev.level, cause: ev.cause ?? null, t: ev.t, at_least: ev.from == null } : { level: p.level, cause: p.cause, t: p.t, at_least: p.at_least };
+        const base = known && !same ? { level: ev.level, cause: ev.cause ?? null, t: ev.t, at_least: ev.from == null || ev.gap === true } : { level: p.level, cause: p.cause, t: p.t, at_least: p.at_least };
         S.overall = { ...base, stale: !!ev.stale, lost: ev.lost ?? null, last: { level: ev.level, cause: ev.cause ?? null, stale: !!ev.stale, lost: ev.lost ?? null } };
         break;
       }
-      case 'item': if (typeof ev.id === 'string') S.items[ev.id] = { level: ev.to, t: ev.t, at_least: ev.from == null }; break;
+      case 'item': if (typeof ev.id === 'string') S.items[ev.id] = { level: ev.to, reason: reasonOf(ev.summary), t: ev.t, at_least: ev.from == null || ev.gap === true }; break;
       case 'show': if (typeof ev.field === 'string') S.show[ev.field] = { value: ev.to, t: ev.t, at_least: ev.from == null }; break;
       case 'calibration': S.calibration = { running: ev.running === true, stage: ev.stage ?? null, stale: ev.stale === true, t: ev.t }; break;
       case 'action': S.last_action = ev; break;
@@ -256,7 +272,7 @@ function smallBody(body) {
 // Short names for the pieces (model.js's names carry a parenthesis for the details drawer); plural ones are marked.
 const WHO = { bitcube: ['bitcube'], touchdesigner: ['TouchDesigner'], ropes: ['The ropes', true], 'rope box 1': ['Rope box 1'], 'rope box 2': ['Rope box 2'],
   'hub75 panels': ['The panels', true], seasons: ["The river's year"], 'gallery camera': ['The gallery camera'], 'river camera': ['The river camera'],
-  router: ['The install router'], internet: ['The internet at Gray Area'], 'modal agent': ["Dave's agent"], 'modal link': ["The link to Dave's agent"],
+  router: ['The router'], internet: ['The internet at Gray Area'], 'modal agent': ["Dave's agent"], 'modal link': ['Clips to Dave'],
   recorder: ['The river recorder'], 'people counter': ['The people counter'], 'mission control': ['Mission control'] };
 // How a summary's opening reads after the name, as a verb phrase ("Not running on bitcube" -> "TouchDesigner stopped running
 // on bitcube"); the rest of the summary follows unchanged. A replacement starting with '=' is the whole sentence.
@@ -270,14 +286,14 @@ const SAID = [
   [/^Not reaching the lights/, 'are not reaching the lights'], [/^Sender can't open its port/, "are not getting the river: the sender can't open its port"],
   [/^Sender switched off/, 'have their sender switched off'], [/^Dark on purpose/, 'are dark on purpose'],
   [/^Both rope boxes are silent: the ropes are dark$/, 'are dark: both rope boxes are silent'],
-  [/^(Rope box \d) \((ropes [\d-]+)\) silent: those ropes may be dark$/, (_m, box, ropes) => `=${cap(ropes)} may be dark: ${box.toLowerCase()} is silent`],
+  [/^(Rope box \d) \((ropes [\d–-]+)\) silent: those ropes may be dark$/, (_m, box, ropes) => `=${cap(ropes)} may be dark: ${box.toLowerCase()} is silent`],
   [/^Driven at only/, 'are driven at only'], [/^No panel sender/, 'have no sender'], [/^Panel sender present; dark while/, 'are dark while'],
   [/^Panel sender present, but the picture is frozen/, 'hold a frozen picture'], [/^Panel sender present, but the picture is gone/, 'show nothing'],
   [/^Panel sender present; this file has no panel output/, 'have no picture: this show file has no panel output'],
   [/^Panel sender present, but the panel output is off/, 'are switched off in the show file'], [/^Panel sender present, brightness 0/, 'are at brightness 0'],
-  [/^No internet from bitcube/, 'is down: bitcube cannot reach it'], [/^Reports a problem/, 'reports a problem'], [/^Hasn't ticked/, "hasn't ticked"],
+  [/^No internet from bitcube/, 'is down: bitcube cannot reach it'], [/^Reports a problem/, 'reports a problem'], [/^Hasn't (?:ticked|updated)/, "hasn't updated"],
   [/^Clips failing for both cameras/, 'is failing: no clips from either camera'],
-  [/^(Gallery|River) clips failing/, (_m, cam) => `is not posting ${cam.toLowerCase()} clips`],
+  [/^(Gallery|River) clips failing/, (_m, cam) => `=${cam} clips to Dave are failing`],
   [/^Sync has seen no new state/, 'has seen no new state from Dave'], [/^Current run can't/, "can't"],
 ];
 const STAGE = { 'ropes-capture': 'photographing the ropes', 'ropes-decode': 'working out where each rope is', 'hub75-capture': 'photographing the panels', 'hub75-locate': 'finding the panels', done: 'done' };
@@ -289,9 +305,15 @@ const fileLabel = (name) => FILES[name]?.label ?? (typeof name === 'string' && n
 /** One sentence keeps one colon: later ones (a summary's own) become semicolons. Clock times (02:43) have no space. */
 const oneColon = (s) => { const i = s.indexOf(': '); return i < 0 ? s : s.slice(0, i + 2) + s.slice(i + 2).replace(/: /g, '; '); };
 
+/** A stored summary without the parts that were only true at that moment ("last clip 21 s ago", "up 3 h"): the feed shows
+ *  its own "12 min ago" beside it, and a frozen age would contradict it. */
+function timeless(s) {
+  return String(s ?? '').split(/;\s*/).map((x) => x.replace(/\s*\((?:last|up)\b[^()]*\)/gi, '').trim())
+    .filter((x) => x && !/\bago\b|^up \d/i.test(x)).join('; ');
+}
 function itemWords(ev) {
   const [name, plural] = WHO[ev.id] ?? [cap(String(ev.id ?? 'something'))];
-  const s = String(ev.summary ?? '').trim();
+  const s = timeless(String(ev.summary ?? '').trim());
   if (ev.to === 'ok') return `${name} ${plural ? 'are' : 'is'} ${ev.from == null ? 'fine' : ev.from === 'down' ? 'back' : 'OK again'}${s ? `: ${lc(s)}` : ''}`;
   const said = SAID.find(([re]) => re.test(s));
   if (said) { const r = s.replace(said[0], said[1]); return r.startsWith('=') ? r.slice(1) : `${name} ${r}`; }
@@ -312,7 +334,7 @@ function showWords(ev) {
 }
 
 function calibrationWords(ev) {
-  const what = ev.mode === 'dry-run' ? 'A dry-run calibration' : ev.mode === 'decode-only' ? 'A decode-only calibration' : 'The calibration';
+  const what = ev.mode === 'dry-run' ? 'A dry-run calibration' : ev.mode === 'decode-only' ? 'A calibration from earlier photos' : 'The calibration';
   const stage = STAGE[ev.stage] ?? null;
   if (ev.stale) return `${what} stopped answering: its process is gone`;
   if (ev.running && !ev.from?.running) return `${what} started${stage && stage !== 'done' ? `: ${stage}` : ''}`;
@@ -332,7 +354,7 @@ function actionPhrase(ev) {
     case 'target': return ['Set', 'set', `the target to ${[b.season, b.intensity != null ? `intensity ${b.intensity}` : null].filter(Boolean).join(', ') || 'a new value'}`];
     case 'rules': { const n = Object.keys(obj(b.rules) ?? {}).length; return ['Changed', 'change', n ? `${n} of the year's rules` : "the year's rules"]; }
     case 'rules-reset': return ['Reset', 'reset', "the year's rules"];
-    case 'ropes': return ['Turned', 'turn', b.dark ? 'the ropes dark' : 'the ropes on'];
+    case 'ropes': return ['Turned', 'turn', b.dark === true ? 'the ropes dark' : 'the ropes on'];   // as planControl: only a real true goes dark
     case 'hub75': return ['Set', 'set', `the panel brightness to ${pct}`];
     case 'switch': return ['Switched', 'switch', `TouchDesigner to ${fileLabel(b.file)}`];
     case 'bootfile': return ['Set', 'set', `the show file for the next restart to ${fileLabel(b.file)}`];
@@ -340,7 +362,7 @@ function actionPhrase(ev) {
     case 'check': return ['Ran', 'run', 'the full check of bitcube'];
     case 'rebuild': return ['Rebuilt', 'rebuild', `${fileLabel(b.file)} with the new LED map`];
     case 'calibrate': return b.action === 'cancel' ? ['Cancelled', 'cancel', 'the calibration'] : b.action === 'status' ? ['Checked', 'check', 'the calibration']
-      : ['Started', 'start', `a ${b.dry_run ? 'dry-run ' : b.decode_only ? 'decode-only ' : ''}calibration`];
+      : ['Started', 'start', `a ${b.dry_run === true ? 'dry-run ' : ''}calibration${b.decode_only ? ' from earlier photos' : ''}`];   // as planCalibrate
     default: return ['Used', 'use', `the "${ev.action ?? 'unknown'}" control`];
   }
 }

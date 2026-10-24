@@ -2,67 +2,103 @@
 // does it look right, where is every LED, calibrating. Every verdict and sentence comes from derive() in /model.js; this
 // page only lays it out, draws the LED map (GET /api/pixelmap) and what TouchDesigner is sending (GET /api/lights), and
 // runs the Calibrate block from GET /api/calibration. Plain ES module, no build step, no framework.
-import { mountShell, poll, tick, art, fmt, control, confirm, api, esc, mark, plainError, DOC_LINKS } from '/ui.js';
-import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S } from '/model.js';
+import { mountShell, poll, tick, watchContact, art, fmt, control, confirm, api, esc, mark, plainError, DOC_LINKS, splitHeadline, WARN_MS, LOST_MS } from '/ui.js';
+import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS } from '/model.js';
+import { uprightsFromAtlas } from '/screens.js';
 
 const N_ROPES = 20, LEDS = 400;
 const LIGHTS_MS = 10_000, CAL_MS = 5_000, STILL_MS = 30_000, FRAME_OLD_S = 30, PROBE_OLD_S = 120;
 const INSTALL_DAY = '20261022';           // the lift at Gray Area: a map captured before this day was made elsewhere (Agape)
 const DRIFT_FINE_PX = 30;
 const OLD_RUN_S = 15 * 60;                // a run that ended this long before the page opened is not shown as a result                 // calibrate.py's default --max-drift
-const STAGE_WORDS = { 'ropes-capture': 'Capturing the ropes', 'ropes-decode': 'Decoding', 'hub75-capture': 'Capturing the panels', 'hub75-locate': 'Finding the panels', done: 'Done' };
+// one set of stage words with the Status band (model.js CAL_STAGE_WORDS)
+const STAGE_WORDS = { ...Object.fromEntries(Object.entries(CAL_STAGE_WORDS).map(([k, v]) => [k, v[0].toUpperCase() + v.slice(1)])), done: 'Done' };
 const STAGE_ORDER = ['ropes-capture', 'ropes-decode', 'hub75-capture', 'hub75-locate', 'done'];
 const YEAR_FILE = Object.keys(FILES).find((f) => FILES[f].kind === 'year');
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const $ = (sel) => document.querySelector(sel);
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s ?? '');
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch { /* fine */ } } };
+/** Seconds since a moment recorded as { at: performance.now(), wall: Date.now() }: the larger of the monotonic and the wall
+ *  clock's view, so a phone that slept (its monotonic clock paused) never shows an hour-old picture as seconds old. */
+const since = (at, wall) => Math.max(0, (performance.now() - at) / 1000, wall != null ? (Date.now() - wall) / 1000 : 0);
 const ropeHue = (r) => `hsl(${(r * 137.5) % 360} 85% 62%)`;   // golden-angle spacing: neighbours never share a hue
 
 // ---- state ------------------------------------------------------------------------------------------------------
 const S = {
   m: null,                                   // the model, from the last /api/status
   lights: { frames: null, at: null, age_s: null, error: null, failedAt: null, bytes: null, panelBytes: null, dark: null },
-  map: { map: null, screens: null, still: null, error: null, ropes: null, loaded: false },
+  map: { map: null, screens: null, still: null, error: null, ropes: null, loaded: false, askedAt: performance.now() },
   cal: { p: null, at: null, error: null, timer: null, lost: null, started: null },
   room: { on: false, url: null, age_s: null, at: null, error: null, timer: null },
   view: 'auto',                              // 'auto' (Live while frames flow, else Map) | 'map' | 'live'
   hi: null,                                  // the highlighted rope (0-based) or null
   html: {},                                  // last rendered HTML per part: never re-render under a thumb
+  calCtl: {},                                // the Calibrate block's live controls: { start, dry } | { stop } | { rebuild }
 };
 
 const shell = mountShell({ page: 'lights', title: 'Lights' });
 const status = poll('/api/status', { every: 5000,
   onData: () => { shell.setAge(0); shell.setStale(null); S.m = model(); render(); watchCalibration(); },
-  onError: (e, downForMs) => { shell.setStale(downForMs > 30_000 ? 'down' : downForMs > 12_000 ? 'warning' : null); S.m = model(); render(); } });
-function model() { return status.last ? derive(status.last, status.last.now + (performance.now() - status.receivedAt)) : null; }
-const pageDown = () => status.failedSince != null && performance.now() - status.failedSince > 30_000;
+  onError: () => { S.m = model(); render(); } });   // before any answer, watchContact's header says "No answer yet · N s"
+function model() { return status.last ? derive(status.last, status.last.now + status.elapsed()) : null; }
+// the shared rule (ui.js): greyed and bannered from the time since the last answer, so a hung request counts too
+const contact = watchContact(status, shell, () => { S.m = model(); render(); });
+const pageDown = () => contact.lost;
+/** The server's clock now (its last answer's `now`, carried forward), for comparing with bitcube's own times. */
+const serverNowMs = () => (status.last ? status.last.now + status.elapsed() : null);
 
 // ---- render: every part, in page order -----------------------------------------------------------------------------
 function render() {
   const m = S.m;
   art.setSeason(m?.show.weights ?? null);
-  document.body.classList.toggle('page-stale', !!(m?.overall.cause === 'page' || pageDown()));
   renderStateLine(); renderMapCard(); renderChips(); renderStrips(); renderProvenance(); renderCalibrate(); renderFooter();
+  updateRebuild();
 }
 const put = (id, html) => { if (S.html[id] !== html) { S.html[id] = html; const el = document.getElementById(id); if (el) el.innerHTML = html; } };
 
 /** The probe's age as of now: the model's age (the server's clock) plus the time since that answer arrived, so it ticks. */
-function probeAge() { const a = S.m?.overall.checked.probe_age_s; return a == null || status.receivedAt == null ? a ?? null : a + (performance.now() - status.receivedAt) / 1000; }
+function probeAge() { const a = S.m?.overall.checked.probe_age_s; return a == null || status.receivedAt == null ? a ?? null : a + status.elapsed() / 1000; }
 
 // ---- the state line: show.ropes.words · show.panels.words · from bitcube · N s ago ---------------------------------------
 function renderStateLine() {
   const m = S.m;
-  if (!m) { put('state-words', status.failedSince ? "This page can't reach mission control yet." : 'Connecting to mission control…'); put('state-from', ''); return; }
+  if (!m) {
+    // the header's thresholds (ui.js WARN_MS, LOST_MS), from when the page started asking: one fact, one wording everywhere
+    const ms = performance.now() - status.startedAt;
+    put('state-words', ms > LOST_MS ? "This page can't reach mission control." : ms > WARN_MS ? `No answer from mission control yet · ${fmt.nb(dur(ms / 1000))}` : 'Connecting to mission control…');
+    put('state-from', ''); put('state-next', ''); sayState(ms > LOST_MS ? "This page can't reach mission control." : ''); return;
+  }
   const ropes = m.show.ropes, panels = m.show.panels;
   const words = `${cap(ropes.words)} · ${panels.words}.`;
-  put('state-words', `<span class="lv-${levelOf('ropes')}">${mark(levelOf('ropes'))}</span> ${esc(words)}`);
-  const a = probeAge();
-  const from = a == null ? (m.overall.cause === 'bitcube-offline' ? 'bitcube is offline' : 'not checked yet') : `from bitcube · ${fmt.nb(dur(a))} ago`;
+  const lost = m.overall.cause === 'page' || pageDown();
+  const ropesItem = m.items.find((x) => x.id === 'ropes');
+  // one rule with Status and the map: the item's own stale flag says whether this is a last answer
+  const stale = !lost && !!ropesItem?.stale;
+  // the line speaks for the ropes and the panels, so its mark is the worse of the two; a last answer is never green
+  const RANK = { down: 0, warning: 1, unknown: 2, ok: 3 };
+  const worst = [levelOf('ropes'), levelOf('hub75 panels')].sort((a, b) => RANK[a] - RANK[b])[0];
+  const lv = lost || stale ? 'unknown' : worst;
+  put('state-words', `<span class="lv-${lv}">${mark(lv)}</span> ${esc(words)}`);
+  const a = probeAge(), pr = m.sources.probe;
+  const from = lost ? `No contact with mission control for ${fmt.nb(dur(status.elapsed() / 1000))}: this is how it was at ${fmt.clock(status.last.now, status.last.now)}`
+    : m.overall.cause === 'bitcube-offline' ? 'bitcube is offline'
+    : a == null ? 'Not checked yet'
+    : pr.present && !pr.ok ? `bitcube's full check failed · ${fmt.nb(dur(a))} ago`
+    : stale ? `last seen from bitcube ${fmt.nb(dur(a))} ago: this is how it was then`
+    : `from bitcube · ${fmt.nb(dur(a))} ago`;
   const el = $('#state-from');
   el.textContent = from;
-  el.className = `from muted${a != null && a > PROBE_OLD_S ? ' old' : ''}`;
+  el.className = `from muted${lost || stale || (a != null && a > PROBE_OLD_S) ? ' old' : ''}`;
+  // when it isn't OK, the band's headline and the way to what to do (Lights has no band of its own)
+  const o = m.overall, bad = !lost && o.level !== 'ok' && o.cause !== 'calibrating';
+  // the headline's cause, split as Status splits it (never inside a parenthesis); a bare "Checking" says the whole headline
+  const [cause] = splitHeadline(o.headline), head = /^Checking$/i.test(cause.trim()) ? o.headline : cause;
+  put('state-next', bad ? `<span>${esc(fmt.nb(head.replace(/[.\s]+$/, '')))}.</span> <a href="/status">What to do → Status</a>` : '');
+  sayState(lost ? `No contact with mission control. ${words}` : stale ? `Last seen: ${words}` : words);
 }
+/** Screen readers hear the state line's words when they change, never its ticking age (lights.html #state-live). */
+function sayState(t) { const l = $('#state-live'); if (l && l.textContent !== t) l.textContent = t; }
 function levelOf(id) { return S.m?.items.find((x) => x.id === id)?.level ?? 'unknown'; }
 
 // ---- the LED map: GET /api/pixelmap once (and again after a calibration writes a map) --------------------------------------
@@ -71,10 +107,17 @@ async function loadMap() {
     const r = await fetch('/api/pixelmap', { cache: 'no-store' });
     if (r.status === 401) { location.href = '/login'; return; }
     const j = await r.json().catch(() => ({}));
-    if (!r.ok || j.error || j.map?.error) throw new Error(j.error || j.map?.error || `HTTP ${r.status}`);
-    S.map = { map: j.map ?? null, screens: j.screens ?? null, still: j.still ?? null, error: null, ropes: prepareRopes(j.map), loaded: true };
+    if (!r.ok || j.error || j.map?.error) throw Object.assign(new Error(mapError(j.error || j.map?.error || `HTTP ${r.status}`)), { status: r.status });
+    S.map = { ...S.map, map: j.map ?? null, screens: j.screens ?? null, still: j.still ?? null, error: null, ropes: prepareRopes(j.map), loaded: true };
   } catch (e) { S.map = { ...S.map, error: plainError(e), loaded: true }; }
   render();
+}
+/** A map error in the team's words: never a file name or a parser's message (the raw text stays in the server's answer). */
+function mapError(raw) {
+  const s = String(raw ?? '');
+  if (/unreadable|JSON|Unexpected|parse/i.test(s)) return "the LED map file can't be read";
+  if (/could not fetch|fetch failed|ssh|can't reach/i.test(s)) return "bitcube didn't send it";
+  return s;
 }
 /** The map's 8000 points grouped by rope, as fractions of the frame (y already flipped: v runs bottom → top). */
 function prepareRopes(map) {
@@ -119,17 +162,39 @@ async function pollLights() {
     const j = await r.json().catch(() => ({}));
     const f = j?.frames;
     if (!r.ok || j.ok === false || !f?.ropes?.rgb || !f?.panels?.rgb) {
-      S.lights.error = String(j?.error || f?.ropes?.error || f?.panels?.error || `HTTP ${r.status}`).replace(/:\s*no frames$/i, '');
+      S.lights.error = lightsError(j?.error || f?.ropes?.error || f?.panels?.error, r.status);
       S.lights.failedAt ??= performance.now();
     } else {
       const bytes = decodeRGB(f.ropes.rgb, f.ropes.w, f.ropes.h), panelBytes = decodeRGB(f.panels.rgb, f.panels.w, f.panels.h);
       if (!bytes || !panelBytes) throw new Error('the frame was cut short');
       const dark = [];   // per rope: every LED black (max channel under 8)
       for (let c = 0; c < f.ropes.w; c++) { let lit = false; for (let y = 0; y < f.ropes.h && !lit; y++) { const i = (y * f.ropes.w + c) * 3; if (bytes[i] > 8 || bytes[i + 1] > 8 || bytes[i + 2] > 8) lit = true; } dark.push(!lit); }
-      S.lights = { frames: f, at: performance.now(), age_s: typeof j.age_s === 'number' ? j.age_s : 0, error: null, failedAt: null, bytes, panelBytes, dark, panelImg: panelImage(panelBytes, f.panels.w, f.panels.h) };
+      S.lights = { frames: f, at: performance.now(), wall: Date.now(), age_s: typeof j.age_s === 'number' ? j.age_s : 0, error: null, failedAt: null, bytes, panelBytes, dark, scr: screensOf(f, panelBytes) };
     }
-  } catch (e) { S.lights.error = plainError(e); S.lights.failedAt ??= performance.now(); }
+  } catch (e) { S.lights.error = lightsError(e); S.lights.failedAt ??= performance.now(); }
   render();
+}
+/** Why the lights can't be shown, in the team's words: the server's plain sentence, else plainError's; never "HTTP 502" or
+ *  a frame's byte count. */
+function lightsError(e, status) {
+  const m = String(e?.message ?? e ?? '').replace(/:\s*no frames$/i, '');
+  if (!m) return status ? plainError(`HTTP ${status}`) : 'no frames yet';
+  if (/rgb holds|bytes, expected|bad frame|missing|cut short/i.test(m)) return 'a frame from bitcube arrived incomplete';
+  if (/not cooked|has not cooked/i.test(m)) return 'TouchDesigner has not drawn a frame yet';
+  return plainError(typeof e === 'object' && e ? e : m);
+}
+/** The four screens to draw, each upright as seen: { img, cw, ch } with cell k-1 = screen k at (cw·(k-1), 0, cw, ch).
+ *  frames.screens when bitcube sends it; else the Gray Area atlas undone (public/screens.js); else (an atlas of four quads
+ *  in a row, before Gray Area) the atlas cut into four as it is. */
+function screensOf(f, panelBytes) {
+  const s = f.screens;
+  if (s?.rgb && Number.isInteger(s.w) && Number.isInteger(s.h) && s.w % 4 === 0) {
+    const b = decodeRGB(s.rgb, s.w, s.h);
+    if (b) return { img: panelImage(b, s.w, s.h), cw: s.w / 4, ch: s.h, upright: true };
+  }
+  const up = uprightsFromAtlas(panelBytes, f.panels.w, f.panels.h);
+  if (up) return { img: panelImage(up.bytes, up.w, up.h), cw: up.w / 4, ch: up.h, upright: true };
+  return { img: panelImage(panelBytes, f.panels.w, f.panels.h), cw: f.panels.w / 4, ch: f.panels.h, upright: false };
 }
 function panelImage(bytes, w, h) {
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
@@ -138,7 +203,7 @@ function panelImage(bytes, w, h) {
   cv.getContext('2d').putImageData(img, 0, 0);
   return cv;
 }
-const frameAgeS = () => (S.lights.frames ? S.lights.age_s + (performance.now() - S.lights.at) / 1000 : null);
+const frameAgeS = () => (S.lights.frames ? S.lights.age_s + since(S.lights.at, S.lights.wall) : null);
 const frameOld = () => { const a = frameAgeS(); return a != null && a > FRAME_OLD_S; };
 const ledRGB = (c, y) => { const b = S.lights.bytes, w = S.lights.frames.ropes.w, i = (y * w + c) * 3; return [b[i], b[i + 1], b[i + 2]]; };
 const isBlack = ([r, g, b]) => r <= 8 && g <= 8 && b <= 8;
@@ -150,7 +215,7 @@ function renderMapCard() {
   for (const b of document.querySelectorAll('#view-seg [data-view]')) { const on = (b.dataset.view === 'live') === live; b.classList.toggle('lit', on); b.setAttribute('aria-pressed', on); }
   const quads = screenQuads(), estimated = quads.filter((q) => q.located && q.estimated).length, located = quads.filter((q) => q.located).length;
   const zoomed = zoomBox(...frameSize()).zoomed;
-  put('map-legend', live ? `Each LED in the colour TouchDesigner is sending it; the screens show their picture.${zoomed ? ' Zoomed to the piece.' : ''}`
+  put('map-legend', live ? `Each LED in the colour TouchDesigner is sending it; the screens show their picture.${estimated ? ` Screens marked ~ are estimated.` : ''}${zoomed ? ' Zoomed to the piece.' : ''}`
     : `Each rope in its own colour, numbered at its plug end; dots are LEDs the camera saw.${located ? ` Screens outlined${estimated ? `, ${estimated} of them estimated (dashed)` : ''}.` : ''}${zoomed ? ' Zoomed to the piece.' : ''}`);
   // the still behind: the calibration's own frame when the map ships one, else the room still on request
   const img = $('#room-img'), toggle = $('#room-toggle');
@@ -160,26 +225,35 @@ function renderMapCard() {
   // the note over the canvas: no map, or no frames
   const note = $('#map-note');
   let noteHtml = '';
-  if (!S.map.loaded) noteHtml = `${mark('unknown')}<span>Loading the LED map…</span>`;
+  // what TouchDesigner sends is not what the room shows when the lights aren't connected: said over the map, and dimmed
+  const ropesSt = S.m?.show.ropes.state, panelsSt = S.m?.show.panels.state;
+  const notGetting = [ropesSt === 'not-reaching' ? "the ropes aren't getting it" : '', panelsSt === 'no-sender' ? 'the panels have no sender' : ''].filter(Boolean);
+  const unsent = live && !!S.lights.frames && !pageDown() && !frameOld() && notGetting.length > 0;
+  const mapWaitS = (performance.now() - S.map.askedAt) / 1000;
+  if (!S.map.loaded) noteHtml = mapWaitS * 1000 > LOST_MS ? `${mark('unknown')}<span>The LED map hasn't loaded: no answer for ${esc(fmt.nb(dur(mapWaitS)))}.</span>` : `${mark('unknown')}<span>Loading the LED map…</span>`;
   else if (!hasMap && S.map.error) noteHtml = `${mark('unknown')}<span>No LED map: ${esc(S.map.error)}.</span>`;
   else if (!hasMap) noteHtml = `${mark('unknown')}<span>No LED map yet: calibrate to make one. Rope by rope below shows what is being sent.</span>`;
-  else if (live && !S.lights.frames) noteHtml = `${mark(S.m?.overall.cause === 'bitcube-offline' ? 'down' : 'unknown')}<span>Can't show the lights: ${esc(S.lights.error ?? 'no frames yet')}.</span>`;
+  else if (live && !S.lights.frames) noteHtml = `${mark(S.m?.overall.cause === 'bitcube-offline' ? 'down' : 'unknown')}<span>${esc(S.lights.error && /:/.test(S.lights.error) ? `Can't show the lights. ${cap(S.lights.error)}` : `Can't show the lights: ${S.lights.error ?? 'no frames yet'}`)}.</span>`;
+  else if (live && pageDown()) noteHtml = `${mark('unknown')}<span>No contact with mission control: this is the last frame it sent.</span>`;
   else if (live && frameOld()) noteHtml = `${mark('warning')}<span>No new frame for ${esc(fmt.nb(dur(frameAgeS())))}${S.lights.error ? `: ${esc(S.lights.error)}` : ''}. This is the last one.</span>`;
+  else if (unsent) noteHtml = `${mark('warning')}<span>What TouchDesigner sends; ${esc(notGetting.join(' and '))}.</span>`;
   if (S.html['map-note'] !== noteHtml) { S.html['map-note'] = noteHtml; note.innerHTML = noteHtml; note.className = `mapnote ${/lv-down/.test(noteHtml) ? 'lv-down' : /lv-warning/.test(noteHtml) ? 'lv-warning' : 'lv-unknown'}`; }
   note.hidden = !noteHtml;
-  $('#mapwrap').classList.toggle('dim', live && !!S.lights.frames && frameOld());
+  $('#mapwrap').classList.toggle('dim', live && !!S.lights.frames && (frameOld() || pageDown() || unsent));
   // the caption
   let capHtml;
   if (live && S.lights.frames) capHtml = `<b>Live</b> · what TouchDesigner is sending · from bitcube · ${esc(fmt.nb(dur(frameAgeS())))} ago`;
   else if (live) capHtml = `<b>Live</b> · waiting for a frame from bitcube`;
-  else capHtml = hasMap ? `<b>Map</b> · ${zoomed ? 'the piece, as the camera sees it' : `the camera's frame${S.map.map?.meta?.frame_size ? ` (${S.map.map.meta.frame_size.join(' × ')})` : ''}`}, drawn by ratio` : `<b>Map</b> · nothing to draw yet`;
+  else capHtml = hasMap ? `<b>Map</b> · ${zoomed ? 'the piece, as the camera sees it' : "the camera's whole picture"}`
+    : !S.map.loaded && mapWaitS * 1000 > LOST_MS ? `<b>Map</b> · the LED map hasn't loaded: no answer for ${esc(fmt.nb(dur(mapWaitS)))}`
+    : !S.map.loaded ? '<b>Map</b> · loading' : `<b>Map</b> · nothing to draw yet`;
   if (mapStill) capHtml += ' · over the still from the calibration';
   else if (S.room.on) capHtml += S.room.url ? ` · the room still is ${esc(fmt.nb(dur(roomAgeS())))} old` : S.room.error ? ` · no room still: ${esc(S.room.error)}` : ' · fetching the room still…';
   put('map-cap', capHtml);
   const wrap = $('#mapwrap'), [FW, FH] = frameSize(), frameAspect = FW / FH;
   const zb = zoomBox(FW, FH), aspect = zb.zoomed ? Math.min(frameAspect, Math.max(0.8, zb.aspect)) : frameAspect;
   const want = `${Math.round(aspect * 1000)} / 1000`;
-  if (wrap.style.aspectRatio !== want) wrap.style.aspectRatio = want;
+  if (wrap.style.aspectRatio !== want) { wrap.style.aspectRatio = want; wrap.style.setProperty('--ar', (Math.round(aspect * 1000) / 1000).toString()); }
   drawMap(live);
 }
 function stillUrl(still) {
@@ -228,8 +302,11 @@ function drawMap(live) {
   // (the same scale both ways, so nothing is stretched): the ropes fill a narrow middle of the camera's frame.
   const [FW, FH] = frameSize(), z = zoomBox(W, H), X = (x) => (x * FW - z.cx) * z.k + W / 2, Y = (y) => (y * FH - z.cy) * z.k + H / 2;
   const P = (p) => [X(p[0]), Y(p[1])];
+  const placed = [];   // label boxes already drawn: later labels move off them, never under them
+  const screenLabels = [];   // drawn after the ropes, so no rope is painted over a screen's number
   // the screens first, under the ropes
-  const panels = useFrame ? S.lights.panelImg : null, pw = S.lights.frames?.panels.w ?? 256, ph = S.lights.frames?.panels.h ?? 32, qw = pw / 4;
+  // each screen's own picture, upright as seen, onto its corners as the camera sees them (cell n-1 = screen n)
+  const scr = useFrame ? S.lights.scr : null, panels = scr?.img ?? null, qw = scr?.cw ?? 1, ph = scr?.ch ?? 1;
   for (const q of screenQuads()) {
     if (!q.located) continue;
     const tl = P(q.tl), tr = P(q.tr), br = P(q.br), bl = P(q.bl), i = q.n - 1;
@@ -242,7 +319,7 @@ function drawMap(live) {
     ctx.lineWidth = 1.5; ctx.strokeStyle = panels ? 'rgba(228, 233, 238, 0.7)' : '#7cc3e8';
     ctx.beginPath(); ctx.moveTo(...tl); ctx.lineTo(...tr); ctx.lineTo(...br); ctx.lineTo(...bl); ctx.closePath(); ctx.stroke();
     ctx.restore();
-    if (!useFrame || hi == null) label(ctx, (tl[0] + br[0]) / 2, (tl[1] + br[1]) / 2, `${q.n}${q.estimated ? ' ~' : ''}`, narrow ? 12 : 14, '#7cc3e8');
+    if (!useFrame || hi == null) screenLabels.push([(tl[0] + br[0]) / 2, (tl[1] + br[1]) / 2, `${q.n}${q.estimated ? ' ~' : ''}`]);
   }
   // the ropes: a polyline through the filled points, dots on the visible ones
   for (let r = 0; r < N_ROPES; r++) {
@@ -273,12 +350,13 @@ function drawMap(live) {
     }
     ctx.globalAlpha = 1;
   }
-  // numbers at the plug ends (Map view, or the highlighted rope)
+  for (const [x, y, t] of screenLabels) label(ctx, x, y, t, 14, '#7cc3e8', placed);
+  // numbers at the plug ends (Map view, or the highlighted rope); one moved off a crowd keeps a thin line to its plug end
   for (let r = 0; r < N_ROPES; r++) {
     const pts = ropes[r];
     if (!pts.length || (useFrame && hi !== r) || (hi != null && hi !== r)) continue;
-    const p0 = pts[0], dy = (r % 2 ? 1 : -1) * (narrow ? 12 : 15);     // alternate above and below: the plug ends crowd the ceiling
-    label(ctx, X(p0.x), Y(p0.y) + dy, String(r + 1), narrow ? 12 : 14, ropeHue(r));
+    const p0 = pts[0], dy = (r % 2 ? 1 : -1) * 15;     // alternate above and below: the plug ends crowd the ceiling
+    label(ctx, X(p0.x), Y(p0.y) + dy, String(r + 1), 14, ropeHue(r), placed, [X(p0.x), Y(p0.y)]);
   }
 }
 /** The frame's size in its own pixels (meta.frame_size, else 1440 × 808). */
@@ -300,13 +378,31 @@ function zoomBox(W, H) {
   const k = Math.min(W / bw, H / bh);
   return { k, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, zoomed: k > whole.k * 1.02 || bw / bh < (FW / FH) * 0.9, aspect: bw / bh };
 }
-function label(ctx, x, y, text, size, color) {
+/** A number in a dark pill at (x, y), moved to the nearest free spot (down, up, then sideways) when it would cover a
+ *  label already drawn (`placed`, the boxes so far): on a phone the plug ends crowd together. */
+function label(ctx, x, y, text, size, color, placed = [], anchor = null) {
   ctx.save();
   const cw = ctx.canvas.clientWidth || ctx.canvas.width, ch = ctx.canvas.clientHeight || ctx.canvas.height;
-  x = Math.min(cw - 14, Math.max(14, x)); y = Math.min(ch - 11, Math.max(11, y));
   ctx.font = `700 ${size}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const w = ctx.measureText(text).width + 8, h = size + 6;
+  const fit = (px, py) => [Math.min(cw - w / 2 - 1, Math.max(w / 2 + 1, px)), Math.min(ch - h / 2 - 1, Math.max(h / 2 + 1, py))];
+  const hits = (px, py) => placed.some((b) => Math.abs(b.x - px) < (b.w + w) / 2 + 2 && Math.abs(b.y - py) < (b.h + h) / 2 + 2);
+  let best = fit(x, y);
+  if (hits(...best)) {
+    const steps = [];
+    for (let k = 1; k <= 6; k++) steps.push([0, k * (h + 2)], [0, -k * (h + 2)], [k * (w + 2), 0], [-k * (w + 2), 0], [k * (w + 2), k * (h + 2)], [-k * (w + 2), -k * (h + 2)]);
+    for (const [dx, dy] of steps) { const c = fit(x + dx, y + dy); if (!hits(...c)) { best = c; break; } }
+  }
+  const [x0, y0] = [x, y];
+  [x, y] = best;
+  placed.push({ x, y, w, h });
+  // moved off its spot: a leader line from the thing it names (the plug end) to the label, so it can't be misread
+  if (anchor && Math.hypot(x - x0, y - y0) > h) {
+    ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.globalAlpha = 0.9;
+    ctx.beginPath(); ctx.moveTo(anchor[0], anchor[1]); ctx.lineTo(x, y); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
   ctx.fillStyle = 'rgba(5, 8, 11, 0.85)';
   ctx.beginPath(); ctx.roundRect(x - w / 2, y - h / 2, w, h, 5); ctx.fill();
   ctx.fillStyle = color; ctx.fillText(text, x, y + 0.5);
@@ -314,7 +410,7 @@ function label(ctx, x, y, text, size, color) {
 }
 
 // ---- the room still (optional, behind the map) ---------------------------------------------------------------------------
-const roomAgeS = () => (S.room.at == null ? null : (S.room.age_s ?? 0) + (performance.now() - S.room.at) / 1000);
+const roomAgeS = () => (S.room.at == null ? null : (S.room.age_s ?? 0) + since(S.room.at, S.room.wall));
 async function pollRoom() {
   if (!S.room.on || document.hidden) return;
   try {
@@ -323,7 +419,7 @@ async function pollRoom() {
     if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || `HTTP ${r.status}`); }
     const url = URL.createObjectURL(await r.blob());
     if (S.room.url) URL.revokeObjectURL(S.room.url);
-    S.room = { ...S.room, url, age_s: Number(r.headers.get('x-age-s')) || 0, at: performance.now(), error: null };
+    S.room = { ...S.room, url, age_s: Number(r.headers.get('x-age-s')) || 0, at: performance.now(), wall: Date.now(), error: null };
   } catch (e) { S.room.error = plainError(e); }
   render();
 }
@@ -339,23 +435,29 @@ function ropeState(r) {
   const m = S.m, found = S.map.map?.ropes?.[String(r)], seen = found?.visible ?? null;
   const darkNow = S.lights.dark?.[r] === true && m?.show.ropes.state === 'river' && !frameOld();
   if (darkNow) return { level: 'warning', word: 'Dark now', seen };
+  // before the LED map has answered (or when it couldn't be fetched) nothing is known: "Not mapped yet" claims calibration is missing
+  if (!S.map.loaded || (!S.map.map && S.map.error)) return { level: 'unknown', word: 'Not known yet', seen: null };
   if (!S.map.map) return { level: 'unknown', word: 'Not mapped yet', seen: null };
-  if (seen > 0) return { level: 'ok', word: 'Found', seen };
-  return { level: 'warning', word: 'Not found', seen: seen ?? 0 };
+  // what calibration found is not the rope's state now: a neutral mark, never a green ✓ (that would read "this rope is OK")
+  if (seen > 0) return { level: 'unknown', neutral: true, word: 'Found at calibration', seen };
+  return { level: 'warning', word: 'Not found at calibration', seen: seen ?? 0 };
 }
 function renderChips() {
   const html = Array.from({ length: N_ROPES }, (_, r) => {
     const n = r + 1, box = n <= 10 ? 1 : 2, out = ((n - 1) % 10) + 1, st = ropeState(r);
     const seen = st.seen == null ? '' : `${esc(fmt.nb(`${st.seen} of ${LEDS}`))} seen · `;
-    return `<button type="button" class="rope lv-${st.level}" data-rope="${r}" aria-pressed="${S.hi === r}" aria-label="Rope ${n}, box ${box} out ${out}: ${esc(st.word)}">
-      ${mark(st.level)}<span class="rname">Rope ${n} <span class="out">box ${box} · OUT ${out}</span></span>
+    return `<button type="button" class="rope lv-${st.level}${st.neutral ? ' neutral' : ''}" data-rope="${r}" aria-pressed="${S.hi === r}" aria-label="Rope ${n}, box ${box} out ${out}: ${esc(st.word)}${st.seen == null ? '' : `, ${st.seen} of ${LEDS} seen`}">
+      ${st.neutral ? '<span class="mk lv-unknown" aria-hidden="true">·</span>' : mark(st.level)}<span class="rname">Rope ${n} <span class="out">box ${box} · OUT ${out}</span></span>
       <span class="rline">${seen}<span class="state">${esc(st.word)}</span></span></button>`;
   }).join('');
   put('rope-chips', html);
   const found = S.map.map ? Object.values(S.map.map.ropes ?? {}).filter((v) => (v?.visible ?? 0) > 0).length : null;
   put('ropes-sub', found == null ? 'tap one to pick it out' : `${found} of ${N_ROPES} found at calibration · tap one to pick it out`);
   const quads = screenQuads(), located = quads.filter((q) => q.located);
-  put('screens-line', !located.length ? 'Screens: not located yet.' : `Screens: ${located.map((q) => `${q.n}${q.estimated ? ' (estimated)' : ''}`).join(', ')} located${located.length < 4 ? `; ${4 - located.length} not located yet` : ''}.`);
+  const list = (ns) => (ns.length > 1 ? `${ns.slice(0, -1).join(', ')} and ${ns.at(-1)}` : String(ns[0]));
+  const measured = located.filter((q) => !q.estimated).map((q) => q.n), est = located.filter((q) => q.estimated).map((q) => q.n), missing = quads.filter((q) => !q.located).map((q) => q.n);
+  const parts = [measured.length ? `${measured.length > 1 ? 'Screens' : 'Screen'} ${list(measured)} located` : '', est.length ? `${measured.length ? '' : `${est.length > 1 ? 'Screens' : 'Screen'} `}${list(est)} estimated` : '', missing.length ? `${list(missing)} not located yet` : ''].filter(Boolean);
+  put('screens-line', !located.length ? 'Screens: not located yet.' : `${parts.join('; ')}.`);
 }
 $('#rope-chips').addEventListener('click', (e) => {
   const b = e.target.closest('[data-rope]');
@@ -378,11 +480,11 @@ function renderStrips() {
   let text = '', bad = false;
   if (l.frames) {
     const dark = l.frames.source === 'black' || l.frames.ropes?.source === 'black';
-    text = dark ? 'The ropes are dark on purpose: TouchDesigner sends black. The panels still show the river.' : `What TouchDesigner sends to each LED and screen · from bitcube · ${fmt.nb(dur(frameAgeS()))} ago.`;
-    if (!dark && m?.show.ropes.state === 'not-reaching') text += ` The ropes are not getting it: ${m.show.ropes.summary.replace(/\.$/, '').toLowerCase()}.`;
+    text = dark ? 'The ropes are dark on purpose: TouchDesigner sends black. The panels still show the river.' : 'What TouchDesigner sends to each LED and screen, from bitcube (its age is on the map above).';
+    if (!dark && m?.show.ropes.state === 'not-reaching') text += ` The ropes are not getting it. ${cap(m.show.ropes.summary.replace(/\.$/, ''))}.`;
     if (frameOld()) { text = `No new frame for ${fmt.nb(dur(frameAgeS()))}${l.error ? `: ${l.error}` : ''}. This is the last one received.`; bad = true; }
   } else {
-    text = `Can't show the lights: ${l.error ?? 'no frames yet'}.`;
+    text = l.error && /:/.test(l.error) ? `Can't show the lights. ${cap(l.error)}.` : `Can't show the lights: ${l.error ?? 'no frames yet'}.`;
     bad = !!l.error && !/not checked yet/.test(l.error);
     if (!l.error && m && m.overall.cause && m.overall.cause !== 'page') text = `Can't show the lights yet: ${m.show.ropes.words}.`;
   }
@@ -419,9 +521,12 @@ function drawStrips() {
     if (S.hi === r) { fr.ctx.strokeStyle = '#7cc3e8'; fr.ctx.lineWidth = 2; fr.ctx.strokeRect(x + 1, 1, Math.round(sw) - 2, fr.h - 2); }
   }
   fr.ctx.globalAlpha = 1;
-  const qw = f.panels.w / 4, gw = (fq.w - gap * 3) / 4;
+  // the four screens, each upright as seen (cell n-1 = screen n), its own shape kept, centred over its number
+  const sc = l.scr, gw = (fq.w - gap * 3) / 4;
+  let dw = gw, dh = fq.h;
+  if (sc.upright) { dh = fq.h; dw = dh * sc.cw / sc.ch; if (dw > gw) { dw = gw; dh = gw * sc.ch / sc.cw; } }
   fq.ctx.imageSmoothingEnabled = false;
-  for (let i = 0; i < 4; i++) fq.ctx.drawImage(l.panelImg, i * qw, 0, qw, f.panels.h, Math.round(i * (gw + gap)), 0, Math.round(gw), fq.h);
+  for (let i = 0; i < 4; i++) fq.ctx.drawImage(sc.img, i * sc.cw, 0, sc.cw, sc.ch, Math.round(i * (gw + gap) + (gw - dw) / 2), Math.round((fq.h - dh) / 2), Math.round(dw), Math.round(dh));
 }
 
 // ---- provenance: "Map made 23 Oct 12:24 at Gray Area · 20 of 20 ropes · camera drift 10 (fine)" ---------------------------
@@ -443,13 +548,13 @@ function renderProvenance() {
   const driftWords = drift == null ? '' : ` · camera drift ${Math.round(drift)} (${drift < DRIFT_FINE_PX ? 'fine' : 'too much'})`;
   const sc = S.map.screens, quads = screenQuads().filter((q) => q.located), est = quads.filter((q) => q.estimated).length;
   const scWhen = sc ? captureWhen(sc.meta?.capture, sc.file) : null;
-  const screensWords = sc ? ` · screens from ${scWhen.words}${est ? ` (${quads.length - est} measured, ${est} estimated)` : ''}` : quads.length ? ' · screen 1 from the map' : '';
-  put('prov-words', esc(fmt.nb(`Map made ${when.words} at ${fromHere ? 'Gray Area' : 'Agape'} · ${found} of ${N_ROPES} ropes${driftWords}${screensWords}`)) + (map.file ? ` <span class="muted">(${esc(map.file)})</span>` : ''));
+  const screensWords = sc ? ` · screens from ${scWhen.words}${est ? ` (${quads.length - est} located, ${est} estimated)` : ''}` : quads.length ? ' · screen 1 from the map' : '';
+  put('prov-words', esc(fmt.nb(`Map made ${when.words} at ${fromHere ? 'Gray Area' : 'Agape'} · ${found} of ${N_ROPES} ropes${driftWords}${screensWords}`)));
   // amber when it doesn't match: made at another site, or a calibration since then wrote a newer map
   const p = S.cal.p, newer = p && !p.running && p.ok === true && p.result && !p.result.dry_run && p.result.map && p.result.map > (map.file ?? '');
   let w = '';
   if (!fromHere) w = `This map was made at Agape; it doesn't match the gallery camera here. Calibrate to make a new one.`;
-  else if (newer) w = `A calibration made a newer map (${p.result.map}) than the one shown here; mission control picks it up at its next check, or reload the page.`;
+  else if (newer) w = `A calibration made a newer map (${captureWhen(p.result.capture, p.result.map).words}) than the one shown here; mission control picks it up at its next check, or reload the page.`;
   else if (drift != null && drift >= DRIFT_FINE_PX) w = `The camera moved ${Math.round(drift)} px during the capture: the dots may sit off the ropes. Calibrate again with the camera fixed.`;
   warn.hidden = !w;
   if (w) warn.innerHTML = `${mark('warning')}<span>${esc(w)}</span>`;
@@ -466,8 +571,10 @@ async function pollCal() {
     const j = await r.json().catch(() => ({}));
     if (!r.ok || (j.ok === false && !('running' in j))) throw new Error(j.error || `HTTP ${r.status}`);
     const wasRunning = S.cal.p?.running === true;
-    S.cal.p = j.none ? null : j; S.cal.at = performance.now(); S.cal.error = null;
-    if (!wasRunning && !j.running && !S.cal.seenStarted) S.cal.stale = typeof j.updated === 'number' && Date.now() / 1000 - j.updated > OLD_RUN_S;   // ended before this page opened: show only a recent one
+    S.cal.p = j.none ? null : j; S.cal.at = performance.now(); S.cal.wall = Date.now(); S.cal.error = null;
+    // ended before this page opened: show only a recent one, judged on the server's clock (never this phone's)
+    const nowS = typeof j.age_s === 'number' ? null : serverNowMs() != null ? serverNowMs() / 1000 : null;
+    if (!wasRunning && !j.running && !S.cal.seenStarted) S.cal.stale = typeof j.age_s === 'number' ? j.age_s > OLD_RUN_S : nowS != null && typeof j.updated === 'number' && nowS - j.updated > OLD_RUN_S;
     if (j.running) { S.cal.stale = false; S.cal.seenStarted = true; }
     if (wasRunning && !j.running && j.ok === true && j.result && !j.result.dry_run) loadMap();   // a new map: draw it
   } catch (e) {
@@ -495,8 +602,12 @@ function calChecklist(m) {
   const both = [lv('rope box 1'), lv('rope box 2')];
   const boxLevel = both.every((l) => l === 'ok') ? 'ok' : both.includes('down') ? 'down' : both.includes('warning') ? 'warning' : 'unknown';
   const boxWhy = both[0] !== 'ok' && both[1] !== 'ok' ? "neither rope box is answering" : both[0] !== 'ok' ? "rope box 1 isn't answering" : "rope box 2 isn't answering";
+  const td = m?.items.find((x) => x.id === 'touchdesigner'), tdSum = td?.summary ?? '';
+  const tdWhy = td?.level === 'down' ? (/not running/i.test(tdSum) ? "TouchDesigner isn't running" : "TouchDesigner isn't answering")
+    : /slow/i.test(tdSum) ? `TouchDesigner is running slowly (${tdSum.replace(/^Running slowly: /i, '')})`
+    : /restart|start/i.test(tdSum) ? 'TouchDesigner is still starting' : "TouchDesigner isn't ready";
   return [
-    { level: lv('touchdesigner'), ok: 'TouchDesigner answering', why: "TouchDesigner isn't answering" },
+    { level: lv('touchdesigner'), ok: 'TouchDesigner answering', why: tdWhy },
     { level: boxLevel, ok: 'both rope boxes answering', why: boxWhy },
     { level: lv('gallery camera'), ok: 'the gallery camera reachable', why: "the gallery camera isn't reachable" },
   ];
@@ -521,85 +632,129 @@ function resultWords(res) {
   const dark = Array.isArray(res.ropes_dark) ? res.ropes_dark : [];
   const darkWords = dark.length ? ` · ${dark.length === 1 ? 'rope' : 'ropes'} ${dark.length > 1 ? dark.slice(0, -1).join(', ') + ' and ' + dark.at(-1) : dark[0]} not found (dark)` : '';
   const ropesFound = Array.isArray(res.ropes_found) ? res.ropes_found.length : (N_ROPES - dark.length);
-  const quads = Array.isArray(res.hub75_quads) && res.hub75_quads.length ? ` · ${res.hub75_quads.length === 1 ? 'panel quad 1 found' : `${res.hub75_quads.length} panel quads found`}` : '';
+  const quads = Array.isArray(res.hub75_quads) && res.hub75_quads.length ? ` · ${res.hub75_quads.length === 1 ? 'screen 1 found' : `${res.hub75_quads.length} screens found`}` : '';
   const drift = typeof res.drift_px === 'number' ? ` · camera drift ${Math.round(res.drift_px)} (${res.drift_px < DRIFT_FINE_PX ? 'fine' : 'too much'})` : '';
   const seen = typeof res.seen === 'number' ? res.seen     // the result says how many LEDs the camera saw (calibrate.py summarize_map)
     : S.map.map && S.map.map.file === res.map ? Object.values(S.map.map.ropes ?? {}).reduce((s, v) => s + (v?.visible ?? 0), 0) : null;   // older result: the map on this page is that map
   const points = seen != null ? ` · ${seen.toLocaleString('en-US')} LEDs seen, the rest placed along the rope` : typeof res.points === 'number' ? ` · ${res.points.toLocaleString('en-US')} LEDs placed` : '';
   return fmt.nb(`Map made ${when.words} · ${ropesFound} of ${N_ROPES} ropes found${darkWords}${points}${drift}${quads}.`);
 }
+/** The Calibrate block. Each view (before, run, stopped, failed, done, lost) is built once; while it stays, its parts are
+ *  painted in place and its controls are kept and updated, never re-mounted: a confirm left open is withdrawn by its own
+ *  control when that becomes impossible (ui.js control().update), and Stop keeps its pending and failed words across the
+ *  run's every pattern. Leaving a view withdraws any confirm its controls still have open. */
 function renderCalibrate() {
   const m = S.m, p = S.cal.p, body = $('#cal-body');
   const running = p?.running === true;
   const lost = S.cal.lost && !isDismissed({ started: S.cal.lost.started }) ? S.cal.lost : null;
   const finished = p && !p.running && !isDismissed(p) && !S.cal.stale;   // a finished run stays until dismissed (or it was old when the page opened)
   const lostView = !!lost || (running && m?.overall.cause === 'bitcube-offline');
-  let key, html;
+  const dry = !!(p?.dry_run || p?.mode === 'dry-run' || p?.result?.dry_run);
+  let view, key, html;
   if (lostView) {
-    key = `lost:${lost?.started ?? p?.started}`;
+    view = 'lost'; key = `lost:${lost?.started ?? p?.started}`;
     html = `<div class="cal-result lv-down"><div class="h">${mark('down')}<span>Calibration interrupted</span></div>
       <p class="r-words">bitcube went offline during the run: the ropes may still be in patterns; they come back when TouchDesigner reloads.</p>
       <div class="cal-dismiss"><button type="button" class="btn" data-cal="dismiss-lost">OK</button></div></div>`;
   } else if (running) {
-    key = `run:${p.started}:${p.stage}:${p.step}:${p.pass}:${p.retakes}:${p.message}`;
-    const stageWord = p.stage ? STAGE_WORDS[p.stage] ?? cap(p.stage) : 'Starting';
-    const line = p.pass && p.of > 0 ? `Pass ${p.pass}: pattern ${p.step} of ${p.of}` : p.stage === 'ropes-decode' && p.of > 0 ? `Rope ${p.step} of ${p.of}` : p.stage === 'ropes-capture' && p.of > 0 && p.step > 0 ? `Pass ${p.step} of ${p.of} done` : '';
-    const retakes = p.retakes ? ` · retakes ${p.retakes}` : '';
-    const frac = runFraction(p);
-    const stages = STAGE_ORDER.map((s) => `<span class="${s === p.stage ? 'now' : STAGE_ORDER.indexOf(s) < STAGE_ORDER.indexOf(p.stage ?? 'ropes-capture') ? 'done' : ''}">${STAGE_WORDS[s]}</span>`).join('<span aria-hidden="true">→</span>');
-    html = `<div class="cal-stage" id="cal-stage">${esc(stageWord)}${p.dry_run ? ' <span class="muted">(a dry run: the lights don\'t change)</span>' : ''}</div>
-      <div class="stages">${stages}</div>
-      <div class="prog ${p.dry_run ? 'dry' : ''}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(frac * 100)}"><i id="cal-bar" style="width:${Math.round(frac * 100)}%"></i></div>
-      <div class="cal-line" id="cal-line">${esc(fmt.nb(line))}${esc(retakes)}</div>
+    view = 'run'; key = `run:${p.started}:${dry}`;
+    html = `<div class="cal-stage" id="cal-stage">${dry ? 'A dry run: the lights don\'t change' : 'Calibrating'}</div>
+      <div class="stages" id="cal-stages"></div>
+      <div class="prog ${dry ? 'dry' : ''}" id="cal-prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="cal-bar" style="width:0%"></i></div>
+      <div class="cal-line" id="cal-line"></div>
       <div class="cal-left" id="cal-left"></div>
       <div class="cal-ctls"><div class="ctl" id="cal-stop"></div></div>
-      <p class="cal-fine">Started ${esc(fmt.clock(p.started * 1000))}${p.cam ? ` · the ${esc(p.cam)} camera` : ''}. The ropes come back to the river by themselves when it ends.</p>`;
+      <p class="cal-fine">Started ${esc(fmt.clock(p.started * 1000))}${p.cam ? ` · the ${esc(p.cam)} camera` : ''}. ${dry ? 'The lights stay as they are.' : 'The ropes come back to the river by themselves when it ends.'}</p>`;
   } else if (finished && p.cancelled) {
-    key = `stopped:${p.started}:${p.restored}`;
-    const forced = p.restored === false;
-    html = `<div class="cal-result lv-unknown"><div class="h">${mark('unknown')}<span>Stopped</span></div>
-      <p class="r-words">${forced ? 'Stopped, but the job had to be killed: the ropes may still show a pattern. Press Ropes → On on the Status page. No map was written.' : 'Stopped; the ropes are back on the river. No map was written.'}</p>
+    view = 'stopped'; key = `stopped:${p.started}:${p.restored}:${dry}`;
+    const forced = p.restored === false && !dry;
+    html = `<div class="cal-result lv-unknown"><div class="h">${mark('unknown')}<span>${dry ? 'Dry run stopped' : 'Stopped'}</span></div>
+      <p class="r-words">${dry ? 'Dry run stopped; nothing changed.' : forced ? 'Stopped, but it had to be forced: the ropes may still show a pattern. Press Ropes → On on the Status page. No map was written.' : 'Stopped; the ropes are back on the river. No map was written.'}</p>
       <div class="cal-dismiss"><button type="button" class="btn" data-cal="dismiss">OK</button>${forced ? '<a class="btn" href="/status">Open Status</a>' : ''}</div></div>`;
   } else if (finished && p.ok === false) {
-    key = `failed:${p.started}:${p.error}`;
-    const err = String(p.error || 'the run ended with an error');
+    view = 'failed'; key = `failed:${p.started}:${p.error}`;
+    const err = calFailure(p);
     html = `<div class="cal-result lv-down"><div class="h">${mark('down')}<span>Calibration failed</span></div>
       <p class="r-words">${esc(err.replace(/\.?$/, '.'))}${p.restored === false ? ' The ropes may still show a pattern: press Ropes → On on the Status page.' : /back on the river|the map was not saved/i.test(err) ? '' : ' The ropes are back on the river; no map was written.'}</p>
-      <div class="cal-dismiss"><button type="button" class="btn" data-cal="dismiss">OK</button><button type="button" class="btn primary" data-cal="again">Run again</button></div></div>`;
+      <div class="cal-dismiss"><button type="button" class="btn" data-cal="dismiss">OK</button><button type="button" class="btn primary" data-cal="again">Back to Calibrate</button></div></div>`;
   } else if (finished && p.ok === true) {
-    key = `done:${p.started}`;
-    const res = p.result, dry = !!(p.dry_run || res?.dry_run);
-    html = `<div class="cal-result lv-ok"><div class="h">${mark('ok')}<span>${dry ? 'Dry run finished' : 'Map made'}</span></div>
+    const res = p.result, rebuilt = rebuiltAt(p);
+    view = 'done'; key = `done:${p.started}:${rebuilt ?? ''}`;
+    html = rebuilt != null
+      // rebuilt: the map is in the show file now; nothing more to press (a second rebuild is another minute dark)
+      ? `<div class="cal-result lv-ok"><div class="h">${mark('ok')}<span>Map in use</span></div>
+        <p class="r-words">The river's year now uses this map (rebuilt ${esc(fmt.clock(rebuilt))}).${res ? ` <span class="muted">${esc(resultWords(res))}</span>` : ''}</p>
+        <div class="cal-dismiss"><button type="button" class="btn" data-cal="dismiss">OK</button></div></div>`
+      : `<div class="cal-result lv-ok"><div class="h">${mark('ok')}<span>${dry ? 'Dry run finished' : 'Map made'}</span></div>
       <p class="r-words">${res ? esc(resultWords(res)) : 'The run finished.'}${dry ? ' <span class="muted">A dry run describes the newest existing map; the lights were not changed and nothing was written.</span>' : ' The show file still uses the old map until it is rebuilt.'}</p>
       ${dry ? '<div class="cal-dismiss"><button type="button" class="btn" data-cal="dismiss">OK</button></div>'
         : `<div class="cal-ctls"><div class="ctl" id="cal-rebuild"></div></div><div class="cal-dismiss"><button type="button" class="btn" data-cal="dismiss">Keep the old map</button></div>`}</div>`;
   } else {
-    const checks = calChecklist(m);
-    const failing = checks.find((c) => c.level !== 'ok');
-    const why = m?.controls.ropes.why ?? (m ? (failing ? failing.why : null) : "this page hasn't heard from mission control yet");
-    const whyKey = why ?? (failing ? failing.why : '');
-    key = `before:${checks.map((c) => c.level).join(',')}:${why}`;
+    view = 'before'; key = 'before';
     html = `<p class="cal-lead">Finds where every LED and the panels are, using the gallery camera. The ropes flash black-and-white patterns for about five minutes (the show is interrupted) and come back by themselves.</p>
-      <ul class="checklist">${checks.map((c) => `<li class="lv-${c.level}">${mark(c.level)}<span>${esc(c.level === 'ok' ? c.ok : c.level === 'unknown' ? `${c.ok.replace(/answering|reachable/, 'not known yet')}` : c.why)}</span></li>`).join('')}
-        <li class="you"><span class="mk" aria-hidden="true">·</span><span>the room dark and nobody in the camera's view (you check)</span></li></ul>
+      <ul class="checklist" id="cal-checks"></ul>
       <div class="cal-ctls"><div class="ctl" id="cal-start"></div><div class="ctl quiet" id="cal-dry"></div></div>`;
-    void whyKey;
   }
   if (S.html['cal-body'] !== key) {
-    S.html['cal-body'] = key;
+    leaveCalView(view);
+    S.html['cal-body'] = key; S.html['cal-checks'] = null;
     body.innerHTML = html;
-    if (lostView) { /* nothing to mount: OK only */ }
-    else if (running) mountStop();
-    else if (finished && p.ok === true && !(p.dry_run || p.result?.dry_run)) mountRebuild(p);
-    else if (!finished) mountStart(m);
+    if (view === 'run') S.calCtl.stop = mountStop(dry);
+    else if (view === 'done' && !dry && rebuiltAt(p) == null) S.calCtl.rebuild = mountRebuild(p);
+    else if (view === 'before') Object.assign(S.calCtl, mountStart(m));
   }
-  if (running && !lostView) tickCalibrate();
+  // the parts that change while a view stays, painted in place
+  if (view === 'before') {
+    const checks = calChecklist(m);
+    const ul = $('#cal-checks'), lis = `${checks.map((c) => `<li class="lv-${c.level}">${mark(c.level)}<span>${esc(c.level === 'ok' ? c.ok : c.level === 'unknown' ? `${c.ok.replace(/answering|reachable/, 'not known yet')}` : c.why)}</span></li>`).join('')}
+        <li class="you"><span class="mk" aria-hidden="true">·</span><span>the room dark and nobody in the camera's view (you check)</span></li>`;
+    if (ul && S.html['cal-checks'] !== lis) { S.html['cal-checks'] = lis; ul.innerHTML = lis; }
+    for (const [c, w] of [[S.calCtl.start, startWhy(m)], [S.calCtl.dry, dryWhy(m)]]) if (c && c.state !== 'pending' && c.why !== w) c.update({ why: w });
+  }
+  if (view === 'run') { paintRun(p); tickCalibrate(); }
+  updateRebuild();
+}
+/** Leaving a view: a confirm its controls still hold open (Start, Dry run, Rebuild) is withdrawn, so a press on it can't send
+ *  anything for a block that is gone; a control already sending is left to finish. */
+function leaveCalView(next) {
+  const why = next === 'run' ? 'a calibration is running' : next === 'lost' ? 'bitcube went offline during the run' : 'the calibration changed meanwhile';
+  for (const c of Object.values(S.calCtl)) if (c && c.state !== 'pending') c.update({ why });
+  S.calCtl = {};
+}
+/** The run's progress, painted in place (the stage words, the bar, "Pass A: pattern 12 of 29 · 1 pattern photographed again"). */
+function paintRun(p) {
+  const line = p.pass && p.of > 0 ? `Pass ${p.pass}: pattern ${p.step} of ${p.of}`
+    : p.stage === 'ropes-decode' && p.of > 0 && p.step >= 1 ? `Rope ${p.step} of ${p.of}`       // never "Rope 0 of 20": it reads as an error
+    : p.stage === 'ropes-capture' && p.of > 0 && p.step > 0 ? `Pass ${p.step} of ${p.of} done` : '';
+  const again = p.retakes ? `${p.retakes} ${p.retakes === 1 ? 'pattern' : 'patterns'} photographed again` : '';
+  const text = fmt.nb([line, again].filter(Boolean).join(' · '));
+  const el = $('#cal-line'); if (el && el.textContent !== text) el.textContent = text;
+  const stages = STAGE_ORDER.map((s) => `<span class="${s === p.stage ? 'now' : STAGE_ORDER.indexOf(s) < STAGE_ORDER.indexOf(p.stage ?? 'ropes-capture') ? 'done' : ''}">${STAGE_WORDS[s]}</span>`).join('<span aria-hidden="true">→</span>');
+  const st = $('#cal-stages'); if (st && S.html['cal-stages'] !== stages) { S.html['cal-stages'] = stages; st.innerHTML = stages; }
+  const pct = Math.round(runFraction(p) * 100), prog = $('#cal-prog'), bar = $('#cal-bar');
+  if (prog && prog.getAttribute('aria-valuenow') !== String(pct)) { prog.setAttribute('aria-valuenow', String(pct)); bar.style.width = `${pct}%`; }
+}
+/** When the rebuild with this run's map succeeded on this phone (ms), or null. */
+function rebuiltAt(p) {
+  const hit = String(store.get('mc-cal-rebuilt') ?? '').split(',').map((x) => x.split('@')).find(([st]) => p && st === String(p.started));
+  return hit && Number.isFinite(Number(hit[1])) ? Number(hit[1]) : null;
+}
+/** Why a run failed, in the team's words: calibrate.py's plain `reason` (from 24 Oct), else its error when that is already
+ *  plain, else the stage it failed in; never a step id, a file name, an exit code or a traceback. */
+function calFailure(p) {
+  const plain = (s) => !!s && !/Traceback|exit \d|\.py\b|\bOUT\b|bridge|Error:|[A-Z][a-z]+Error\b|\|/.test(s);
+  if (p?.reason && plain(p.reason)) return String(p.reason);
+  const e = String(p?.error ?? '');
+  if (plain(e)) return e || 'the run ended with an error';
+  const stage = /ropes-capture/.test(e) ? 'Photographing the ropes failed' : /ropes-decode/.test(e) ? 'Working out where each rope is failed'
+    : /hub75-capture/.test(e) ? 'Photographing the panels failed' : /hub75-locate/.test(e) ? 'Finding the panels failed' : 'The run stopped with an error';
+  return `${stage}; run it again when the room is empty, or ask Gavin`;
 }
 function tickCalibrate() {
   const p = S.cal.p, left = $('#cal-left');
   if (!p?.running || !left) return;
   if (p.dry_run) { left.textContent = 'A dry run takes about a minute.'; return; }
-  const elapsed = (p.elapsed_s ?? 0) + (performance.now() - S.cal.at) / 1000;
+  const elapsed = (p.elapsed_s ?? 0) + since(S.cal.at, S.cal.wall);
   const remain = Math.max(0, runTotalS(p) - elapsed);
   left.textContent = remain < 45 ? 'Nearly done' : `About ${fmt.nb(dur(remain))} left`;
 }
@@ -607,40 +762,62 @@ function startRun(dry_run) {
   S.cal.pending = true;
   return api('/api/control/calibrate', { action: 'start', dry_run: !!dry_run }).catch((e) => {
     // the server's refusals read "<reason>: calibration can't start"; the control adds its own frame, so keep the reason alone
-    throw new Error(String(e.message || e).replace(/:\s*calibration can't start$/i, ''));
+    const reason = String(e.message || e).replace(/:\s*calibration can't start$/i, '');
+    throw Object.assign(new Error(/^[A-Z][a-z]/.test(reason) && !/^TouchDesigner/.test(reason) ? reason[0].toLowerCase() + reason.slice(1) : reason),
+      { status: e.status, noAnswer: e.noAnswer, waitedS: e.waitedS, posted: e.posted });
   }).finally(() => { S.cal.pending = false; });
 }
 function afterStart(r) {
-  if (r?.calibration) { S.cal.p = r.calibration; S.cal.at = performance.now(); S.cal.lost = null; }
+  if (r?.calibration) { S.cal.p = r.calibration; S.cal.at = performance.now(); S.cal.wall = Date.now(); S.cal.lost = null; }
   S.cal.stale = false; S.cal.seenStarted = true;
-  S.html['cal-body'] = null;
-  watchCalibration(); pollCal();
+  watchCalibration(); renderCalibrate(); pollCal();
 }
+/** Why Calibrate (and its dry run) can't start now: the model's reason for the ropes, else the checklist's first failing line. */
+function startWhy(m) {
+  if (!m) return "this page hasn't heard from mission control yet";
+  const failing = calChecklist(m).find((c) => c.level !== 'ok');
+  return m.controls.ropes.why ?? (failing ? failing.why : null);
+}
+/** A dry run touches no lights and needs no camera: only the model's reason for the ropes (a calibration running, no contact). */
+const dryWhy = (m) => (m ? m.controls.ropes.why : "this page hasn't heard from mission control yet");
 function mountStart(m) {
-  const checks = calChecklist(m), failing = checks.find((c) => c.level !== 'ok');
-  const why = !m ? "this page hasn't heard from mission control yet" : m.controls.ropes.why ?? (failing ? failing.why : null);
-  control($('#cal-start'), { label: 'Calibrate the lights', kind: 'primary', why,
+  const why = startWhy(m);
+  const start = control($('#cal-start'), { label: 'Calibrate the lights', kind: 'primary', why,
     before: 'Starts the real run: patterns on the ropes for about five minutes, then a new LED map to look at before anything changes. Asks first.',
     confirm: { title: 'Start calibration?', body: "The ropes go into patterns now, for about five minutes, and the show stops meanwhile. Keep people out of the camera's view.", ok: 'Start', cancel: 'Not now', destructive: true },
     pending: 'Asking bitcube to start…', run: () => startRun(false), done: 'Calibration started', fail: "Calibration didn't start", onDone: afterStart });
-  control($('#cal-dry'), { label: 'Dry run (the lights don\'t change)', kind: 'plain', why: m ? m.controls.ropes.why : why,
+  const dry = control($('#cal-dry'), { label: 'Dry run: the lights stay as they are', kind: 'plain', why: dryWhy(m),
     before: 'Walks the same steps without touching the lights, about a minute: a check that the camera and bitcube are ready.',
     pending: 'Asking bitcube to start…', run: () => startRun(true), done: 'Dry run started', fail: "The dry run didn't start", onDone: afterStart });
+  start.why = why; dry.why = dryWhy(m);
+  const wrap = (c) => { const up = c.update; c.update = (n) => { if ('why' in n) c.why = n.why; up(n); }; return c; };
+  return { start: wrap(start), dry: wrap(dry) };
 }
-function mountStop() {
-  control($('#cal-stop'), { label: 'Stop and restore the ropes', kind: 'danger', before: 'Ends the run now; the ropes go back to the river within a few seconds. No map is written.',
+/** Stop, mounted once per run (its pending and failed words stay while the patterns move on). A dry run touches no lights. */
+function mountStop(dry) {
+  return control($('#cal-stop'), { label: dry ? 'Stop the dry run' : 'Stop and restore the ropes', kind: 'danger',
+    before: dry ? 'Ends the check now; the lights were not touched.' : 'Ends the run now; the ropes go back to the river within a few seconds. No map is written.',
     pending: 'Asking bitcube to stop…', run: () => api('/api/control/calibrate', { action: 'cancel' }), fail: "It didn't stop",
-    done: (r) => (r?.forced ? 'Stopped (the job had to be killed)' : r?.cancelled === false ? 'Nothing was running' : 'Stopped'),
-    onDone: (r) => { if (r?.calibration) { S.cal.p = r.calibration; S.cal.at = performance.now(); if (r.forced) S.cal.p.restored = false; } S.html['cal-body'] = null; watchCalibration(); renderCalibrate(); pollCal(); } });
+    noAnswer: 'the progress above shows whether it is still running',
+    done: (r) => (r?.forced && !dry ? 'Stopped, but it had to be forced' : r?.cancelled === false ? 'Nothing was running' : 'Stopped'),
+    onDone: (r) => { if (r?.calibration) { S.cal.p = r.calibration; S.cal.at = performance.now(); if (r.forced) S.cal.p.restored = false; } watchCalibration(); renderCalibrate(); pollCal(); } });
 }
+/** Why the rebuild can't run now: the model's reason for a switch, or the river's year not running (only it is rebuilt). */
+function rebuildWhy() {
+  const m = S.m;
+  if (!m) return "this page hasn't heard from mission control yet";
+  if (m.sources.probe.stale) return `mission control hasn't heard from bitcube for ${dur(m.sources.probe.age_s)}`;
+  return m.controls.switch.why ?? (m.show.file && m.show.file.kind !== 'year' ? "the river's year isn't running: switch to it first" : !m.show.file ? "what TouchDesigner is running isn't known" : null);
+}
+function updateRebuild() { const c = S.calCtl.rebuild; if (c?.button.isConnected && c.state !== 'pending') c.update({ why: rebuildWhy() }); }
 function mountRebuild(p) {
-  const why = S.m?.controls.switch.why ?? null;
-  control($('#cal-rebuild'), { label: 'Use this map: rebuild the show file', kind: 'primary', why,
-    before: `Bakes the new LED map (${esc(p.result?.map ?? 'the newest')}) into the river's year and restarts TouchDesigner on it: about a minute dark. Asks first.`,
+  return control($('#cal-rebuild'), { label: 'Use this map: rebuild the show file', kind: 'primary', why: rebuildWhy(),
+    before: `Bakes the new LED map (${esc(captureWhen(p.result?.capture, p.result?.map).words)}) into the river's year and restarts TouchDesigner on it: about a minute dark. Asks first.`,
     confirm: { title: 'Rebuild the show file with this map?', body: "Bakes the new LED map into the river's year and restarts TouchDesigner on it: about a minute dark.", ok: 'Rebuild', cancel: 'Keep the old map', destructive: true },
     pending: 'Rebuilding on bitcube… this takes a few minutes', run: () => api('/api/control/rebuild', { file: YEAR_FILE }),
     done: "Rebuilt the river's year with the new map; TouchDesigner is restarting on it", fail: 'The show file is unchanged',
-    onDone: () => { status.refresh(); loadMap(); } });
+    // the card then says the map is in use, with no second rebuild on offer (another minute dark)
+    onDone: () => { store.set('mc-cal-rebuilt', [...String(store.get('mc-cal-rebuilt') ?? '').split(',').filter(Boolean).slice(-5), `${p.started}@${Date.now()}`].join(',')); renderCalibrate(); status.refresh(); loadMap(); } });
 }
 $('#cal-body').addEventListener('click', (e) => {
   const b = e.target.closest('[data-cal]');
@@ -663,13 +840,14 @@ document.addEventListener('mc:check', () => { status.refresh(); pollLights(); po
 document.addEventListener('mc:theme', () => render());
 addEventListener('resize', () => { drawMap(liveView()); drawStrips(); });
 tick(() => {   // ages only: the state line's "from bitcube", the captions, the time left; the rows stay put
-  if (S.m) { S.m = model(); renderStateLine(); }
+  if (S.m) { S.m = model(); renderStateLine(); } else renderStateLine();   // before the first answer: the wait's words tick too
   const live = liveView(), cap_ = $('#map-cap');
   if (live && S.lights.frames && cap_) {
     const t = `<b>Live</b> · what TouchDesigner is sending · from bitcube · ${esc(fmt.nb(dur(frameAgeS())))} ago${S.room.on && S.room.url && !stillUrl(S.map.still) ? ` · the room still is ${esc(fmt.nb(dur(roomAgeS())))} old` : ''}`;
     if (S.html['map-cap'] !== t) put('map-cap', t);
-    if (frameOld() !== $('#mapwrap').classList.contains('dim')) renderMapCard();
+    if ((frameOld() || pageDown()) !== $('#mapwrap').classList.contains('dim')) renderMapCard();
   }
   if (S.lights.frames && frameOld() !== $('#strips').classList.contains('dim')) renderStrips();
+  if (!S.map.loaded) renderMapCard();   // "Loading the LED map…", then "hasn't loaded: no answer for N s" ticking
   tickCalibrate();
 });

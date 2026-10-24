@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Auth, readPasswordFile, parseCookies } from '../lib/auth.mjs';
+import { Auth, readPasswordFile, parseCookies, clientOf } from '../lib/auth.mjs';
 
 const dir = mkdtempSync(join(tmpdir(), 'mission-auth-'));
 
@@ -41,7 +41,38 @@ test('many failures from many clients slow everyone', () => {
   let t = 5_000_000;
   const a = new Auth({ password: 'pw', sessionsFile: null, now: () => t });
   for (let i = 0; i < 30; i++) a.login('ip' + i, 'bad');
-  assert.ok(a.delayFor('fresh') >= 5000);
+  assert.ok(a.delayFor('fresh') >= 20_000);
+});
+
+test('a guesser spread over many addresses gets about 30 counted guesses per 10 minutes, as before v2', () => {
+  let t = 6_000_000;
+  const a = new Auth({ password: 'pw', sessionsFile: null, now: () => t });
+  let counted = 0;
+  for (let i = 0; i < 12_000; i++) {            // a new address every 100 ms for 20 minutes
+    const r = a.login('guesser' + i, 'bad');
+    if (!r.throttled) counted++;
+    t += 100;
+  }
+  assert.ok(counted <= 95, `counted ${counted} guesses in 20 minutes`);   // 30, then one per 20 s; the 5 s delay of round 1 allowed about 270
+});
+
+test('a burst of bad guesses slows the team for seconds after the last one, never locks it out for the window', () => {
+  let t = 7_000_000;
+  const a = new Auth({ password: 'pw', sessionsFile: null, now: () => t });
+  for (let i = 0; i < 30; i++) a.login('ip' + i, 'bad');
+  assert.equal(a.login('teammate', 'pw').throttled, true, 'right after the burst: wait a moment');
+  t += 20_001;
+  assert.equal(a.login('teammate', 'pw').ok, true, 'twenty seconds after the last failure the right password works, though the window still holds 30');
+});
+
+test('the backoff is keyed on the address the proxy added (the last X-Forwarded-For entry), never one the client claims', () => {
+  assert.equal(clientOf('10.1.2.1, 203.0.113.9', '127.0.0.1'), '203.0.113.9');
+  assert.equal(clientOf('203.0.113.9', '127.0.0.1'), '203.0.113.9');
+  assert.equal(clientOf(undefined, '127.0.0.1'), '127.0.0.1');
+  let t = 9_000_000;
+  const a = new Auth({ password: 'pw', sessionsFile: null, now: () => t });
+  a.login(clientOf('10.1.1.1, 198.51.100.7'), 'bad');
+  assert.equal(a.login(clientOf('10.1.2.1, 198.51.100.7'), 'bad').throttled, true, 'rotating the claimed part does not reset the backoff');
 });
 
 test('password file: trailing newline ignored, contents never logged', () => {

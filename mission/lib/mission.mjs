@@ -3,11 +3,20 @@
 // arbitrary commands. planControl is the whitelist on its own (pure), shared with fixture mode.
 import { execFile } from 'node:child_process';
 import { connect } from 'node:net';
+import { scrubCreds } from './scrub.mjs';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 const PROBE = PS + 'probe.ps1';
 export const CAMERAS = ['gallery', 'river'];
 const SNAP_CACHE_MS = 45_000;
+/** Controls refused while a calibration runs (model.js refuses the same ones on the pages). A rebuild ends in the switch
+ *  path (TouchDesigner stopped and restarted), so it spoils a run as surely as a switch. */
+export const CAL_BLOCKED = ['ropes', 'hub75', 'switch', 'lightsroute', 'rebuild'];
+/** The 409 a control gets while a calibration runs (shared with fixture mode), or null. */
+export function calBlocked(action, cal) {
+  if (!CAL_BLOCKED.includes(action) || cal?.running !== true || cal.stale === true) return null;
+  return Object.assign(new Error('a calibration is running: stop it on the Lights page first'), { status: 409 });
+}
 // Show files mission control may open (the online one keeps its old name until step S1.1 renames it).
 export const BOOT_FILES = ['river-local-oct-22-seasons.toe', 'river-online-oct-23.toe', 'river-online-oct-20.toe', 'river-local-oct-18.toe'];
 // The only show file a rebuild may bake the LED map into: the river's year (build_seasons_local.py refuses any other).
@@ -68,7 +77,12 @@ export class Mission {
     this.timers = [];
   }
 
-  #set(name, value, error) { this.data[name] = { at: this.now(), ...(error ? { error: String(error) } : { value }) }; }
+  #set(name, value, error) {
+    // a failure keeps when the failures in a row began (failing_since), so "failing for 52 min" can grow past one poll
+    const prev = this.data[name], t = this.now();
+    // never a login in what the pages are served (a camera's RTSP address in an ffmpeg line, see scrub.mjs)
+    this.data[name] = { at: t, ...(error ? { error: scrubCreds(String(error)), failing_since: prev?.error ? prev.failing_since ?? prev.at : t } : { value: scrubCreds(value) }) };
+  }
 
   async pollFast() {
     // Only bitcube itself is reachable from the mini; everything behind it is checked by the probe.
@@ -118,7 +132,18 @@ export class Mission {
   // ---- controls (fixed actions) ----------------------------------------------------------------------
   async control(action, body = {}) {
     const plan = planControl(action, body);
-    return plan.kind === 'seasons' ? this.#seasons(plan.path, plan.body) : this.#probeAction(plan.args, plan.timeout);
+    // a calibration photographs the ropes and the panels: anything that changes them, restarts TouchDesigner or moves the
+    // lighting port spoils the run (the pages refuse these too; this covers the studio chat and a stale page)
+    const blocked = calBlocked(action, this.data.probe?.value?.calibration);
+    if (blocked) throw blocked;
+    if (plan.kind === 'seasons') return this.#seasons(plan.path, plan.body);
+    // a rebuild, a switch or a boot-file change at a time: two phones pressing Rebuild must not run two builds and two restarts
+    if (EXCLUSIVE.includes(action)) {
+      if (this.busy) throw Object.assign(new Error(`${this.busy === 'rebuild' ? 'a rebuild' : 'a show-file change'} is already running; wait for it to finish`), { status: 409 });
+      this.busy = action;
+      try { return await this.#probeAction(plan.args, plan.timeout, action); } finally { this.busy = null; }
+    }
+    return this.#probeAction(plan.args, plan.timeout, action);
   }
 
   async #seasons(path, body) {
@@ -127,11 +152,22 @@ export class Mission {
     return r;
   }
 
-  async #probeAction(args, timeout) {
+  async #probeAction(args, timeout, action = null) {
     const r = await this.probe(this.sshHost, args, timeout);
     if (r.ok !== false || r.td) this.#set('probe', r);
-    return r;
+    // the answer goes to the page as it is: every log line in it (modal_link.*.last, recorder.last) is scrubbed as the snapshot is
+    return scrubCreds(actionResult(action, r));
   }
+}
+
+const EXCLUSIVE = ['rebuild', 'switch', 'bootfile'];
+/** Ropes and panels act through TouchDesigner: when its own answer says it failed, the action failed, whatever the probe's
+ *  top-level ok says (a probe.ps1 from before 24 Oct reported ok: true with td.ok false). */
+export function actionResult(action, r) {
+  if ((action === 'ropes' || action === 'hub75') && r && r.ok !== false && r.td && r.td.ok === false) {
+    return { ...r, ok: false, error: String(r.td.error || 'TouchDesigner did not answer') };
+  }
+  return r;
 }
 
 /** The control whitelist: what a fixed action would do, with its arguments checked. Pure, so fixture mode checks
@@ -147,18 +183,18 @@ export function planControl(action, body = {}) {
     case 'target': {
       const t = {};
       if (body.season !== undefined) { if (!SEASONS.includes(body.season)) throw bad('unknown season'); t.season = body.season; }
-      if (body.intensity !== undefined) { const x = Number(body.intensity); if (!(x >= 0 && x <= 1)) throw bad('intensity is 0 to 1'); t.intensity = x; }
+      if (body.intensity !== undefined) { const x = num(body.intensity); if (!(x >= 0 && x <= 1)) throw bad('intensity is 0 to 1'); t.intensity = x; }
       return { kind: 'seasons', path: '/target', body: t };
     }
     case 'rules': {
       const r = {};
-      for (const [k, v] of Object.entries(body.rules ?? {})) { if (!/^[a-z_]{1,40}$/.test(k) || !Number.isFinite(Number(v))) throw bad('bad rule'); r[k] = Number(v); }
+      for (const [k, v] of Object.entries(body.rules ?? {})) { if (!/^[a-z_]{1,40}$/.test(k) || !Number.isFinite(num(v))) throw bad('bad rule'); r[k] = num(v); }
       return { kind: 'seasons', path: '/rules', body: r };
     }
     case 'rules-reset': return { kind: 'seasons', path: '/rules/reset', body: {} };
-    case 'ropes': return { kind: 'probe', args: `-Action ropes${body.dark ? ' -Dark' : ''}` };
+    case 'ropes': return { kind: 'probe', args: `-Action ropes${body.dark === true ? ' -Dark' : ''}` };   // only a real true goes dark
     case 'hub75': {
-      const x = Number(body.brightness);
+      const x = num(body.brightness);
       if (!(x >= 0 && x <= 1)) throw bad('brightness is 0 to 1');
       return { kind: 'probe', args: `-Action hub75 -Brightness ${x.toFixed(2)}` };
     }
@@ -180,3 +216,9 @@ export function planControl(action, body = {}) {
 }
 
 function bad(msg) { return Object.assign(new Error(msg), { status: 400 }); }
+/** A number from a request: a number, or a string that is one ("0.8"); null, "", false, [] and true are NaN, never 0. */
+export function num(v) {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string' && /^\s*-?(\d+\.?\d*|\.\d+)\s*$/.test(v)) return Number(v);
+  return NaN;
+}

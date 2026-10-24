@@ -96,6 +96,10 @@ small { font-size: 14px; }
 .lnk { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; }   /* a standalone link: a 44 px target */
 .state { font-size: 16px; font-weight: 700; color: var(--lv-text); }                       /* a state word, 16 px, never tinted smaller */
 [id] { scroll-margin-top: calc(var(--header-h) + 12px); }
+/* tabbing never leaves the focused control under the sticky header or the fixed tab bar */
+html { scroll-padding-top: calc(var(--header-h) + 8px); scroll-padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px); }
+/* read by screen readers only (the live regions that carry a level word and a headline, never a ticking age) */
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
 .flash { animation: flash 1.6s ease-out 1; }
 @keyframes flash { 0% { box-shadow: 0 0 0 4px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
 
@@ -137,11 +141,11 @@ header.top {
   display: flex; align-items: center; gap: 10px; padding: 6px var(--gutter);
   padding-top: calc(6px + env(safe-area-inset-top));
   background: var(--panel); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line); overflow-wrap: break-word;
 }
 .brand { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; line-height: 1.15; }
 .brand .wordmark { font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
-.brand .title { font-size: 17px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+.brand .title { font-size: 17px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; margin: 0; line-height: inherit; }
 .fresh { margin-left: auto; flex: 0 1 auto; min-width: 0; max-width: 46%; font-size: 14px; line-height: 1.25; color: var(--muted); text-align: right; font-weight: 600; }
 .fresh.lv-warning, .fresh.warn { color: var(--warn-text); font-weight: 700; }
 .fresh.lv-down, .fresh.bad { color: var(--down-text); font-weight: 700; }
@@ -165,7 +169,7 @@ main > *, .col-a > *, .col-b > * { min-width: 0; }
 .card.tight { padding: 0; overflow: hidden; }
 .stack { display: grid; gap: var(--gap); }
 .row-btns { display: flex; flex-wrap: wrap; gap: var(--gap); }
-.links { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.links { display: flex; flex-wrap: wrap; gap: 12px 16px; }
 .links a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; }
 .links a.btn { min-height: 48px; }
 
@@ -183,7 +187,11 @@ main > *, .col-a > *, .col-b > * { min-width: 0; }
   background: var(--lv); color: var(--lv-ink); font-weight: 800; font-size: 16px; letter-spacing: 0.01em; line-height: 1.2;
 }
 .chip.small { font-size: 14px; min-height: 28px; padding: 3px 10px 3px 4px; }
-.stale .mk, .page-stale .mk { filter: grayscale(1); opacity: 0.7; }
+/* amber on a light card is under 3:1: the chip gets the dark ring the amber mark has (not needed on dark surfaces) */
+.chip.lv-warning { box-shadow: 0 0 0 1px var(--warn-text); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chip.lv-warning { box-shadow: none; } }
+:root[data-theme="dark"] .chip.lv-warning { box-shadow: none; }
+.stale .mk, .page-stale .mk { --lv: var(--unk); --lv-ink: var(--unk-ink); }   /* a last answer: grey at full contrast, never faded */
 .stale .state, .page-stale .state { color: var(--muted); }
 
 /* ---- the verdict band: opaque, read at arm's length; four levels by class ------------------------------------ */
@@ -191,7 +199,7 @@ main > *, .col-a > *, .col-b > * { min-width: 0; }
   background: var(--lv-soft); color: var(--text); border: 1px solid var(--line); border-left: 6px solid var(--lv);
   border-radius: var(--radius); padding: 16px var(--gutter) 14px; box-shadow: var(--shadow);
 }
-.band h1 { font-size: 27px; line-height: 1.18; margin: 12px 0 6px; font-weight: 800; letter-spacing: -0.012em; text-wrap: balance; }
+.band h1 { font-size: 27px; line-height: 1.18; margin: 12px 0 6px; font-weight: 800; letter-spacing: -0.012em; text-wrap: balance; overflow-wrap: break-word; }   /* at spaces, unless one word can't fit */
 .band .rest { font-size: 18px; line-height: 1.35; margin: 0 0 8px; font-weight: 600; }
 .band .detail { font-size: 16px; line-height: 1.4; }
 .band .call { display: inline-flex; align-items: center; min-height: 48px; font-size: 17px; font-weight: 800; color: var(--accent); text-decoration: none; }
@@ -202,6 +210,8 @@ main > *, .col-a > *, .col-b > * { min-width: 0; }
   display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 6px 4px; text-align: left;
   background: transparent; border: 0; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; color: var(--text);
 }
+.call-row, .row-btns + .call-row { margin-top: 12px; }
+.addr .links { margin-top: 8px; }
 .check-line { font-size: 14px; color: var(--muted); display: flex; align-items: center; gap: 0 12px; flex-wrap: wrap; margin-top: 8px; }
 .check-line > span { flex: 1 1 220px; line-height: 1.35; }
 .last-done { font-size: 14px; color: var(--muted); margin-top: 6px; }
@@ -235,7 +245,7 @@ main > *, .col-a > *, .col-b > * { min-width: 0; }
 .btn.danger { background: var(--down-soft); color: var(--down-text); border-color: var(--down); font-weight: 750; }
 .btn.danger.solid { background: var(--down); color: var(--down-ink); border-color: transparent; }
 .btn.wide { width: 100%; }
-.btn.link { background: transparent; border-color: transparent; color: var(--accent); padding: 6px 4px; min-height: 44px; text-decoration: underline; text-underline-offset: 3px; }
+.btn.link { background: transparent; border-color: transparent; color: var(--accent); padding: 6px 4px; min-height: 48px; text-decoration: underline; text-underline-offset: 3px; }
 .btn:disabled, .btn[aria-disabled="true"] { opacity: 0.5; cursor: default; }
 .btn .spin { margin: 0; }
 .seg { display: flex; border: 1px solid var(--line); border-radius: var(--radius-btn); overflow: hidden; background: var(--panel-solid); }
@@ -246,7 +256,10 @@ main > *, .col-a > *, .col-b > * { min-width: 0; }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button.lit, .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .seg button:disabled { opacity: 0.45; cursor: default; }
+/* the lit segment is the only readout of the current state: it stays readable when nothing can be changed (dashed: not possible now) */
+.seg button[aria-pressed="true"]:disabled { opacity: 1; background: var(--panel-solid); color: var(--text); box-shadow: inset 0 0 0 2px var(--accent); outline: 2px dashed var(--muted); outline-offset: -6px; }
 .seg button:focus-visible { outline-offset: -3px; }
+.seg button.lit:focus-visible, .seg button[aria-pressed="true"]:focus-visible { outline-color: var(--accent-ink); }   /* the ring shows on the lit fill */
 .stepper { display: flex; align-items: center; gap: var(--gap); flex-wrap: wrap; }
 .stepper .btn.step { width: 48px; padding: 0; font-size: 24px; flex: none; }
 .stepper output { font-size: 20px; font-weight: 800; min-width: 64px; text-align: center; }
@@ -267,7 +280,7 @@ main > *, .col-a > *, .col-b > * { min-width: 0; }
 
 /* ---- cards that open: rows (collapsed / expanded), groups by cause, the fine list, the installer ------------- */
 .group-h { display: flex; gap: 10px; align-items: flex-start; padding: 12px var(--gutter); border-bottom: 1px solid var(--line); background: var(--lv-soft); }
-.group-h b { font-size: 16px; }
+.group-h b, .group-h h3 { font-size: 16px; font-weight: 700; line-height: 1.35; margin: 0; }
 .group-h .g-action { font-size: 15px; margin-top: 2px; }
 details.row { border-top: 1px solid var(--line); }
 details.row:first-child, .group-h + details.row { border-top: 0; }
@@ -276,6 +289,8 @@ details.row > summary {
   padding: 12px var(--gutter); min-height: 56px; cursor: pointer;
 }
 details.row > summary::-webkit-details-marker { display: none; }
+/* the ring inside the row: a problem group (.card.tight) clips at its rounded edge, so an outside ring lost its sides */
+details.row > summary:focus-visible { outline-offset: -3px; border-radius: 6px; }
 details.row > summary .mk { margin-top: 2px; }
 .row .name { font-weight: 750; font-size: 16px; line-height: 1.3; }
 .row .sum { font-size: 15px; line-height: 1.35; margin-top: 1px; }
@@ -311,13 +326,14 @@ details.fine .fine-list { border-top: 1px solid var(--line); margin: 0 calc(-1 *
   background-image: repeating-linear-gradient(135deg, transparent 0 12px, color-mix(in srgb, var(--warn) 10%, transparent) 12px 14px);
 }
 .installer > summary > span { white-space: nowrap; }
+@media (max-width: 260px) { .installer > summary > span { white-space: normal; } }
 .installer > summary .tool { font-size: 18px; }
 .installer > summary .note { font-size: 14px; color: var(--muted); font-weight: 500; white-space: normal; flex: 1; min-width: 0; }
 .installer .body { display: grid; gap: var(--gap); padding-top: 10px; }
 
 /* ---- controls: on the thing they change; before / confirm / pending / result / failure on themselves ------------ */
 .ctl { border: 1px solid var(--line); border-radius: var(--radius-btn); padding: 12px; background: var(--panel-solid); display: grid; gap: 10px; }
-.ctl.off { opacity: 0.85; }
+.ctl.off { border-style: dashed; background: transparent; }   /* off: a dashed border, never faded text */
 .ctl .effect, .ctl-before { font-size: 14px; color: var(--muted); line-height: 1.4; }
 .ctl .effect b, .ctl-before b { color: var(--text); }
 .ctl-why { font-size: 14px; color: var(--warn-text); font-weight: 700; }
@@ -340,8 +356,10 @@ details.fine .fine-list { border-top: 1px solid var(--line); margin: 0 calc(-1 *
 .still.none .cap-none { display: flex; gap: 10px; align-items: center; font-size: 15px; font-weight: 600; color: var(--text); }
 
 /* ---- footer and the tab bar ----------------------------------------------------------------------------------- */
-footer.foot { font-size: 14px; color: var(--muted); padding: 8px 4px 0; line-height: 1.6; }
+footer.foot { font-size: 14px; color: var(--muted); padding: 8px 4px 0; line-height: 1.6; display: flex; flex-wrap: wrap; gap: 12px 6px; align-items: center; }
+footer.foot .fine-print { flex-basis: 100%; }
 footer.foot a { display: inline-flex; min-height: 44px; align-items: center; }
+footer.foot.links { gap: 12px 16px; }
 nav.tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
   display: flex; padding-bottom: env(safe-area-inset-bottom);
@@ -351,7 +369,7 @@ nav.tabs a {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
   text-decoration: none; color: var(--muted); font-size: 14px; font-weight: 700; min-height: 48px; line-height: 1.1;
 }
-nav.tabs a.on { color: var(--accent); }
+nav.tabs a.on { color: var(--accent); font-weight: 800; box-shadow: inset 0 3px 0 var(--accent); }   /* not by colour alone: a bar on top and a heavier label */
 nav.tabs a svg { width: 24px; height: 24px; }
 nav.tabs a:focus-visible { outline-offset: -3px; border-radius: 8px; }
 
@@ -384,6 +402,26 @@ dialog.sheet .menu-row .btn .chev { margin-left: auto; }
 }
 
 /* ---- wider screens: the tab pill in the header from 900 px, two sticky columns from 1100 px ------------------- */
+/* landscape on a phone: a shorter header leaves the page its height */
+@media (max-height: 500px) and (max-width: 899px) {
+  :root { --header-h: 48px; }
+  header.top { padding-top: calc(2px + env(safe-area-inset-top)); padding-bottom: 2px; }
+}
+/* landscape (wide enough for icon and label side by side, as the 900 px pill): the tab bar is 48 px tall, not 64 */
+@media (max-height: 500px) and (min-width: 480px) and (max-width: 899px) {
+  :root { --tabbar-h: 48px; }
+  nav.tabs a { flex-direction: row; gap: 8px; }
+  nav.tabs a svg { width: 20px; height: 20px; }
+}
+/* very narrow (a phone at 200 % zoom): the wordmark goes, and the words wrap at spaces only, never mid-word */
+@media (max-width: 280px) {
+  .brand .wordmark { display: none; }
+  header.top { overflow-wrap: normal; gap: 6px; padding-left: 10px; padding-right: 10px; }
+  .fresh { max-width: 40%; min-width: min-content; overflow-wrap: normal; word-break: normal; hyphens: none; }
+  .brand { min-width: min-content; }   /* never narrower than its longest word: "Status" whole, never "Stat" */
+  .brand .title { overflow: visible; white-space: normal; overflow-wrap: normal; text-overflow: clip; font-size: 15px; }   /* wraps at spaces */
+  nav.tabs a { overflow-wrap: normal; text-align: center; font-size: 13px; }
+}
 @media (min-width: 900px) {
   nav.tabs {
     position: fixed; top: 6px; bottom: auto; left: 50%; right: auto; transform: translateX(-50%);

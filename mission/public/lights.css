@@ -5,10 +5,13 @@
 .stateline .words { font-size: 18px; line-height: 1.35; font-weight: 650; }
 .stateline .from { font-size: 14px; margin-top: 4px; }
 .stateline .from.old { color: var(--warn-text); font-weight: 700; }
+.stateline .next:empty { display: none; }
+.stateline .next { font-size: 15px; line-height: 1.4; margin-top: 6px; display: flex; flex-wrap: wrap; gap: 0 10px; align-items: center; }
+.stateline .next a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; color: var(--accent); }
 
 /* ---- the map card: Map | Live, the canvas over the (optional) still, the caption ----------------------------- */
 .mapcard .maphead { display: flex; align-items: center; gap: var(--gap); padding: 12px var(--gutter) 10px; flex-wrap: wrap; }
-.mapcard .seg { flex: 0 0 auto; min-width: 180px; }
+.mapcard .seg { flex: 0 1 auto; min-width: min(180px, 100%); }
 .mapcard .legend { font-size: 14px; line-height: 1.35; flex: 1 1 160px; }
 .mapwrap { position: relative; width: 100%; aspect-ratio: 1440 / 808; background: #0b0f14; overflow: hidden; }
 .mapwrap img.room { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; opacity: 0.45; display: block; }
@@ -47,7 +50,7 @@
 /* ---- rope by rope: B's strips and the four quads --------------------------------------------------------------- */
 .strips canvas { display: block; width: 100%; border-radius: 10px; background: #0b0f14; }
 #strips-canvas { height: 220px; margin-top: 6px; }
-#quads-canvas { height: 72px; margin-top: 6px; }
+#quads-canvas { height: 150px; margin-top: 6px; }   /* the four screens upright (portrait), each over its number */
 .striplabels { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; padding-top: 8px; }
 .stripnums { display: grid; grid-template-columns: repeat(20, 1fr); font-size: 14px; font-weight: 650; color: var(--muted); text-align: center; letter-spacing: -0.02em; padding-top: 4px; }
 .stripnums span { min-width: 0; white-space: nowrap; }
@@ -55,6 +58,7 @@
 .stripnums span.hi { color: var(--accent); font-weight: 800; }
 @media (max-width: 599px) { .stripnums:not(.quads) span:not(.key):not(.hi) { visibility: hidden; } }   /* 20 numbers don't fit a phone: 1, 5, 10, 15, 20 */
 .stripnums.quads { grid-template-columns: repeat(4, 1fr); }
+.stripnums.quads span, .stripnums.quads span:last-child { text-align: center; }
 .strips.dim canvas { opacity: 0.45; }
 #strips-note { margin-top: 8px; }
 #strips-note.bad { color: var(--down-text); font-weight: 650; }
@@ -101,3 +105,9 @@
 
 /* ---- footer ------------------------------------------------------------------------------------------------- */
 footer.foot .links a { margin-right: 16px; }
+
+/* landscape on a phone: the whole piece on one screen, between the header and the tab bar (the width follows the
+   map's aspect, which lights.js sets as --ar) */
+@media (max-height: 500px) {
+  .mapwrap { width: min(100%, calc((100dvh - var(--header-h) - var(--tabbar-h) - 24px) * var(--ar, 1.78))); margin-inline: auto; }
+}

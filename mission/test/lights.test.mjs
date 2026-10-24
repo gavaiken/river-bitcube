@@ -83,6 +83,7 @@ test('planCalibrate is a whitelist with checked arguments', () => {
   assert.equal(planCalibrate('start', { dry_run: true }), '-Action start -DryRun');
   assert.equal(planCalibrate('start', { decode_only: 'pixelmap-20261018-154155', cam: 'gallery' }), '-Action start -DecodeOnly pixelmap-20261018-154155 -Cam gallery');
   assert.equal(planCalibrate('start', { task: true }), '-Action start -Task');
+  assert.equal(planCalibrate('start', { dry_run: 'no', task: 'x' }), '-Action start', 'only a real true is a flag');
   assert.equal(planCalibrate('cancel', { dry_run: true }), '-Action cancel');
   assert.equal(planCalibrate('status'), '-Action status');
   for (const [a, b] of [['shell', {}], ['start', { decode_only: 'x; rm -rf' }], ['start', { decode_only: '..\\..\\secrets' }],
@@ -224,4 +225,47 @@ test('readLocalPixelmap and readLocalScreens read the newest files in the clone 
   writeFileSync(join(tmp, 'pixelmap-2026-10-02.json'), JSON.stringify({ meta: { drift: 2 }, ropes: {}, points: [] }));
   utimesSync(join(tmp, 'pixelmap-2026-10-02.json'), new Date(Date.now() + 5000), new Date(Date.now() + 5000));
   assert.equal(readLocalPixelmap(tmp).meta.drift, 2, 'a changed file is read again');
+});
+
+test('screens: the stacked Gray Area atlas comes apart into one upright screen per quad (never all four on every screen)', async () => {
+  const { uprightsFromAtlas, atlasFromUprights, quadPos, isStacked } = await import('../public/screens.js');
+  const AW = 64, AH = 128, COL = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0]];
+  const atlas = new Uint8Array(AW * AH * 3);
+  for (let y = 0; y < AH; y++) for (let x = 0; x < AW; x++) atlas.set(COL[Math.floor(y / 32)], (y * AW + x) * 3);   // quad k: rows 32(k-1)..
+  const up = uprightsFromAtlas(atlas, AW, AH);
+  assert.deepEqual([up.w, up.h], [128, 64], 'four 32 × 64 portraits side by side');
+  for (let k = 0; k < 4; k++) for (const [x, y] of [[0, 0], [31, 63], [16, 40]]) {
+    const i = (y * 128 + k * 32 + x) * 3;
+    assert.deepEqual([...up.bytes.slice(i, i + 3)], COL[k], `screen ${k + 1} at ${x},${y}`);
+  }
+  // the transform is a bijection per quad, and the inverse gives the atlas back
+  for (let k = 1; k <= 4; k++) { const seen = new Set(); for (let y = 0; y < 64; y++) for (let x = 0; x < 32; x++) seen.add(quadPos(k, x, y, 32, 64).join()); assert.equal(seen.size, 32 * 64); }
+  const rnd = Uint8Array.from({ length: 128 * 64 * 3 }, (_, i) => (i * 37) % 251);
+  const back = atlasFromUprights(rnd, 128, 64);
+  assert.deepEqual([back.w, back.h], [64, 128]);
+  assert.deepEqual(uprightsFromAtlas(back.bytes, 64, 128).bytes, rnd);
+  assert.equal(isStacked(256, 32), false, 'the pre-Gray-Area atlas (quads in a row) is cut as it is');
+  assert.equal(uprightsFromAtlas(new Uint8Array(256 * 32 * 3), 256, 32), null);
+});
+
+test('Lights.calibrate passes on only the request fields (never timeout, maxBuffer or exec), and never a camera login', async () => {
+  const seen = [];
+  const PW = 'rtsp://admin:NOT-A-REAL-PW@192.168.9.76:554/Preview_01_main';
+  const lights = new Lights({
+    calibrate: async (_h, action, opts) => {
+      seen.push({ action, opts });
+      return { ok: false, error: `ropes-capture failed (exit 1): Error opening input file ${PW}.`, calibration: { running: false, log: [`Error opening input file ${PW}.`], error: `x ${PW}` } };
+    },
+  });
+  const r = await lights.calibrate('start', { action: 'start', dry_run: true, cam: 'gallery', timeout: 0, maxBuffer: 1e12, exec: 'x' });
+  assert.deepEqual(seen[0].opts, { dry_run: true, cam: 'gallery' });
+  assert.doesNotMatch(JSON.stringify(r), /NOT-A-REAL-PW|admin:/);
+  assert.match(r.calibration.log[0], /rtsp:\/\/\*\*\*@192\.168\.9\.76:554/);
+  const st = await lights.calibration();
+  assert.doesNotMatch(JSON.stringify(st), /NOT-A-REAL-PW/);
+  // the real ssh path: those keys from a body can't reach execFile's options
+  const calls = [];
+  const exec = (cmd, args, opts, cb) => { calls.push(opts); setImmediate(() => cb(null, '{"ok":true}')); };
+  await sshCalibrate('bitcube', 'status', { exec });
+  assert.equal(calls[0].timeout, 60_000);
 });
