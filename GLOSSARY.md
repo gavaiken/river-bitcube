@@ -12,7 +12,7 @@
 
 **The year only turns forward**: Seasons always follow winter → spring → summer → autumn → winter. Whatever steers the river (the clock or presence) can hold it in a season or move it on, never back: from autumn, the way back to summer is through winter and spring.
 
-**Intensity**: How much the river is moving, from **trickle** to **torrent**. It shows as flow speed, spray and brightness. Summer is the most intense season and winter the least.
+**Intensity**: How much the river is moving, from **trickle** to **torrent**. It shows as flow speed, spray and brightness. Summer is the most intense season and winter the least. Mission control names it in five words, low to high: **stillness** (under 0.1), **trickle** (under 0.3), **flowing** (under 0.6), **strong** (under 0.8) and **torrent**.
 
 **Presence**: How many people the gallery camera sees in the foreground, in front of the piece. Smoothed over several seconds, so it swells and fades rather than flickers.
 
@@ -22,7 +22,7 @@
 
 **Mode**: Who is steering the year. **Automatic**: the season cycle, one season a minute. **Dynamic**: relative presence steers it, a closed loop that people can watch but not touch. **Manual**: someone picks a target season and an intensity, and the year travels forward to it quickly. In every mode the year only turns forward.
 
-**Intensity (in manual)**: Set directly on a scale from **stillness** (0) to **turbulence** (1), instead of following the season.
+**Intensity (in manual)**: Set directly on a scale from **stillness** (0) to **torrent** (1), instead of following the season.
 
 **Target**: In manual mode, where the river should end up: a **target season** and a **target intensity**. The river travels to a target (forward through the calendar), it never jumps there.
 
