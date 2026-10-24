@@ -1,0 +1,115 @@
+/* Mission control v2: the System map page (docs/mission-ui.md, "System map (engineers)"). The signal chain from
+   prototype B (boxes and links), restyled on v2.css's tokens: every box carries its own item's level as .lv-*; the
+   links and their pills carry the link item's level the same way. Plain CSS, no images, no build step. */
+
+main.map { max-width: 760px; }
+[hidden] { display: none !important; }
+@media (min-width: 1100px) { main.map { grid-template-columns: minmax(0, 1fr); max-width: 980px; padding-top: 20px; } }
+
+.map-lede { font-size: 15px; color: var(--muted); line-height: 1.4; padding: 2px 4px 0; }
+.map-lede b { color: var(--text); font-weight: 700; }
+
+/* ---- the chain card ---- */
+.chain { position: relative; }
+.chain-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.chain-h h2 { font-size: 16px; font-weight: 750; }
+.chain-h .from { font-size: 14px; color: var(--muted); font-weight: 600; }
+.chain-h .from.old { color: var(--warn-text); }
+
+/* Mission control: a slim bar above the grid (the chain is seen from here) */
+.mini-bar {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; margin: 0 0 14px; padding: 8px 12px;
+  border: 1px solid var(--line); border-radius: var(--radius-btn); background: var(--panel-solid); color: var(--text);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.mini-bar .nname { font-weight: 750; font-size: 15px; }
+.mini-bar .w { font-size: 14px; font-weight: 750; color: var(--lv-text); }
+.mini-bar .nsum { font-size: 14px; color: var(--muted); margin-left: auto; text-align: right; line-height: 1.3; }
+@media (max-width: 480px) { .mini-bar { flex-wrap: wrap; } .mini-bar .nsum { flex: 1 1 100%; margin-left: 0; text-align: left; } }
+
+/* The grid: six columns on a phone, three on wider screens; the links are an SVG laid over it */
+.nodes { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 46px 10px; }
+.nodes svg.lks { position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none; overflow: visible; }
+.node {
+  position: relative; z-index: 1; min-height: 88px; min-width: 0; padding: 12px 10px 10px; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; gap: 5px; border-radius: var(--radius-btn); border: 1px solid var(--line);
+  background: var(--panel-solid); color: var(--text); box-shadow: var(--shadow); font: inherit; overflow: hidden;
+}
+.node::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 5px; background: var(--lv); }
+.node.lv-unknown { border-style: dashed; }
+.node.lv-down { background: color-mix(in srgb, var(--down-soft) 55%, var(--panel-solid)); }
+.node.lv-warning { background: color-mix(in srgb, var(--warn-soft) 55%, var(--panel-solid)); }
+.node, .mini-bar { overflow-wrap: normal; }
+.node .nname { font-weight: 750; font-size: 15px; line-height: 1.2; }
+.node .nstate { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; font-weight: 750; color: var(--lv-text); line-height: 1.2; }
+.node .nstate .last { font-weight: 600; color: var(--muted); }
+.node .nsum { font-size: 14px; line-height: 1.3; color: var(--muted); }
+.node .subs { display: grid; gap: 5px; margin-top: 3px; padding-top: 6px; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.3; }
+.node .subs .sub { display: block; min-width: 0; color: var(--text); }
+.node .subs .sub .mk { width: 16px; height: 16px; font-size: 11px; vertical-align: -3px; margin-right: 5px; }
+.node .subs .sub .w { color: var(--lv-text); font-weight: 750; margin-left: 6px; }
+.node .subs .sub.muted-sub, .node .subs .sub.muted-sub .w { color: var(--muted); font-weight: 500; }
+.node.stale, .page-stale .node { filter: saturate(0.35); opacity: 0.72; }
+.page-stale .nodes svg.lks { opacity: 0.6; filter: saturate(0.35); }
+
+/* phone placement: inputs across the top, bitcube, then TouchDesigner beside Dave's agent, then the lights */
+.node.gallery { grid-column: 1 / 3; } .node.river { grid-column: 3 / 5; } .node.internet { grid-column: 5 / 7; }
+@media (max-width: 759px) { .node.gallery, .node.river, .node.internet { padding-left: 8px; padding-right: 8px; } }
+.node.bitcube { grid-column: 1 / 7; }
+.node.td { grid-column: 1 / 5; } .node.dave { grid-column: 5 / 7; }
+.node.ropes { grid-column: 1 / 4; } .node.panels { grid-column: 4 / 7; }
+
+/* links: a bezier with an arrowhead, a pill with the link's word at its middle */
+.lk { fill: none; stroke: var(--lv); stroke-width: 2.5; }
+.lk.lv-unknown { stroke-dasharray: 5 5; }
+.lk.stale { opacity: 0.5; stroke-dasharray: 2 5; }
+.arrow { fill: var(--lv); }
+.pill text { font-size: 14px; font-weight: 700; fill: var(--lv-text); }
+.pill rect { fill: var(--panel-solid); stroke: var(--lv); stroke-width: 1.5; }
+.pill.lv-unknown rect { stroke-dasharray: 3 3; }
+.pill.stale { opacity: 0.6; }
+
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.legend .chip.small { font-size: 14px; }
+.legend .note { flex: 1 1 100%; line-height: 1.35; }
+
+@media (min-width: 760px) {
+  .nodes { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1fr); grid-template-rows: repeat(3, auto); gap: 16px 118px; }
+  .node.gallery { grid-column: 1; grid-row: 1; } .node.river { grid-column: 1; grid-row: 2; } .node.internet { grid-column: 1; grid-row: 3; }
+  .node.bitcube { grid-column: 2; grid-row: 1 / 3; align-self: stretch; } .node.td { grid-column: 2; grid-row: 3; }
+  .node.dave { grid-column: 3; grid-row: 1; } .node.ropes { grid-column: 3; grid-row: 2; } .node.panels { grid-column: 3; grid-row: 3; }
+  .node .nname { font-size: 16px; }
+}
+
+/* ---- the sheet a box opens ---- */
+.sh { display: grid; gap: 10px; }
+.sh .sh-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sh .sh-top .from { font-size: 14px; color: var(--muted); font-weight: 600; }
+.sh .sh-top .from.old { color: var(--warn-text); }
+.sh .sh-sum { font-size: 17px; font-weight: 700; line-height: 1.35; }
+.sh .sh-detail { font-size: 15px; line-height: 1.45; }
+.sh .since { font-size: 14px; color: var(--muted); font-weight: 600; }
+.sh .todo { margin-top: 2px; }
+.sh .rows { display: grid; border-top: 1px solid var(--line); }
+.sh .rows .r { display: grid; grid-template-columns: 20px 1fr auto; gap: 2px 10px; padding: 10px 0; border-bottom: 1px solid var(--line); align-items: center; }
+.sh .rows .r .mk { grid-row: 1 / 3; align-self: start; margin-top: 2px; }
+.sh .rows .r .n { font-weight: 700; font-size: 15px; }
+.sh .rows .r .w { font-size: 14px; font-weight: 750; color: var(--lv-text); }
+.sh .rows .r .s { grid-column: 2 / 4; font-size: 14px; color: var(--muted); line-height: 1.35; }
+.sh .rows .r.muted-sub .n, .sh .rows .r.muted-sub .w { color: var(--muted); font-weight: 600; }
+.sh .rows .r.lnk-row { background: color-mix(in srgb, var(--accent-soft) 60%, transparent); margin: 0 -8px; padding: 10px 8px; border-radius: 8px; }
+.sh .rows .r .arrow-k { font-size: 14px; color: var(--muted); font-weight: 600; }
+.sh .addr code { word-break: break-all; }
+.sh .addr .links { margin-top: 2px; }
+
+/* ---- the full diagram ---- */
+.diagram .card-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.diagram h2 { font-size: 16px; font-weight: 750; }
+.diagram .card-h a { font-weight: 700; display: inline-flex; align-items: center; min-height: 44px; }
+.diagram p { font-size: 15px; color: var(--muted); line-height: 1.4; margin-bottom: 10px; }
+.diagram iframe { display: block; width: 100%; height: min(78vh, 760px); min-height: 420px; border: 1px solid var(--line); border-radius: var(--radius-btn); background: #fff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .diagram iframe { background: #0e141a; } }
+:root[data-theme="dark"] .diagram iframe { background: #0e141a; }
+
+/* ---- the lost-contact banner and the first load ---- */
+.connecting { font-size: 16px; color: var(--muted); padding: 6px 0 2px; }

@@ -4,7 +4,9 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sshJson, sshFrames, sshPixelmap, sshCalibrate, planCalibrate, decodeFrames, rgbAt, summarizePixelmap, ropePaths,
-         syntheticFrames, Lights, PIXELMAP_CACHE_MS } from '../lib/lights.mjs';
+         syntheticFrames, Lights, PIXELMAP_CACHE_MS, readLocalPixelmap, readLocalScreens } from '../lib/lights.mjs';
+import { mkdtempSync, writeFileSync, utimesSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REAL_MAP = join(HERE, '..', '..', 'tools', 'pixelmap', 'pixelmap-2026-10-18.json');
@@ -138,6 +140,8 @@ test('summarizePixelmap and ropePaths describe the real map like the probe does'
   assert.equal(s.file, 'pixelmap-2026-10-18.json');
   assert.equal(s.date, '2026-10-18');
   assert.equal(s.points, 7200);
+  assert.equal(s.seen, Object.values(m.ropes).reduce((a, v) => a + v.visible, 0));
+  assert.ok(s.seen > 0 && s.seen < s.points, `seen ${s.seen} of ${s.points}`);
   assert.equal(s.ropes, 18);
   assert.deepEqual(s.ropes_dark, [9, 17]);
   assert.deepEqual(s.ropes_found.slice(0, 3), [1, 2, 3]);
@@ -191,4 +195,33 @@ test('Lights caches frames (one fetch at a time), refetches the map per new file
   t += 4000; await lights.calibration(); assert.equal(counts.status, 2);
   await assert.rejects(lights.calibrate('shell', {}), (e) => e.status === 400);
   assert.equal(counts.start, 1);
+});
+
+test('readLocalPixelmap and readLocalScreens read the newest files in the clone like pixelmap.ps1 prints them', () => {
+  const dir = join(HERE, '..', '..', 'tools', 'pixelmap');
+  const m = readLocalPixelmap(dir);
+  assert.equal(m.file, 'pixelmap-2026-10-23.json');
+  assert.match(m.modified, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+  assert.equal(m.points.length, 8000);
+  assert.equal(Object.keys(m.ropes).length, 20);
+  assert.deepEqual(m.meta.frame_size, [1440, 808]);
+  assert.equal(m.meta.camera, 'gallery');
+  assert.equal(summarizePixelmap(m).date, '2026-10-23');
+  assert.equal(readLocalPixelmap(dir), m, 'the same file is parsed once');
+  const sc = readLocalScreens(dir);
+  assert.equal(sc.file, 'screens-2026-10-23.json');
+  assert.deepEqual(Object.keys(sc.screens), ['1', '2', '3', '4']);
+  assert.deepEqual(Object.keys(sc.meta).sort(), ['camera', 'capture', 'frame_size', 'uv']);
+  assert.deepEqual([sc.screens['1'].estimated, sc.screens['2'].estimated, sc.screens['2'].tl.length], [true, undefined, 2]);
+  // an empty folder, an unreadable file, a rewritten file
+  const tmp = mkdtempSync(join(tmpdir(), 'pm-'));
+  assert.equal(readLocalPixelmap(tmp), null);
+  assert.equal(readLocalScreens('/nowhere/at/all'), null);
+  writeFileSync(join(tmp, 'pixelmap-2026-10-01.json'), '{ nope');
+  assert.match(readLocalPixelmap(tmp).error, /unreadable pixelmap-2026-10-01.json/);
+  writeFileSync(join(tmp, 'pixelmap-2026-10-02.json'), JSON.stringify({ meta: { drift: 1 }, ropes: {}, points: [] }));
+  assert.equal(readLocalPixelmap(tmp).file, 'pixelmap-2026-10-02.json');
+  writeFileSync(join(tmp, 'pixelmap-2026-10-02.json'), JSON.stringify({ meta: { drift: 2 }, ropes: {}, points: [] }));
+  utimesSync(join(tmp, 'pixelmap-2026-10-02.json'), new Date(Date.now() + 5000), new Date(Date.now() + 5000));
+  assert.equal(readLocalPixelmap(tmp).meta.drift, 2, 'a changed file is read again');
 });

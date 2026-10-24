@@ -271,10 +271,10 @@ const SAID = [
   [/^Sender switched off/, 'have their sender switched off'], [/^Dark on purpose/, 'are dark on purpose'],
   [/^Both rope boxes are silent: the ropes are dark$/, 'are dark: both rope boxes are silent'],
   [/^(Rope box \d) \((ropes [\d-]+)\) silent: those ropes may be dark$/, (_m, box, ropes) => `=${cap(ropes)} may be dark: ${box.toLowerCase()} is silent`],
-  [/^Driven at only/, 'are driven at only'], [/^No LED display/, 'have no LED display'], [/^LED display present; dark while/, 'are dark while'],
-  [/^LED display present, but the picture is frozen/, 'hold a frozen picture'], [/^LED display present, but the picture is gone/, 'show nothing'],
-  [/^LED display present; this file has no panel output/, 'have no picture: this show file has no panel output'],
-  [/^LED display present, but the panel output is off/, 'are switched off in the show file'], [/^LED display present, brightness 0/, 'are at brightness 0'],
+  [/^Driven at only/, 'are driven at only'], [/^No panel sender/, 'have no sender'], [/^Panel sender present; dark while/, 'are dark while'],
+  [/^Panel sender present, but the picture is frozen/, 'hold a frozen picture'], [/^Panel sender present, but the picture is gone/, 'show nothing'],
+  [/^Panel sender present; this file has no panel output/, 'have no picture: this show file has no panel output'],
+  [/^Panel sender present, but the panel output is off/, 'are switched off in the show file'], [/^Panel sender present, brightness 0/, 'are at brightness 0'],
   [/^No internet from bitcube/, 'is down: bitcube cannot reach it'], [/^Reports a problem/, 'reports a problem'], [/^Hasn't ticked/, "hasn't ticked"],
   [/^Clips failing for both cameras/, 'is failing: no clips from either camera'],
   [/^(Gallery|River) clips failing/, (_m, cam) => `is not posting ${cam.toLowerCase()} clips`],
@@ -337,6 +337,8 @@ function actionPhrase(ev) {
     case 'switch': return ['Switched', 'switch', `TouchDesigner to ${fileLabel(b.file)}`];
     case 'bootfile': return ['Set', 'set', `the show file for the next restart to ${fileLabel(b.file)}`];
     case 'lightsroute': return ['Routed', 'route', `the lights through ${b.route === 'router' ? 'the router' : "bitcube's LIGHTS port"}`];
+    case 'check': return ['Ran', 'run', 'the full check of bitcube'];
+    case 'rebuild': return ['Rebuilt', 'rebuild', `${fileLabel(b.file)} with the new LED map`];
     case 'calibrate': return b.action === 'cancel' ? ['Cancelled', 'cancel', 'the calibration'] : b.action === 'status' ? ['Checked', 'check', 'the calibration']
       : ['Started', 'start', `a ${b.dry_run ? 'dry-run ' : b.decode_only ? 'decode-only ' : ''}calibration`];
     default: return ['Used', 'use', `the "${ev.action ?? 'unknown'}" control`];

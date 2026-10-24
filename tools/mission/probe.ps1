@@ -4,6 +4,11 @@
 #   [-Action bootfile -BootFile river-local-oct-22-seasons.toe]   which show file opens at boot
 #   [-Action switch -BootFile river-online-oct-23.toe]            also restart TouchDesigner on it now (~1 min dark)
 #   [-Action lightsroute -LightsRoute direct|router]             which port carries the lighting network (D25, S31)
+#   [-Action rebuild -BootFile river-local-oct-22-seasons.toe]   bake the newest LED map into the river's year: refuses unless
+#                                                                TouchDesigner has that very file open, then runs
+#                                                                td/build/build_seasons_local.py through tools/td.ps1, saves with
+#                                                                tools/td_save.ps1, then the switch path above (restart on it, ~1 min
+#                                                                dark). Reports rebuilt / saved / switched (booleans) with the status.
 param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute)
 $ErrorActionPreference = 'Continue'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
@@ -11,7 +16,33 @@ $river = Split-Path $repo -Parent
 $out = [ordered]@{ ok = $true; time = (Get-Date).ToString('s') }
 
 $BOOT_FILES = @('river-local-oct-22-seasons.toe', 'river-online-oct-23.toe', 'river-online-oct-20.toe', 'river-local-oct-18.toe')
+$REBUILD_FILES = @('river-local-oct-22-seasons.toe')     # the only file build_seasons_local.py rebuilds (its own guard agrees)
 $out.show_files = @($BOOT_FILES | Where-Object { Test-Path (Join-Path $repo $_) })
+$tdPs1 = Join-Path $repo 'tools\td.ps1'
+if ($Action -eq 'rebuild') {
+    # Rebuild = build + save + switch, each step reported; any failure stops the chain and the JSON says where.
+    $out.rebuilt = $false; $out.saved = $false; $out.switched = $false
+    $running = Get-Process TouchDesigner -ErrorAction SilentlyContinue
+    if ($REBUILD_FILES -notcontains $BootFile) { $out.ok = $false; $out.error = "rebuild is only for the river's year ($($REBUILD_FILES -join ', '))" }
+    elseif (-not $running) { $out.ok = $false; $out.error = 'TouchDesigner is not running: nothing to rebuild' }
+    else {
+        $open = (& powershell -NoProfile -ExecutionPolicy Bypass -File $tdPs1 'project.name' -Timeout 15 2>$null | Select-Object -Last 1)
+        $open = "$open".Trim()
+        if ($LASTEXITCODE -ne 0 -or -not $open) { $out.ok = $false; $out.error = 'TouchDesigner did not answer: rebuild refused' }
+        elseif ($open -ne $BootFile) { $out.ok = $false; $out.error = "TouchDesigner is running $open, not $($BootFile): rebuild refused" }
+        else {
+            $null = & powershell -NoProfile -ExecutionPolicy Bypass -File $tdPs1 -File (Join-Path $repo 'td\build\build_seasons_local.py') -Timeout 300 2>&1
+            if ($LASTEXITCODE -ne 0) { $out.ok = $false; $out.error = 'the rebuild failed inside TouchDesigner (see td.ps1); nothing was saved' }
+            else {
+                $out.rebuilt = $true
+                $null = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'tools\td_save.ps1') 2>&1
+                if ($LASTEXITCODE -ne 0) { $out.ok = $false; $out.error = 'rebuilt, but the save failed: not restarting (TouchDesigner still runs the rebuilt file unsaved)' }
+                else { $out.saved = $true }
+            }
+        }
+    }
+    $Action = $(if ($out.saved) { 'switch' } else { 'status' })     # saved: restart on the file, the existing switch path
+}
 if ($Action -in 'bootfile', 'switch') {
     if ($out.show_files -notcontains $BootFile) { $out.ok = $false; $out.error = "no show file $BootFile on bitcube"; $Action = 'status' }
     else { Set-Content -Path (Join-Path $river 'boot-file.txt') -Value $BootFile -Encoding ascii }
@@ -28,6 +59,7 @@ if ($Action -eq 'switch') {
     Start-Sleep 3
     Unregister-ScheduledTask -TaskName 'MissionSwitchShow' -Confirm:$false
     $out.switched_to = $BootFile
+    if ($out.Contains('rebuilt')) { $out.switched = $true }
 }
 
 if ($Action -eq 'lightsroute') {

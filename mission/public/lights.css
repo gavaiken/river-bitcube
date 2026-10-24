@@ -1,0 +1,103 @@
+/* Mission control v2: the Lights page (docs/mission-ui.md, "Lights" and "Calibrate"). Page-specific styles only; the
+   tokens, cards, chips, controls and the shell are v2.css. Canvases are dark on purpose: they show LEDs. */
+
+/* ---- the state line ------------------------------------------------------------------------------------------ */
+.stateline .words { font-size: 18px; line-height: 1.35; font-weight: 650; }
+.stateline .from { font-size: 14px; margin-top: 4px; }
+.stateline .from.old { color: var(--warn-text); font-weight: 700; }
+
+/* ---- the map card: Map | Live, the canvas over the (optional) still, the caption ----------------------------- */
+.mapcard .maphead { display: flex; align-items: center; gap: var(--gap); padding: 12px var(--gutter) 10px; flex-wrap: wrap; }
+.mapcard .seg { flex: 0 0 auto; min-width: 180px; }
+.mapcard .legend { font-size: 14px; line-height: 1.35; flex: 1 1 160px; }
+.mapwrap { position: relative; width: 100%; aspect-ratio: 1440 / 808; background: #0b0f14; overflow: hidden; }
+.mapwrap img.room { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; opacity: 0.45; display: block; }
+.mapwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.mapwrap.dim canvas { opacity: 0.45; transition: opacity 0.6s; }
+.mapwrap .mapnote {
+  position: absolute; left: 12px; right: 12px; bottom: 12px; padding: 8px 12px; border-radius: 10px;
+  background: rgba(10, 14, 18, 0.82); color: #e4e9ee; font-size: 15px; font-weight: 600; line-height: 1.35; display: flex; gap: 10px; align-items: flex-start;
+}
+.mapwrap .mapnote[hidden] { display: none; }
+.mapwrap .mapnote .mk { margin-top: 1px; box-shadow: 0 0 0 1px #e4e9ee; }
+.mapwrap .mapnote.lv-down, .mapwrap .mapnote.lv-unknown, .mapwrap .mapnote.lv-warning { border-left: 4px solid var(--lv); }
+.mapcard .mapfoot { padding: 10px var(--gutter) 12px; display: grid; gap: 8px; }
+.mapcard .cap { font-size: 14px; color: var(--muted); line-height: 1.4; }
+.mapcard .cap b { color: var(--text); font-weight: 650; }
+.roomtoggle { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; font-size: 15px; line-height: 1.35; cursor: pointer; color: var(--text); }
+.roomtoggle input { width: 22px; height: 22px; margin: 2px 0 0; flex: none; accent-color: var(--accent); }
+.roomtoggle[hidden] { display: none; }
+
+/* ---- the 20 rope chips ---------------------------------------------------------------------------------------- */
+.ropes .sec { padding-bottom: 8px; }
+.chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.rope {
+  display: grid; grid-template-columns: 20px 1fr; gap: 2px 8px; align-items: center; text-align: left; min-height: 64px;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-btn); background: var(--panel-solid); color: var(--text); font: inherit; cursor: pointer;
+}
+.rope .mk { grid-row: 1 / 3; }
+.rope .rname { font-size: 16px; font-weight: 750; line-height: 1.25; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.rope .rname .out { font-size: 14px; font-weight: 600; color: var(--muted); }
+.rope .rline { font-size: 14px; line-height: 1.3; color: var(--muted); }
+.rope .rline .state { font-size: 14px; }
+.rope[aria-pressed="true"] { outline: 3px solid var(--accent); outline-offset: -1px; background: var(--accent-soft); }
+.rope:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+#screens-line { margin-top: 10px; }
+
+/* ---- rope by rope: B's strips and the four quads --------------------------------------------------------------- */
+.strips canvas { display: block; width: 100%; border-radius: 10px; background: #0b0f14; }
+#strips-canvas { height: 220px; margin-top: 6px; }
+#quads-canvas { height: 72px; margin-top: 6px; }
+.striplabels { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; padding-top: 8px; }
+.stripnums { display: grid; grid-template-columns: repeat(20, 1fr); font-size: 14px; font-weight: 650; color: var(--muted); text-align: center; letter-spacing: -0.02em; padding-top: 4px; }
+.stripnums span { min-width: 0; white-space: nowrap; }
+.stripnums span:last-child { text-align: right; }
+.stripnums span.hi { color: var(--accent); font-weight: 800; }
+@media (max-width: 599px) { .stripnums:not(.quads) span:not(.key):not(.hi) { visibility: hidden; } }   /* 20 numbers don't fit a phone: 1, 5, 10, 15, 20 */
+.stripnums.quads { grid-template-columns: repeat(4, 1fr); }
+.strips.dim canvas { opacity: 0.45; }
+#strips-note { margin-top: 8px; }
+#strips-note.bad { color: var(--down-text); font-weight: 650; }
+
+/* ---- provenance --------------------------------------------------------------------------------------------- */
+.prov p { margin-top: 6px; line-height: 1.45; }
+.prov .warnline { padding: 10px 12px; border-radius: 12px; background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); color: var(--text); font-size: 15px; font-weight: 600; display: flex; gap: 10px; align-items: flex-start; }
+.prov .warnline .mk { margin-top: 2px; }
+.prov .warnline[hidden] { display: none; }
+.prov.old #prov-words { color: var(--warn-text); font-weight: 650; }
+
+/* ---- calibrate: the installer block's states --------------------------------------------------------------------- */
+.installer > summary { padding: 0; }
+.cal-lead { font-size: 15px; line-height: 1.45; }
+.checklist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.checklist li { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; line-height: 1.4; min-height: 24px; }
+.checklist li .mk { margin-top: 2px; }
+.checklist li.you { color: var(--muted); }
+.checklist li.you .mk { box-shadow: 0 0 0 1px var(--muted); background: transparent; color: var(--muted); }
+.cal-ctls { display: grid; gap: var(--gap); }
+.cal-ctls .ctl.quiet { opacity: 0.92; }
+.prog { position: relative; height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.prog > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 999px; transition: width 0.6s; min-width: 4px; }
+.prog.dry > i { background: var(--unk); }
+.cal-stage { font-size: 18px; font-weight: 750; line-height: 1.3; }
+.cal-line { font-size: 15px; line-height: 1.4; }
+.cal-line b { font-weight: 700; }
+.cal-left { font-size: 15px; color: var(--muted); font-weight: 600; }
+.stages { display: flex; flex-wrap: wrap; gap: 4px 6px; font-size: 14px; color: var(--muted); line-height: 1.35; }
+.stages .done { text-decoration: line-through; opacity: 0.8; }
+.stages .now { color: var(--text); font-weight: 750; }
+.cal-result { border: 1px solid var(--line); border-radius: var(--radius-btn); padding: 12px; background: var(--panel-solid); display: grid; gap: 10px; }
+.cal-result .h { display: flex; gap: 10px; align-items: center; font-size: 17px; font-weight: 800; }
+.cal-result .r-words { font-size: 15px; line-height: 1.45; }
+.cal-result.lv-down { border-left: 6px solid var(--down); }
+.cal-result.lv-ok { border-left: 6px solid var(--ok); }
+.cal-result.lv-unknown { border-left: 6px solid var(--unk); }
+.cal-result.lv-warning { border-left: 6px solid var(--warn); }
+.cal-fine { font-size: 14px; color: var(--muted); line-height: 1.4; }
+.cal-dismiss { display: flex; gap: var(--gap); flex-wrap: wrap; }
+
+/* two columns from 1100 px: the state line and the map stay put; the chips, strips, provenance and Calibrate scroll */
+@media (min-width: 1100px) { .mapwrap { max-height: calc(100vh - 320px); } }
+
+/* ---- footer ------------------------------------------------------------------------------------------------- */
+footer.foot .links a { margin-right: 16px; }

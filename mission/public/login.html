@@ -1,23 +1,112 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mission control: log in</title><link rel="stylesheet" href="/app.css"></head>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e141a" media="(prefers-color-scheme: dark)">
+<title>Log in · Mission control</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" href="/v2.css">
+<script>try { const t = localStorage.getItem('mc-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
+<style>
+  main.login { min-height: 100dvh; padding: calc(24px + env(safe-area-inset-top)) var(--gutter) calc(24px + env(safe-area-inset-bottom)); align-content: center; max-width: 440px; }
+  .login form { display: grid; gap: 14px; padding: 22px var(--gutter) 20px; }
+  .login .wordmark { font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .login h1 { font-size: 27px; line-height: 1.18; font-weight: 800; letter-spacing: -0.012em; margin-top: -8px; }
+  .login .lede { font-size: 16px; color: var(--muted); line-height: 1.4; margin-top: -6px; }
+  .login .field { display: grid; gap: 6px; margin-top: 4px; }
+  .login input[type="password"], .login input[type="text"] {
+    width: 100%; min-height: 52px; padding: 10px 14px; font: inherit; font-size: 18px; color: var(--text);
+    background: var(--panel-solid); border: 1px solid var(--line); border-radius: var(--radius-btn); outline-offset: 2px;
+  }
+  .login input:focus-visible { outline: 3px solid var(--accent); border-color: var(--accent); }
+  .login input[aria-invalid="true"] { border-color: var(--down); }
+  .login .showpw { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; font-size: 15px; font-weight: 600; cursor: pointer; width: fit-content; color: var(--text); }
+  .login .showpw input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+  .login .err { font-size: 15px; font-weight: 700; color: var(--down-text); line-height: 1.4; display: flex; gap: 8px; align-items: flex-start; }
+  .login .err:empty { display: none; }
+  .login .err .mk { margin-top: 2px; }
+  .login .nopw { font-size: 15px; line-height: 1.5; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; margin-top: 2px; }
+  .login .nopw b { color: var(--text); }
+  .login .nopw a { font-weight: 700; display: inline-block; min-height: 24px; }
+  .login .foot { padding: 14px 4px 0; }
+  @media (min-width: 1100px) { main.login { grid-template-columns: minmax(0, 1fr); max-width: 440px; gap: var(--gap); padding-top: 24px; } }
+</style>
+</head>
 <body>
-<form class="login panel" id="f">
-  <div class="big">A River Becoming</div>
-  <div class="dim">Mission control and the studio chat. Team only.</div>
-  <input type="password" name="password" placeholder="Team password" autocomplete="current-password" autofocus required>
-  <button class="primary" style="width:100%">Log in</button>
-  <div class="err" id="err"></div>
-</form>
-<script>
-document.getElementById('f').onsubmit = async (e) => {
-  e.preventDefault();
-  const err = document.getElementById('err'); err.textContent = '';
-  const r = await fetch('/login', { method: 'POST', headers: { 'content-type': 'application/json' },
-                                   body: JSON.stringify({ password: e.target.password.value }) });
-  if (r.ok) return location.href = '/status';
-  const j = await r.json().catch(() => ({}));
-  err.textContent = (j.error || 'Could not log in') + (j.wait_ms ? ` · try again in ${Math.ceil(j.wait_ms / 1000)} s` : '');
-};
+<main class="login">
+  <form class="card" id="f" novalidate>
+    <div class="wordmark">Mission control</div>
+    <h1>A River Becoming</h1>
+    <p class="lede">Mission control and the studio chat. Team only.</p>
+    <div class="field">
+      <label class="label" for="pw">Team password</label>
+      <input id="pw" type="password" name="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" autofocus required aria-describedby="err">
+      <label class="showpw"><input type="checkbox" id="show"> Show password</label>
+    </div>
+    <button class="btn primary wide" type="submit" id="go">Log in</button>
+    <div class="err" id="err" role="alert" aria-live="assertive"></div>
+    <p class="nopw" id="nopw">No password? Call <b>Gavin</b> (bitcube, TouchDesigner, the show file and mission control).</p>
+  </form>
+  <footer class="foot links"><a href="https://gavaiken.github.io/river-bitcube/" target="_blank" rel="noopener">About the piece</a></footer>
+</main>
+<script type="module">
+  import { art, esc } from '/ui.js';
+  import { CONTACTS } from '/model.js';
+  art.mount(); art.setSeason(null);
+  const f = document.getElementById('f'), pw = document.getElementById('pw'), err = document.getElementById('err'), go = document.getElementById('go'), show = document.getElementById('show');
+  const MARK = '<span class="mk lv-down" aria-hidden="true">✕</span>';
+  show.addEventListener('change', () => { const at = pw.selectionStart; pw.type = show.checked ? 'text' : 'password'; try { pw.setSelectionRange(at, at); } catch {} pw.focus(); });
+  let waitTimer = null;
+  function fail(text) {
+    clearInterval(waitTimer);
+    err.innerHTML = `${MARK}<span>${esc(text)}</span>`;
+    pw.setAttribute('aria-invalid', 'true');
+    pw.focus(); pw.select();
+  }
+  function failWait(lead, waitMs) {
+    let left = Math.ceil(waitMs / 1000);
+    const paint = () => { err.innerHTML = `${MARK}<span>${esc(lead)} ${left > 0 ? `Wait ${left} s, then try again.` : 'Try again now.'}</span>`; };
+    clearInterval(waitTimer); paint();
+    pw.setAttribute('aria-invalid', 'true'); pw.focus(); pw.select();
+    if (left > 0) waitTimer = setInterval(() => { left -= 1; paint(); if (left <= 0) clearInterval(waitTimer); }, 1000);
+  }
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!pw.value) return fail('Type the team password first.');
+    go.disabled = true; go.textContent = 'Logging in…'; err.textContent = ''; pw.removeAttribute('aria-invalid');
+    let r, j = {};
+    try {
+      r = await fetch('/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pw.value }) });
+      j = await r.json().catch(() => ({}));
+    } catch { r = null; }
+    go.disabled = false; go.textContent = 'Log in';
+    if (r && r.ok) { const next = new URLSearchParams(location.search).get('next'); location.href = next && /^\/[a-z]/.test(next) ? next : '/status'; return; }
+    if (!r) return fail("Mission control didn't answer. Check your connection and try again.");
+    if (r.status === 429) return failWait('Too many tries.', j.wait_ms ?? 30_000);
+    if (r.status === 401) return j.wait_ms > 1500 ? failWait('Wrong password.', j.wait_ms) : fail('Wrong password. Try again.');
+    if (r.status === 403) return fail("Mission control didn't accept the request from this address. Open the page from its own link and try again.");
+    fail(`Could not log in${j.error ? `: ${j.error}` : ''}. Try again, or call Gavin.`);
+  });
+  // Who to call when there is no password: names and what they own from model.js. GET /api/contacts holds the numbers but sits
+  // behind the login today; set CONTACTS_PUBLIC true once the server serves it (or a public subset) to a logged-out browser.
+  const CONTACTS_PUBLIC = false;
+  (async () => {
+    const box = document.getElementById('nopw');
+    let list = Object.entries(CONTACTS).map(([key, c]) => ({ key, ...c, tel: null }));
+    if (CONTACTS_PUBLIC) try {
+      const r = await fetch('/api/contacts', { cache: 'no-store' });
+      if (r.ok) { const j = await r.json(); const got = Array.isArray(j?.contacts) ? j.contacts : [];
+        list = list.map((c) => ({ ...c, tel: got.find((x) => x.key === c.key)?.tel ?? null })); }
+    } catch { /* names only */ }
+    const who = (c) => (c.tel ? `<a href="tel:${esc(String(c.tel).replace(/[^\d+]/g, ''))}">${esc(c.name)}</a>` : `<b>${esc(c.name)}</b>`) + ` (${esc(c.owns)})`;
+    const first = list.find((c) => c.key === 'gavin') ?? list[0], others = list.filter((c) => c !== first && ['lilian', 'will', 'colin'].includes(c.key));
+    box.innerHTML = `No password? Call ${who(first)}${others.length ? `, or ${others.map(who).join(', ')}` : ''}.`;
+  })();
 </script>
-</body></html>
+</body>
+</html>

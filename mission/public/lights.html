@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e141a" media="(prefers-color-scheme: dark)">
+<title>Lights · Mission control</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" href="/v2.css">
+<link rel="stylesheet" href="/lights.css">
+<script>try { const t = localStorage.getItem('mc-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
+</head>
+<body>
+<main>
+  <div class="col-a">
+    <section class="card stateline" id="stateline" aria-live="polite">
+      <p class="words" id="state-words">Connecting to mission control…</p>
+      <p class="from muted" id="state-from"></p>
+    </section>
+
+    <section class="card tight mapcard" id="mapcard" aria-label="The LED map">
+      <div class="maphead">
+        <div class="seg" role="group" aria-label="Map or live" id="view-seg">
+          <button type="button" data-view="map">Map</button>
+          <button type="button" data-view="live">Live</button>
+        </div>
+        <div class="legend muted" id="map-legend"></div>
+      </div>
+      <div class="mapwrap" id="mapwrap">
+        <img class="room" id="room-img" alt="" hidden>
+        <canvas id="map-canvas" aria-label="The 20 ropes and the four screens as the gallery camera sees them"></canvas>
+        <div class="mapnote" id="map-note" hidden></div>
+      </div>
+      <div class="mapfoot">
+        <p class="cap" id="map-cap"></p>
+        <label class="roomtoggle" id="room-toggle"><input type="checkbox" id="room-check"> <span>Show the room still behind (the camera's framing may differ)</span></label>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="col-b">
+    <section class="card ropes" id="ropes" aria-label="The ropes">
+      <div class="sec">Ropes <span class="sub" id="ropes-sub"></span></div>
+      <div class="chips" id="rope-chips"></div>
+      <p class="muted secondary" id="screens-line"></p>
+    </section>
+    <section class="card strips" id="strips" aria-label="Rope by rope">
+      <div class="sec">Rope by rope <span class="sub">plug end at the top</span></div>
+      <div class="striplabels muted"><span>Rope box 1 · ropes 1–10</span><span>Rope box 2 · ropes 11–20</span></div>
+      <canvas id="strips-canvas" aria-label="The 20 ropes as TouchDesigner is sending them, plug end at the top"></canvas>
+      <div class="stripnums" id="strip-nums" aria-hidden="true"></div>
+      <div class="sec" style="padding-top:12px">Panels <span class="sub">the four screens</span></div>
+      <canvas id="quads-canvas" aria-label="The four HUB75 screens as TouchDesigner is sending them"></canvas>
+      <div class="stripnums quads" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span></div>
+      <p class="muted secondary" id="strips-note"></p>
+    </section>
+
+    <section class="card prov" id="prov" aria-label="Where the map came from">
+      <div class="sec">The LED map</div>
+      <p id="prov-words" class="secondary">Loading the map…</p>
+      <p id="prov-warn" class="warnline" hidden></p>
+    </section>
+
+    <details class="card installer" id="calibrate" open>
+      <summary><span class="tool" aria-hidden="true">🛠</span><span>Calibrate the lights</span><span class="note">interrupts the show</span><span class="chev">›</span></summary>
+      <div class="body" id="cal-body"></div>
+    </details>
+
+    <footer class="foot" id="foot"></footer>
+  </div>
+</main>
+<script type="module" src="/lights.js"></script>
+</body>
+</html>

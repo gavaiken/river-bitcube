@@ -1,8 +1,37 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>System map</title><link rel="stylesheet" href="/app.css">
-<style>main.full { max-width: none; padding: 0; } iframe.fullmap { display: block; width: 100%; height: calc(100dvh - 53px); border: 0; background: #fff; }</style></head>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e141a" media="(prefers-color-scheme: dark)">
+<title>System map · Mission control</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" href="/v2.css">
+<link rel="stylesheet" href="/map.css">
+<script>try { const t = localStorage.getItem('mc-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
+</head>
 <body>
-<main class="full"><iframe class="fullmap" src="/map/" title="System map, live"></iframe></main>
-<script type="module">import { header } from '/app.js'; header('map');</script>
-</body></html>
+<main class="map">
+  <p class="map-lede"><b>For engineers.</b> Which link is down, and the addresses. The verdict and what to do are on <a href="/status">Status</a>.</p>
+  <div class="banner" id="banner" role="status" hidden></div>
+  <section class="card chain" aria-label="The signal chain">
+    <div class="chain-h"><h2>The signal chain · tap a box</h2><span class="from" id="chainFrom"></span></div>
+    <p class="connecting" id="connecting">Connecting to mission control…</p>
+    <button type="button" class="mini-bar lv-unknown" id="mini" data-box="mini" aria-haspopup="dialog"><span class="nname">Mission control</span><span class="nsum">Connecting…</span></button>
+    <div class="nodes" id="nodes"></div>
+    <div class="legend" id="legend"></div>
+  </section>
+  <section class="card diagram" aria-label="The full system map">
+    <div class="card-h"><h2>Every machine, address and port</h2><a href="/map/" target="_blank" rel="noopener">Open full screen →</a></div>
+    <p>The engineers' diagram: places, devices, services and the cables between them, with live dots from the same checks. Search by name or address inside it; tap a box for its details.</p>
+    <iframe src="/map/" title="System map: every machine, address and port, with live status" loading="lazy"></iframe>
+  </section>
+  <footer class="foot links" id="footLinks"></footer>
+</main>
+<script type="module" src="/map.js"></script>
+</body>
+</html>

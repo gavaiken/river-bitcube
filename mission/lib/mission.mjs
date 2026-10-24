@@ -10,6 +10,8 @@ export const CAMERAS = ['gallery', 'river'];
 const SNAP_CACHE_MS = 45_000;
 // Show files mission control may open (the online one keeps its old name until step S1.1 renames it).
 export const BOOT_FILES = ['river-local-oct-22-seasons.toe', 'river-online-oct-23.toe', 'river-online-oct-20.toe', 'river-local-oct-18.toe'];
+// The only show file a rebuild may bake the LED map into: the river's year (build_seasons_local.py refuses any other).
+export const REBUILD_FILES = ['river-local-oct-22-seasons.toe'];
 export const MODES = ['automatic', 'dynamic', 'manual'];
 export const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
 
@@ -116,7 +118,7 @@ export class Mission {
   // ---- controls (fixed actions) ----------------------------------------------------------------------
   async control(action, body = {}) {
     const plan = planControl(action, body);
-    return plan.kind === 'seasons' ? this.#seasons(plan.path, plan.body) : this.#probeAction(plan.args);
+    return plan.kind === 'seasons' ? this.#seasons(plan.path, plan.body) : this.#probeAction(plan.args, plan.timeout);
   }
 
   async #seasons(path, body) {
@@ -125,8 +127,8 @@ export class Mission {
     return r;
   }
 
-  async #probeAction(args) {
-    const r = await this.probe(this.sshHost, args);
+  async #probeAction(args, timeout) {
+    const r = await this.probe(this.sshHost, args, timeout);
     if (r.ok !== false || r.td) this.#set('probe', r);
     return r;
   }
@@ -134,7 +136,7 @@ export class Mission {
 
 /** The control whitelist: what a fixed action would do, with its arguments checked. Pure, so fixture mode checks
  *  requests exactly as the real server does. Returns { kind: 'seasons', path, body } (a POST to the seasons page)
- *  or { kind: 'probe', args } (probe.ps1 on bitcube); anything else is a status-400 error. */
+ *  or { kind: 'probe', args, timeout? } (probe.ps1 on bitcube); anything else is a status-400 error. */
 export function planControl(action, body = {}) {
   if (!body || typeof body !== 'object') throw bad('bad body');
   switch (action) {
@@ -163,6 +165,11 @@ export function planControl(action, body = {}) {
     case 'bootfile': case 'switch': {
       if (!BOOT_FILES.includes(body.file)) throw bad('unknown show file');
       return { kind: 'probe', args: `-Action ${action} -BootFile ${body.file}` };
+    }
+    case 'rebuild': {
+      // Bake the newest LED map into the river's year (probe.ps1 -Action rebuild: build, save, then the switch path; minutes).
+      if (!REBUILD_FILES.includes(body.file)) throw bad("rebuild is only for the river's year");
+      return { kind: 'probe', args: `-Action rebuild -BootFile ${body.file}`, timeout: 400_000 };
     }
     case 'lightsroute': {
       if (!['direct', 'router'].includes(body.route)) throw bad('route is direct or router');

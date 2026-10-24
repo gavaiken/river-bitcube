@@ -46,10 +46,13 @@ FAKE_CAPTURE = textwrap.dedent(f'''
     if mode == 'ropes':
         for name in 'AB':
             time.sleep(slow)
+            if os.environ.get('FAKE_PATTERN_LINES'):          # the per-pattern line capture.py prints
+                for i in range(1, 30):
+                    print(f'pass {{name}}: pattern {{i}} of 29 (b{{i:02d}})', flush=True)
             print(f'pass {{name}} done 10:1{{name}}:00', flush=True)
         print('  b04n: retaken, 3 takes, best disagreement 0.012', flush=True)
     meta = {{'mode': mode, 'camera': 'gallery', 'date': stamp[:8], 'stamp': stamp, 'settle': 1.75, 'brightness_cap': 0.4,
-            'drift': 2.5, 'lit_camera_px': 1234}}
+            'drift': float(os.environ.get('FAKE_DRIFT', '2.5')), 'lit_camera_px': 1234}}
     (out / 'meta.json').write_text(json.dumps(meta))
     print(json.dumps(meta), flush=True)
     print(f'OUT {{out}}', flush=True)
@@ -180,6 +183,8 @@ class Env:
 def env(tmp_path, monkeypatch):
     monkeypatch.delenv('FAKE_FAIL', raising=False)
     monkeypatch.delenv('FAKE_SLOW', raising=False)
+    monkeypatch.delenv('FAKE_DRIFT', raising=False)
+    monkeypatch.delenv('FAKE_PATTERN_LINES', raising=False)
     e = Env(tmp_path, monkeypatch)
     yield e
     e.close()
@@ -210,7 +215,9 @@ def test_full_run_walks_every_stage_and_reports_the_map(env):
     assert order == sorted(order) and seen[-1] == 'done'
     assert all(s['running'] for s in env.snaps[:-1])
     capture_steps = [s['step'] for s in env.snaps if s['stage'] == 'ropes-capture']
-    assert capture_steps[0] == 0 and 1 in capture_steps and capture_steps[-1] == 2
+    assert capture_steps[0] == 0 and 1 in capture_steps and capture_steps[-1] == 2       # no per-pattern lines: a pass is a step
+    assert [s for s in env.snaps if s['stage'] == 'ropes-capture'][-1]['retakes'] == 1
+    assert p['max_drift'] == 30.0 and 'pass' in p and 'retakes' in p
     decode = [s for s in env.snaps if s['stage'] == 'ropes-decode']
     assert decode[-1]['step'] == 20 and decode[-1]['of'] == 20
     assert any('retaken' in s['message'] for s in env.snaps)
@@ -371,3 +378,78 @@ def test_pid_alive():
     p.wait()
     assert cal.pid_alive(p.pid) is False
     assert cal.pid_alive(0) is False and cal.pid_alive('x') is False and cal.pid_alive(None) is False
+
+
+# ---- capture.py's stdout -> step / of / pass / retakes; the drift threshold ----------------------------------------
+
+def test_parse_capture_line_reads_patterns_passes_and_retakes():
+    assert cal.parse_capture_line('pass A: pattern 12 of 29 (b03)') == {'step': 12, 'of': 29, 'pass': 'A', 'message': 'pass A: pattern 12 of 29 (b03)'}
+    assert cal.parse_capture_line('pattern 3 of 29 b02n pass B') == {'step': 3, 'of': 29, 'pass': 'B', 'message': 'pattern 3 of 29 b02n pass B'}
+    assert cal.parse_capture_line('Pattern 29 of 29') == {'step': 29, 'of': 29, 'message': 'Pattern 29 of 29'}
+    assert cal.parse_capture_line('  b04n: retaken, 3 takes, best disagreement 0.012') == {'retakes': 1, 'message': 'b04n: retaken, 3 takes, best disagreement 0.012'}
+    assert cal.parse_capture_line('pass A done 10:11:00') == {'pass_done': True, 'message': 'pass A done 10:11:00'}
+    assert cal.parse_capture_line('settle 1.75 s, start 10:10:10') == {'message': 'settle 1.75 s, start 10:10:10'}
+    assert cal.parse_capture_line('settle series: 0.0:1 0.3:40') == {'message': 'settle series: 0.0:1 0.3:40'}
+    for noise in ('before: {}', 'OUT frames/x', '', 'RuntimeError: no camera frames'):
+        assert cal.parse_capture_line(noise) == {}, noise
+
+
+def test_capture_lines_move_the_progress_file(tmp_path):
+    job = cal.Job(state_dir=tmp_path)
+    job.p = job.fresh_progress()
+    job.write(stage='ropes-capture', stage_index=0, step=0, of=cal.STEPS['ropes-capture'])
+    job.on_capture_line("before: {'Active': True, 'Source': 'canvas', 'Brightness': 0.4, 'Graybit': 0, 'Grayinvert': False, 'Panels': 'canvas', 'Maxbrightness': 0.4}")
+    assert job.p['before']['Source'] == 'canvas'
+    job.on_capture_line('settle 1.75 s, start 10:10:10')
+    assert job.p['message'].startswith('settle 1.75 s')
+    job.on_capture_line('pass A: pattern 1 of 29 (black)')
+    job.on_capture_line('pass A: pattern 12 of 29 (b05n)')
+    assert (job.p['step'], job.p['of'], job.p['pass'], job.p['retakes']) == (12, 29, 'A', 0)
+    job.on_capture_line('pass A done 10:11:00')
+    assert (job.p['step'], job.p['of']) == (29, 29)
+    job.on_capture_line('pass B: pattern 2 of 29 (b00)')
+    assert (job.p['step'], job.p['pass']) == (2, 'B')
+    job.on_capture_line('  b04n: retaken, 3 takes, best disagreement 0.012')
+    job.on_capture_line('  b07: retaken, 4 takes, best disagreement 0.020')
+    assert job.p['retakes'] == 2 and 'retaken' in job.p['message']
+    job.on_capture_line('{"mode": "ropes", "drift": 48.3, "lit_camera_px": 1234, "settle": 1.75, "brightness_cap": 0.4}')
+    assert job.p['capture_info']['drift'] == 48.3
+    job.on_capture_line('OUT C:/x/frames/pixelmap-20261024-101010')
+    assert job.capture_dir.endswith('pixelmap-20261024-101010')
+    saved = json.loads((tmp_path / 'calibration.json').read_text(encoding='utf-8'))
+    assert (saved['step'], saved['of'], saved['pass'], saved['retakes']) == (2, 29, 'B', 2)
+    # an old capture.py without per-pattern lines: a pass is a step of two
+    job2 = cal.Job(state_dir=tmp_path)
+    job2.p = job2.fresh_progress()
+    job2.write(stage='ropes-capture', stage_index=0, step=0, of=cal.STEPS['ropes-capture'])
+    job2.on_capture_line('pass A done 10:11:00')
+    job2.on_capture_line('pass B done 10:12:00')
+    assert (job2.p['step'], job2.p['of'], job2.p['pass']) == (2, 2, None)
+
+
+def test_full_run_with_per_pattern_lines_reports_pass_and_pattern(env, monkeypatch):
+    monkeypatch.setenv('FAKE_PATTERN_LINES', '1')
+    assert env.run() == 0
+    cap = [s for s in env.snaps if s['stage'] == 'ropes-capture']
+    assert any(s['pass'] == 'A' and s['step'] == 12 and s['of'] == 29 for s in cap)
+    assert any(s['pass'] == 'B' and s['step'] == 29 for s in cap)
+    assert cap[-1]['retakes'] == 1 and cap[-1]['step'] == 29
+    assert env.progress()['ok'] is True
+
+
+def test_a_moved_camera_fails_the_run_before_any_map_is_written(env, monkeypatch):
+    monkeypatch.setenv('FAKE_DRIFT', '48.3')
+    assert env.run() == 1
+    p = env.progress()
+    assert p['running'] is False and p['ok'] is False and p['cancelled'] is False
+    assert p['error'] == 'The camera moved during the run (drift 48): the map was not saved. Fix the camera and run again'
+    assert p['message'] == p['error'] and p['stage'] == 'ropes-capture' and p['result'] is None
+    assert p['restored'] is True                                           # capture.py ended by itself: its finally ran
+    assert p['capture_info']['drift'] == 48.3 and p['max_drift'] == 30.0
+    assert not list(env.scripts.glob('pixelmap-*.json'))                   # decode.py never ran
+    assert env.bridge.calls == ['1']
+    assert not (env.state / 'calibration.lock').exists()
+    # the threshold is a flag: a looser one lets the same run through
+    assert env.run('--max-drift', '60') == 0
+    assert env.progress()['ok'] is True and env.progress()['max_drift'] == 60.0
+    assert cal.drift_error(29.6) == 'The camera moved during the run (drift 30): the map was not saved. Fix the camera and run again'

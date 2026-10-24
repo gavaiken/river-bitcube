@@ -1,4 +1,4 @@
-// Shared helpers for mission control's pages.
+// Shared helpers for mission control's pages (ui.js builds on these: api, esc, md).
 export async function api(path, body) {
   const r = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   if (r.status === 401) { location.href = '/login'; throw new Error('logged out'); }
@@ -18,18 +18,19 @@ export function md(src) {
       h = h.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
            .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
            .replace(/(^|\s)(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
-      if (/^(- |\* |\d+\. )/m.test(p)) return '<ul>' + h.split('\n').map((l) => `<li>${l.replace(/^(- |\* |\d+\. )/, '')}</li>`).join('') + '</ul>';
+      // A paragraph with list items: the lines that are items become the list, the others ("What I found:") stay text above or below it.
+      if (/^(- |\* |\d+\. )/m.test(p)) {
+        let out = '', list = [], text = [];
+        const flushText = () => { if (text.length) out += `<p>${text.join('<br>')}</p>`; text = []; };
+        const flushList = () => { if (list.length) out += `<ul>${list.map((l) => `<li>${l}</li>`).join('')}</ul>`; list = []; };
+        for (const l of h.split('\n')) {
+          const m = l.match(/^(- |\* |\d+\. )(.*)$/);
+          if (m) { flushText(); list.push(m[2]); } else { flushList(); text.push(l); }
+        }
+        flushText(); flushList();
+        return out;
+      }
       return `<p>${h.replace(/\n/g, '<br>')}</p>`;
     }).join('');
   }).join('');
 }
-export function header(active) {
-  const h = document.createElement('header');
-  const tab = (href, key, label) => `<a href="${href}" class="${active === key ? 'on' : ''}">${label}</a>`;
-  h.innerHTML = `<div class="in"><b>A River Becoming</b><nav>
-    ${tab('/status', 'status', 'System status')}${tab('/map', 'map', 'System map')}${tab('/mission', 'mission', 'Mission control')}${tab('/chat', 'chat', 'Studio chat')}</nav>
-    <button id="logout" title="Log out">Log out</button></div>`;
-  document.body.prepend(h);
-  h.querySelector('#logout').onclick = async () => { await fetch('/logout', { method: 'POST' }); location.href = '/login'; };
-}
-export const ago = (s) => s == null ? '–' : s < 90 ? `${s}s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`;

@@ -42,8 +42,11 @@ export const FILES = {                          // GLOSSARY.md: the local-only f
   'river-online-oct-20.toe': { kind: 'live', label: 'the live river (20 Oct)' },
   'river-local-oct-18.toe': { kind: 'live', label: 'the live river (old file name)' },
 };
+export const CAL_STAGE_S = { 'ropes-capture': 170, 'ropes-decode': 40, 'hub75-capture': 35, 'hub75-locate': 10 };   // calibrate.py EXPECTED_S
+export const CAL_TOTAL_S = Object.values(CAL_STAGE_S).reduce((a, b) => a + b, 0);
+const CAL_STAGE_WORDS = { 'ropes-capture': 'photographing the ropes', 'ropes-decode': 'working out where each rope is', 'hub75-capture': 'photographing the panels', 'hub75-locate': 'finding the panels' };
 export const INTENSITY_WORDS = [[0.1, 'stillness'], [0.3, 'trickle'], [0.6, 'flowing'], [0.8, 'strong'], [Infinity, 'torrent']];
-export const LEVELS = { down: 0, warning: 1, unknown: 2, ok: 3 };   // what wins the headline, and the items' order
+export const LEVELS = { down: 0, warning: 1, unknown: 2, ok: 3 };   // what wins the headline (after a stale page), and the items' order
 export const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
 /** The season a phase of the year falls in (seasons.py: the rounded phase, wrapped to four), or null. */
 export function seasonOfPhase(phase) {
@@ -68,7 +71,7 @@ const CONTACT_BY_CAUSE = {
   'ropes-dark': 'colin', 'online-file': 'colin',
   'river-stale': 'will', 'no-internet': 'will', router: 'will', 'river-site': 'will', 'gallery-cam': 'will',
   'modal-unreachable': 'dave', 'modal-stalled': 'dave', 'modal-not-ok': 'dave',
-  'td-restarting': null, 'coming-up': null, 'not-checked': null, unknown: null,
+  'td-restarting': null, 'coming-up': null, 'not-checked': null, calibrating: null, unknown: null,
 };
 export function contactFor(cause) { const k = CONTACT_BY_CAUSE[cause]; return k ? CONTACTS[k] : null; }
 const ROPE_BOX = { 'rope box 1': ['2.0.0.10', '1-10'], 'rope box 2': ['2.0.0.11', '11-20'] };
@@ -224,6 +227,11 @@ export function derive(status, nowMs) {
   const relayAgeNow = relayAge != null ? relayAge + (pb.age_s ?? 0) : null;
   const counter = yearOk ? obj(year.presence)?.available === true : null;
   const diskGb = num(pr?.disk_free_gb), diskLow = diskGb != null && diskGb < DISK_LOW_GB;
+  // A calibration run (lib/lights.mjs: the probe carries the job's progress file): the ropes are in patterns on purpose.
+  // Time left: the stage's expected_s scaled to the whole run by the stages' typical lengths, minus what has elapsed.
+  const cal = obj(pr?.calibration), calibrating = !!cal && cal.running === true && cal.stale !== true;
+  const calTotalS = calibrating && num(cal.expected_s) != null && CAL_STAGE_S[cal.stage] ? CAL_TOTAL_S / CAL_STAGE_S[cal.stage] * cal.expected_s : CAL_TOTAL_S;
+  const calLeftS = calibrating ? Math.max(30, Math.round(calTotalS - (num(cal.elapsed_s) ?? 0) - (pb.age_s ?? 0))) : null;
 
   // Dave's agent: a past next tick is a fault only by day (it rests overnight), measured in daytime minutes.
   const finMs = m ? Date.parse(m.finished_at) : NaN, nextMs = m && num(m.next_tick_epoch) != null ? m.next_tick_epoch * 1000 : null;
@@ -356,15 +364,15 @@ export function derive(status, nowMs) {
   const brightness = hub ? num(hub.brightness) : null;
   if (behind) unknown('hub75 panels', behind);
   else if (led == null) unknown('hub75 panels', ['Not reported by the full check', 'The full check did not list bitcube\'s displays.']);
-  else if (ledMissing) it('hub75 panels', 'down', 'No LED display: the sender is not connected', `bitcube sees ${displays.length && displays[0] !== '\u0000' ? displays.join(', ') : 'no display at all'}. The panels get their picture over HDMI through the Colorlight sender; until bitcube sees it as an LED display they stay dark.${boxesDown.length === 2 ? ' Expected before the lights are connected.' : ''}`,
+  else if (ledMissing) it('hub75 panels', 'down', 'No panel sender: bitcube does not see one', `bitcube sees ${displays.length && displays[0] !== '\u0000' ? displays.join(', ') : 'no display at all'}. The panels get their picture over HDMI through the Colorlight sender; until bitcube sees it as an LED display they stay dark.${boxesDown.length === 2 ? ' Expected before the lights are connected.' : ''}`,
     { action: 'Plug the Colorlight sender into bitcube\'s HDMI; the display should then read LED.' });
-  else if (!td) unknown('hub75 panels', ['LED display present; picture not reported', 'The full check answered without a word about TouchDesigner, which draws the picture.']);
-  else if (tdRestarting || tdOffBooting) it('hub75 panels', 'warning', `LED display present; dark while TouchDesigner ${tdRestarting ? 'restarts' : 'starts'}`, 'The picture comes back with TouchDesigner.');
-  else if (!tdOk) it('hub75 panels', 'warning', `LED display present, but the picture is ${frozen ? 'frozen' : 'gone'}`, frozen ? 'TouchDesigner is frozen, so the panels keep their last picture.' : 'TouchDesigner is not running, so nothing is drawn.');
-  else if (!hub) it('hub75 panels', 'warning', 'LED display present; this file has no panel output', 'TouchDesigner reports no panels in this show file.');
-  else if (hub.output === false) it('hub75 panels', 'warning', 'LED display present, but the panel output is off', 'The panels are switched off in the show file.');
-  else if (brightness === 0) it('hub75 panels', 'warning', 'LED display present, brightness 0 (dark)', 'Someone turned the HUB75 brightness to 0.', { action: 'Raise HUB75 brightness in mission control.' });
-  else it('hub75 panels', 'ok', `LED display present, brightness ${brightness ?? '?'}`, `${ropesDark ? 'Still showing the river while the ropes are dark. ' : ''}Display: ${displays.join(', ')}.`);
+  else if (!td) unknown('hub75 panels', ['Panel sender present; picture not reported', 'The full check answered without a word about TouchDesigner, which draws the picture.']);
+  else if (tdRestarting || tdOffBooting) it('hub75 panels', 'warning', `Panel sender present; dark while TouchDesigner ${tdRestarting ? 'restarts' : 'starts'}`, 'The picture comes back with TouchDesigner.');
+  else if (!tdOk) it('hub75 panels', 'warning', `Panel sender present, but the picture is ${frozen ? 'frozen' : 'gone'}`, frozen ? 'TouchDesigner is frozen, so the panels keep their last picture.' : 'TouchDesigner is not running, so nothing is drawn.');
+  else if (!hub) it('hub75 panels', 'warning', 'Panel sender present; this file has no panel output', 'TouchDesigner reports no panels in this show file.');
+  else if (hub.output === false) it('hub75 panels', 'warning', 'Panel sender present, but the panel output is off', 'The panels are switched off in the show file.');
+  else if (brightness === 0) it('hub75 panels', 'warning', 'Panel sender present, brightness 0 (dark)', 'Someone turned the HUB75 brightness to 0.', { action: 'Raise HUB75 brightness in mission control.' });
+  else it('hub75 panels', 'ok', `Panel sender present, brightness ${brightness != null ? `${Math.round(brightness * 100)} %` : 'not known'}`, `${ropesDark ? 'Still showing the river while the ropes are dark. ' : ''}Display: ${displays.join(', ')}.`);
 
   const noClip = (c) => (c.since ? `no clip to Dave since ${c.since}` : 'no recent clip to Dave');
   const clipWords = (cam) => { const c = clips[cam]; return !c.present ? '' : c.failing ? `; ${noClip(c)}` : `; clips posting (last ${dur(c.age_s)} ago)`; };
@@ -481,7 +489,10 @@ export function derive(status, nowMs) {
       else if (hub && brightness === 0) add('panels-dark', 'warning', 58, 'The HUB75 panels are at brightness 0', 'Someone turned the panels down to nothing.', 'Raise HUB75 brightness in mission control.', ['hub75 panels']);
       if (slow) add('td-slow', 'warning', 60, 'TouchDesigner is running slowly: the river will look jerky', `${cap(label)} at ${fps} frames a second instead of 60${tdErrors ? `, with ${tdErrors} errors in the file` : ''}.`,
         "Look at bitcube's screen for what is slow or erroring; if it doesn't recover in a few minutes, restart TouchDesigner on the river's year with Switch now (about a minute dark).", ['touchdesigner', 'ropes']);
-      if (ropesDark) add('ropes-dark', 'warning', 42, 'The ropes are dark on purpose (sending black); everything else is up',
+      if (calibrating) add('calibrating', 'warning', 61, `Calibrating the lights: the ropes are in patterns for about ${dur(calLeftS)} more`,
+        `${cal.mode === 'dry-run' ? 'A dry run: the lights do not change. ' : ''}The gallery camera is ${CAL_STAGE_WORDS[cal.stage] ?? 'at work'}; the ropes come back to the river by themselves when it ends.`,
+        "Keep people out of the camera's view. If the room is needed now, stop it on the Lights page: the ropes come back at once.", ['ropes']);
+      else if (ropesDark) add('ropes-dark', 'warning', 42, 'The ropes are dark on purpose (sending black); everything else is up',
         'Someone pressed Ropes → Dark: the sender keeps sending black, so the boxes stay dark instead of playing their own colour cycle. The panels still show the river.',
         'If the ropes should be showing the river, press Ropes → On; they follow within a few seconds. Nothing is broken.', ['ropes']);
       if (kind === 'live') add('online-file', 'warning', 40, "TouchDesigner is showing the live river, not the river's year: the year and its controls are unavailable",
@@ -529,7 +540,9 @@ export function derive(status, nowMs) {
   const explained = new Set(P.flatMap((p) => p.items));
   const orphans = items.filter((x) => x.level === 'unknown' && !x.muted && !explained.has(x.id));
   if (orphans.length) add('unknown', 'unknown', 10, `Not known yet: ${orphans.map((x) => x.name.replace(/ \(.*\)$/, '')).join(', ')}`, 'Mission control has no answer about these yet.', 'Wait a minute and look again.', orphans.map((x) => x.id));
-  P.sort((a, b) => LEVELS[a.level] - LEVELS[b.level] || b.pri - a.pri);
+  // A page that can't reach mission control knows nothing current, so it heads the list whatever else was wrong last time
+  // (docs/mission-ui.md thresholds: 30 s without an answer, the band goes Unknown); otherwise down > warning > unknown, then priority.
+  P.sort((a, b) => (b.id === 'page') - (a.id === 'page') || LEVELS[a.level] - LEVELS[b.level] || b.pri - a.pri);
   const causeOf = {};
   for (const p of P) for (const id of p.items) causeOf[id] ??= p.id;
   for (const x of items) x.cause = causeOf[x.id] ?? null;

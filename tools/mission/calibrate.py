@@ -1,7 +1,7 @@
 """Mission control's calibration job: the structured-light pipeline as a background job with a progress file.
 
     .venv\\Scripts\\python tools\\mission\\calibrate.py [--dry-run | --decode-only frames\\pixelmap-YYYYMMDD-HHMMSS]
-                                                      [--cam gallery] [--brightness 0.4] [--settle S] [--log FILE]
+                                                      [--cam gallery] [--brightness 0.4] [--settle S] [--max-drift 30] [--log FILE]
 
 Stages (each a subprocess of the existing tools, their stdout parsed as it arrives):
     ropes-capture   capture.py ropes     Gray-code patterns on the ropes, two passes, retakes (docs/sessions/B.md)
@@ -10,7 +10,11 @@ Stages (each a subprocess of the existing tools, their stdout parsed as it arriv
     hub75-locate    hub75.py <frames>    -> hub75_quad1 corners into the map
     done
 Progress goes to C:/Users/user/River/calibration.json after every step (the shape is in mission/lib/lights.mjs; the
-probe and calibrate.ps1 -Action status read it). A lock file refuses a second run; a full run also refuses to start
+probe and calibrate.ps1 -Action status read it). During ropes-capture, capture.py's stdout becomes step/of/pass/retakes:
+"pass A: pattern 12 of 29 (b03)" -> step 12, of 29, pass 'A' (capture.py prints one such line per pattern; a capture.py
+that only prints "pass A done" still moves step 0 -> 1 -> 2 of 2 passes); "  b04n: retaken, 3 takes, ..." -> retakes +1.
+The camera must not move during a run: when capture.py's meta drift (camera px between the first and last black frame)
+is above --max-drift (default 30), the run fails BEFORE decoding, so no map is saved, with the words the portal shows. A lock file refuses a second run; a full run also refuses to start
 when TouchDesigner's bridge does not answer. --dry-run walks the stages with short waits and no lights, camera or
 subprocesses (for exercising the portal); --decode-only decodes an existing capture (no lights).
 
@@ -40,6 +44,38 @@ STEPS = {'ropes-capture': 2, 'ropes-decode': 20, 'hub75-capture': 1, 'hub75-loca
 EXPECTED_S = {'ropes-capture': 170, 'ropes-decode': 40, 'hub75-capture': 35, 'hub75-locate': 10}   # typical, for a bar
 CAPTURE_STAGES = ('ropes-capture', 'hub75-capture')
 N_ROPES = 20
+MAX_DRIFT_PX = 30.0          # --max-drift default: camera movement (px) between the first and last black frame that voids a run
+# capture.py's per-pattern line: "pass A: pattern 12 of 29 (b03)" (the pass letter may also trail: "pattern 12 of 29 pass A")
+PATTERN_RE = re.compile(r'^\s*(?:pass\s+(?P<pass1>[A-Z])\b[:\s]*)?pattern\s+(?P<i>\d+)\s+of\s+(?P<n>\d+)\b(?P<rest>.*)$', re.IGNORECASE)
+PASS_RE = re.compile(r'\bpass\s+(?P<p>[A-Z])\b')
+RETAKE_RE = re.compile(r'retaken,\s*(?P<takes>\d+)\s+takes')
+
+
+def drift_error(drift):
+    """The words the portal shows when the camera moved (docs/mission-ui.md, Calibrate > Failure)."""
+    return f'The camera moved during the run (drift {drift:.0f}): the map was not saved. Fix the camera and run again'
+
+
+def parse_capture_line(line):
+    """What one capture.py stdout line means for the progress file: a dict of changes (possibly empty).
+    Pure, so it is tested on its own; on_capture_line applies it (and keeps the OUT folder / before: side effects)."""
+    m = PATTERN_RE.match(line)
+    if m:
+        letter = m.group('pass1')
+        if not letter:
+            t = PASS_RE.search(m.group('rest') or '')
+            letter = t.group('p') if t else None
+        out = {'step': int(m.group('i')), 'of': int(m.group('n')), 'message': line.strip()}
+        if letter:
+            out['pass'] = letter.upper()
+        return out
+    if RETAKE_RE.search(line):
+        return {'retakes': +1, 'message': line.strip()}
+    if line.startswith('pass ') and ' done' in line:
+        return {'pass_done': True, 'message': line.strip()}
+    if line.startswith('settle '):
+        return {'message': line.strip()}
+    return {}
 KEEP = ('Active', 'Source', 'Brightness', 'Graybit', 'Grayinvert')      # what capture.py restores, in its order
 MAP_GLOB = 'pixelmap-????-??-??.json'
 LOG_LINES = 40
@@ -124,6 +160,7 @@ def summarize_map(path):
     date = re.search(r'(\d{4}-\d{2}-\d{2})', path.name)
     meta = m.get('meta') or {}
     return {'map': path.name, 'date': date.group(1) if date else None, 'points': len(m.get('points') or []),
+            'seen': sum(int((v or {}).get('visible', 0) or 0) for v in ropes.values()),     # LEDs the camera saw; the rest are placed along the rope
             'ropes_found': found, 'ropes_dark': [r for r in range(1, N_ROPES + 1) if r not in found],
             'drift_px': meta.get('drift'), 'hub75_quads': sorted(k for k in m if re.fullmatch(r'hub75_quad\d+', k)),
             'camera': meta.get('camera'), 'frame_size': meta.get('frame_size'), 'capture': meta.get('capture')}
@@ -133,8 +170,10 @@ def summarize_map(path):
 
 class Job:
     def __init__(self, *, state_dir, repo=REPO, scripts=None, python=None, bridge=BRIDGE, cam='gallery',
-                 brightness=0.4, settle=None, dry_run=False, dry_wait=1.0, decode_only=None, poll=0.25, now=time.time):
+                 brightness=0.4, settle=None, dry_run=False, dry_wait=1.0, decode_only=None, poll=0.25, now=time.time,
+                 max_drift=MAX_DRIFT_PX):
         self.repo = Path(repo)
+        self.max_drift = max_drift
         self.scripts = Path(scripts) if scripts else self.repo / 'tools' / 'pixelmap'
         self.python = python or sys.executable
         self.bridge, self.cam, self.brightness, self.settle = bridge, cam, brightness, settle
@@ -153,6 +192,16 @@ class Job:
         self.hub75_dir = None
         self.map_path = None
         self.log = []
+
+    def fresh_progress(self):
+        """The progress file's initial content (every key the portal may read, lib/lights.mjs)."""
+        return {'running': True, 'pid': os.getpid(), 'mode': self.mode, 'stage': None, 'stage_index': -1,
+                'stages': list(self.stages) + ['done'], 'step': 0, 'of': 0, 'pass': None, 'retakes': 0, 'expected_s': None,
+                'started': round(self.now(), 3), 'updated': None, 'elapsed_s': 0, 'message': 'starting',
+                'ok': None, 'error': None, 'cancelled': False, 'dry_run': self.dry_run,
+                'decode_only': str(self.decode_only) if self.decode_only else None, 'cam': self.cam,
+                'brightness_cap': self.brightness, 'max_drift': self.max_drift, 'before': None, 'restored': None,
+                'capture': None, 'hub75_capture': None, 'capture_info': None, 'result': None, 'log': []}
 
     # -- progress file --
     def write(self, **changes):
@@ -217,13 +266,7 @@ class Job:
                 self.cancel_file.unlink()          # a leftover from an earlier run must not stop this one
             except OSError:
                 pass
-            self.p = {'running': True, 'pid': os.getpid(), 'mode': self.mode, 'stage': None, 'stage_index': -1,
-                      'stages': list(self.stages) + ['done'], 'step': 0, 'of': 0, 'expected_s': None,
-                      'started': round(self.now(), 3), 'updated': None, 'elapsed_s': 0, 'message': 'starting',
-                      'ok': None, 'error': None, 'cancelled': False, 'dry_run': self.dry_run,
-                      'decode_only': str(self.decode_only) if self.decode_only else None, 'cam': self.cam,
-                      'brightness_cap': self.brightness, 'before': None, 'restored': None, 'capture': None,
-                      'hub75_capture': None, 'capture_info': None, 'result': None, 'log': []}
+            self.p = self.fresh_progress()
             if self.decode_only and not (Path(self.decode_only) / 'meta.json').exists():
                 return self.refuse(2, f'no capture at {self.decode_only} (no meta.json)')
             if self.mode == 'full':
@@ -233,7 +276,7 @@ class Job:
             self.write()
             for i, stage in enumerate(self.stages):
                 self.check_cancel()
-                self.write(stage=stage, stage_index=i, step=0, of=STEPS[stage],
+                self.write(stage=stage, stage_index=i, step=0, of=STEPS[stage], **{'pass': None},
                            expected_s=2 * self.dry_wait if self.dry_run else EXPECTED_S[stage], message=f'{stage} started')
                 getattr(self, 'stage_' + stage.replace('-', '_'))()
             self.write(running=False, ok=True, stage='done', stage_index=len(self.stages), step=1, of=1,
@@ -282,7 +325,11 @@ class Job:
         if self.dry_run:
             return self.pretend([(0.5, 'pass A done'), (1.0, 'pass B done')])
         self.run_capture('ropes')
-        self.write(capture=Path(self.capture_dir).name, step=2, message='ropes captured')
+        self.write(capture=Path(self.capture_dir).name, step=self.p['of'], message='ropes captured')
+        # The camera moved: the patterns no longer line up with the first frame, so decoding would place every LED wrong.
+        drift = (self.p.get('capture_info') or {}).get('drift')
+        if isinstance(drift, (int, float)) and drift > self.max_drift:
+            raise StageFailed(drift_error(drift))
 
     def stage_ropes_decode(self):
         if self.dry_run:
@@ -404,10 +451,6 @@ class Job:
                 self.write(before=self.before)
             except (ValueError, SyntaxError):
                 pass
-        elif line.startswith('pass ') and ' done' in line:
-            self.write(step=min(self.p['step'] + 1, STEPS['ropes-capture']), message=line.strip())
-        elif line.startswith('settle ') or 'retaken' in line:
-            self.write(message=line.strip())
         elif line.startswith('OUT '):
             folder = line[4:].strip()
             if 'hub75-' in Path(folder).name:
@@ -420,6 +463,18 @@ class Job:
                 self.write(capture_info={k: info.get(k) for k in ('mode', 'drift', 'lit_camera_px', 'settle', 'brightness_cap')})
             except ValueError:
                 pass
+        else:
+            changes = parse_capture_line(line)
+            if changes.pop('pass_done', False):
+                # A pass is complete: with per-pattern lines step reaches "of"; without them (old capture.py) a pass is a step.
+                if self.p['of'] == STEPS['ropes-capture']:
+                    changes['step'] = min(self.p['step'] + 1, STEPS['ropes-capture'])
+                else:
+                    changes['step'] = self.p['of']
+            if 'retakes' in changes:
+                changes['retakes'] = self.p.get('retakes', 0) + 1
+            if changes:
+                self.write(**changes)
 
     def on_decode_line(self, line):
         if re.match(r'rope\s+\d+:', line):
@@ -443,6 +498,8 @@ def main(argv=None):
     ap.add_argument('--cam', default='gallery')
     ap.add_argument('--brightness', type=float, default=0.4)
     ap.add_argument('--settle', type=float)
+    ap.add_argument('--max-drift', type=float, default=MAX_DRIFT_PX,
+                    help=f'camera movement (px) during the capture that voids the run (default {MAX_DRIFT_PX:g})')
     ap.add_argument('--log', help='append all output to this file (calibrate.ps1 passes one under River\\logs)')
     ap.add_argument('--state', help='folder for calibration.json/.lock/.cancel (default: the River folder above the repo)')
     ap.add_argument('--repo', help=argparse.SUPPRESS)        # tests
@@ -461,7 +518,7 @@ def main(argv=None):
             decode_only = repo / 'frames' / decode_only
     job = Job(state_dir=a.state or repo.parent, repo=repo, scripts=a.scripts, python=a.python, bridge=a.bridge,
               cam=a.cam, brightness=a.brightness, settle=a.settle, dry_run=a.dry_run, dry_wait=a.dry_wait,
-              decode_only=decode_only)
+              decode_only=decode_only, max_drift=a.max_drift)
     return job.run()
 
 

@@ -9,32 +9,72 @@
 // `scenario` cookie (GET /fixtures/<name>); without one it gets all-good, else the first name alphabetically.
 // Controls are checked exactly like the real ones (planControl), then only logged to <state>/controls.log.
 //
+// The clock: a scenario is written at one frozen moment (_scenario.now). Serving it later must not age it (an "at" from
+// this morning would read as hours old by tonight), but it must not change its time of day either: Dave's agent rests
+// 23:55-07:00 Pacific, so a scene "3 h old at 02:59" is the agent resting, while the same scene rebased to 18:50 reads
+// "hasn't ticked for 3 h". So every timestamp is shifted by WHOLE DAYS only, to the last same time of day at or before
+// now (fixtureClock), and the snapshot carries that moment as `now`: the server serves it as the clock the page judges
+// by (/api/status now), and ages are what the scenario wrote. The fixture clock stands still between polls; a page
+// ticks its own ages from the moment it received the answer, as it does with the live server.
+//
 // GET /api/lights (what TouchDesigner is sending to the lights right now) is answered here by synthesising season-coloured
-// flowing water from the scenario's seasons state, so the pages can draw the ropes and panels without bitcube. The contract,
-// which a real frames endpoint will serve one day (until then the real server answers 503 { error: 'not available yet' }):
-//   200 { at:     ms epoch when the frame was taken (the server's clock),
-//         source: 'canvas' (the show) | 'black' (the ropes are dark on purpose: every rope byte is 0; the panels still show the river),
-//         ropes:  { w: 20, h: 400, rgb: <base64 of w*h*3 bytes> }    row-major 8-bit RGB: byte (led * 20 + rope) * 3 is the red of LED
-//                                                                   `led` (0 = the plug end, in the ceiling) on rope `rope` (0 = rope 1);
-//                                                                   drawn as a 20-wide, 400-tall image it is the 20 ropes side by side
-//         panels: { w: 256, h: 32, rgb: <base64 of w*h*3 bytes> } } row-major, top row first: the four HUB75 quads side by side,
-//                                                                   64 x 32 each (quad 1 at x 0-63, quad 2 at 64-127, ...)
-//   503 { error } when there is nothing to show: bitcube offline, TouchDesigner not answering, or not checked yet.
+// flowing water from the scenario's seasons state (renderLights), wrapped in the SAME shape lib/lights.mjs documents for
+// the real frames (its CONTRACT: { ok, action: 'frames', file, fps, frames: { at, source, brightness, ropes { w, h, rgb,
+// source, brightness, watts }, panels { w, h, rgb, source, brightness, output, atlas } }, age_s }), plus synthetic: true.
+// 503 { error } when there is nothing to show: bitcube offline, TouchDesigner not answering, or not checked yet.
+//
+// The calibration (POST /api/control/calibrate, GET /api/calibration) is a scripted run (FixtureCalibration): about 60 s
+// instead of five minutes, writing the exact progress-file shape lib/lights.mjs documents (stages ropes-capture with two
+// passes of 29 patterns and one retake, ropes-decode over 20 ropes, hub75-capture, hub75-locate, done; before/restored;
+// a result naming the newest map in the repo). Cancel stops it (restored true). outcome 'drift' ends it in the drift
+// failure, 'decode' in a decode failure. Each scenario has its own job (a run started on all-good is not seen from td-frozen:
+// every scenario is its own world, like its history); while one exists (24 h, like probe.ps1) that scenario's probe carries it
+// as `calibration`, so the Status band can say "Calibrating the lights".
 import { readFileSync, readdirSync, existsSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { CAMERAS, planControl } from './mission.mjs';
+import { readLocalPixelmap, summarizePixelmap } from './lights.mjs';
 
 const NAME = /^[a-z0-9-]+$/;
 const STILL_AGE_S = 20;
+export const DAY_MS = 86_400_000;
+const TZ = 'America/Los_Angeles';
+
+/** Local-time offset (ms) of a moment in the team's zone, so a whole-day shift keeps the wall clock across a DST change. */
+function tzOffsetMs(ms) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(ms));
+  const g = (t) => Number(parts.find((x) => x.type === t).value);
+  return Date.UTC(g('year'), g('month') - 1, g('day'), g('hour') % 24, g('minute'), g('second')) - Math.floor(ms / 1000) * 1000;
+}
+
+/** The fixture's moment moved forward by whole days: the latest moment at or before `now` with the same time of day. */
+export function fixtureClock(fixtureNow, now) {
+  if (!Number.isFinite(fixtureNow)) return now;
+  let c = fixtureNow + Math.floor((now - fixtureNow) / DAY_MS) * DAY_MS;
+  c += tzOffsetMs(fixtureNow) - tzOffsetMs(c);        // the same wall clock in Pacific time
+  if (c > now) c -= DAY_MS;
+  return c;
+}
 
 export class FixtureMission {
-  constructor({ dir, stateDir, now = () => Date.now() }) {
+  constructor({ dir, stateDir, now = () => Date.now(), pixelmapDir = null, calibrateS = 60 }) {
     if (!dir || !existsSync(dir)) throw new Error(`MISSION_FIXTURES: ${dir} is not a folder`);
-    Object.assign(this, { dir, stateDir, now });
+    Object.assign(this, { dir, stateDir, now, pixelmapDir, calibrateS });
+    this.calibs = new Map();     // scenario name -> FixtureCalibration: each scenario is its own world, so its own job on its own bitcube
   }
 
   start() {}      // nothing to poll
-  stop() {}
+  stop() { for (const c of this.calibs.values()) c.stop(); }
+
+  /** The scripted calibration job of a scenario (by cookie value; the same resolution as active()). */
+  calibFor(name) {
+    const n = this.active(name) ?? '-';
+    if (!this.calibs.has(n)) this.calibs.set(n, new FixtureCalibration({ now: this.now, durationS: this.calibrateS, map: () => (this.pixelmapDir ? readLocalPixelmap(this.pixelmapDir) : null) }));
+    return this.calibs.get(n);
+  }
+
+  /** The clock a scenario is served on (see the header): its moment shifted by whole days to today, or now when it has none. */
+  clock(name) { const [, f] = this.#scenario(name); return fixtureClock(f._scenario?.now, this.now()); }
 
   /** Scenario names, alphabetical (read afresh each time, so a new file shows up at once). */
   names() { return readdirSync(this.dir).filter((f) => f.endsWith('.json') && NAME.test(f.slice(0, -5))).map((f) => f.slice(0, -5)).sort(); }
@@ -55,21 +95,25 @@ export class FixtureMission {
 
   snapshot(name) {
     const [n, f] = this.#scenario(name);
-    // A scenario is written at one frozen moment (_scenario.now, ms). Serving it later would make its ages drift
-    // (an "at" from this morning reads as hours old by tonight), so every timestamp is shifted to the present:
-    // the scene set "9 h ago" in the file is 9 h ago whenever the page is opened.
-    const delta = Number.isFinite(f._scenario?.now) ? this.now() - f._scenario.now : 0;
+    // Every timestamp moves with the fixture clock (the header): whole days forward, so the scene set "9 h ago" in the
+    // file is 9 h before `now` whenever the page is opened, at the same time of day the scenario was written at.
+    const clock = fixtureClock(f._scenario?.now, this.now());
+    const delta = Number.isFinite(f._scenario?.now) ? clock - f._scenario.now : 0;
     const out = {};
     for (const [k, v] of Object.entries(f.status ?? {})) {
       if (!v || typeof v !== 'object') { out[k] = v; continue; }
       const src = rebase(v, delta);
       // The real snapshot carries both `at` and `age_s`; a hand-written source may give one, so fill in the other.
       // A rebased `at` has moved, so its age_s follows it; a frozen fixture (no _scenario.now) keeps its age_s as written.
-      if (src.at != null && (delta || src.age_s == null)) src.age_s = Math.max(0, Math.round((this.now() - src.at) / 1000));
-      else if (src.age_s != null && src.at == null) src.at = this.now() - src.age_s * 1000;
+      if (src.at != null && (delta || src.age_s == null)) src.age_s = Math.max(0, Math.round((clock - src.at) / 1000));
+      else if (src.age_s != null && src.at == null) src.at = clock - src.age_s * 1000;
       out[k] = src;
     }
+    // The calibration job, as probe.ps1 reports it: the progress file while a run is on or recent (only behind a full check).
+    const cal = this.calibFor(n).probeView();
+    if (cal && out.probe && typeof out.probe === 'object' && out.probe.value && typeof out.probe.value === 'object') out.probe = { ...out.probe, value: { ...out.probe.value, calibration: cal } };
     out.fixture = n;
+    out.now = clock;
     return out;
   }
 
@@ -79,7 +123,7 @@ export class FixtureMission {
     if (!CAMERAS.includes(cam)) throw Object.assign(new Error('unknown camera'), { status: 400 });
     const [, f] = this.#scenario(name);
     if (!f.cameras?.[cam]) return {};
-    const at = this.now() - 1000 * Number(f.camera_age_s?.[cam] ?? STILL_AGE_S);
+    const at = fixtureClock(f._scenario?.now, this.now()) - 1000 * Number(f.camera_age_s?.[cam] ?? STILL_AGE_S);
     for (const file of [`placeholder-${cam}.jpg`, 'placeholder.jpg']) {
       if (existsSync(join(this.dir, file))) return { jpeg: readFileSync(join(this.dir, file)), type: 'image/jpeg', at };
     }
@@ -89,12 +133,47 @@ export class FixtureMission {
   /** Same whitelist and argument checks as Mission.control; then the request is logged instead of acted on. */
   async control(action, body = {}) {
     planControl(action, body);
-    mkdirSync(this.stateDir, { recursive: true });
-    appendFileSync(join(this.stateDir, 'controls.log'), JSON.stringify({ t: this.now(), action, body }) + '\n');
+    this.#log(action, body);
     return { ok: true, fixture: true, action, body, note: 'fixture mode: nothing was changed' };
   }
 
-  /** What the lights are being sent right now (the contract at the top), synthesised from the scenario's seasons state. */
+  /** POST /api/control/check in fixture mode: nothing to poll, so only the log line. */
+  async check() {
+    this.#log('check', {});
+    return { ok: true, fixture: true, action: 'check', at: this.now(), note: 'fixture mode: nothing was checked' };
+  }
+
+  /** GET /api/calibration: the scripted run's progress file, or { running: false, none: true } (calibrate.ps1 -Action status). */
+  calibration(scenario) { return this.calibFor(scenario).status(); }
+
+  /** POST /api/control/calibrate: the scripted run, refused for the reasons the real one would give in this scenario
+   *  (bitcube offline, TouchDesigner not answering, the gallery camera unreachable). outcome: 'ok' | 'drift' | 'decode'. */
+  async calibrate(action, body = {}, { scenario, outcome = 'ok' } = {}) {
+    const args = { ...(body && typeof body === 'object' ? body : {}) };
+    this.#log('calibrate', { action, ...args });
+    const calib = this.calibFor(scenario);
+    if (action === 'cancel') return calib.cancel();
+    if (action === 'status') return calib.status();
+    if (action !== 'start') throw Object.assign(new Error('action is start, cancel or status'), { status: 400 });
+    const [, f] = this.#scenario(scenario);
+    const st = f.status ?? {}, pr = st.probe?.value, td = pr?.td;
+    const refuse = (error) => ({ ok: false, error, calibration: calib.status() });
+    if (st.bitcube?.value?.online === false) return refuse("bitcube is offline: calibration can't start");
+    if (!args.dry_run) {
+      if (!pr) return refuse("bitcube hasn't been checked yet: calibration can't start");
+      if (!td || td.ok === false || typeof td.file !== 'string') return refuse("TouchDesigner isn't answering: calibration can't start");
+      if (pr.devices?.gallery_cam === false) return refuse("The gallery camera isn't reachable: calibration can't start");
+    }
+    return calib.start({ dry_run: !!args.dry_run, cam: args.cam === 'river' ? 'river' : 'gallery', outcome });
+  }
+
+  #log(action, body) {
+    mkdirSync(this.stateDir, { recursive: true });
+    appendFileSync(join(this.stateDir, 'controls.log'), JSON.stringify({ t: this.now(), action, body }) + '\n');
+  }
+
+  /** What the lights are being sent right now, synthesised from the scenario's seasons state (renderLights) and wrapped in
+   *  the frames shape lib/lights.mjs documents, so a page reads one shape in both modes. */
   lights(name) {
     const [, f] = this.#scenario(name);
     const st = f.status ?? {};
@@ -104,8 +183,15 @@ export class FixtureMission {
     if (!pr) throw no('not checked yet: no frames until the full check of bitcube answers');
     if (!td || td.ok === false || typeof td.file !== 'string') throw no("TouchDesigner isn't answering: no frames");
     const year = st.seasons?.value ?? td.seasons ?? null;
-    return renderLights({ at: this.now(), source: td.ropes?.source === 'black' ? 'black' : 'canvas', weights: year?.weights ?? null,
-                          intensity: typeof year?.intensity === 'number' ? year.intensity : 0.5, look: td.river_cam?.fresh ? 'live' : 'rain', fps: td.fps ?? null });
+    const r = renderLights({ at: this.now(), source: td.ropes?.source === 'black' ? 'black' : 'canvas', weights: year?.weights ?? null,
+                             intensity: typeof year?.intensity === 'number' ? year.intensity : 0.5, look: td.river_cam?.fresh ? 'live' : 'rain', fps: td.fps ?? null });
+    const hub = td.hub75 && typeof td.hub75 === 'object' ? td.hub75 : {};
+    const panelBrightness = typeof hub.brightness === 'number' ? hub.brightness : 1;
+    const watts = Array.isArray(td.ropes?.status?.watts) ? td.ropes.status.watts : null;
+    return { ok: true, action: 'frames', file: td.file, fps: td.fps ?? null, synthetic: true, age_s: 0,
+             frames: { at: r.at / 1000, source: r.source, brightness: panelBrightness,
+                       ropes: { ...r.ropes, source: r.source, brightness: 0.4, watts },
+                       panels: { ...r.panels, source: 'canvas', brightness: panelBrightness, output: hub.output !== false, atlas: [1024, 128] } } };
   }
 
   #scenario(name) {
@@ -208,3 +294,191 @@ function shiftIso(s, delta) {
   const p = (n, w = 2) => String(n).padStart(w, '0');
   return `${local.getUTCFullYear()}-${p(local.getUTCMonth() + 1)}-${p(local.getUTCDate())}T${p(local.getUTCHours())}:${p(local.getUTCMinutes())}:${p(local.getUTCSeconds())}${m[3] ?? ''}${zone}`;
 }
+
+// ---- the scripted calibration run -------------------------------------------------------------------------------
+// The progress file tools/mission/calibrate.py writes (shape in lib/lights.mjs), produced by a timetable instead of lights,
+// a camera and subprocesses: the same stages, fields and wording, about 60 s long (durationS) in the real stages' proportions.
+const N_PATTERNS = 29;                                   // graycode.patterns(): black, then 14 bits with their inverses
+const N_ROPES = 20;
+const REAL_S = { 'ropes-capture': 170, 'ropes-decode': 40, 'hub75-capture': 35, 'hub75-locate': 10 };   // calibrate.py EXPECTED_S
+const BEFORE = { Active: true, Source: 'canvas', Brightness: 0.4, Graybit: 0, Grayinvert: false, Panels: 'canvas', Maxbrightness: 0.4 };
+const PATTERN_NAMES = ['black', ...Array.from({ length: 14 }, (_, b) => [`b${String(b).padStart(2, '0')}`, `b${String(b).padStart(2, '0')}n`]).flat()];
+export const CALIBRATION_OUTCOMES = ['ok', 'drift', 'decode'];
+export const DRIFT_ERROR = 'The camera moved during the run (drift 48): the map was not saved. Fix the camera and run again';
+export const DECODE_ERROR = 'Decoding failed: rope 7 has no usable patterns; the ropes are back on the river';
+const clockOf = (s) => { const d = new Date(s * 1000); const p = (n) => String(n).padStart(2, '0'); return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; };
+
+/** calibrate.py's result block for a map (summarize_map), from the map as lib/lights.mjs reads it. */
+export function mapResult(map, { dryRun = false } = {}) {
+  const s = summarizePixelmap(map);
+  if (!s) return null;
+  return { map: s.file, date: s.date, points: s.points, seen: s.seen, ropes_found: s.ropes_found, ropes_dark: s.ropes_dark, drift_px: s.drift_px,
+           hub75_quads: s.hub75_quads, camera: s.camera, frame_size: s.frame_size, capture: map.meta?.capture ?? null, ...(dryRun ? { dry_run: true } : {}) };
+}
+
+export class FixtureCalibration {
+  constructor({ now = () => Date.now(), durationS = 60, map = () => null, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
+    Object.assign(this, { now, durationS, map, setTimer, clearTimer });
+    this.p = null;           // the progress file (what calibrate.ps1 -Action status prints)
+    this.timer = null;
+    this.steps = [];         // [{ at (s from start), apply(p) }], the timetable
+    this.log = [];
+    this.pid = 4000 + Math.floor(Math.random() * 1000);
+  }
+
+  /** calibrate.ps1 -Action status */
+  status() { return this.p ? { ...this.p, alive: this.p.running } : { running: false, none: true }; }
+
+  /** probe.ps1's `calibration`: the progress file while it is from the last 24 h, with alive. */
+  probeView() {
+    if (!this.p || this.now() / 1000 - this.p.updated > 24 * 3600) return null;
+    return { ...this.p, alive: this.p.running };
+  }
+
+  start({ dry_run = false, cam = 'gallery', outcome = 'ok' } = {}) {
+    if (this.p?.running) return { ok: false, error: 'a calibration is already running', calibration: this.status() };
+    const t0 = this.now() / 1000;
+    this.log = [];
+    const stages = ['ropes-capture', 'ropes-decode', 'hub75-capture', 'hub75-locate'];
+    this.p = { running: true, pid: this.pid, mode: dry_run ? 'dry-run' : 'full', stage: null, stage_index: -1, stages: [...stages, 'done'],
+               step: 0, of: 0, pass: null, retakes: 0, expected_s: null, started: round3(t0), updated: round3(t0), elapsed_s: 0, message: 'starting',
+               log: [], ok: null, error: null, cancelled: false, dry_run, decode_only: null, cam, brightness_cap: 0.4, max_drift: 30,
+               before: null, restored: null, capture: null, hub75_capture: null, capture_info: null, result: null };
+    this.steps = this.#timetable({ dry_run, outcome, t0 });
+    this.#write();
+    this.#schedule();
+    return { ok: true, started: true, pid: this.pid, log: `C:\\Users\\user\\River\\logs\\calibrate-${stamp(t0)}.log`, calibration: this.status() };
+  }
+
+  /** calibrate.ps1 -Action cancel: the job stops its child and restores the ropes itself (never forced here). */
+  cancel() {
+    if (!this.p?.running) return { ok: true, cancelled: false, forced: false, note: 'nothing is running', calibration: this.p ? this.status() : null };
+    this.#stopTimer();
+    this.#note('child stopped');
+    const restored = this.p.dry_run ? null : true;
+    if (restored) this.#note('restored ropes and panels: ' + "r=op('/project1/ropes'); r.par.Active=True; r.par.Source='canvas'; r.par.Brightness=0.4; r.par.Graybit=0; r.par.Grayinvert=False; op('/project1/panels').par.Source='canvas'");
+    this.#write({ running: false, ok: false, cancelled: true, error: 'cancelled', message: 'cancelled', result: null, restored });
+    return { ok: true, cancelled: true, forced: false, calibration: this.status() };
+  }
+
+  stop() { this.#stopTimer(); }
+
+  #stopTimer() { if (this.timer) { this.clearTimer(this.timer); this.timer = null; } }
+
+  #schedule() {
+    this.#stopTimer();
+    const next = this.steps[0];
+    if (!next || !this.p?.running) return;
+    const delay = Math.max(0, (this.p.started + next.at) * 1000 - this.now());
+    this.timer = this.setTimer(() => { this.timer = null; this.#tick(); }, delay);
+    if (this.timer && typeof this.timer.unref === 'function') this.timer.unref();
+  }
+
+  #tick() {
+    if (!this.p?.running) return;
+    // every step whose time has come (a timer can fire late; a test clock can jump)
+    while (this.steps.length && (this.p.started + this.steps[0].at) * 1000 <= this.now() + 1) {
+      const step = this.steps.shift();
+      const changes = step.apply(this.p) ?? {};
+      this.#write(changes);
+      if (!this.p.running) { this.steps = []; break; }
+    }
+    this.#schedule();
+  }
+
+  #note(line) { this.log.push(String(line).slice(0, 300)); }
+
+  #write(changes = {}) {
+    const p = this.p;
+    Object.assign(p, changes);
+    p.updated = round3(this.now() / 1000);
+    p.elapsed_s = Math.round((p.updated - p.started) * 10) / 10;
+    p.log = this.log.slice(-40);
+  }
+
+  /** The timetable: [{ at, apply }], the same stage order, fields and stdout lines as calibrate.py reports. */
+  #timetable({ dry_run, outcome, t0 }) {
+    const k = this.durationS / Object.values(REAL_S).reduce((a, b) => a + b, 0);     // 60 s for the real 255 s
+    const T = Object.fromEntries(Object.entries(REAL_S).map(([s, v]) => [s, Math.round(v * k * 10) / 10]));
+    const steps = [];
+    const add = (at, apply) => steps.push({ at: Math.round(at * 100) / 100, apply });
+    const note = (line) => this.#note(line);
+    let t = 0;
+    const stageStart = (stage, i, of) => add(t, () => ({ stage, stage_index: i, step: 0, of, pass: null, expected_s: T[stage], message: `${stage} started` }));    // the scripted dry run takes as long as the full one
+    const map = this.map();
+    const drift = outcome === 'drift' ? 48.3 : map?.meta?.drift ?? 10.23;
+
+    // ropes-capture: two passes of 29 patterns, one retake, the end black frame that measures the drift
+    stageStart('ropes-capture', 0, dry_run ? 2 : N_PATTERNS);
+    if (dry_run) {
+      add(t + T['ropes-capture'] * 0.5, () => ({ step: 1, message: 'pass A done' }));
+      add(t + T['ropes-capture'], () => ({ step: 2, message: 'pass B done' }));
+      t += T['ropes-capture'];
+    } else {
+      const per = (T['ropes-capture'] - 1.2) / (2 * N_PATTERNS + 3);
+      add(t + 0.2, () => { note('$ python tools/pixelmap/capture.py ropes --cam gallery --brightness 0.4'); note(`before: ${pyDict(BEFORE)}`); return { before: BEFORE }; });
+      add(t + 0.6, () => { const l = `settle 1.75 s, start ${clockOf(this.now() / 1000)}`; note(l); return { message: l }; });
+      let at = t + 1.2;
+      for (const pass of ['A', 'B']) {
+        for (let i = 1; i <= N_PATTERNS; i++) {
+          add(at, () => { const l = `pass ${pass}: pattern ${i} of ${N_PATTERNS} (${PATTERN_NAMES[i - 1]})`; note(l); return { step: i, of: N_PATTERNS, pass, message: l }; });
+          at += per;
+        }
+        add(at, () => { const l = `pass ${pass} done ${clockOf(this.now() / 1000)}`; note(l); return { step: N_PATTERNS, message: l }; });
+      }
+      add(at + per, () => { const l = '  b04n: retaken, 3 takes, best disagreement 0.012'; note(l); return { retakes: 1, message: l }; });
+      add(at + 2 * per, (p) => {
+        const info = { mode: 'ropes', camera: 'gallery', frame_size: [1440, 808], settle: 1.75, brightness_cap: 0.4, drift: Math.round(drift * 100) / 100, lit_camera_px: 31677 };
+        note(JSON.stringify(info));
+        const folder = `C:\\Users\\user\\River\\river-bitcube\\frames\\pixelmap-${stamp(p.started)}`;
+        note(`OUT ${folder}`);
+        return { capture_info: { mode: 'ropes', drift: info.drift, lit_camera_px: info.lit_camera_px, settle: 1.75, brightness_cap: 0.4 }, capture: `pixelmap-${stamp(p.started)}`, restored: true, message: 'ropes captured' };
+      });
+      t = at + 3 * per;
+      if (outcome === 'drift') {
+        add(t, () => ({ running: false, ok: false, error: DRIFT_ERROR, message: DRIFT_ERROR, result: null }));
+        return steps;
+      }
+    }
+
+    // ropes-decode: one line per rope
+    stageStart('ropes-decode', 1, N_ROPES);
+    const ropes = map?.ropes ?? {};
+    const perRope = T['ropes-decode'] / (N_ROPES + 1);
+    add(t + perRope * 0.5, () => { note(`$ python tools/pixelmap/decode.py frames/pixelmap-${stamp(t0)}`); note('decoded camera px: 28893  rope px with a position: 7466'); return { message: 'decoded camera px: 28893  rope px with a position: 7466' }; });
+    for (let r = 1; r <= N_ROPES; r++) {
+      const failHere = outcome === 'decode' && r === 7;
+      add(t + perRope * r, () => {
+        if (failHere) { note('Traceback (most recent call last):'); note('ValueError: rope 7 has no usable patterns'); return { running: false, ok: false, error: DECODE_ERROR, message: DECODE_ERROR, result: null, restored: dry_run ? null : true }; }
+        const s = ropes[String(r - 1)];
+        const l = `rope ${String(r).padStart(2)}: ` + (s && s.visible > 0 ? `visible ${String(s.visible).padStart(3)}  filled ${String(s.filled).padStart(3)}` : 'not seen');
+        note(l);
+        return { step: r, message: l };
+      });
+    }
+    t += T['ropes-decode'];
+    if (outcome === 'decode') return steps;
+    add(t, () => { const name = map?.file ?? 'pixelmap-2026-10-23.json'; note(`wrote tools/pixelmap/${name} and frames/pixelmap-${stamp(t0)}/overlay.png`); return { step: N_ROPES, message: `map written: ${name}` }; });
+
+    // hub75-capture, hub75-locate
+    t += 0.3;
+    stageStart('hub75-capture', 2, 1);
+    if (dry_run) add(t + T['hub75-capture'], () => ({ step: 1, message: 'panels captured' }));
+    else {
+      add(t + T['hub75-capture'] * 0.3, () => { note('$ python tools/pixelmap/capture.py hub75 --cam gallery --brightness 0.4'); note(`before: ${pyDict(BEFORE)}`); return { before: BEFORE, message: 'settle 1.75 s' }; });
+      add(t + T['hub75-capture'], (p) => { note(`OUT C:\\Users\\user\\River\\river-bitcube\\frames\\hub75-${stamp(p.started)}`); return { step: 1, hub75_capture: `hub75-${stamp(p.started)}`, restored: true, capture_info: { mode: 'hub75', drift: 0.8, lit_camera_px: 9129, settle: 1.75, brightness_cap: 0.4 }, message: 'panels captured' }; });
+    }
+    t += T['hub75-capture'] + 0.3;
+    stageStart('hub75-locate', 3, 1);
+    add(t + T['hub75-locate'], () => { const name = map?.file ?? 'pixelmap-2026-10-23.json'; note(`wrote hub75_quad1 into tools/pixelmap/${name}`); return { step: 1, message: 'HUB75 quad 1 located' }; });
+    t += T['hub75-locate'] + 0.2;
+    add(t, () => ({ running: false, ok: true, stage: 'done', stage_index: 4, step: 1, of: 1, pass: null, message: 'calibration done',
+                    result: map ? mapResult(map, { dryRun: dry_run }) : null, restored: dry_run ? null : true }));
+    return steps;
+  }
+}
+
+const round3 = (x) => Math.round(x * 1000) / 1000;
+function stamp(s) { const d = new Date(s * 1000); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
+/** A dict the way Python prints it (capture.py's 'before:' line). */
+function pyDict(o) { return '{' + Object.entries(o).map(([k, v]) => `'${k}': ${typeof v === 'string' ? `'${v}'` : typeof v === 'boolean' ? (v ? 'True' : 'False') : v}`).join(', ') + '}'; }

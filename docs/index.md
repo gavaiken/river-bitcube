@@ -6,7 +6,7 @@ title: A River Becoming: show machine status
 
 **A River Becoming** is an installation by **Colin, Justine, Andi, Lilian, Will, Dave and Gavin**, for Gray Area, San Francisco (October 2026). This site is the team's working notes for bitcube, the show machine.
 
-**[Show files](show-files.md)** (what the piece is doing) · **[Execution plan](execution-plan.md)** (status table and session prompts) · **[Plan & open questions](plan.md)** · **[Log](a-river-becoming-log.md)** · **[Hardware](a-river-becoming-hardware.md)** · **[System map](system/)** (every device, IP and connection; [system.json](system/system.json) for agents) · **[Ceiling install](ceiling.md)**
+**[Show files](show-files.md)** (what the piece is doing) · **[Execution plan](execution-plan.md)** (status table and session prompts) · **[Plan & open questions](plan.md)** · **[Log](a-river-becoming-log.md)** · **[Hardware](a-river-becoming-hardware.md)** · **[System map](system/)** (every device, IP and connection; [system.json](system/system.json) for agents) · **[Ceiling install](ceiling.md)** · **[Mission control](mission-ui.md)** (the team's web app: how its pages read and why)
 
 **Status as of Fri 23 Oct 2026, 00:05.** At Gray Area, network done and tested for the ceiling: our router (Wi-Fi `gray-river`, 192.168.9.x) and bitcube come back by themselves after a power cut, bitcube falls back to Wi-Fi in seconds, and VNC works with no monitor. Open before the lift: lights tested on the ground, the gallery cam on Wi-Fi only, the wired drop. [Before the lift](execution-plan.md#before-the-lift-22-oct-night-everything-still-to-resolve) · [Ceiling install](ceiling.md).
 

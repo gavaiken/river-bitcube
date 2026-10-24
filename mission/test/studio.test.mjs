@@ -39,12 +39,28 @@ test('stop interrupts the current request; the queue carries on', async () => {
   const s = new Studio({ runner: fakeRunner(log, { delay: 50 }), dir: dir() });
   s.send('long'); s.send('next');
   await sleep(60);
-  assert.equal(s.stop(), true);
+  assert.deepEqual(s.stop(), { stopped: true, cleared: 0 });
   await s.drained();
   const kinds = s.history().map((e) => e.kind);
   assert.ok(kinds.includes('stopped'));
+  assert.ok(!kinds.includes('failed'), 'a stop is not a failure');
   assert.ok(s.history().some((e) => e.kind === 'text' && e.text === 'done: next'));
   assert.ok(!s.history().some((e) => e.kind === 'text' && e.text === 'done: long'));
+});
+
+test('stop with clear drops the waiting requests too, each recorded as stopped before it started', async () => {
+  const log = [];
+  const s = new Studio({ runner: fakeRunner(log, { delay: 50 }), dir: dir() });
+  const one = s.send('long'), two = s.send('next'), three = s.send('later');
+  await sleep(60);
+  assert.deepEqual(s.stop({ clear: true }), { stopped: true, cleared: 2 });
+  assert.deepEqual(s.status().queue, []);
+  await s.drained();
+  const stopped = s.history().filter((e) => e.kind === 'stopped').map((e) => e.id);
+  assert.deepEqual(stopped.sort(), [one, two, three].sort());
+  assert.ok(!s.history().some((e) => e.kind === 'started' && e.id !== one), 'the cleared ones never started');
+  assert.ok(!s.history().some((e) => e.kind === 'text'));
+  assert.deepEqual(s.stop({ clear: true }), { stopped: false, cleared: 0 });
 });
 
 test('the conversation and its history survive a restart', async () => {
@@ -76,10 +92,36 @@ test('a lost session starts a fresh conversation instead of failing forever', as
   assert.equal(s.state.sessionId, 'S2');
 });
 
-test('errors are recorded, not thrown', async () => {
+test('errors are recorded, not thrown, and the run is closed by a failed event in plain words', async () => {
   const s = new Studio({ runner: async function* () { throw new Error('boom'); }, dir: dir() });
-  s.send('z'); await s.drained();
+  const id = s.send('z'); await s.drained();
   assert.ok(s.history().some((e) => e.kind === 'error' && e.text === 'boom'));
+  const failed = s.history().filter((e) => e.kind === 'failed');
+  assert.deepEqual(failed.map((e) => [e.id, e.text]), [[id, 'the agent stopped with an error']]);
+  assert.ok(s.history().every((e) => e.id === id), 'every event carries the request id');
+  // a result with ok false (the agent gave up) or an error event mid-run: one failed event, the reason in plain words
+  const bad = async function* ({ text }) {
+    yield { kind: 'session', sessionId: 'S' };
+    if (/ssh/.test(text)) yield { kind: 'error', text: 'ssh: connect to host bitcube port 22: Operation timed out' };
+    yield { kind: 'result', ok: false, text: /ssh/.test(text) ? 'bitcube did not answer' : 'Claude Code process exited with code 1', cost: 0, turns: 1 };
+  };
+  const b = new Studio({ runner: bad, dir: dir() });
+  const one = b.send('try ssh'); await b.drained();
+  const two = b.send('plain'); await b.drained();
+  assert.deepEqual(b.history().filter((e) => e.kind === 'failed').map((e) => [e.id, e.text]), [[one, "bitcube didn't answer"], [two, 'the agent stopped with an error']]);
+  assert.deepEqual(b.history().filter((e) => e.id === one).map((e) => e.kind), ['user', 'started', 'error', 'result', 'failed']);
+  assert.ok(!b.history().some((e) => e.kind === 'stopped'));
+});
+
+test('plainFailure never leaks the plumbing', async () => {
+  const { plainFailure } = await import('../lib/studio.mjs');
+  assert.equal(plainFailure('ssh: connect to host bitcube port 22: Operation timed out'), "bitcube didn't answer");
+  assert.equal(plainFailure('The studio agent has no Claude token yet (step M7: Gavin runs `claude setup-token`)'), 'the agent has no token yet');
+  assert.equal(plainFailure('request timed out after 600 s'), 'it took too long');
+  assert.equal(plainFailure('fetch failed: ENOTFOUND api.anthropic.com'), "the agent couldn't reach the internet");
+  assert.equal(plainFailure('429 rate limit exceeded'), 'the agent is busy; try again in a minute');
+  for (const raw of ['TypeError: x is undefined', '', null]) assert.equal(plainFailure(raw), 'the agent stopped with an error');
+  for (const raw of ['ssh x', 'token y', 'ECONNRESET']) assert.ok(!/\b(ssh|tcp|token|ECONN|exit|json)\b/i.test(plainFailure(raw).replace('token yet', '')) || plainFailure(raw) === 'the agent has no token yet');
 });
 
 test('empty and huge messages are refused', () => {

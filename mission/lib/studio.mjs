@@ -1,12 +1,16 @@
 // The studio chat (docs/mission-plan.md): one long-running conversation, single-threaded.
 // Messages queue and run one at a time; each run resumes the same agent session; Stop aborts the current
-// run (queued messages still run after it). Every event is appended to chat.jsonl and emitted live.
+// run (queued messages still run after it, unless Stop was asked to clear the queue: those are recorded as 'stopped' before
+// they ever start). Every event is appended to chat.jsonl and emitted live.
 //
 // A runner is an async generator function run({ text, resume, signal }) yielding events:
 //   { kind: 'session', sessionId }          the agent session id (kept in state.json, resumed next time)
 //   { kind: 'text', text }                  something the agent said
 //   { kind: 'activity', text }              a short line about a tool it used
 //   { kind: 'result', ok, text, cost, turns }
+// Every recorded event carries the request's id (the 'user' event's), so a page pairs replies with their request. A run that
+// ends badly (an 'error' event, a result with ok false, or the runner throwing) is closed by { kind: 'failed', id, text } with
+// the reason in plain words (plainFailure); one the person stopped is closed by { kind: 'stopped', id } instead.
 import { EventEmitter } from 'node:events';
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -49,11 +53,19 @@ export class Studio extends EventEmitter {
     return item.id;
   }
 
-  /** Interrupt the request that is running now. Returns false if nothing was running. */
-  stop() {
-    if (!this.current) return false;
-    this.current.abort.abort();
-    return true;
+  /** Interrupt the request that is running now; with clear, drop the waiting ones too (each recorded as 'stopped', so a page
+   *  shows them as Stopped). Returns { stopped, cleared }: whether something was running, and how many never started. */
+  stop({ clear = false } = {}) {
+    let cleared = 0;
+    if (clear && this.queue.length) {
+      const dropped = this.queue.splice(0);
+      cleared = dropped.length;
+      for (const item of dropped) this.#record({ kind: 'stopped', id: item.id, queued: true });
+      if (!this.current) this.emit('status', this.status());     // nothing running to end the turn: tell open pages now
+    }
+    const stopped = !!this.current;
+    if (stopped) this.current.abort.abort();
+    return { stopped, cleared };
   }
 
   /** Resolves when the queue is empty and nothing is running (for tests and shutdown). */
@@ -76,8 +88,10 @@ export class Studio extends EventEmitter {
 
   async #run(item, abort) {
     this.#record({ kind: 'started', id: item.id });
+    let failure = null;                       // the raw reason the run went wrong, if it did
     const attempt = async (resume) => {
       let produced = false;
+      failure = null;
       for await (const ev of this.runner({ text: item.text, resume, signal: abort.signal })) {
         if (abort.signal.aborted) break;
         if (ev.kind === 'session') {
@@ -88,6 +102,8 @@ export class Studio extends EventEmitter {
           continue;
         }
         produced = true;
+        if (ev.kind === 'error') failure = String(ev.text ?? 'error');
+        if (ev.kind === 'result' && ev.ok === false) failure = String(ev.text || failure || 'the agent stopped with an error');
         this.#record({ ...ev, id: item.id });
       }
       return produced;
@@ -102,12 +118,14 @@ export class Studio extends EventEmitter {
         this.#record({ kind: 'notice', id: item.id, text: 'The previous conversation could not be found, so this starts a new one.' });
         delete this.state.sessionId;
         writeFileSync(this.stateFile, JSON.stringify(this.state, null, 2));
-        try { await attempt(undefined); } catch (e2) { this.#record({ kind: 'error', id: item.id, text: String(e2?.message ?? e2) }); }
+        try { await attempt(undefined); } catch (e2) { failure = String(e2?.message ?? e2); this.#record({ kind: 'error', id: item.id, text: failure }); }
       } else {
-        this.#record({ kind: 'error', id: item.id, text: String(e?.message ?? e) });
+        failure = String(e?.message ?? e);
+        this.#record({ kind: 'error', id: item.id, text: failure });
       }
     }
     if (abort.signal.aborted) this.#record({ kind: 'stopped', id: item.id });
+    else if (failure != null) this.#record({ kind: 'failed', id: item.id, text: plainFailure(failure) });
   }
 
   #record(ev) {
@@ -117,6 +135,18 @@ export class Studio extends EventEmitter {
     appendFileSync(this.chatFile, JSON.stringify(e) + '\n');
     this.emit('event', e);
   }
+}
+
+/** Why a run failed, in the words a teammate reads (never the plumbing: ssh, ports, exit codes). */
+export function plainFailure(raw) {
+  const s = String(raw ?? '').trim();
+  if (/ssh|connect to host|port 22|bitcube did not answer|bitcube didn't answer/i.test(s)) return "bitcube didn't answer";
+  if (/no claude token|setup-token/i.test(s)) return 'the agent has no token yet';
+  if (/timed? ?out|timeout|took too long/i.test(s)) return 'it took too long';
+  if (/rate limit|overloaded|529|too many requests/i.test(s)) return 'the agent is busy; try again in a minute';
+  if (/quota|budget|credit|billing/i.test(s)) return 'the agent is out of credit';
+  if (/network|ENOTFOUND|ECONN|fetch failed/i.test(s)) return "the agent couldn't reach the internet";
+  return 'the agent stopped with an error';
 }
 
 function readJson(path, dflt) { try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return dflt; } }

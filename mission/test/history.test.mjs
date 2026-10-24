@@ -336,7 +336,7 @@ test('describeEvent: one plain sentence for every kind, in glossary words', () =
   assert.equal(describeEvent(b[0]), "The lights aren't connected: neither rope box answers and bitcube sees no LED display");
   assert.equal(describeEvent(item(b, 'ropes')), 'The ropes are not reaching the lights: sender closed, both boxes silent');
   assert.equal(describeEvent(item(b, 'rope box 1')), 'Rope box 1 stopped answering');
-  assert.equal(describeEvent(item(b, 'hub75 panels')), 'The panels have no LED display: the sender is not connected');
+  assert.equal(describeEvent(item(b, 'hub75 panels')), 'The panels have no sender: bitcube does not see one');
   assert.equal(describeEvent(item(b, 'river camera')), 'The river camera stopped answering: the river site is down');
   assert.equal(describeEvent(item(b, 'modal link')), "The link to Dave's agent is not posting river clips (none lately); gallery fine");
   assert.equal(describeEvent(item(b, 'recorder')), "The river recorder can't reach the river camera");
@@ -368,12 +368,16 @@ test('describeEvent: one plain sentence for every kind, in glossary words', () =
   assert.equal(first('nothing-known-yet', 'bitcube'), 'bitcube is fine: reachable; full check still to come');
 
   // the calibration job: its stages, how it ended, a process gone quiet; progress within a stage is not news
-  const cal = (calibration, t) => { const p = payload('all-good'); p.probe.value.calibration = calibration; return h.observe(p, t); };
-  let evs = cal({ running: true, stage: 'ropes-capture', mode: 'full', ok: null, step: 1, of: 12 }, T0 + 3 * MIN);
-  assert.equal(evs.length, 1);
+  const all = (calibration, t) => { const p = payload('all-good'); p.probe.value.calibration = calibration; return h.observe(p, t); };
+  const cal = (calibration, t) => all(calibration, t).filter((e) => e.kind === 'calibration');     // the band's own line is tested once, below
+  let evs = all({ running: true, stage: 'ropes-capture', mode: 'full', ok: null, step: 1, of: 12, expected_s: 170, elapsed_s: 20 }, T0 + 3 * MIN);
+  assert.deepEqual(evs.map((e) => e.kind), ['overall', 'calibration'], 'the band turns to Attention: Calibrating, and the job started');
+  assert.deepEqual([evs[0].level, evs[0].cause], ['warning', 'calibrating']);
+  assert.match(describeEvent(evs[0]), /^Calibrating the lights: the ropes are in patterns for about .+ more$/);
+  evs = evs.slice(1);
   assert.deepEqual(evs[0], { kind: 'calibration', t: T0 + 3 * MIN, running: true, stage: 'ropes-capture', ok: null, cancelled: false, mode: 'full', error: null, stale: false, from: null });
   assert.equal(describeEvent(evs[0]), 'The calibration started: photographing the ropes');
-  assert.deepEqual(cal({ running: true, stage: 'ropes-capture', mode: 'full', ok: null, step: 5, of: 12 }, T0 + 4 * MIN), []);
+  assert.deepEqual(all({ running: true, stage: 'ropes-capture', mode: 'full', ok: null, step: 5, of: 12 }, T0 + 4 * MIN), []);
   evs = cal({ running: true, stage: 'ropes-decode', mode: 'full', ok: null }, T0 + 5 * MIN);
   assert.equal(describeEvent(evs[0]), 'The calibration is working out where each rope is');
   evs = cal({ running: false, stage: 'done', mode: 'full', ok: true }, T0 + 6 * MIN);
@@ -387,7 +391,7 @@ test('describeEvent: one plain sentence for every kind, in glossary words', () =
   assert.equal(evs[0].error, 'Traceback (most recent call last): ssh exited 255', 'the raw error stays on the event for the details');
   evs = cal({ running: true, stage: 'ropes-capture', mode: 'full', ok: null, stale: true }, T0 + 10 * MIN);
   assert.equal(describeEvent(evs[0]), 'The calibration stopped answering: its process is gone');
-  assert.deepEqual(cal(null, T0 + 11 * MIN), [], 'no progress file (none in 24 h) is not news');
+  assert.deepEqual(all(null, T0 + 11 * MIN), [], 'no progress file (none in 24 h) is not news');
 
   // actions, from each control, and why one failed in plain words
   const act = (action, body, extra = {}) => describeEvent(h.action({ action, body, ...extra }));

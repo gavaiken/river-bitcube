@@ -9,9 +9,14 @@ mode (`MISSION_FIXTURES=<dir>`) serves `status`, `cameras` and `camera_age_s`; r
 - `build.mjs` is where the scenarios are written (as data on top of an all-good base); `node build.mjs` rewrites the
   JSON files. Edit the scenario there, not the JSON, or the next build will undo it.
 - `node check.mjs [name ...]` validates every file: it parses, has the format, `_scenario.expect` is complete, the
-  payload is internally consistent, and today's pages read it without throwing (copies of `rows()` from
-  `status.html`, the `Now` block of `mission.html` and `toMap()` from `map-live.js`). Its last column prints what
-  today's status page would say, which doubles as a list of what the redesign has to fix.
+  payload is internally consistent, and the v1 pages read it without throwing (copies of `rows()` from the old
+  `status.html`, the `Now` block of the old `mission.html` and `toMap()` from `map-live.js`). Its last column prints what
+  the v1 status page would have said; the v2 pages (docs/mission-ui.md) judge every fixture through `public/model.js`
+  instead (`test/model.test.mjs`).
+- Served by the fixture server, each scenario is its own world: its clock is the scenario's moment moved forward by
+  whole days (02:59 Pacific, today; it stands still between polls, so ages read as written), its history (since when,
+  what was last done) is in memory per scenario, and so is the scripted calibration run. Lights come from
+  `lib/lights.mjs`'s synthetic frames and the newest map and screens file in the clone (`tools/pixelmap/`).
 - Base: the real payload recorded at 03:00 on 23 Oct (`_recorded-2026-10-23.json`; the underscore keeps it out of the scenario list). Every
   fixture is "taken" at the same moment, `NOW = 1792749540000` (2026-10-23 02:59:00 PDT), two seconds after it.
 

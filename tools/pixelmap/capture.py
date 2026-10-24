@@ -138,9 +138,10 @@ def run_ropes(cam, out, settle):
     passes = {}
     for name in ('A', 'B'):
         passes[name] = {}
-        for p in pats:
+        for i, p in enumerate(pats, 1):
+            print(f"pass {name}: pattern {i} of {len(pats)} ({p['name']})", flush=True)    # mission control's progress card reads this
             passes[name][p['name']] = snap(cam, settle, lambda p=p: set_ropes(p))
-        print(f'pass {name} done {datetime.now():%H:%M:%S}')
+        print(f'pass {name} done {datetime.now():%H:%M:%S}', flush=True)
     hi = decode.lit_level({k: v.max(axis=2) for k, v in passes['A'].items()})
     lit = hi - passes['A']['black'].max(axis=2) > 30
     report = {}

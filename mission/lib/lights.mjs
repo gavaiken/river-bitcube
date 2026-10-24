@@ -26,6 +26,11 @@
 //     hub75_quad1: { tl, tr, br, bl: [u, v], capture, frame_size, check_px, ... } }      or { error }
 //   u, v are normalised camera coordinates in TD's convention (v up): on a still of the same aspect, x = u * W, y = (1 - v) * H.
 //   Fetched once per new map: the class refetches when the probe's summary (file, modified) changes.
+//   The server answers GET /api/pixelmap as { map, screens, still }: map is the newest tools/pixelmap/pixelmap-YYYY-MM-DD.json
+//   in the mini's clone of the repo (readLocalPixelmap: the same shape as pixelmap.ps1 prints), fetched from bitcube instead
+//   when the probe names a newer file than the clone has; screens is the newest tools/pixelmap/screens-YYYY-MM-DD.json
+//   (readLocalScreens, passed through: { file, modified, meta { capture, camera, frame_size, uv }, screens { '1'..'4': { tl, tr,
+//   br, bl, estimated?, from?, px?, balance? } } }); still is null until a calibration ships its reference frame.
 //
 // GET /api/status (the probe, every 60 s) gains two keys from probe.ps1:
 //   pixelmap:    { file, date, points, ropes (count), ropes_found: [1-based], ropes_dark: [1-based], hub75_quads: ['hub75_quad1', ...],
@@ -51,6 +56,8 @@
 //     result: null | { map, date, points, ropes_found: [1-based], ropes_dark: [1-based], drift_px, hub75_quads, camera, frame_size, capture, dry_run? } }
 //   A dry run's result describes the newest existing map (dry_run: true), so the map view can be exercised without lights.
 import { execFile } from 'node:child_process';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 export const FRAMES_CACHE_MS = 8_000;
@@ -59,6 +66,32 @@ export const PIXELMAP_CACHE_MS = 10 * 60_000;
 export const CALIBRATE_ACTIONS = ['start', 'cancel', 'status'];
 export const N_ROPES = 20;
 const MAP_FILE = /^pixelmap-\d{4}-\d{2}-\d{2}\.json$/;
+const SCREENS_FILE = /^screens-\d{4}-\d{2}-\d{2}\.json$/;
+const localCache = new Map();          // dir + kind -> { file, mtimeMs, value }
+
+/** The newest file in `dir` whose name matches `re` (names sort by date), parsed, with file and modified in front as
+ *  pixelmap.ps1 prints them; null when there is none. Cached per file and modification time, so a 600 KB map is parsed once. */
+function readLocalJson(dir, re, kind) {
+  let names;
+  try { names = readdirSync(dir).filter((f) => re.test(f)).sort(); } catch { return null; }
+  const file = names.at(-1);
+  if (!file) return null;
+  const path = join(dir, file);
+  let mtimeMs;
+  try { mtimeMs = statSync(path).mtimeMs; } catch { return null; }
+  const key = `${kind}:${dir}`, c = localCache.get(key);
+  if (c && c.file === file && c.mtimeMs === mtimeMs) return c.value;
+  try {
+    const body = JSON.parse(readFileSync(path, 'utf8').replace(/^\uFEFF/, ''));
+    const value = { file, modified: new Date(mtimeMs).toISOString().slice(0, 19), ...body };
+    localCache.set(key, { file, mtimeMs, value });
+    return value;
+  } catch (e) { return { file, error: `unreadable ${file}: ${e.message}` }; }
+}
+/** The newest rope map in a clone's tools/pixelmap (the shape sshPixelmap returns), or null. */
+export function readLocalPixelmap(dir) { return readLocalJson(dir, MAP_FILE, 'pixelmap'); }
+/** The newest screens file (where each HUB75 screen hangs in the camera's view; tools/pixelmap/screens.py), or null. */
+export function readLocalScreens(dir) { return readLocalJson(dir, SCREENS_FILE, 'screens'); }
 const CAPTURE_DIR = /^(pixelmap|hub75)-\d{8}-\d{6}$/;
 
 /** Run one tools/mission script on bitcube and parse its JSON line (sshProbe's pattern). Never rejects. */
@@ -142,7 +175,8 @@ export function summarizePixelmap(map) {
   if (!map || typeof map !== 'object' || map.error) return null;
   const found = Object.entries(map.ropes ?? {}).filter(([, v]) => (v?.visible ?? 0) > 0).map(([k]) => Number(k) + 1).sort((a, b) => a - b);
   const dark = []; for (let r = 1; r <= N_ROPES; r++) if (!found.includes(r)) dark.push(r);
-  return { file: map.file ?? null, date: (map.file ?? '').match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null, points: (map.points ?? []).length,
+  const seen = Object.values(map.ropes ?? {}).reduce((s, v) => s + (Number(v?.visible) || 0), 0);     // LEDs the camera saw; the rest are placed along the rope
+  return { file: map.file ?? null, date: (map.file ?? '').match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null, points: (map.points ?? []).length, seen,
            ropes: found.length, ropes_found: found, ropes_dark: dark, hub75_quads: Object.keys(map).filter((k) => /^hub75_quad\d+$/.test(k)).sort(),
            camera: map.meta?.camera ?? null, frame_size: map.meta?.frame_size ?? null, drift_px: map.meta?.drift ?? null, modified: map.modified ?? null };
 }

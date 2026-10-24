@@ -1,0 +1,74 @@
+/* Mission control v2: the Status page's own styles, on top of v2.css (the shell). Only what the shell has no class
+   for: the season head, the four-season strip, the intensity bar, the steering controls, the rules form, the tiles'
+   room strip, the rope-box lines inside the Ropes card. Tokens and levels come from v2.css. */
+
+/* ---- the verdict band: the since-when beside the chip, the jump buttons ---- */
+.band .chip-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.band .since { font-size: 15px; font-weight: 700; color: var(--muted); }
+.band .row-btns { margin-top: 12px; }
+.band .call-row { margin-top: 6px; }
+.band .todo .action { font-size: 17px; }
+.band .stale-note { font-size: 15px; font-weight: 600; color: var(--unk-text); margin-top: 8px; }
+.band .check-line .btn.link { margin-left: auto; }
+.band .last-done b { font-weight: 700; color: var(--text); }
+
+/* ---- the piece now: season, strip, intensity, tiles, the room ---- */
+.now { padding: 14px var(--gutter) 10px; }
+.season-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.season-word { font-size: 30px; font-weight: 850; line-height: 1.1; text-transform: capitalize; letter-spacing: -0.01em; }
+.season-word.muted { color: var(--muted); font-size: 22px; text-transform: none; }
+.mode { font-size: 15px; color: var(--muted); font-weight: 600; }
+.strip { position: relative; height: 18px; border-radius: 9px; display: flex; margin: 12px 0 4px; }
+.strip > span { flex: 1; }
+.strip .w  { background: #c9dcea; border-radius: 9px 0 0 9px; }
+.strip .sp { background: #b5d9bf; }
+.strip .su { background: #ecd48a; }
+.strip .au { background: #ddb48e; border-radius: 0 9px 9px 0; }
+.strip.dim > span { opacity: 0.35; }
+.strip .marker {
+  position: absolute; top: -5px; width: 28px; height: 28px; margin-left: -14px; border-radius: 50%;
+  background: var(--panel-solid); border: 4px solid var(--text); box-shadow: 0 0 0 2px var(--panel-solid);
+}
+.strip-labels { display: flex; font-size: 14px; color: var(--muted); font-weight: 600; text-transform: capitalize; }
+.strip-labels span { flex: 1; text-align: center; }
+.strip-labels span.on { color: var(--text); font-weight: 800; }
+.intensity { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 15px; flex-wrap: wrap; }
+.intensity .lbl { color: var(--muted); font-weight: 600; }
+.int-bar { display: inline-flex; gap: 3px; }
+.int-bar i { width: 16px; height: 12px; border-radius: 3px; background: var(--line); }
+.int-bar i.on { background: var(--accent); }
+.now .tiles { margin-top: 14px; }
+.now .tile .words { font-weight: 500; }
+.still.room { grid-column: 1 / -1; }
+.still .cap .age { font-weight: 600; }
+.still.old .cap { color: #f2f4f6; }
+.now .switch-host { margin-top: 12px; }
+
+/* ---- steer the year ---- */
+details.sub .sub-body { padding-top: 2px; }
+.target-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.target-grid .btn { padding: 8px 4px; font-size: 14px; text-transform: capitalize; min-width: 0; }
+.rules { display: grid; gap: 10px; }
+.rule { display: grid; grid-template-columns: 1fr 112px; gap: 10px; align-items: center; font-size: 14px; }
+.rule input { min-height: 44px; width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; font: inherit; font-size: 16px; background: var(--panel-solid); color: var(--text); }
+.rule .unit { color: var(--muted); font-size: 14px; }
+.ctl .row-btns { margin-top: 0; }
+.ctl .ctl-why { order: -1; }       /* "Not possible now: …" reads above the greyed control */
+.ctl .ctl-h { order: -2; }
+
+/* ---- Not OK cards: group header, rows, what-to-do inside a row, the rope boxes under Ropes ---- */
+.group .g-action { color: var(--text); }
+.row-body .todo { margin-top: 0; }
+.row-body .action-line { font-size: 15px; font-weight: 650; line-height: 1.4; }
+.boxes { display: grid; gap: 6px; font-size: 15px; }
+.boxes .box { display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: start; }
+.boxes .box .state { font-size: 15px; }
+.boxes .box .sum { color: var(--muted); font-size: 14px; }
+.row .from .since { font-weight: 600; }
+.dave { display: grid; gap: 6px; font-size: 15px; }
+.dave .lbl { color: var(--muted); font-weight: 600; }
+.fine-names { text-transform: none; }
+details.fine > summary .mk { flex: none; }
+
+/* ---- footer ---- */
+footer.foot .fine-print { margin-top: 4px; }
