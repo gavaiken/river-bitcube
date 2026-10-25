@@ -119,8 +119,12 @@ test('server in fixture mode: /version, login, /fixtures, status, stills, contro
   assert.equal((await post('/api/chat/send', { text: 'hello' }, { cookie: mc })).status, 200);
   let events = [];
   for (let i = 0; i < 100 && events.filter((e) => e.kind === 'result').length < 2; i++) { await sleep(20); events = (await (await get('/api/chat/history', { cookie: mc })).json()).events; }
-  const kinds = events.map((e) => e.kind);
-  assert.deepEqual(kinds.filter((k) => k !== 'started'), ['user', 'user', 'activity', 'activity', 'activity', 'error', 'result', 'failed', 'activity', 'activity', 'activity', 'text', 'result']);
+  const kinds = events.map((e) => e.kind).filter((k) => k !== 'started');
+  // The fake agent starts at once, so the second request can be recorded before or after the first run's first step
+  // (it was flaky on a loaded machine): check the two requests apart from the two runs' own order.
+  assert.deepEqual(kinds.filter((k) => k !== 'user'), ['activity', 'activity', 'activity', 'error', 'result', 'failed', 'activity', 'activity', 'activity', 'text', 'result']);
+  assert.deepEqual([kinds[0], kinds.filter((k) => k === 'user').length], ['user', 2]);
+  assert.ok(kinds.lastIndexOf('user') < kinds.indexOf('activity', kinds.indexOf('failed')), 'the second request is recorded before its own run starts');
   assert.equal(events.find((e) => e.kind === 'failed').text, "bitcube didn't answer");
   assert.equal(events.find((e) => e.kind === 'failed').id, events[0].id);
   assert.deepEqual(events.filter((e) => e.kind === 'activity').slice(0, 3).map((e) => e.text), ['read CLAUDE.md', 'ran: Check bitcube is online', 'edited docs/sessions/U.md']);
