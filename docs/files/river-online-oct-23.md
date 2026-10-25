@@ -4,7 +4,7 @@ title: "river-online-oct-23"
 
 # river-online-oct-23
 
-**The live river and Dave's AI.** Rebuilt 23 Oct for Gray Area from `river-online-oct-20` (kept as a fallback). [All show files](../show-files.html)
+**The live river and Dave's AI.** Rebuilt 23 Oct for Gray Area from `river-online-oct-20` (now retired as [old-river-online-oct-20](old-river-online-oct-20.html)). [All show files](../show-files.html)
 
 ## For visitors
 The river you see is happening now: a camera at a river in the Sierra foothills streams it here over a satellite link. An AI listens to this room and the river through their cameras and writes a journal; every few minutes it chooses the colours and the mood of the water, and it reacts to what it sees in between.

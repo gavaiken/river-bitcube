@@ -2,7 +2,7 @@
   "_scenario": {
     "now": 1792749540000,
     "title": "The online file is running, not the seasons file",
-    "description": "TouchDesigner is running river-online-oct-20.toe (the live river plus Dave's agent and canvas). That file has no seasons COMP, so nothing listens on port 9981: the seasons fetch fails (connection refused, reported as \"fetch failed\"), devices.seasons_page is false and td.seasons is null. The live river relay is healthy (fresh frames from the river camera, infrared at this hour). The seasons file is still the boot file, so the next restart would bring it back. Everything else is up.",
+    "description": "TouchDesigner is running river-online-oct-23.toe (the live river plus Dave's agent and canvas). That file has no seasons COMP, so nothing listens on port 9981: the seasons fetch fails (connection refused, reported as \"fetch failed\"), devices.seasons_page is false and td.seasons is null. The live river relay is healthy (fresh frames from the river camera, infrared at this hour). The seasons file is still the boot file, so the next restart would bring it back. Everything else is up.",
     "expect": {
       "headline": "TouchDesigner is running the online file, not the seasons file: the river's year and its controls are unavailable",
       "severity": "warning",
@@ -71,8 +71,7 @@
         "time": "2026-10-23T02:58:32",
         "show_files": [
           "river-local-oct-22-seasons.toe",
-          "river-online-oct-23.toe",
-          "river-online-oct-20.toe"
+          "river-online-oct-23.toe"
         ],
         "lights_route": "direct",
         "td": {

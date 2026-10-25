@@ -2,7 +2,7 @@
 
 **Show file**: A TouchDesigner file that runs the whole piece (ropes and HUB75 panels) on the show machine. Each one has its own page explaining it to visitors and to the team.
 
-**Local-only file**: A show file that runs with no network at all: no internet, no Modal, no live river feed. It draws only on what is on the show machine's disk. Example: `river-local-oct-22-seasons.toe`. Its counterpart is the **online show file** (`river-online-oct-20.toe`), which also uses the live river feed and Dave's Modal agent.
+**Local-only file**: A show file that runs with no network at all: no internet, no Modal, no live river feed. It draws only on what is on the show machine's disk. Example: `river-local-oct-22-seasons.toe`. Its counterpart is the **online show file** (`river-online-oct-23.toe`), which also uses the live river feed and Dave's Modal agent.
 
 **River library**: The recorded clips of the real river, kept on the show machine and played back when the live river feed is absent. Not the same as the **river memory** (the last few seconds of whatever river image is showing, smeared down the ropes).
 

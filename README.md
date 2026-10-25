@@ -12,7 +12,7 @@ Show machine for **A River Becoming** (Gray Area, Oct 2026). Lives at `C:\Users\
 | `td/bridge/` | Claude ↔ TouchDesigner bridge (WebServer DAT on localhost:9980) |
 | `tools/td.ps1` | Run Python inside the open TD project via the bridge |
 | `tools/cam_snap.ps1` | Grab a camera frame (URLs in untracked `secrets.local.json`) |
-| `Start-River.cmd` | Login autostart: opens `river.toe` in TouchDesigner |
+| `Start-River.cmd` | Login autostart: opens the boot show file in TouchDesigner |
 | `Start-Status.cmd` | Login autostart (40 s): Chrome on the main monitor with the public status page (`tools/status_page.ps1`; local `docs/index.md` if offline) |
 | `Start-Claude.cmd` | Login autostart: terminal in `C:\Users\user\River` running Claude, told to read all docs and wait |
 
@@ -22,10 +22,10 @@ Set up 2026-10-17. This box auto-logs in as `user`, and the shortcut
 `C:\Users\user\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\Start-River.lnk`
 runs `C:\Users\user\River\river-bitcube\Start-River.cmd` at every login.
 
-`Start-River.cmd` waits 10 s, then opens `C:\Users\user\River\river-bitcube\river-local-oct-18.toe` (the local rain checkpoint; set 18 Oct, was `river.toe`) in TouchDesigner
-(`C:\Program Files\Derivative\TouchDesigner\bin\TouchDesigner.exe`, build 2025.33230). If `river.toe` doesn't exist yet, it opens TouchDesigner with no file.
+`Start-River.cmd` waits 10 s, then opens the boot show file in TouchDesigner
+(`C:\Program Files\Derivative\TouchDesigner\bin\TouchDesigner.exe`, build 2025.33230): the file named in `C:\Users\user\River\boot-file.txt` (set by mission control), else `river-local-oct-22-seasons.toe` (the river's year), else `river-online-oct-23.toe`. If none exists, it opens TouchDesigner with no file. Retired show files start with `old-` and are never opened.
 
-- To change what runs at boot, put the show file at `river-bitcube\river.toe`, or edit the `TOE` line in the script.
+- To change what runs at boot, use mission control's Boot file (Status → Installer), or edit the `TOE` lines in the script.
 - To stop autostart, delete or move `Start-River.lnk` out of the Startup folder.
 - The parent folder `C:\Users\user\River` is shared over SMB as `\\bitcube\River` (user `user`).
 - TouchDesigner 2022.33910 is no longer installed. The 2025 installer ignored `/DIR` and replaced it in place (2026-10-17). 2025 opens the old BitCube files.

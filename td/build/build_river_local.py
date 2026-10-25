@@ -9,7 +9,7 @@
 #   -> /project1/ropes Canvas;  field -> Corner Pin (quad 1 corners) -> 256x128 -> /project1/panels Quad1
 #
 # Only for the checkpoint file: it rewires the shared ropes and panels COMPs and switches Andi's Web Render
-# off, so it refuses to run in river.toe (the login show file).
+# off, so it refuses to run in anything but a river-local-*/river-online-* file (never the seasons file or an old-… file).
 import glob
 import json
 import sys

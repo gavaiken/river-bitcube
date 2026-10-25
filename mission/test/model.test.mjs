@@ -466,3 +466,22 @@ test('summaries say what the ropes do, never a measurement; the watts stay in th
     assert.match(r.detail, /\d+ \+ \d+ W/, name);
   }
 });
+
+test("an old show file running is Attention with the way back to the river's year, and old files are never offered (D27)", () => {
+  const fx = clone(byName['seasons-not-running']);
+  fx.status.probe.value.td.file = 'old-river-online-oct-20.toe';
+  fx.status.probe.value.show_files = ['river-local-oct-22-seasons.toe', 'river-online-oct-23.toe', 'river-online-oct-20.toe', 'old-river.toe'];
+  const m = run(fx);
+  assert.deepEqual([m.show.file.kind, m.show.file.label], ['other', 'an old show file']);
+  assert.equal(m.overall.cause, 'old-file');
+  assert.equal(m.overall.level, 'warning');
+  assert.match(m.overall.headline, /^TouchDesigner is showing an old show file, not the river's year/);
+  assert.match(m.overall.action, /Switch to the river's year below/);
+  assert.equal(contactFor('old-file').name, 'Gavin');
+  assert.doesNotMatch(`${m.overall.headline} ${m.overall.detail} ${m.overall.action}`, JARGON);
+  assert.deepEqual(m.show.show_files, ['river-local-oct-22-seasons.toe', 'river-online-oct-23.toe'], 'the old names (before and after the rename) are not offered');
+  assert.match(m.items.find((x) => x.id === 'seasons').action, /Switch to the river's year/);
+  // a bitcube that hasn't pulled the rename still reports the old name: same reading
+  fx.status.probe.value.td.file = 'river-online-oct-20.toe';
+  assert.equal(run(fx).overall.cause, 'old-file');
+});

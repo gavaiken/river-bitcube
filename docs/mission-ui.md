@@ -170,7 +170,7 @@ Top to bottom on a phone; every value is a model field.
 | Installer | `controls.lightsroute/bootfile` | hatched, tool icon, "changes cabling settings": the lighting port and the boot file (both confirm), "Calibrate the lights → Lights" | | |
 | Footer | | System map (for engineers) · Show files · Install guide · The plan | | |
 
-The jump button is keyed on `overall.cause`: ropes-dark → "Ropes → On"; td-frozen, td-slow, td-off, online-file, river-stale, year-page → "Switch to the river's year", or "Restart on the river's year" when it is the file running (`yearPress()` in model.js, the same words as the advice); panels-off → "Panels brightness"; gallery-cam, no-internet, router, river-site, lights, box, sender → "Open <card> →"; coming-up, not-checked → "Open the studio chat". `/api/status` every 5 s; `derive(last, last.now + elapsed since receipt)` on every render; ages tick every second without re-rendering rows. Controls POST `/api/control/<action>`; a non-2xx or `ok: false` is a failure.
+The jump button is keyed on `overall.cause`: ropes-dark → "Ropes → On"; td-frozen, td-slow, td-off, online-file, old-file, river-stale, year-page → "Switch to the river's year", or "Restart on the river's year" when it is the file running (`yearPress()` in model.js, the same words as the advice); panels-off → "Panels brightness"; gallery-cam, no-internet, router, river-site, lights, box, sender → "Open <card> →"; coming-up, not-checked → "Open the studio chat". `/api/status` every 5 s; `derive(last, last.now + elapsed since receipt)` on every render; ages tick every second without re-rendering rows. Controls POST `/api/control/<action>`; a non-2xx or `ok: false` is a failure.
 
 ### Lights
 

@@ -2,7 +2,7 @@
   "_scenario": {
     "now": 1792749540000,
     "title": "River camera has gone quiet (online file running)",
-    "description": "TouchDesigner is running the online show file (river-online-oct-20.toe), the one that uses the live river camera and Dave's agent, so the seasons page isn't served (fetch failed: connection refused on 9981; td.seasons is null): expected for this file. The fault: the river camera's RTSP port still accepts TCP connections (devices.river_cam true) but sends no frames. TD's relay reports its last frame 1800 s ago and fresh false (river_cam.py never records a stream error, so error stays null while the relay keeps restarting ffmpeg); the panels and ropes have fallen back to the rain. The Modal link's river capture is in the same state: its last successful clip (the last INFO line) was at 01:58, an hour ago, and every clip since has failed with an ERROR line about 70 s apart, so the log file itself is still fresh (log_age_s small). The recorder's current run times out. The cached river still is 30 minutes old.",
+    "description": "TouchDesigner is running the online show file (river-online-oct-23.toe), the one that uses the live river camera and Dave's agent, so the seasons page isn't served (fetch failed: connection refused on 9981; td.seasons is null): expected for this file. The fault: the river camera's RTSP port still accepts TCP connections (devices.river_cam true) but sends no frames. TD's relay reports its last frame 1800 s ago and fresh false (river_cam.py never records a stream error, so error stays null while the relay keeps restarting ffmpeg); the panels and ropes have fallen back to the rain. The Modal link's river capture is in the same state: its last successful clip (the last INFO line) was at 01:58, an hour ago, and every clip since has failed with an ERROR line about 70 s apart, so the log file itself is still fresh (log_age_s small). The recorder's current run times out. The cached river still is 30 minutes old.",
     "expect": {
       "headline": "The river camera has sent no frames for 30 minutes: the show is running on the rain fallback (online file)",
       "severity": "warning",
@@ -71,8 +71,7 @@
         "time": "2026-10-23T02:58:32",
         "show_files": [
           "river-local-oct-22-seasons.toe",
-          "river-online-oct-23.toe",
-          "river-online-oct-20.toe"
+          "river-online-oct-23.toe"
         ],
         "lights_route": "direct",
         "td": {

@@ -255,7 +255,7 @@ function jumpButtons(o, m) {
   const c = o.cause, b = [];
   const first = m.problems.find((x) => x.id === c)?.items?.[0];
   if (c === 'ropes-dark') b.push(['Ropes → On', 'goto', rid('ropes')]);
-  else if (['td-frozen', 'td-slow', 'td-off', 'online-file', 'river-stale', 'year-page'].includes(c)) b.push([M.yearPress(m.show.file?.kind), 'goto-switch', '']);   // the advice's own words
+  else if (['td-frozen', 'td-slow', 'td-off', 'online-file', 'old-file', 'river-stale', 'year-page'].includes(c)) b.push([M.yearPress(m.show.file?.kind), 'goto-switch', '']);   // the advice's own words
   else if (['panels-off', 'panels-dark'].includes(c)) b.push(['Panels brightness', 'goto', rid('hub75 panels')]);
   else if (['coming-up', 'not-checked'].includes(c)) b.push(['Open the studio chat', 'href', '/chat']);
   else if (['page', 'bitcube-unchecked', 'probe-stale', 'bitcube-offline', 'check-failed', 'unknown', 'td-unknown'].includes(c)) return '';
@@ -309,8 +309,8 @@ function nowHTML(m) {
       <div class="strip"><span class="w"></span><span class="sp"></span><span class="su"></span><span class="au"></span><span class="marker" style="left:${pos.toFixed(1)}%"></span></div>
       <div class="strip-labels">${SEASONS.map((x) => `<span class="${x === s.season ? 'on' : ''}">${x}</span>`).join('')}</div>
       ${s.intensity ? `<div class="intensity"><span class="lbl">Intensity</span><span class="int-bar">${INTENSITY.map((_, i) => `<i class="${i < lit ? 'on' : ''}"></i>`).join('')}</span><b>${esc(s.intensity.word)}</b></div>` : ''}`;
-  } else if (s.file?.kind === 'live') {
-    head = `<div class="season-row"><div class="season-word muted">The live river, not the river's year</div></div>
+  } else if (s.file?.kind === 'live' || s.file?.kind === 'other') {
+    head = `<div class="season-row"><div class="season-word muted">${s.file.kind === 'live' ? 'The live river' : cap(s.file.label)}, not the river's year</div></div>
       <div class="strip dim"><span class="w"></span><span class="sp"></span><span class="su"></span><span class="au"></span></div>
       <div class="strip-labels">${SEASONS.map((x) => `<span>${x}</span>`).join('')}</div>
       <div class="intensity"><span class="lbl">The river</span><b>${esc(cap(s.river.words))}</b></div>
@@ -449,7 +449,7 @@ function rowHTML(x, m) {
     x.action ? `<div class="todo"><div class="label">What to do</div><div class="action">${esc(nb(x.action))}</div></div>` : '',
     x.id === 'ropes' ? ropesCtlHTML(m) : x.id === 'hub75 panels' ? hubCtlHTML(m) : x.id === 'touchdesigner' ? showfileCtlHTML(m)
       : x.id === 'seasons' && m.show.season ? '<div class="row-btns"><button type="button" class="btn" data-act="goto" data-target="steer">Steer the year</button></div>'
-      : x.id === 'seasons' && m.show.file?.kind === 'live' ? showfileCtlHTML(m, 'year')
+      : x.id === 'seasons' && ['live', 'other'].includes(m.show.file?.kind) ? showfileCtlHTML(m, 'year')
       : x.id === 'river camera' ? riverStillHTML(x) : x.id === 'modal agent' ? daveHTML(m) : '',
     addrHTML(x, m),
   ].join('');
@@ -541,8 +541,8 @@ function hubCtlHTML(m) {
 /** The show-file control: every file (the TouchDesigner row), or only the files of one kind (the Season card: the river's year). */
 function showfileCtlHTML(m, onlyKind = null) {
   const c = m.controls.switch, s = m.show, all = s.show_files.length ? s.show_files : Object.keys(FILES).slice(0, 2);
-  // the older fallbacks (a label in parentheses) are switched to from the Installer's boot file, not here
-  const files = (onlyKind ? all.filter((f) => FILES[f]?.kind === onlyKind) : all).filter((f) => f === s.file?.name || !/\(/.test(fileLabel(f)));
+  // only the river's year and the live river: model.js leaves old show files out of show_files (execution plan D27)
+  const files = onlyKind ? all.filter((f) => FILES[f]?.kind === onlyKind) : all;
   const running = s.file?.name, off = !c.possible || pend('switch');
   const btns = files.map((f) => `<button type="button" class="btn ${f === running ? '' : 'primary'}" data-act="switch" data-file="${esc(f)}" ${off ? 'disabled' : ''}>${f === running ? `Restart on ${esc(fileLabel(f))}` : `Switch to ${esc(fileLabel(f))}`}</button>`).join('');
   return `<div class="ctl ${c.possible ? '' : 'off'}" data-ctl="switch"><div class="ctl-h">Show file</div>${c.possible ? '' : why(c.why)}

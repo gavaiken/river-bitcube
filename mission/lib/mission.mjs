@@ -17,8 +17,9 @@ export function calBlocked(action, cal) {
   if (!CAL_BLOCKED.includes(action) || cal?.running !== true || cal.stale === true) return null;
   return Object.assign(new Error('a calibration is running: stop it on the Lights page first'), { status: 409 });
 }
-// Show files mission control may open (the online one keeps its old name until step S1.1 renames it).
-export const BOOT_FILES = ['river-local-oct-22-seasons.toe', 'river-online-oct-23.toe', 'river-online-oct-20.toe', 'river-local-oct-18.toe'];
+// Show files mission control may open: the river's year and the live river. Retired files start with old- (D27) and
+// are never offered, for the boot file or a switch.
+export const BOOT_FILES = ['river-local-oct-22-seasons.toe', 'river-online-oct-23.toe'];
 // The only show file a rebuild may bake the LED map into: the river's year (build_seasons_local.py refuses any other).
 export const REBUILD_FILES = ['river-local-oct-22-seasons.toe'];
 export const MODES = ['automatic', 'dynamic', 'manual'];

@@ -39,9 +39,15 @@ export const TZ = 'America/Los_Angeles';        // bitcube, the mini and the tea
 export const FILES = {                          // GLOSSARY.md: the local-only file is "the river's year", the online one "the live river"
   'river-local-oct-22-seasons.toe': { kind: 'year', label: "the river's year" },
   'river-online-oct-23.toe': { kind: 'live', label: 'the live river' },
-  'river-online-oct-20.toe': { kind: 'live', label: 'the live river (older fallback)' },
-  'river-local-oct-18.toe': { kind: 'other', label: 'the old rain file (local-only)' },   // the 18 Oct rain checkpoint (CLAUDE.md): no year, no live river
+  // Retired show files (execution plan D27): renamed old-… on 24 Oct, never offered for the boot file or a switch. Their
+  // earlier names stay here so a bitcube that hasn't pulled the rename still reads right.
+  'old-river-online-oct-20.toe': { kind: 'other', label: 'an old show file' },
+  'old-river.toe': { kind: 'other', label: 'an old show file' },
+  'river-online-oct-20.toe': { kind: 'other', label: 'an old show file' },
+  'river-local-oct-18.toe': { kind: 'other', label: 'an old show file' },
+  'river.toe': { kind: 'other', label: 'an old show file' },
 };
+const OFFERED = ['year', 'live'];               // the kinds the boot file and the show-file switch offer
 export const CAL_STAGE_S = { 'ropes-capture': 170, 'ropes-decode': 40, 'hub75-capture': 35, 'hub75-locate': 10 };   // calibrate.py EXPECTED_S
 export const CAL_TOTAL_S = Object.values(CAL_STAGE_S).reduce((a, b) => a + b, 0);
 export const CAL_STAGE_WORDS = { 'ropes-capture': 'photographing the ropes', 'ropes-decode': 'working out where each rope is', 'hub75-capture': 'photographing the panels', 'hub75-locate': 'finding the panels' };
@@ -68,7 +74,7 @@ const CONTACT_BY_CAUSE = {
   'link-off': 'gavin', 'link-failing': 'gavin', recorder: 'gavin', disk: 'gavin', 'modal-stale': 'gavin', 'seasons-stale': 'gavin',
   lights: 'lilian', sender: 'lilian', box: 'lilian',
   panels: 'andi', 'panels-off': 'andi', 'panels-dark': 'andi',
-  'ropes-dark': 'colin', 'online-file': 'colin',
+  'ropes-dark': 'colin', 'online-file': 'colin', 'old-file': 'gavin',
   'river-stale': 'will', 'no-internet': 'will', router: 'will', 'river-site': 'will', 'gallery-cam': 'will',
   'modal-unreachable': 'dave', 'modal-stalled': 'dave', 'modal-not-ok': 'dave',
   'td-restarting': null, 'coming-up': null, 'not-checked': null, calibrating: null, unknown: null,
@@ -353,7 +359,8 @@ export function derive(status, nowMs) {
     { source: 'seasons', action: "Press Switch to the river's year if the year is wanted (the lights go dark for about a minute)." });
   else if (kind === 'year') it('seasons', 'warning', 'Page not answering', `TouchDesigner runs the river's year, but its page isn't answering properly: ${fetchWords(se.error)}.`,
     { source: 'seasons', action: `Wait a minute; if it stays down, press ${YEAR_PRESS}.` });
-  else if (kind === 'other') it('seasons', 'warning', `Not running: TouchDesigner is showing ${label}`, 'That show file serves no year page.', { source: 'seasons' });
+  else if (kind === 'other') it('seasons', 'warning', `Not running: TouchDesigner is showing ${label}`, 'That show file serves no year page.',
+    { source: 'seasons', action: "Press Switch to the river's year (the lights go dark for about a minute)." });
   else it('seasons', 'warning', 'Page not answering', `${cap(fetchWords(se.error))}; waiting for the full check of bitcube to say why.`, { source: 'seasons' });
 
   const watts = Array.isArray(rs?.watts) ? rs.watts.map(num) : null, capW = num(ro?.box_watts_cap);
@@ -527,6 +534,9 @@ export function derive(status, nowMs) {
       if (kind === 'live') add('online-file', 'warning', 40, "TouchDesigner is showing the live river, not the river's year: the year and its controls are unavailable",
         `The live river has no year of seasons and no year page.${FILES[pr.boot_file]?.kind === 'year' ? " The river's year opens at the next restart." : ''}`,
         "If nobody chose this on purpose, press Switch to the river's year below; the lights go dark for about a minute. If the live river is wanted tonight, leave it.", ['seasons']);
+      else if (kind === 'other') add('old-file', 'warning', 40, `TouchDesigner is showing ${label}, not the river's year: the year and its controls are unavailable`,
+        `It is neither the river's year nor the live river.${FILES[pr.boot_file]?.kind === 'year' ? " The river's year opens at the next restart." : ''}`,
+        "Press Switch to the river's year below; the lights go dark for about a minute.", ['seasons']);
       else if (kind === 'year' && !y && se.present) add('year-page', 'warning', 46, "The river's year page isn't answering, though TouchDesigner runs it", `${cap(fetchWords(se.error))}; the year's controls are unavailable until it does.`,
         `Wait a minute; if it stays down, press ${YEAR_PRESS} (about a minute dark).`, ['seasons']);
       if (riverStale) add('river-stale', 'warning', 55, `The river camera has sent no frames for ${dur(relayAgeNow)}: the show is running on the rain fallback`,
@@ -613,7 +623,7 @@ export function derive(status, nowMs) {
   const show = {
     file: tdOk ? { name: td.file, kind, label, words: `TouchDesigner is showing ${label}` } : null,
     boot_file: typeof pr?.boot_file === 'string' ? { name: pr.boot_file, kind: FILES[pr.boot_file]?.kind ?? 'other', label: FILES[pr.boot_file]?.label ?? pr.boot_file } : null,
-    show_files: Array.isArray(pr?.show_files) ? pr.show_files : [],
+    show_files: (Array.isArray(pr?.show_files) ? pr.show_files : []).filter((f) => OFFERED.includes(FILES[f]?.kind)),
     season: yearOk ? year.season : null, phase: yearOk ? num(year.phase) : null, weights: yearOk ? obj(year.weights) : null,
     intensity: intensity != null ? { value: intensity, word: intensityWord(intensity), words: `${intensityWord(intensity)} (${intensity.toFixed(2)})` } : null,
     mode: yearOk ? { id: year.mode, effective: year.effective_mode ?? year.mode, words: modeWords } : null,

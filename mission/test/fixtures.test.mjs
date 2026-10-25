@@ -11,15 +11,15 @@ test('planControl: the whitelist accepts the fixed actions and rejects everythin
   assert.deepEqual(planControl('target', { season: 'summer', intensity: '0.8' }), { kind: 'seasons', path: '/target', body: { season: 'summer', intensity: 0.8 } });
   assert.deepEqual(planControl('rules', { rules: { cycle_seconds: '300' } }), { kind: 'seasons', path: '/rules', body: { cycle_seconds: 300 } });
   assert.deepEqual(planControl('rules-reset', {}), { kind: 'seasons', path: '/rules/reset', body: {} });
-  const probes = [['ropes', { dark: true }], ['hub75', { brightness: 0.5 }], ['bootfile', { file: 'river-online-oct-20.toe' }],
-                  ['switch', { file: 'river-local-oct-18.toe' }], ['lightsroute', { route: 'router' }], ['rebuild', { file: 'river-local-oct-22-seasons.toe' }]].map(([a, b]) => planControl(a, b));
+  const probes = [['ropes', { dark: true }], ['hub75', { brightness: 0.5 }], ['bootfile', { file: 'river-online-oct-23.toe' }],
+                  ['switch', { file: 'river-local-oct-22-seasons.toe' }], ['lightsroute', { route: 'router' }], ['rebuild', { file: 'river-local-oct-22-seasons.toe' }]].map(([a, b]) => planControl(a, b));
   assert.ok(probes.every((p) => p.kind === 'probe'));
-  assert.deepEqual(probes.map((p) => p.args), ['-Action ropes -Dark', '-Action hub75 -Brightness 0.50', '-Action bootfile -BootFile river-online-oct-20.toe',
-                                               '-Action switch -BootFile river-local-oct-18.toe', '-Action lightsroute -LightsRoute router', '-Action rebuild -BootFile river-local-oct-22-seasons.toe']);
+  assert.deepEqual(probes.map((p) => p.args), ['-Action ropes -Dark', '-Action hub75 -Brightness 0.50', '-Action bootfile -BootFile river-online-oct-23.toe',
+                                               '-Action switch -BootFile river-local-oct-22-seasons.toe', '-Action lightsroute -LightsRoute router', '-Action rebuild -BootFile river-local-oct-22-seasons.toe']);
   assert.ok(probes[5].timeout >= 300_000, 'a rebuild builds, saves and restarts: minutes');
   for (const dark of ['no', 1, 'true', {}]) assert.equal(planControl('ropes', { dark }).args, '-Action ropes', `dark: ${JSON.stringify(dark)} is not true`);
   for (const [a, b] of [['mode', { mode: 'chaos' }], ['target', { season: 'monsoon' }], ['hub75', { brightness: 3 }],
-                        ['bootfile', { file: 'evil.toe; rm -rf' }], ['lightsroute', { route: 'both' }], ['rules', { rules: { 'x; y': 1 } }], ['shell', {}],
+                        ['bootfile', { file: 'evil.toe; rm -rf' }], ['bootfile', { file: 'old-river-online-oct-20.toe' }], ['switch', { file: 'river-online-oct-20.toe' }], ['lightsroute', { route: 'both' }], ['rules', { rules: { 'x; y': 1 } }], ['shell', {}],
                         ['ropes', null], ['mode', 'manual'], ['rebuild', { file: 'river-online-oct-23.toe' }], ['rebuild', {}],
                         // a half-filled form or a buggy client gets a 400, never "0" (panels dark, intensity 0)
                         ['hub75', { brightness: null }], ['hub75', { brightness: '' }], ['hub75', { brightness: false }], ['hub75', { brightness: [] }],
@@ -102,12 +102,12 @@ test('control: checked exactly like the real one, logged, and never acted on', a
   t.after(() => { globalThis.fetch = realFetch; });
   assert.deepEqual(await m.control('mode', { mode: 'manual' }),
                    { ok: true, fixture: true, action: 'mode', body: { mode: 'manual' }, note: 'fixture mode: nothing was changed' });
-  await m.control('switch', { file: 'river-online-oct-20.toe' });
+  await m.control('switch', { file: 'river-online-oct-23.toe' });
   for (const [a, b] of [['mode', { mode: 'chaos' }], ['switch', { file: 'evil.toe' }], ['shell', {}]]) {
     await assert.rejects(m.control(a, b), (e) => e.status === 400, a);
   }
   const log = readFileSync(join(dir, 'state', 'controls.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
-  assert.deepEqual(log, [{ t: 5_000_000, action: 'mode', body: { mode: 'manual' } }, { t: 5_000_000, action: 'switch', body: { file: 'river-online-oct-20.toe' } }]);
+  assert.deepEqual(log, [{ t: 5_000_000, action: 'mode', body: { mode: 'manual' } }, { t: 5_000_000, action: 'switch', body: { file: 'river-online-oct-23.toe' } }]);
   // nothing in the module can reach bitcube, Modal or ssh
   const src = readFileSync(new URL('../lib/fixtures.mjs', import.meta.url), 'utf8');
   assert.ok(!/node:(net|child_process|dns|http|https)|fetch\(/.test(src));
