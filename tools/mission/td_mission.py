@@ -5,6 +5,7 @@
 #   {"action": "status"}                       show file, fps, ropes, panels, seasons, river cam
 #   {"action": "ropes", "dark": true|false}    keep sending black (dark) or the canvas; never stops the sender
 #   {"action": "hub75", "brightness": 0..1}    HUB75 output brightness
+#   {"action": "test", "on": true|false}       the test pattern on the ropes and the panels, or back to what they showed
 #   {"action": "frames"}                       status plus "frames": what the ropes and the HUB75 are being sent now:
 #       {"at": unix s, "source": ropes Source, "brightness": panels Brightness,
 #        "ropes":  {"w": 20, "h": 400, "rgb": base64 of w*h*3 uint8, row 0 = plug end, columns = ropes 1..20,
@@ -33,13 +34,36 @@ ropes = op('/project1/ropes')
 panels = op('/project1/panels')
 out = {'ok': True, 'action': act}
 
+h = sys.modules.setdefault('mission_probe', types.ModuleType('mission_probe'))
+
 if act == 'ropes':
     ropes.par.Source = 'black' if args.get('dark') else 'canvas'
     ropes.par.Active = True                     # dark = keep sending black (CLAUDE.md), never Active off
 elif act == 'hub75':
     panels.par.Brightness = max(0.0, min(1.0, float(args.get('brightness', 1.0))))
-
-h = sys.modules.setdefault('mission_probe', types.ModuleType('mission_probe'))
+elif act == 'test':
+    # The test pattern: colour wipes down every rope (artnet_out.test_frame) and panel_test.glsl on every quad (four coloured
+    # panels, white squares counting the quad). Stop puts back what each showed before: the ropes dark stay dark.
+    if args.get('on'):
+        if ropes:
+            names = list(ropes.par.Source.menuNames)
+            if 'test' not in names:              # a show file built before the test source: add it to the menu here
+                ropes.par.Source.menuNames = names + ['test']
+                ropes.par.Source.menuLabels = list(ropes.par.Source.menuLabels) + ['Test pattern (colour wipes)']
+            if ropes.par.Source.eval() != 'test':
+                h.test_ropes_was = ropes.par.Source.eval()
+            ropes.par.Source = 'test'
+            ropes.par.Active = True
+        if panels:
+            if panels.par.Source.eval() != 'test':
+                h.test_panels_was = panels.par.Source.eval()
+            panels.par.Source = 'test'
+    else:
+        if ropes and ropes.par.Source.eval() == 'test':
+            ropes.par.Source = 'black' if getattr(h, 'test_ropes_was', None) == 'black' else 'canvas'
+            ropes.par.Active = True
+        if panels and panels.par.Source.eval() == 'test':
+            panels.par.Source = 'black' if getattr(h, 'test_panels_was', None) == 'black' else 'canvas'
 now, frame = time.time(), absTime.frame
 last = getattr(h, 'last', None)
 h.last = (now, frame)
@@ -57,7 +81,7 @@ out.update({
     'fps': fps, 'cook_rate': project.cookRate,
     'ropes': {'active': bool(ropes.par.Active), 'source': ropes.par.Source.eval(),
               'box_watts_cap': ropes.par.Boxwatts.eval(), 'status': rs} if ropes else None,
-    'hub75': {'brightness': panels.par.Brightness.eval(), 'output': bool(panels.par.Output)} if panels else None,
+    'hub75': {'brightness': panels.par.Brightness.eval(), 'output': bool(panels.par.Output), 'source': panels.par.Source.eval()} if panels else None,
     'seasons': safe(lambda: op('/project1/seasons/seasons_mod').module.state()['year'].state()) if op('/project1/seasons') else None,
     'river_cam': safe(lambda: op('/project1/river_local/river_cam_mod').module.status('river', 'sub')) if op('/project1/river_local') else None,
     'errors': len(op('/project1').errors(recurse=True) or ''),
@@ -123,6 +147,8 @@ def ropes_now(fp, cfg):
         f = mod.heads_frame(n, px)
     elif source == 'gray':
         f = mod.gray_frame(n, px, p.Graybit.eval(), p.Grayinvert.eval())
+    elif source == 'test':
+        f = mod.test_frame(n, px, absTime.seconds)
     else:                                                   # 'black' and anything unknown: the sender sends black
         return base | fp.pack_black(n, px)
     return base | fp.pack_frame(f)

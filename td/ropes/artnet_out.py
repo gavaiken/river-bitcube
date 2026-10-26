@@ -98,6 +98,24 @@ def heads_frame(ropes, pixels, n=20):
     return f
 
 
+TEST_COLOURS = ((0.6, 0, 0), (0, 0.6, 0), (0, 0, 0.6), (0.2, 0.2, 0.2))   # red, green, blue, white
+TEST_WIPE_S = 3.0
+
+
+def test_frame(ropes, pixels, t, wipe_s=TEST_WIPE_S):
+    """Mission control's test pattern: every rope full of one colour while the next wipes down over it from the plug end
+    (pixel 0), red -> green -> blue -> white, one wipe every wipe_s seconds. Every LED shows every colour once a cycle, and
+    the moving edge shows the direction. Each colour is one channel at 0.6 (white: three at 0.2), so a box draws at most
+    10 ropes x 150 W x 0.2 = 300 W at full brightness, as the calibration's cap (CLAUDE.md: never all ropes white)."""
+    phase = max(0.0, float(t)) / wipe_s
+    k = int(phase) % len(TEST_COLOURS)
+    edge = int((phase % 1.0) * pixels)
+    f = np.empty((ropes, pixels, 3), np.float32)
+    f[:] = TEST_COLOURS[k - 1]
+    f[:, :edge] = TEST_COLOURS[k]
+    return f
+
+
 ROPE_BITS = 5      # Gray-code bits for the rope index (20 ropes)
 
 
@@ -232,6 +250,8 @@ def tick(comp):
             frame = heads_frame(ropes, pixels)
         elif source == 'gray':
             frame = gray_frame(ropes, pixels, p.Graybit.eval(), p.Grayinvert.eval())
+        elif source == 'test':
+            frame = test_frame(ropes, pixels, now)
         else:
             frame = np.zeros((ropes, pixels, 3), np.float32)
         brightness = min(p.Brightness.eval(), p.Maxbrightness.eval())

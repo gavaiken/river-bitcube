@@ -49,10 +49,10 @@ ropes.par.Graybit.clampMin = ropes.par.Graybit.clampMax = True
 # Menu entries are (re)set on every build so new sources reach an existing COMP.
 # Test sources: see the *_frame functions in td/ropes/artnet_out.py and tools/rope_tests.ps1.
 ropes.par.Source.menuNames = ['canvas', 'identify', 'order', 'box1_red', 'box2_green', 'rope', 'heads',
-                              'gray', 'black']
+                              'gray', 'test', 'black']
 ropes.par.Source.menuLabels = ['Canvas', 'Identify rope (markers)', 'Rope order (steps)', 'Box 1 red',
                                'Box 2 green', 'One rope (Identify)', 'Rope heads (first 20 px)',
-                               'Gray code (Graybit)', 'Black']
+                               'Gray code (Graybit)', 'Test pattern (colour wipes)', 'Black']
 
 # canvas -> crop -> fit to 20 x 400 (one column per rope, top row = pixel 0)
 src = ropes.op('canvas') or ropes.create(selectTOP, 'canvas')
