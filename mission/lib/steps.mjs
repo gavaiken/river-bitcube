@@ -9,8 +9,14 @@
 //   raw     what the tool was given (a command, a path, a URL, a pattern), logins scrubbed, at most RAW_MAX characters
 //   acting  true only when the step changes something on the installation (set, switched, restarted, turned, …); reading,
 //           checking and changing a file in the repo are not acting
+// Every input is scrubbed of logins BEFORE any words are made from it: a word rule that cut a URL first ("https://admin:pw@…"
+// into "httpa file:pw@…") left a login the scrubber no longer recognised (round 6 #36). A line the page's own guard would
+// reword (public/chat-words.js) is never sent: an acting line then says what it changed ("changed the ropes"), never only
+// "worked on it" (round 6 #20). A change asked of mission control (node mission/bin/mc.mjs <action> '<body>') reads in the
+// history's words ("asked mission control to turn the ropes dark").
 // No SDK import here: the fake agent (MISSION_FAKE_AGENT) uses it too.
 import { scrubCreds } from './scrub.mjs';
+import { actionPhrase } from './history.mjs';
 import { FILES } from '../public/model.js';
 import { ACTS } from '../public/chat-words.js';   // the things that make up the installation: one list for the server and the page
 
@@ -28,10 +34,45 @@ const PAST = { check: 'checked', run: 'ran', restart: 'restarted', set: 'set', s
   commit: 'committed', build: 'built', render: 'rendered', dim: 'dimmed', raise: 'raised', lower: 'lowered', ask: 'asked', call: 'called',
   change: 'changed', reset: 'reset', apply: 'applied', move: 'moved', aim: 'aimed', light: 'lit', enable: 'enabled', disable: 'disabled',
   reboot: 'rebooted', put: 'put', watch: 'watched', see: 'saw', try: 'tried', copy: 'copied', fix: 'fixed', add: 'added', edit: 'edited',
-  view: 'viewed', note: 'noted', reload: 'reloaded', cancel: 'cancelled', calibrate: 'calibrated', bring: 'brought', go: 'went', use: 'used' };
+  view: 'viewed', note: 'noted', reload: 'reloaded', cancel: 'cancelled', calibrate: 'calibrated', bring: 'brought', go: 'went', use: 'used',
+  pan: 'panned', tilt: 'tilted', power: 'powered' };
 /** Verbs that change something on the installation: only these lines are acting lines (highlighted on the page). */
 const CHANGE = new Set(['set', 'switch', 'restart', 'turn', 'start', 'stop', 'kill', 'rebuild', 'dim', 'raise', 'lower', 'move', 'aim',
-  'reboot', 'change', 'reset', 'apply', 'light', 'enable', 'disable', 'put', 'reload', 'cancel', 'calibrate', 'send', 'save']);
+  'reboot', 'change', 'reset', 'apply', 'light', 'enable', 'disable', 'put', 'reload', 'cancel', 'calibrate', 'send', 'save', 'pan', 'tilt', 'power']);
+/** The page's own guard (public/chat-words.js `bad`): a line it would reword is never sent as it is. Kept equal by
+ *  test/steps.test.mjs, which checks the page shows every line this file makes exactly as it was sent. */
+const PAGE_JARGON = /\b(TD|fps|tcp|udp|ssh|vnc|rtsp|psac-?10s?|probe|oserror|art-?net|artnet|wmi|https?|json|null|undefined|epoch|toe|bridge|modal|ffmpeg|pixelmap|colorlight|reolink|gl\.?inet|claude|uplink|wan|ToolSearch)\b/i;
+const PAGE_CODE = /[|\\{}=`$<>~#]|\.(ps1|py|toe|json|mjs|js|md|sh|cmd|bat|log|txt|csv)\b|https?:|\/\w|\w_\w|\b[a-z]+[A-Z]\w*|\b[A-Z][a-z]+[A-Z]\w*|\d+\.\d+\.\d+\.\d+|:\d{2,5}\b|(^|\s)--?[A-Za-z]/;
+/** Whether a line can't be shown as it is: the copy rules' banned words, or what the page's guard rewords. */
+export const unplain = (s) => BANNED.test(s) || PAGE_JARGON.test(s) || PAGE_CODE.test(String(s).replace(/TouchDesigner/g, 'Touchdesigner'));
+/** What a change acted on, in the glossary's words, for an acting line whose own words can't be shown (first match wins). */
+const THINGS = [
+  [/\brope ?box(?:es)?\b|\bpsac-?10s?\b/i, 'a rope box'],
+  [/\bropes?\b|\bsender\b|\bart-?net\b|\bsource\b|\bblack\b|\bdark\b|\bropelights\b|\brope lights\b/i, 'the ropes'],
+  [/\bpanels?\b|\bhub75\b|\bbrightness\b/i, 'the panels'],
+  [/\bboot[ -]?file\b/i, 'the boot file'],
+  [/\bgallery cam(?:era)?\b/i, 'the gallery camera'], [/\briver cam(?:era)?\b/i, 'the river camera'], [/\bcam(?:era)?s?\b|\bptz\b/i, 'a camera'],
+  [/\brouter\b/i, 'the router'],
+  [/\bcalibrat|\bled map\b/i, 'the calibration'],
+  [/\brecorder\b/i, 'the river recorder'], [/\bpeople counter\b/i, 'the people counter'],
+  [/\briver's year\b|\bseasons?\b|\bmode\b|\btarget\b|\brules\b/i, "the river's year"],
+  [/\blive river\b/i, 'the live river'],
+  [/\bscheduled task\b|\bschtasks\b/i, 'a scheduled task on bitcube'],
+  [/\btouchdesigner\b|\btd\b|\bshow file\b|\bstart-river\b|\.toe\b/i, 'TouchDesigner'],
+  [/\blights?\b/i, 'the lights'],
+];
+const FALLBACK_VERB = { stop: 'stopped', kill: 'stopped', disable: 'switched off', start: 'started', enable: 'switched on', restart: 'restarted',
+  reload: 'restarted', reboot: 'restarted', move: 'moved', aim: 'moved', pan: 'moved', tilt: 'moved', calibrate: 'calibrated', cancel: 'stopped' };
+/** An acting line that can't be shown as it is: what it did to what ("stopped a scheduled task on bitcube", "changed the ropes"). */
+function actingFallback(verb, ...texts) {
+  const t = texts.map((x) => String(x ?? '')).join(' ');
+  const thing = THINGS.find(([re]) => re.test(t))?.[1] ?? 'something on bitcube';
+  return `${FALLBACK_VERB[verb] ?? 'changed'} ${thing}`;
+}
+/** A command that changes the installation whatever its description says (the page's CHANGE_CMD, and calibrate.ps1). */
+const CHANGE_CMD = /-Action\s+(ropes|hub75|switch|bootfile|lightsroute|rebuild|calibrate|mode|target|rules)\b|\/api\/control\/|Restart-Computer|Stop-Process|Start-Process|taskkill|\bkill\b|schtasks\s+\/(run|end|change)|ptz\.py\s+\w+\s+(?!presets)|td_save|calibrate\.ps1\s+-Action\s+(start|cancel)/i;
+/** node mission/bin/mc.mjs <action> ['<body>']: a change asked of mission control (or its status read). */
+const MC = /\bmc\.mjs\s+([a-z-]+)(?:\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)"))?/;
 /** Words that are as often things as actions after "and" ("the ropes and light"), so only a first word is taken as a verb. */
 const NOUNISH = new Set(['light', 'note', 'view', 'report', 'count', 'call', 'watch', 'test', 'copy', 'record', 'build', 'search']);
 // a raw command, in any case ("SSH bitcube …" as "ssh bitcube …"); "ssh into bitcube and check …" is a description, not one
@@ -69,10 +110,22 @@ export function plainFile(path) {
 }
 
 const PATH = /(?:\bthe )?(?:[A-Za-z]:)?(?:[\w.~-]*[\\/])+[\w.-]+|(?:\bthe )?\b[\w-]+\.(?:md|py|ps1|mjs|js|json|cmd|sh|txt|log|ya?ml|toe)\b/g;
+// Addresses first, before the path rule could cut one in two ("https:" + "//host/x" was read as a drive and a path).
+// An address runs to the next space or quote, without a closing bracket or a sentence's last mark ("(https://h/x?cmd=Snap).").
+const URLS = [
+  [/https?:\/\/[^\s"'<>]*modal\.run(?:[^\s"'<>]*[^\s"'<>).,;:!?])?/gi, "Dave's agent's page"],
+  [/rtsps?:\/\/[^\s"'<>]*[^\s"'<>).,;:!?]/gi, "a camera's stream"],
+  [/https?:\/\/[^\s"'<>]*[^\s"'<>).,;:!?]/gi, 'a web page'],
+  [/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]*[^\s"'<>).,;:!?]/gi, 'an address'],
+];
 // The copy rules' names, in order (earlier rules see the raw words). Each is [pattern, replacement].
 const WORDS = [
-  [/https?:\/\/[^\s"'<>]*modal\.run[^\s"'<>]*/gi, "Dave's agent's page"],
-  [/https?:\/\/[^\s"'<>]+/gi, 'a web page'],
+  [/\b(?:the )?ropes? Source ?= ?['"]?black['"]?/gi, 'the ropes dark'],
+  [/\b(?:the )?ropes? Source ?= ?['"]?canvas['"]?/gi, 'the ropes back to the river'],
+  [/\bRopeLights\b/g, "Will's rope lights"],
+  [/\b(?:the )?modal[_ ]link(?:\.py)?(?: status)?\b/gi, 'Clips to Dave'],
+  [/\b(?:the )?seasons? (?:show )?file\b/gi, "the river's year"],
+  [/\bon\/off\b/gi, 'on and off'],
   [/\b(?:the )?(?:TD|TouchDesigner)(?:'s)? (?:fps|frame ?rate)\b/gi, "TouchDesigner's frame rate"],
   [/\b(\d+(?:\.\d+)?) ?fps\b/gi, '$1 frames a second'],
   [/\bfps\b/gi, 'frame rate'],
@@ -95,7 +148,8 @@ const WORDS = [
 ];
 /** Free text in the copy rules' words: show files by their names, files as what they are, the gear by the glossary. */
 export function plainWords(s) {
-  let out = String(s ?? '').replace(/\b(run|ran) (?:the )?(?:[\w.~-]*[\\/])*probe(?:\.ps1)?\b(?: on bitcube)?/gi, '$1 the full check of bitcube');
+  let out = scrubCreds(String(s ?? '')).replace(/\b(run|ran) (?:the )?(?:[\w.~-]*[\\/])*probe(?:\.ps1)?\b(?: on bitcube)?/gi, '$1 the full check of bitcube');
+  for (const [re, to] of URLS) out = out.replace(re, to);
   for (const name of Object.keys(FILES)) out = out.split(name).join(FILES[name].label);
   out = out.replace(/\b[\w-]+\.toe\b/g, 'a show file');
   // "on/off", "and/or", "24/7": one slash between two plain words is not a path
@@ -114,25 +168,47 @@ function pastTense(s) {
   return [/^[A-Z][a-z]/.test(m[1]) ? m[1].toLowerCase() + m[2] : s, null];
 }
 
-/** A Bash step: the agent's description in plain words, else a plain fallback. */
+/** A change asked of mission control through its control socket (bin/mc.mjs), in the history's words; null if not one. */
+function mcLine(command) {
+  const m = MC.exec(String(command ?? ''));
+  if (!m) return null;
+  if (m[1] === 'status') return { text: 'looked at what mission control shows', acting: false };
+  let body = {};
+  try { const j = JSON.parse(m[2] ?? (m[3] != null ? m[3].replace(/\\(.)/g, '$1') : '{}')); if (j && typeof j === 'object' && !Array.isArray(j)) body = j; } catch { /* words from the action alone */ }
+  const [, inf, what] = actionPhrase({ action: m[1], body });
+  if (/^the "/.test(what)) return null;                 // not one of mission control's controls
+  return { text: `asked mission control to ${inf} ${what}`, acting: m[1] !== 'check' && !(m[1] === 'calibrate' && body.action === 'status') };
+}
+
+/** A Bash step: the agent's description in plain words, else a plain fallback; an acting one says what it changed. */
 function bashLine(description, command) {
+  const mc = mcLine(command);
+  if (mc) return mc;
   const desc = String(description ?? '').replace(/\s+/g, ' ').trim().replace(/[.\s]+$/, '');
   const onBitcube = /bitcube|\bssh\b/i.test(`${desc} ${command ?? ''}`);
-  const fallback = { text: onBitcube ? 'ran a command on bitcube' : 'ran a command', acting: false };
+  const cmdActs = CHANGE_CMD.test(String(command ?? ''));
+  const fallback = cmdActs ? { text: actingFallback(null, command), acting: true } : { text: onBitcube ? 'ran a command on bitcube' : 'ran a command', acting: false };
   if (!desc || RAW_CMD.test(desc)) return fallback;
-  const [first, verb] = pastTense(plainWords(desc));
+  const plain = plainWords(desc);
+  const [first, verb] = pastTense(plain);
   // "Commit and push the plan": every verb of a list in the past tense, not only the first
   const verbs = verb ? [verb] : [];
   const past = (m, j, w) => (PAST[w] && !NOUNISH.has(w) ? (verbs.push(w), `${j}${PAST[w]}`) : m);
   const line = first.replace(/\b((?:and|then) )([a-z]+)\b/g, past).replace(/(, )([a-z]+)\b/g, past);
-  if (!line || BANNED.test(line)) return fallback;
-  // acting: a change verb on something that makes up the installation ("set the ropes dark"), never on a repo file or a folder
-  return { text: clip(line, TEXT_MAX), acting: verbs.some((v) => CHANGE.has(v)) && ACTS.test(line) };
+  // acting: a change verb on something that makes up the installation ("set the ropes dark"), never on a repo file or a folder;
+  // or a command that changes it, whatever the description says
+  const acting = (verbs.some((v) => CHANGE.has(v)) && ACTS.test(`${line} ${desc}`)) || cmdActs;
+  if (!line || unplain(line)) {
+    // a change is never only "ran a command": say what it changed
+    return acting ? { text: actingFallback(verbs.find((v) => CHANGE.has(v)) ?? null, desc, command), acting: true } : fallback;
+  }
+  return { text: clip(line, TEXT_MAX), acting };
 }
 
 /** One step line for a tool the agent used (see the header). Never throws. */
 export function describeTool(block) {
-  const i = block?.input && typeof block.input === 'object' ? block.input : {};
+  // every field scrubbed before anything is made from it (the words, the tooltip): a login never reaches a phone or chat.jsonl
+  const i = block?.input && typeof block.input === 'object' ? scrubCreds(block.input) : {};
   const line = (text, raw, acting = false) => ({ text: clip(text, TEXT_MAX), raw: rawOf(raw), acting });
   try {
     switch (block?.name) {
@@ -141,11 +217,11 @@ export function describeTool(block) {
       case 'Edit': case 'Write': case 'NotebookEdit': return line(`changed ${plainFile(i.file_path ?? i.notebook_path)}`, i.file_path ?? i.notebook_path);
       case 'Glob': case 'Grep': return line('searched the repo', i.pattern);
       case 'WebFetch': return line(/modal\.run/i.test(String(i.url)) ? "looked at what Dave's agent is doing" : 'looked something up online', i.url);
-      case 'WebSearch': { const q = plainWords(clip(i.query, 60)); return line(q && !BANNED.test(q) ? `searched the web for ${q}` : 'searched the web', i.query); }
+      case 'WebSearch': { const q = plainWords(clip(i.query, 60)); return line(q && !unplain(q) ? `searched the web for ${q}` : 'searched the web', i.query); }
       case 'TodoWrite': return line('updated its to-do list', '');
       case 'Agent': case 'Task': {
         const d = plainWords(clip(i.description, 60)).replace(/[.\s]+$/, '');
-        return line(d && !BANNED.test(d) ? `asked a helper to ${d[0].toLowerCase()}${d.slice(1)}` : 'asked a helper', i.description);
+        return line(d && !unplain(d) ? `asked a helper to ${d[0].toLowerCase()}${d.slice(1)}` : 'asked a helper', i.description);
       }
       default: return line('used a tool', `${block?.name ?? 'a tool'}${Object.keys(i).length ? ' ' + JSON.stringify(i) : ''}`);
     }

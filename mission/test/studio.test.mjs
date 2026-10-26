@@ -163,3 +163,18 @@ test('a camera login never reaches the chat: steps, replies, errors and the save
   writeFileSync(join(old, 'chat.jsonl'), JSON.stringify({ t: 1, kind: 'activity', id: 'x', text: `ran: ffmpeg -i ${PW}` }) + '\n');
   assert.doesNotMatch(JSON.stringify(new Studio({ runner: leaky, dir: old }).history()), /NOT-A-REAL-PW/);
 });
+
+test('round 6 #37: the running and waiting requests are served scrubbed (status(), every status event); the agent still gets what was typed', async () => {
+  const log = [], seen = [];
+  const s = new Studio({ runner: fakeRunner(log, { delay: 30 }), dir: dir() });
+  s.on('status', (st) => seen.push(JSON.stringify(st)));
+  s.send('why does rtsp://admin:NOT-A-REAL-PW@192.168.9.76:554/Preview_01_sub fail');
+  s.send("and https://admin:NOT-A-REAL-PW@192.168.9.76/cgi-bin/api.cgi");
+  const st = s.status();
+  assert.equal(st.current.text, 'why does rtsp://***@192.168.9.76:554/Preview_01_sub fail');
+  assert.equal(st.queue[0].text, 'and https://***@192.168.9.76/cgi-bin/api.cgi');
+  await s.drained();
+  assert.ok(seen.length >= 2);
+  for (const x of seen) assert.doesNotMatch(x, /NOT-A-REAL-PW/);
+  assert.match(log[0].text, /NOT-A-REAL-PW/, 'the request itself is the person\'s own words, for the agent');
+});

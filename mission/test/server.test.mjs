@@ -221,6 +221,8 @@ test('the v2 routes on the real fixtures: lights, pixelmap, calibration (scripte
   assert.equal((await post('/api/control/rebuild', {}, on('all-good'))).status, 400);
   const rb = await (await post('/api/control/rebuild', { file: 'river-local-oct-22-seasons.toe' }, on('all-good'))).json();
   assert.deepEqual([rb.ok, rb.fixture, rb.action], [true, true, 'rebuild']);
+  // it ends in a restart: confirming until TouchDesigner answers on the file (MISSION_FIXTURE_APPLY_S later here)
+  for (let i = 0; i < 100 && (await (await get('/api/status', on('all-good'))).json()).applying.length; i++) await sleep(20);
 
   // the scripted calibration: none -> start -> progress -> done; the probe mirrors it; cancel; the drift flag
   // (the rebuild above went all the way: /api/calibration says which map the river's year now uses, on every phone)
@@ -326,7 +328,8 @@ test('applying a change over HTTP: status.applying on every phone, 409 "wait: ..
   let st;
   for (let i = 0; i < 50; i++) { st = await status(); if (st.applying.length) break; await sleep(20); }
   const [e] = st.applying;
-  assert.deepEqual([e.action, e.label, e.file, e.expect_s, e.blocks.includes('ropes'), e.blocks.includes('calibrate')], ['switch', 'the switch to the live river', 'river-online-oct-23.toe', 60, true, true]);
+  assert.deepEqual([e.action, e.label, e.file, e.expect_s, e.blocks.includes('ropes'), e.blocks.includes('calibrate'), e.phase, e.source],
+                   ['switch', 'the switch to the live river', 'river-online-oct-23.toe', 60, true, true, 'applying', 'mission control']);
   assert.ok(e.started_at <= st.now && st.now - e.started_at < 2_000, 'started_at on the clock the page judges by');
   for (const [path, body] of [['/api/control/ropes', { dark: true }], ['/api/control/mode', { mode: 'manual' }], ['/api/control/calibrate', { action: 'start' }], ['/api/control/rebuild', { file: 'river-local-oct-22-seasons.toe' }]]) {
     const r = await post(path, body, on);
@@ -337,10 +340,46 @@ test('applying a change over HTTP: status.applying on every phone, 409 "wait: ..
   }
   assert.equal((await post('/api/control/ropes', { dark: false }, other)).status, 200, 'another scenario is another world');
   assert.equal((await sw).status, 200);
+  // answered: TouchDesigner restarts on the file and the switch stays as "confirming", still a lock, until it answers there
   st = await status();
+  assert.deepEqual([st.applying.map((x) => [x.action, x.phase, x.file]), st.probe.value.td.error], [[['switch', 'confirming', 'river-online-oct-23.toe']], 'restarting on river-online-oct-23.toe']);
+  assert.ok(st.applying[0].answered_at >= st.applying[0].started_at);
+  const second = await post('/api/control/switch', { file: 'river-local-oct-22-seasons.toe' }, on);
+  assert.deepEqual([second.status, (await second.json()).error.startsWith('wait: the switch to the live river is being applied')], [409, true]);
+  for (let i = 0; i < 150; i++) { st = await status(); if (!st.applying.length) break; await sleep(20); }
   assert.deepEqual([st.applying, st.probe.value.td.file, st.probe.value.boot_file], [[], 'river-online-oct-23.toe', 'river-online-oct-23.toe']);
   assert.equal((await status(other)).probe.value.td.file, 'river-local-oct-22-seasons.toe');
   // a refused request is not something that happened: only the switch and the other scenario's ropes are in the history
   const hist = await (await fetch(base + '/api/history?kinds=action', { headers: on })).json();
   assert.deepEqual(hist.events.map((x) => x.action), ['switch']);
+});
+
+test('round 6 #40, #18: only the checked fields reach the history and the pages; a restart on the running file is recorded as one', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mission-r6-'));
+  writeFileSync(join(dir, 'pw'), 'NOT-A-REAL-PW\n');
+  const fixtures = fileURLToPath(new URL('./fixtures/', import.meta.url));
+  const { p, base } = await startServer({ MISSION_PORT: '0', MISSION_STATE_DIR: join(dir, 'state'), MISSION_PASSWORD_FILE: join(dir, 'pw'),
+                                          MISSION_FIXTURES: fixtures, MISSION_FAKE_AGENT: '1', MISSION_FIXTURE_APPLY_S: '0.3' });
+  t.after(() => p.kill());
+  const post = (path, body, headers = {}) => fetch(base + path, { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json', ...headers } });
+  const mc = (await post('/login', { password: 'NOT-A-REAL-PW' })).headers.get('set-cookie').split(';')[0];
+  const on = { cookie: `${mc}; scenario=all-good` };
+  const junk = { note: 'rtsp://admin:NOT-A-REAL-PW@192.168.9.76:554/x', '<img src=x onerror=alert(1)>': 1, file: '<img src=x onerror=alert(1)>' };
+  assert.equal((await post('/api/control/mode', { mode: 'manual', ...junk }, on)).status, 200);
+  const st = await (await fetch(base + '/api/status', { headers: on })).json();
+  assert.deepEqual(st.last_action.body, { mode: 'manual' });
+  // a calibration start's body never names a file in status.applying (it has none), whatever the request carried
+  const start = post('/api/control/calibrate', { action: 'start', ...junk }, on);
+  const seen = [];
+  for (let i = 0; i < 20; i++) { seen.push(...(await (await fetch(base + '/api/status', { headers: on })).json()).applying); await sleep(5); }
+  assert.equal((await start).status, 200);
+  assert.doesNotMatch(JSON.stringify(seen), /img|NOT-A-REAL-PW/);
+  await post('/api/control/calibrate', { action: 'cancel' }, on);
+  const hist = await (await fetch(base + '/api/history?kinds=action', { headers: on })).json();
+  assert.doesNotMatch(JSON.stringify(hist), /img|onerror|NOT-A-REAL-PW|rtsp/);
+  assert.deepEqual(hist.events.map((e) => e.body).reverse(), [{ mode: 'manual' }, { action: 'start' }, { action: 'cancel' }]);
+  // a switch to the file TouchDesigner runs is the button's "Restart on …", in the history too
+  assert.equal((await post('/api/control/switch', { file: 'river-local-oct-22-seasons.toe' }, on)).status, 200);
+  const last = (await (await fetch(base + '/api/status', { headers: on })).json()).last_action;
+  assert.deepEqual([last.label, last.words], ["the restart on the river's year", "Restarted TouchDesigner on the river's year from mission control"]);
 });

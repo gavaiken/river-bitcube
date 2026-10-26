@@ -357,12 +357,12 @@ test('describeEvent: one plain sentence for every kind, in glossary words', () =
   assert.equal(first('ropes-dark-on-purpose', 'ropes'), 'The ropes are dark on purpose: sending black');
   assert.equal(first('seasons-not-running', 'seasons'), "The river's year stopped running: TouchDesigner is showing the live river");
   assert.equal(first('seasons-not-running', 'overall'), "TouchDesigner is showing the live river, not the river's year: the year and its controls are unavailable");
-  assert.equal(first('river-cam-stale', 'river camera'), 'The river camera answers, but no frames for 30 min');
+  assert.equal(first('river-cam-stale', 'river camera'), 'The river camera answers, but no frames');      // the age was only true then (round 6 #19)
   assert.equal(first('gallery-cam-down', 'gallery camera'), 'The gallery camera stopped answering');
   assert.equal(first('gallery-cam-down', 'modal link'), "Gallery clips to Dave are failing since 02:43; river fine");
   assert.equal(first('no-internet', 'internet'), 'The internet at Gray Area is down: bitcube cannot reach it');
   assert.equal(first('no-internet', 'river camera'), 'The river camera became unreachable: no internet at Gray Area');
-  assert.equal(first('modal-scene-old', 'modal agent'), "Dave's agent hasn't updated for 9 h");
+  assert.equal(first('modal-scene-old', 'modal agent'), "Dave's agent hasn't updated");      // no age that was only true then (round 6 #19)
   assert.equal(first('just-booted', 'modal link'), "Clips to Dave hasn't started yet: bitcube just restarted");
   assert.equal(first('bitcube-offline', 'overall'), 'bitcube is offline: nothing behind it can be checked');
   assert.equal(first('nothing-known-yet', 'bitcube'), 'bitcube is fine: reachable; full check still to come');
@@ -373,7 +373,8 @@ test('describeEvent: one plain sentence for every kind, in glossary words', () =
   let evs = all({ running: true, stage: 'ropes-capture', mode: 'full', ok: null, step: 1, of: 12, expected_s: 170, elapsed_s: 20 }, T0 + 3 * MIN);
   assert.deepEqual(evs.map((e) => e.kind), ['overall', 'calibration'], 'the band turns to Attention: Calibrating, and the job started');
   assert.deepEqual([evs[0].level, evs[0].cause], ['warning', 'calibrating']);
-  assert.match(describeEvent(evs[0]), /^Calibrating the lights: the ropes are in patterns for about .+ more$/);
+  assert.match(evs[0].headline, /^Calibrating the lights: the ropes are in patterns for about .+ more$/, 'the band said how long was left');
+  assert.equal(describeEvent(evs[0]), 'Calibrating the lights: the ropes are in patterns', 'Recent keeps no age that was only true then (round 6 #19)');
   evs = evs.slice(1);
   assert.deepEqual(evs[0], { kind: 'calibration', t: T0 + 3 * MIN, running: true, stage: 'ropes-capture', ok: null, cancelled: false, mode: 'full', error: null, stale: false, from: null });
   assert.equal(describeEvent(evs[0]), 'The calibration started: photographing the ropes');
@@ -396,16 +397,16 @@ test('describeEvent: one plain sentence for every kind, in glossary words', () =
   // actions, from each control, and why one failed in plain words
   const act = (action, body, extra = {}) => describeEvent(h.action({ action, body, ...extra }));
   assert.equal(act('mode', { mode: 'automatic' }), "Set the year's mode to automatic from mission control");
-  assert.equal(act('target', { season: 'winter', intensity: 0.2 }), 'Set the target to winter, intensity 0.2 from mission control');
+  assert.equal(act('target', { season: 'winter', intensity: 0.2 }), 'Set the target to winter, trickle from mission control');   // the band's words: Target → winter, trickle
   assert.equal(act('rules', { rules: { cycle_seconds: 300 } }), "Changed 1 of the year's rules from mission control");
   assert.equal(act('rules-reset', {}), "Reset the year's rules from mission control");
   assert.equal(act('ropes', {}), 'Turned the ropes on from mission control');
   assert.equal(act('hub75', { brightness: 0.5 }), 'Set the panel brightness to 50 % from mission control');
   assert.equal(act('switch', { file: LIVE }, { source: 'studio chat' }), `Switched TouchDesigner to ${LIVE_LABEL} from the studio chat`);
   assert.equal(act('switch', { file: 'river-oct-30.toe' }), 'Switched TouchDesigner to the show file river-oct-30 from mission control');
-  assert.equal(act('bootfile', { file: 'river-local-oct-22-seasons.toe' }), "Set the show file for the next restart to the river's year from mission control");
-  assert.equal(act('lightsroute', { route: 'router' }), 'Routed the lights through the router from mission control');
-  assert.equal(act('lightsroute', { route: 'direct' }), "Routed the lights through bitcube's LIGHTS port from mission control");
+  assert.equal(act('bootfile', { file: 'river-local-oct-22-seasons.toe' }), "Set the boot file to the river's year from mission control");
+  assert.equal(act('lightsroute', { route: 'router' }), 'Moved the lighting network to the spare router port from mission control');
+  assert.equal(act('lightsroute', { route: 'direct' }), "Moved the lighting network to bitcube's LIGHTS port from mission control");
   assert.equal(act('calibrate', { action: 'start', dry_run: true }), 'Started a dry-run calibration from mission control');
   assert.equal(act('calibrate', { action: 'start' }), 'Started a calibration from mission control');
   assert.equal(act('calibrate', { action: 'cancel' }), 'Cancelled the calibration from mission control');
@@ -569,4 +570,48 @@ test('the same state seen again after a long unseen stretch is a first sighting 
     assert.equal(item(again.observe(at('gallery-cam-down', T0 + 181 * MIN), T0 + 181 * MIN), 'gallery camera'), undefined);
     assert.equal(again.since('gallery camera', T0 + 181 * MIN).since, T0);
   }
+});
+
+// ---- round 6 -------------------------------------------------------------------------------------------------------------
+test('round 6 #18: a restart on the running file is recorded with its label and reads "Restarted TouchDesigner on …"', () => {
+  const h = new History({ now: () => T0 });
+  const ev = h.action({ action: 'switch', body: { file: 'river-local-oct-22-seasons.toe' }, label: "the restart on the river's year", source: 'studio chat' });
+  assert.equal(ev.label, "the restart on the river's year");
+  assert.equal(describeEvent(ev), "Restarted TouchDesigner on the river's year from the studio chat");
+  assert.equal(describeEvent(h.action({ action: 'switch', body: { file: 'river-online-oct-23.toe' }, label: 'the switch to the live river' })), 'Switched TouchDesigner to the live river from mission control');
+  assert.equal(h.summary().last_action.label, 'the switch to the live river');
+});
+
+test('round 6 #19: Recent keeps no ages that were only true at the time, in headlines as in summaries', async () => {
+  const { ageless } = await import('../lib/history.mjs');
+  const cases = [
+    ['Calibrating the lights: the ropes are in patterns for about 36 s more', 'Calibrating the lights: the ropes are in patterns'],
+    ["Dave's agent hasn't updated for 9 h (the room is unaffected: the river's year doesn't use its scene)", "Dave's agent hasn't updated (the room is unaffected: the river's year doesn't use its scene)"],
+    ['bitcube restarted 6 min ago and is still coming up', 'bitcube restarted and is still coming up'],
+    ["Mission control hasn't heard from bitcube for 3 min", "Mission control hasn't heard from bitcube"],
+    ['Clips are failing; it has missed 9 h of daytime updates', 'Clips are failing; it has missed daytime updates'],
+    ['TouchDesigner is running slowly: 4 of 60 frames a second', 'TouchDesigner is running slowly: 4 of 60 frames a second'],
+    ['The clock turns the year, one season every 2.5 min', 'The clock turns the year, one season every 2.5 min'],
+  ];
+  for (const [s, want] of cases) assert.equal(ageless(s), want, s);
+  const ev = { kind: 'overall', t: T0, level: 'warning', cause: 'calibrating', headline: cases[0][0], stale: false, lost: null, from: null };
+  assert.equal(describeEvent(ev), 'Calibrating the lights: the ropes are in patterns');
+  assert.equal(describeEvent({ kind: 'item', t: T0, id: 'modal agent', from: 'ok', to: 'warning', summary: "Hasn't updated for 9 h" }), "Dave's agent hasn't updated");
+});
+
+test('round 6 #40: an action keeps the checked body; a login in a body or a note never reaches the history file or a feed', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'hist-r6-'));
+  const file = join(dir, 'history.jsonl');
+  const h = new History({ file, now: () => T0 });
+  const ev = h.action({ action: 'mode', body: { mode: 'manual', note: 'rtsp://admin:NOT-A-REAL-PW@192.168.9.76:554/x' }, ok: false,
+                       note: 'ffmpeg rtsp://admin:NOT-A-REAL-PW@192.168.9.76:554/x failed', label: 'rtsp://admin:NOT-A-REAL-PW@h/x' });
+  assert.doesNotMatch(JSON.stringify(ev) + readFileSync(file, 'utf8') + describeEvent(ev), /NOT-A-REAL-PW/);
+  assert.match(ev.body.note, /rtsp:\/\/\*\*\*@/);
+});
+
+test('round 6 #32: a change that got no answer in time reads as "may or may not have happened", never as a failure', () => {
+  const h = new History({ now: () => T0 });
+  const ev = h.action({ action: 'switch', body: { file: 'river-online-oct-23.toe' }, ok: false, maybe: true, note: 'bitcube took too long to answer' });
+  assert.equal(ev.maybe, true);
+  assert.equal(describeEvent(ev), 'Tried to switch TouchDesigner to the live river from mission control: no answer in time, so it may or may not have happened');
 });

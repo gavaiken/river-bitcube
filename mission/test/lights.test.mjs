@@ -50,11 +50,12 @@ test('sshFrames runs frames.ps1 over ssh and parses the last JSON line', async (
 });
 
 test('fetch failures become { ok: false, error } and never reject', async () => {
+  // killed for time, or ended without a word: it may or may not have happened (maybe), never a plain failure
   assert.deepEqual(await sshJson('bitcube', 'frames.ps1', '', { exec: fakeExec('', Object.assign(new Error('x'), { killed: true })) }),
-                   { ok: false, error: 'bitcube took too long to answer' });
+                   { ok: false, maybe: true, error: 'bitcube took too long to answer' });
   assert.deepEqual(await sshJson('bitcube', 'frames.ps1', '', { exec: fakeExec('', Object.assign(new Error('x'), { code: 255 })) }),
                    { ok: false, error: "can't reach bitcube over SSH" });
-  assert.deepEqual(await sshJson('bitcube', 'pixelmap.ps1', '', { exec: fakeExec('nothing useful\n') }), { ok: false, error: 'no answer from pixelmap.ps1' });
+  assert.deepEqual(await sshJson('bitcube', 'pixelmap.ps1', '', { exec: fakeExec('nothing useful\n') }), { ok: false, maybe: true, error: 'no answer from pixelmap.ps1' });
   assert.deepEqual(await sshJson('bitcube', 'calibrate.ps1', '', { exec: fakeExec('{not json', Object.assign(new Error('x'), { code: 1 })) }),
                    { ok: false, error: 'calibrate.ps1 failed (exit 1)' });
   // bitcube's own error line is passed through as it is

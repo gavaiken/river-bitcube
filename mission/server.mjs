@@ -15,6 +15,9 @@
 //   MISSION_FIXTURE_CALIBRATE_S   fixture mode: how long the scripted calibration run takes (60)
 //   MISSION_FIXTURE_APPLY_S       fixture mode: how long a switch or a boot-file change holds before it answers (6; a rebuild
 //                                 twice that), so a page can be seen applying and then confirming the change (lib/fixtures.mjs)
+//   MISSION_CONTROL_SOCKET  the local control socket (default <MISSION_STATE_DIR>/mc.sock): the studio agent's only way to change
+//                           the installation (mission/bin/mc.mjs). Mode 0600: only this server's own user (river) can connect;
+//                           removed on exit. The agent gets its path in its environment (lib/agent.mjs).
 //
 // Routes (all JSON unless said; everything but /login, /healthz, /version and the assets sits behind the login cookie):
 //   GET  /status /lights /chat /map /login      the v2 pages (public/*.html, docs/mission-ui.md); /, /mission and /status.html
@@ -34,20 +37,28 @@
 //                                              A refusal is { ok: false, error }: 400 bad request, 409 "wait: <label> is being
 //                                              applied (started 21:04)" or "a calibration is running: ...", 429 checked too recently
 //   GET  /api/chat/history  /api/chat/events (SSE)   POST /api/chat/send  /api/chat/stop { clear? } (clear drops the waiting requests too)
+//
+// The local control socket (MISSION_CONTROL_SOCKET; no cookie: the file's mode is the lock), for the studio agent (bin/mc.mjs):
+//   GET  /status                               { ok, now, overall { level, cause, headline }, applying [{ action, label, phase,
+//                                              source, file?, started_at, maybe? }], calibration { running, stage, mode, stale,
+//                                              ok } | null, show_file { file, label } | null, boot_file, blocked { <action>: why } }
+//   POST /control/<action>                     exactly POST /api/control/<action>: the same whitelist, locks and 409 "wait: …",
+//                                              recorded with source 'studio chat' (Applying line, Last done and Recent say so)
 import { createServer } from 'node:http';
-import { readFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, copyFileSync, chmodSync, lstatSync, unlinkSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { userInfo } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Auth, readPasswordFile, parseCookies, clientOf, SESSION_MAX_AGE_S } from './lib/auth.mjs';
 import { Studio } from './lib/studio.mjs';
-import { Mission } from './lib/mission.mjs';
+import { Mission, checkedControl } from './lib/mission.mjs';
 import { FixtureMission, CALIBRATION_OUTCOMES } from './lib/fixtures.mjs';
-import { Lights, readLocalPixelmap, readLocalScreens } from './lib/lights.mjs';
+import { Lights, readLocalPixelmap, readLocalScreens, checkedCalibrate } from './lib/lights.mjs';
 import { History, describeEvent } from './lib/history.mjs';
 import { describeTool } from './lib/steps.mjs';
-import { CONTACTS } from './public/model.js';
+import { SelfUpdate } from './lib/update.mjs';
+import { CONTACTS, derive } from './public/model.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const env = process.env;
@@ -56,6 +67,7 @@ const STATE = env.MISSION_STATE_DIR || join(HERE, '..', '..', 'mission-state');
 const REPO = env.MISSION_REPO || join(HERE, '..');
 const FIXTURES = env.MISSION_FIXTURES || null;
 const CONTACTS_FILE = env.MISSION_CONTACTS_FILE || join(STATE, 'contacts.json');
+const SOCKET = env.MISSION_CONTROL_SOCKET || join(STATE, 'mc.sock');
 const COOKIE = 'mc';
 const CHECK_EVERY_MS = 20_000;                 // POST /api/control/check: the full check is an SSH round trip; no faster than this
 const OBSERVE_EVERY_MS = 5_000;                // how often the history looks at the snapshot (transitions only are kept)
@@ -69,7 +81,8 @@ if (userInfo().username === 'river') {
   copyFileSync(join(HERE, 'setup', 'river-claude-settings.json'), join(home, '.claude', 'settings.json'));
 }
 
-// Self-update: when a pull brings new mission/ code, restart (launchd starts us again) as soon as the chat is idle.
+// Self-update: when a pull brings new mission/ code, restart (launchd starts us again) once the chat is idle and nothing is
+// being applied (lib/update.mjs).
 const git = (...args) => { try { return execFileSync('git', ['-C', REPO, ...args], { encoding: 'utf8' }).trim(); } catch { return null; } };
 const missionTree = () => git('rev-parse', 'HEAD:mission');
 const BOOT_TREE = missionTree();
@@ -77,13 +90,6 @@ const BOOT_TREE = missionTree();
 const COMMIT = git('rev-parse', 'HEAD');
 const VERSION = { commit: COMMIT, short: COMMIT && COMMIT.slice(0, 7), mission_tree: BOOT_TREE, started: new Date().toISOString(),
                   node: process.version, fixtures: !!FIXTURES };
-let restartPending = false;
-function checkForUpdate() {
-  if (!restartPending && BOOT_TREE && missionTree() && missionTree() !== BOOT_TREE) {
-    restartPending = true;
-    console.log('mission/ changed in the repo: restarting when the chat is idle');
-  }
-}
 
 const auth = new Auth({ password: readPasswordFile(env.MISSION_PASSWORD_FILE), sessionsFile: join(STATE, 'sessions.json') });
 
@@ -116,22 +122,26 @@ async function makeRunner() {
   const { agentRunner } = await import('./lib/agent.mjs');
   return agentRunner({ cwd: REPO, appendPrompt: readFileSync(join(HERE, 'STUDIO.md'), 'utf8'),
                        token: readFileSync(tokenFile, 'utf8').trim(), model: env.MISSION_MODEL || undefined,
-                       onSynced: checkForUpdate });
+                       controlSocket: SOCKET, onSynced: () => update.check() });
 }
 
+let mission = null;                // set below; the self-update's quiet() reads it
+const update = new SelfUpdate({ boot: BOOT_TREE, tree: missionTree, exit: () => process.exit(0),
+                                quiet: () => { const st = studio.status(); return !st.running && !st.queue.length && !!mission && !mission.busy(); } });
 const studio = new Studio({ runner: await makeRunner(), dir: STATE });
 const lights = FIXTURES ? null : new Lights({ sshHost: 'bitcube' });
-const mission = FIXTURES ? new FixtureMission({ dir: FIXTURES, stateDir: STATE, pixelmapDir: PIXELMAP_DIR, calibrateS: Number(env.MISSION_FIXTURE_CALIBRATE_S || 60),
+mission = FIXTURES ? new FixtureMission({ dir: FIXTURES, stateDir: STATE, pixelmapDir: PIXELMAP_DIR, calibrateS: Number(env.MISSION_FIXTURE_CALIBRATE_S || 60),
                                                 applyS: Number(env.MISSION_FIXTURE_APPLY_S ?? 6) })
                          : new Mission({ sshHost: 'bitcube', lights, stateDir: STATE });   // fixtures: nothing is polled or run
 mission.start();
-studio.on('status', (st) => { if (restartPending && !st.running && !st.queue.length) { console.log('restarting for new code'); process.exit(0); } });
+studio.on('status', () => update.maybeRestart());
+setInterval(() => update.maybeRestart(), 10_000).unref();       // a change in flight ended: restart now if one is pending
 setInterval(async () => {
   if (studio.status().running || env.MISSION_FAKE_AGENT || FIXTURES) return;
   const { syncRepo } = await import('./lib/agent.mjs');
   await syncRepo(REPO);
-  checkForUpdate();
-  if (restartPending && !studio.status().running && !studio.status().queue.length) { console.log('restarting for new code'); process.exit(0); }
+  update.check();
+  update.maybeRestart();
 }, 5 * 60_000).unref();
 
 // ---- history: since when, and what was last done ----------------------------------------------------------
@@ -153,12 +163,56 @@ function observeAll() {
 }
 observeAll();
 setInterval(observeAll, OBSERVE_EVERY_MS).unref();
-/** Every control, done or failed, goes into the history (source: never a person's name, MD4). */
-function recordAction(scenario, action, body, result, error) {
+/** Every control, done or failed, goes into the history: its checked fields only (what the whitelist read, never what a client
+ *  added), where it came from (mission control or the studio chat: never a person's name, MD4), its label (a restart on the
+ *  running file reads as one) and whether it may or may not have happened (maybe: no answer in time). */
+function recordAction(scenario, action, checked, result, error, { source = 'mission control', label = null } = {}) {
   try {
-    historyFor(scenario).action({ action, body, ok: !error && result?.ok !== false,
-                                  note: error ? String(error.message ?? error) : result?.error ?? result?.note ?? null, source: 'mission control' });
+    historyFor(scenario).action({ action, body: checked, ok: !error && result?.ok !== false, maybe: !error && result?.maybe === true,
+                                  note: error ? String(error.message ?? error) : result?.error ?? result?.note ?? null, source, label });
   } catch (e) { console.warn(`history: ${e.message}`); }
+}
+
+/** One control, from a page (POST /api/control/<action>) or the studio agent (the control socket): the whitelist, the locks and
+ *  the 409s, the history line. -> { status, body }. A refused request (400, 409, 429) is not something that happened: not recorded. */
+async function runControl(action, b, { scenario, source = 'mission control', calib = 'ok' } = {}) {
+  let checked = null, label = null;
+  try {
+    let r;
+    if (action === 'calibrate') {
+      checked = checkedCalibrate(b.action, b);
+      // through the mission, which records a start as a change in flight and keeps the job's answer as its newest state
+      r = await mission.calibrate(b.action, b, { scenario, outcome: calib, source });
+    } else if (action === 'check') { checked = {}; r = await checkNow(scenario); }
+    else {
+      checked = checkedControl(action, b);
+      label = mission.label(action, checked, scenario);          // before it runs: "the restart on …" when its file runs now
+      r = await mission.control(action, b, scenario, { source });   // fixture mode: that scenario's own world
+    }
+    recordAction(scenario, action, checked, r, null, { source, label });
+    return { status: 200, body: r };
+  } catch (e) {
+    if (!e.status || e.status >= 500) recordAction(scenario, action, checked, null, e, { source, label });
+    return { status: e.status || 502, body: { ok: false, error: e.message } };
+  }
+}
+
+/** GET /status on the control socket: what the agent reads before it changes anything (derive() on the snapshot, as a page). */
+function localStatus(scenario) {
+  const snap = mission.snapshot(scenario);
+  const now = snap.now ?? Date.now();
+  const m = derive({ ...snap, now }, now);
+  const pv = snap.probe?.value, cal = pv?.calibration && typeof pv.calibration === 'object' ? pv.calibration : null;
+  return {
+    ok: true, now,
+    overall: { level: m.overall.level, cause: m.overall.cause, headline: m.overall.headline },
+    applying: (snap.applying ?? []).map((a) => ({ action: a.action, label: a.label, phase: a.phase, source: a.source, ...(a.file ? { file: a.file } : {}),
+                                                started_at: a.started_at, ...(a.maybe ? { maybe: true } : {}) })),
+    calibration: cal ? { running: cal.running === true && cal.stale !== true, stage: cal.stage ?? null, mode: cal.mode ?? null, stale: cal.stale === true, ok: cal.ok ?? null } : null,
+    show_file: m.show.file ? { file: m.show.file.name, label: m.show.file.label } : null,
+    boot_file: typeof pv?.boot_file === 'string' ? pv.boot_file : null,
+    blocked: Object.fromEntries(Object.entries(m.controls).filter(([, c]) => !c.possible).map(([k, c]) => [k, c.why])),
+  };
 }
 function withWords(ev) { return ev ? { ...ev, words: describeEvent(ev), ago_s: Math.max(0, Math.round((Date.now() - ev.t) / 1000)) } : null; }
 
@@ -386,24 +440,12 @@ const server = createServer(async (req, res) => {
     }
     const m = path.match(/^\/api\/control\/([a-z0-9-]+)$/);
     if (m && req.method === 'POST') {
-      const action = m[1];
       const b = await body(req);
       // a control's body is a JSON object; anything else (null, a list, a number) is refused before it is run or recorded
       if (!isObject(b)) return send(res, 400, { error: NOT_OBJECT });
-      try {
-        let r;
-        if (action === 'calibrate') {
-          const outcome = CALIBRATION_OUTCOMES.includes(url.searchParams.get('calib')) ? url.searchParams.get('calib') : CALIBRATION_OUTCOMES.includes(cookies.calib) ? cookies.calib : 'ok';
-          // through the mission, which records a start as a change in flight and keeps the job's answer as its newest state
-          r = await mission.calibrate(b.action, b, { scenario, outcome });
-        } else if (action === 'check') r = await checkNow(scenario);
-        else r = await mission.control(action, b, scenario);   // fixture mode: that scenario's own world (a scripted calibration blocks as live)
-        recordAction(scenario, action, b, r);
-        return send(res, 200, r);
-      } catch (e) {
-        if (!e.status || e.status >= 500) recordAction(scenario, action, b, null, e);      // a refused request (400, 409, 429) never happened
-        return send(res, e.status || 502, { ok: false, error: e.message });
-      }
+      const calib = CALIBRATION_OUTCOMES.includes(url.searchParams.get('calib')) ? url.searchParams.get('calib') : CALIBRATION_OUTCOMES.includes(cookies.calib) ? cookies.calib : 'ok';
+      const r = await runControl(m[1], b, { scenario, source: 'mission control', calib });
+      return send(res, r.status, r.body);
     }
     return send(res, 404, { error: 'not found' });
   } catch (e) {
@@ -411,6 +453,37 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '127.0.0.1', () => console.log(`mission control on http://127.0.0.1:${server.address().port} (state in ${STATE}, agent in ${REPO}${FIXTURES ? `, fixtures from ${FIXTURES}` : ''})`));
-const quit = () => { mission.stop(); server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 3000).unref(); };
+// ---- the local control socket (the studio agent's way to change the installation: bin/mc.mjs) -----------------------------
+const local = createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://local');
+  const scenario = FIXTURES ? url.searchParams.get('scenario') ?? undefined : undefined;   // fixture mode: which world (default as a page)
+  try {
+    if (req.method === 'GET' && url.pathname === '/status') return send(res, 200, localStatus(scenario));
+    const m = url.pathname.match(/^\/control\/([a-z0-9-]+)$/);
+    if (m && req.method === 'POST') {
+      const b = await body(req);
+      if (!isObject(b)) return send(res, 400, { ok: false, error: NOT_OBJECT });
+      const r = await runControl(m[1], b, { scenario, source: 'studio chat' });
+      return send(res, r.status, r.body);
+    }
+    return send(res, 404, { ok: false, error: 'not here: GET /status or POST /control/<action>' });
+  } catch (e) { return send(res, e.status || 500, { ok: false, error: e.message }); }
+});
+let socketMine = false;
+function listenLocal() {
+  try {
+    mkdirSync(dirname(SOCKET), { recursive: true });
+    // a socket left by a server that was killed is ours to replace; any other file there is not (listen then fails, said below)
+    try { if (lstatSync(SOCKET).isSocket()) unlinkSync(SOCKET); } catch { /* none there */ }
+    const before = process.umask(0o177);           // created 0600 from its first moment; the chmod below makes sure
+    try { local.listen(SOCKET); } finally { process.umask(before); }
+  } catch (e) { console.warn(`control socket: ${e.message}`); }
+}
+local.on('listening', () => { socketMine = true; try { chmodSync(SOCKET, 0o600); } catch (e) { console.warn(`control socket: ${e.message}`); } });
+local.on('error', (e) => console.warn(`control socket ${SOCKET}: ${e.message} (the studio agent can't change the installation until it is fixed)`));
+process.on('exit', () => { if (socketMine) { try { unlinkSync(SOCKET); } catch { /* gone already */ } } });
+listenLocal();
+
+server.listen(PORT, '127.0.0.1', () => console.log(`mission control on http://127.0.0.1:${server.address().port} (state in ${STATE}, agent in ${REPO}${FIXTURES ? `, fixtures from ${FIXTURES}` : ''}, control socket ${SOCKET})`));
+const quit = () => { mission.stop(); local.close(); server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 3000).unref(); };
 process.on('SIGTERM', quit); process.on('SIGINT', quit);

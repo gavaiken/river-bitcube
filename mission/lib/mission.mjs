@@ -6,8 +6,8 @@ import { connect } from 'node:net';
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { scrubCreds } from './scrub.mjs';
-import { Applying } from './applying.mjs';
-import { planCalibrate } from './lights.mjs';
+import { Applying, applyLabel } from './applying.mjs';
+import { checkedCalibrate, noAnswer } from './lights.mjs';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 const PROBE = PS + 'probe.ps1';
@@ -39,17 +39,13 @@ export function tcpUp(host, port, timeout = 3000) {
   });
 }
 
-export function sshProbe(sshHost, args = '', timeout = 45_000) {
+export function sshProbe(sshHost, args = '', timeout = 45_000, { exec = execFile } = {}) {
   return new Promise((resolve) => {
-    execFile('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', sshHost, `${PROBE} ${args}`],
+    exec('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', sshHost, `${PROBE} ${args}`],
       { timeout, maxBuffer: 1 << 20 }, (err, stdout) => {
         const line = String(stdout ?? '').split('\n').map((l) => l.trim()).filter((l) => l.startsWith('{')).pop();
         if (line) { try { return resolve(JSON.parse(line)); } catch { /* fall through */ } }
-        const why = !err ? 'no answer from the probe'
-          : err.killed ? 'bitcube took too long to answer'
-          : err.code === 255 ? "can't reach bitcube over SSH"
-          : `probe failed (exit ${err.code})`;
-        resolve({ ok: false, error: why });
+        resolve(noAnswer(err, 'probe', 'the probe'));
       });
   });
 }
@@ -66,7 +62,9 @@ export function sshSnap(sshHost, cam, timeout = 30_000) {
 }
 
 async function getJson(url, timeout = 5000, init = {}) {
-  const r = await fetch(url, { ...init, signal: AbortSignal.timeout(timeout) });
+  let r;
+  try { r = await fetch(url, { ...init, signal: AbortSignal.timeout(timeout) }); }
+  catch (e) { throw Object.assign(e, { timedOut: e?.name === 'TimeoutError' || e?.name === 'AbortError' }); }
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw Object.assign(new Error(body.error || `HTTP ${r.status}`), { status: r.status, body });
   return body;
@@ -76,6 +74,12 @@ const obj = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : null);
 const CAL_NONE_GRACE_MS = 30_000;              // a "no job" answer this soon after the kept copy may be a start racing its file
 const CAL_KEEP_S = 24 * 3600;                 // probe.ps1 reports a progress file from the last 24 h, and so does the newest-copy rule
 export const CAL_POLL_MS = 5_000;             // while a run is on, the server reads its progress itself this often
+/** After a switch or rebuild answers, the full check is asked again this soon (as well as on its 60 s timer), so the change is
+ *  confirmed (TouchDesigner answering on the file) about when it is real: the launcher waits 10 s, then opens the file. */
+export const RECHECK_MS = [15_000, 45_000];
+/** A calibration start that wasn't a clear refusal holds its lock ('starting') while the server reads the progress every
+ *  CAL_POLL_MS, this many times (about a minute), until the new run's file shows up. */
+export const CAL_START_READS = 12;
 
 /** A rebuild that went all the way: built, saved and restarted on the file (probe.ps1 -Action rebuild; ok false names the step). */
 export function rebuildSucceeded(r) { return !!r && r.ok !== false && r.rebuilt !== false && r.saved !== false; }
@@ -84,8 +88,10 @@ export class Mission {
   // lights: the Lights instance (lib/lights.mjs) the calibration goes through; stateDir: where the last rebuild is kept (null: memory)
   constructor({ bitcubeHost = '100.73.68.60', sshHost = 'bitcube', seasonsUrl = 'http://100.73.68.60:9981',
                 modalUrl = 'https://to-be-a-river--river.modal.run', riverCam = { host: '192.168.8.217', port: 554 },
-                probe = sshProbe, snap = sshSnap, now = () => Date.now(), lights = null, stateDir = null } = {}) {
-    Object.assign(this, { bitcubeHost, sshHost, seasonsUrl, modalUrl, riverCam, probe, snap, now, lights, stateDir });
+                probe = sshProbe, snap = sshSnap, now = () => Date.now(), lights = null, stateDir = null,
+                later = (fn, ms) => setTimeout(fn, ms).unref?.(), recheckMs = RECHECK_MS, seasonsTimeoutMs = 5000 } = {}) {
+    // later(fn, ms): the timer the follow-up reads use (a test passes its own); seasonsTimeoutMs: a seasons page POST's limit
+    Object.assign(this, { bitcubeHost, sshHost, seasonsUrl, modalUrl, riverCam, probe, snap, now, lights, stateDir, later, recheckMs, seasonsTimeoutMs });
     this.snaps = {};         // cam -> { at, jpeg, pending }
     this.data = {};          // source -> { at, value | error }
     this.timers = [];
@@ -117,8 +123,22 @@ export class Mission {
   }
 
   async pollProbe() {
+    const asked = this.now();
     const r = await this.probe(this.sshHost);
     if (r.ok === false && !r.td) this.#set('probe', null, r.error); else this.#set('probe', r);
+    // a switch or rebuild that answered before this check was asked is done once TouchDesigner answers on its file
+    if (r.td) this.applying.confirm(scrubCreds(r), asked);
+  }
+
+  /** Whether anything is being applied or confirmed (a self-update restart waits for nothing to be in flight). */
+  busy() { return this.applying.list().length > 0; }
+
+  /** The label a change gets (applying.mjs applyLabel): a switch to the file TouchDesigner runs is "the restart on …". */
+  label(action, body) { return applyLabel(action, body, { running: this.data.probe?.value?.td?.file ?? null }); }
+
+  /** After a switch or rebuild answered: look again sooner than the 60 s timer, so the confirmation arrives when it is real. */
+  #recheckSoon() {
+    for (const ms of this.recheckMs) this.later(() => { if (this.busy()) this.pollProbe().catch(() => {}); }, ms);
   }
 
   start() {
@@ -185,15 +205,33 @@ export class Mission {
   }
 
   /** POST /api/control/calibrate: start, cancel or status through Lights (planCalibrate is the whitelist). A start is a change
-   *  in flight (it waits for a switch, rebuild or boot-file change, and those wait for it); a cancel always goes through. */
-  async calibrate(action, body = {}) {
-    planCalibrate(action, body);
+   *  in flight (it waits for a switch, rebuild or boot-file change, and those wait for it); a cancel always goes through. A start
+   *  that isn't a clear refusal but whose run hasn't shown up yet (calibrate.ps1's first write can take longer than its 6 s wait,
+   *  or the call timed out) keeps its lock as 'starting' while the progress is read every CAL_POLL_MS, for about a minute,
+   *  until the new run's file shows up: the run's own state then holds the lock (calBlocked), from its first second. */
+  async calibrate(action, body = {}, { source = 'mission control' } = {}) {
+    const checked = checkedCalibrate(action, body);
     if (!this.lights) throw Object.assign(new Error('no calibration here'), { status: 503 });
-    return this.applying.run('calibrate', { ...body, action }, async () => {
-      const r = await this.lights.calibrate(action, body);
+    const before = typeof this.calibration()?.started === 'number' ? this.calibration().started : null;   // bitcube's clock
+    let isNew = () => false;
+    return this.applying.run('calibrate', checked, async () => {
+      const r = await this.lights.calibrate(action, checked);
       this.noteCalibration(r?.calibration);
+      if (action === 'start') isNew = newRunTest(r, before, this.now());
       return r;
-    });
+    }, { source, awaits: (r) => action === 'start' && startPending(r, isNew), onPending: (e) => this.#watchStart(e.id, isNew) });
+  }
+
+  /** A start whose run hasn't shown up: read the progress every CAL_POLL_MS until the run's file is there (its lock then holds
+   *  it), or CAL_START_READS reads have passed; either way the start's own lock ends. */
+  #watchStart(id, isNew, n = 1) {
+    this.later(async () => {
+      if (!this.applying.has(id)) return;
+      let c = null;
+      try { c = await this.lights.calibration(); this.noteCalibration(c); } catch { /* a failed read: try again */ }
+      if (isNew(c) || isNew(this.calibration()) || n >= CAL_START_READS) this.applying.release(id);
+      else this.#watchStart(id, isNew, n + 1);
+    }, CAL_POLL_MS);
   }
 
   // ---- the last rebuild: which LED map the river's year uses ------------------------------------------------------
@@ -235,34 +273,75 @@ export class Mission {
   }
 
   // ---- controls (fixed actions) ----------------------------------------------------------------------
-  async control(action, body = {}) {
+  async control(action, body = {}, _scenario = null, { source = 'mission control' } = {}) {
     const plan = planControl(action, body);
+    const checked = checkedControl(action, body);     // only what the whitelist read goes into status.applying
     // a calibration photographs the ropes and the panels: anything that changes them, restarts TouchDesigner or moves the
     // lighting port spoils the run (the pages refuse these too; this covers the studio chat and a stale page)
     const blocked = calBlocked(action, this.calibration());
     if (blocked) throw blocked;
     // every change in flight is recorded, and one that conflicts with it waits (409): two phones pressing Rebuild must not run
     // two builds and two restarts, and nothing may touch TouchDesigner while a switch restarts it
-    return this.applying.run(action, body, async () => {
+    // A switch or rebuild that answered OK stays in status.applying ('confirming', still blocking what it blocks: a second switch
+    // would kill the half-opened file) until the full check shows TouchDesigner answering on that file, or its confirm limit.
+    return this.applying.run(action, checked, async () => {
       if (plan.kind === 'seasons') return this.#seasons(plan.path, plan.body);
       const r = await this.#probeAction(plan.args, plan.timeout, action);
-      if (action === 'rebuild' && rebuildSucceeded(r)) this.#recordRebuilt(body.file, r);
+      if (action === 'rebuild' && rebuildSucceeded(r)) this.#recordRebuilt(checked.file, r);
       return r;
-    }, { running: this.data.probe?.value?.td?.file ?? null });
+    }, { running: this.data.probe?.value?.td?.file ?? null, source, awaits: (r) => awaitsReading(action, r), onPending: () => this.#recheckSoon() });
   }
 
   async #seasons(path, body) {
-    const r = await getJson(`${this.seasonsUrl}${path}`, 5000, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    let r;
+    try { r = await getJson(`${this.seasonsUrl}${path}`, this.seasonsTimeoutMs, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); }
+    catch (e) {
+      // no answer in time: the page may have taken it (it may or may not have happened); a refusal or no page at all did not
+      if (e.timedOut) return { ok: false, maybe: true, error: "the river's year page took too long to answer" };
+      throw e;
+    }
     this.#set('seasons', r);
     return r;
   }
 
   async #probeAction(args, timeout, action = null) {
+    const asked = this.now();
     const r = await this.probe(this.sshHost, args, timeout);
     if (r.ok !== false || r.td) this.#set('probe', r);
+    if (r.td) this.applying.confirm(scrubCreds(r), asked);
     // the answer goes to the page as it is: every log line in it (modal_link.*.last, recorder.last) is scrubbed as the snapshot is
     return scrubCreds(actionResult(action, r));
   }
+}
+
+/** Whether a control's answer leaves the change to be confirmed by bitcube's reading: a switch that answered OK, a rebuild that
+ *  went all the way (both restart TouchDesigner, which then opens the file). */
+export function awaitsReading(action, r) {
+  return (action === 'switch' && !!r && r.ok !== false) || (action === 'rebuild' && rebuildSucceeded(r));
+}
+
+/** A calibration start's answer -> isNew(progress): whether a progress file is the run this start launched. By bitcube's clock:
+ *  at or after the request (calibrate.ps1's requested), else newer than the run known before it; with neither, within two
+ *  minutes of the mini's clock (nowMs) at the answer. */
+export function newRunTest(r, before, nowMs) {
+  const req = typeof r?.requested === 'number' ? r.requested - 1 : null;
+  return (c) => {
+    const s = obj(c)?.started;
+    if (typeof s !== 'number') return false;
+    if (req != null) return s >= req;
+    if (before != null) return s > before;
+    return s >= nowMs / 1000 - 120;
+  };
+}
+
+/** A start that isn't a clear refusal and whose run isn't known yet: launched (calibrate.ps1 says started or names a pid; an
+ *  older calibrate.ps1 said "the job did not report within 6 s", also after the -Task launch, with no pid) or a maybe (no
+ *  answer in time). A clear refusal (ok false, started false, no pid) and a run already in hand are not pending. */
+export function startPending(r, isNew) {
+  if (!r || typeof r !== 'object') return false;
+  if (isNew(r.calibration)) return false;
+  if (r.started === false) return false;
+  return r.maybe === true || r.started === true || (r.pid != null && r.pid !== '') || /did not report/i.test(String(r.error ?? ''));
 }
 
 /** Ropes and panels act through TouchDesigner: when its own answer says it failed, the action failed, whatever the probe's
@@ -316,6 +395,22 @@ export function planControl(action, body = {}) {
       return { kind: 'probe', args: `-Action lightsroute -LightsRoute ${body.route}` };
     }
     default: throw bad('unknown action');
+  }
+}
+
+/** A control request as the whitelist reads it, and nothing else (a 400 for a bad request, as planControl): what the history
+ *  keeps, status.applying names and a page reads back. Extra keys a client sends never go further. */
+export function checkedControl(action, body = {}) {
+  const plan = planControl(action, body);
+  switch (action) {
+    case 'mode': return { mode: body.mode };
+    case 'target': return { ...plan.body };
+    case 'rules': return { rules: { ...plan.body } };
+    case 'ropes': return { dark: body.dark === true };
+    case 'hub75': return { brightness: num(body.brightness) };
+    case 'bootfile': case 'switch': case 'rebuild': return { file: body.file };
+    case 'lightsroute': return { route: body.route };
+    default: return {};
   }
 }
 

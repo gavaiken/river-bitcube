@@ -25,8 +25,11 @@
 //                                                          state seen again after a long unseen stretch (since restarts)
 //   { kind: 'show', t, field, from, to }                   file (the .toe name) | mode | season | ropes (the state word)
 //   { kind: 'calibration', t, running, stage, ok, cancelled, mode, error, stale, from: { running, stage } | null }
-//   { kind: 'action', t, action, body, ok, note, source }  source: 'mission control' | 'studio chat' (never a person: MD4);
-//                                                          body is the request body cut to BODY_MAX chars of JSON
+//   { kind: 'action', t, action, body, ok, note, source, label?, maybe? }   source: 'mission control' | 'studio chat' (never a
+//                                                          person: MD4); body: the request's checked fields (what the
+//                                                          whitelist read), cut to BODY_MAX chars of JSON; label: the change's
+//                                                          own words ("the restart on the river's year"); maybe: no answer in
+//                                                          time, so it may or may not have happened. Logins are scrubbed.
 //
 // Rules, and why:
 // - 'unknown' is the absence of knowledge, not a state. A piece that can't be checked (bitcube offline, the server
@@ -48,7 +51,7 @@
 //   nothing here ever throws: history never stops the show.
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { derive, FILES } from '../public/model.js';
+import { derive, FILES, intensityWord } from '../public/model.js';
 import { scrubCreds } from './scrub.mjs';
 
 export const KEEP_MS = 48 * 3600e3;
@@ -144,11 +147,14 @@ export class History {
     return out;
   }
 
-  /** A control was used, from mission control or the studio chat: kept so "was that on purpose?" has an answer. */
+  /** A control was used, from mission control or the studio chat: kept so "was that on purpose?" has an answer. The body is
+   *  what the caller checked (server.mjs passes the whitelist's fields only); a login in it or in the note is scrubbed anyway. */
   action(entry) {
     const e = obj(entry) ?? {};
+    const label = typeof e.label === 'string' && e.label.trim() ? scrubCreds(e.label.trim()).slice(0, 80) : null;
     return this.#record({ kind: 'action', t: num(e.t) ?? this.now(), action: str(e.action == null ? 'unknown' : String(e.action), 40) || 'unknown',
-                          body: smallBody(e.body), ok: e.ok !== false, note: e.note == null ? null : String(e.note).slice(0, 200), source: sourceOf(e.source) });
+                          body: smallBody(scrubCreds(e.body)), ok: e.ok !== false, note: e.note == null ? null : scrubCreds(String(e.note)).slice(0, 200),
+                          source: sourceOf(e.source), ...(label ? { label } : {}), ...(e.maybe === true ? { maybe: true } : {}) });
   }
 
   /** When the current level began. `level` is the last KNOWN level: while the page's model says unknown (not checked,
@@ -332,8 +338,21 @@ const oneColon = (s) => { const i = s.indexOf(': '); return i < 0 ? s : s.slice(
 /** A stored summary without the parts that were only true at that moment ("last clip 21 s ago", "up 3 h"): the feed shows
  *  its own "12 min ago" beside it, and a frozen age would contradict it. */
 function timeless(s) {
-  return String(s ?? '').split(/;\s*/).map((x) => x.replace(/\s*\((?:last|up)\b[^()]*\)/gi, '').trim())
-    .filter((x) => x && !/\bago\b|^up \d/i.test(x)).join('; ');
+  return ageless(String(s ?? '').split(/;\s*/).map((x) => x.replace(/\s*\((?:last|up)\b[^()]*\)/gi, '').trim())
+    .filter((x) => x && !/\bago\b|^up \d/i.test(x)).join('; '));
+}
+// A duration as model.js dur() writes it ("36 s", "4 min", "9 h", "2 days").
+const DUR = String.raw`\d+(?:\.\d+)? ?(?:s|min|h|days?)`;
+const AGES = [new RegExp(String.raw`\s*\bfor (?:about |over |at least )?${DUR}(?: more)?(?![\w%])`, 'gi'),     // "for about 36 s more", "for 9 h"
+              new RegExp(String.raw`\s*\b(?:about |over )?${DUR} ago(?![\w%])`, 'gi'),                           // "restarted 6 min ago"
+              new RegExp(String.raw`(\bmissed) ${DUR} of\b`, 'gi')];                                                // "it has missed 9 h of daytime updates"
+/** A headline or summary without the ages that were only true when it was recorded ("the ropes are in patterns for about 36 s
+ *  more", "hasn't updated for 9 h", "bitcube restarted 6 min ago"): Recent shows when each line happened, never how old
+ *  something was then (mission-ui.md "Since when"). */
+export function ageless(s) {
+  let out = String(s ?? '');
+  for (const re of AGES) out = out.replace(re, (m, missed) => (typeof missed === 'string' && /^missed$/i.test(missed) ? missed : ''));
+  return out.replace(/\s+([,.;:)])/g, '$1').replace(/\(\s*\)/g, '').replace(/\s{2,}/g, ' ').trim();
 }
 function itemWords(ev) {
   const [name, plural] = WHO[ev.id] ?? [cap(String(ev.id ?? 'something'))];
@@ -371,20 +390,24 @@ function calibrationWords(ev) {
   return `${what} is not running`;
 }
 
-/** [past, infinitive, what] for an action, from its body. */
-function actionPhrase(ev) {
+/** [past, infinitive, what] for an action, from its body (also lib/steps.mjs: a change the agent asks mission control for). */
+export function actionPhrase(ev) {
   const b = obj(ev.body) ?? {};
   const pct = num(Number(b.brightness)) != null ? `${Math.round(Number(b.brightness) * 100)} %` : 'a new level';
   switch (ev.action) {
     case 'mode': return ['Set', 'set', `the year's mode to ${b.mode ?? 'a new mode'}`];
-    case 'target': return ['Set', 'set', `the target to ${[b.season, b.intensity != null ? `intensity ${b.intensity}` : null].filter(Boolean).join(', ') || 'a new value'}`];
+    case 'target': {     // the band's words: "summer, strong"
+      const x = Number(b.intensity), w = b.intensity != null && b.intensity !== '' && Number.isFinite(x) ? intensityWord(Math.min(1, Math.max(0, x))) : null;
+      return ['Set', 'set', `the target to ${[b.season, w].filter(Boolean).join(', ') || 'a new value'}`]; }
     case 'rules': { const n = Object.keys(obj(b.rules) ?? {}).length; return ['Changed', 'change', n ? `${n} of the year's rules` : "the year's rules"]; }
     case 'rules-reset': return ['Reset', 'reset', "the year's rules"];
     case 'ropes': return ['Turned', 'turn', b.dark === true ? 'the ropes dark' : 'the ropes on'];   // as planControl: only a real true goes dark
     case 'hub75': return ['Set', 'set', `the panel brightness to ${pct}`];
-    case 'switch': return ['Switched', 'switch', `TouchDesigner to ${fileLabel(b.file)}`];
-    case 'bootfile': return ['Set', 'set', `the show file for the next restart to ${fileLabel(b.file)}`];
-    case 'lightsroute': return ['Routed', 'route', `the lights through ${b.route === 'router' ? 'the router' : "bitcube's LIGHTS port"}`];
+    // a switch to the file TouchDesigner was running is the button's "Restart on …" (its label says so, applying.mjs applyLabel)
+    case 'switch': return /^the restart on /.test(String(ev.label ?? '')) ? ['Restarted', 'restart', `TouchDesigner on ${fileLabel(b.file)}`]
+      : ['Switched', 'switch', `TouchDesigner to ${fileLabel(b.file)}`];
+    case 'bootfile': return ['Set', 'set', `the boot file to ${fileLabel(b.file)}`];
+    case 'lightsroute': return ['Moved', 'move', `the lighting network to ${b.route === 'router' ? 'the spare router port' : "bitcube's LIGHTS port"}`];
     case 'check': return ['Ran', 'run', 'the full check of bitcube'];
     case 'rebuild': return ['Rebuilt', 'rebuild', `${fileLabel(b.file)} with the new LED map`];
     case 'calibrate': return b.action === 'cancel' ? ['Cancelled', 'cancel', 'the calibration'] : b.action === 'status' ? ['Checked', 'check', 'the calibration']
@@ -411,7 +434,7 @@ export function describeEvent(ev) {
     switch (e.kind) {
       case 'overall': {
         const who = e.lost ?? 'bitcube';
-        const head = e.headline || `The verdict is ${e.level ?? 'unknown'}`;
+        const head = ageless(e.headline) || `The verdict is ${e.level ?? 'unknown'}`;
         if (e.stale) {
           const same = e.from && e.from.level === e.level && e.from.cause === (e.cause ?? null);
           line = e.level === 'unknown' || same ? `Lost contact with ${who}` : `${head} (and no word from ${who})`;
@@ -423,7 +446,8 @@ export function describeEvent(ev) {
       case 'calibration': line = calibrationWords(e); break;
       case 'action': {
         const [past, inf, what] = actionPhrase(e), from = `from ${e.source === 'studio chat' ? 'the studio chat' : 'mission control'}`;
-        line = e.ok === false ? `Tried to ${inf} ${what} ${from}, but ${plainNote(e.note) ?? 'it failed'}` : `${past} ${what} ${from}`;
+        line = e.maybe === true ? `Tried to ${inf} ${what} ${from}: no answer in time, so it may or may not have happened`
+          : e.ok === false ? `Tried to ${inf} ${what} ${from}, but ${plainNote(e.note) ?? 'it failed'}` : `${past} ${what} ${from}`;
         break;
       }
       default: line = e.headline || e.summary || 'Something happened';

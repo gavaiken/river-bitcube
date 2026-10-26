@@ -38,9 +38,12 @@ export class Studio extends EventEmitter {
     this.idle = Promise.resolve();
   }
 
+  /** What every open page is told (GET /api/status's studio, every SSE status event, the send answer): the requests' words
+   *  scrubbed of logins, as every chat event is (a camera URL pasted into the chat holds its password). The agent itself still
+   *  gets the request as it was typed. */
   status() {
-    return { running: !!this.current, current: this.current && { id: this.current.id, text: this.current.text },
-             queue: this.queue.map(({ id, text }) => ({ id, text })), session: !!this.state.sessionId };
+    return { running: !!this.current, current: this.current && { id: this.current.id, text: scrubCreds(this.current.text) },
+             queue: this.queue.map(({ id, text }) => ({ id, text: scrubCreds(text) })), session: !!this.state.sessionId };
   }
 
   history(limit = 500) { return this.events.slice(-limit); }
