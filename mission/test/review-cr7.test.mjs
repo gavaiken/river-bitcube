@@ -337,3 +337,22 @@ test('CR7 #4: Status and ui.js control() judge their own change by serverJudged,
   assert.match(ui, /serverJudged\(n\.model, entryId, sent\)/);
   assert.doesNotMatch(st + ui, /entryVerdict\(/, 'never the verdict alone');
 });
+
+test('CR7 #10: this phone\'s own change still in status.applying is its own while its control has no id: applying, confirming, or unconfirmed (an entry begun before it gave up)', async () => {
+  const { derive, ownEntries, bandSaid } = await import('../public/model.js');
+  const now = T0;
+  const entry = (id, action, startedAgoS, label) => ({ id, action, label, phase: 'confirming', source: 'mission control', started_at: all._scenario.now - startedAgoS * 1000, expect_s: 60, blocks: [action] });
+  const m = derive(statusAt(T0, { applying: [entry('ax.1', 'switch', 70, 'the switch to the live river'), entry('ax.2', 'ropes', 5, 'the ropes change to dark')] }), all._scenario.now);
+  // the switch timed out on this phone 10 s ago (no answer: no id) and the server still holds its entry: this phone's own
+  const own = ownEntries(m, [{ action: 'switch', state: 'unconfirmed', entryId: null, at: now - 10_000 }], now);
+  assert.deepEqual(own, { ownIds: ['ax.1'], ownActions: [] });
+  assert.doesNotMatch(bandSaid(m, own), /switch to the live river/);
+  assert.match(bandSaid(m, own), /ropes change to dark/, 'another phone\'s change is still said');
+  // an entry begun after this phone gave up is another phone's change of the same thing
+  assert.deepEqual(ownEntries(m, [{ action: 'ropes', state: 'unconfirmed', entryId: null, at: now - 60_000 }], now), { ownIds: [], ownActions: [] });
+  // applying or confirming without an id: by its action, as before
+  for (const state of ['applying', 'confirming']) assert.deepEqual(ownEntries(m, [{ action: 'ropes', state, entryId: null, at: now - 60_000 }], now), { ownIds: [], ownActions: ['ropes'] }, state);
+  // with an id: by its id, whatever its state; done or failed without one: not this phone's
+  assert.deepEqual(ownEntries(m, [{ action: 'switch', state: 'done', entryId: 'ax.1', at: now }], now), { ownIds: ['ax.1'], ownActions: [] });
+  for (const state of ['done', 'failed', 'ready']) assert.deepEqual(ownEntries(m, [{ action: 'switch', state, entryId: null, at: now - 1000 }], now), { ownIds: [], ownActions: [] }, state);
+});

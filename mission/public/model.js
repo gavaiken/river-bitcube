@@ -981,13 +981,31 @@ export function entrySaid(a) {
   return a?.phase === 'confirming' ? `Waiting for bitcube to show ${label}${from}.` : `Applying: ${label}${from}.`;
 }
 /** What Status's hidden band region says: the level and the headline without their times (R7 #13), then each change in flight
- *  but this phone's own (ownIds: its entries; ownActions: a request still in flight with no id yet) by name and source (R7 #12). */
+ *  but this phone's own (ownEntries: ownIds, its entries; ownActions, a request without an id yet) by name and source (R7 #12). */
 export function bandSaid(m, { ownIds = [], ownActions = [] } = {}) {
   if (!m) return '';
   const head = `${{ ok: 'OK', warning: 'Attention', down: 'Down', unknown: 'Unknown' }[m.overall.level] ?? 'Unknown'}. ${untimed(m.overall.headline.replace(/\s*\(no answer for [^()]*\)$/, ''))}.`;
   if (m.overall.cause === 'page') return head;
   const others = (m.show.applying ?? []).filter((a) => !(a.id && ownIds.includes(a.id)) && !ownActions.includes(a.action));
   return [head.replace(/\.\.$/, '.'), ...others.map(entrySaid)].join(' ');
+}
+/** This phone's own changes among status.applying (derive()'s show.applying), from its controls: [{ action, state, entryId, at }]
+ *  (at: when the control entered its state, this phone's clock, ms). ownIds: its entries by id, and, for a control unconfirmed
+ *  without an id (its answer never came), an entry of its action begun before it gave up (one begun later is another phone's
+ *  change of the same thing); ownActions: a request in flight or confirming without an id, by its action (CR7 #10). What
+ *  bandSaid, Status's band and Lights' state line leave out: this phone's own change is said on its control only. */
+export function ownEntries(m, controls, nowMs = Date.now()) {
+  const list = (Array.isArray(controls) ? controls : []).filter((c) => c && typeof c.action === 'string');
+  const ownIds = list.map((c) => c.entryId).filter((x) => typeof x === 'string' && x !== '');
+  const ownActions = [...new Set(list.filter((c) => !c.entryId && (c.state === 'applying' || c.state === 'confirming')).map((c) => c.action))];
+  for (const a of m?.show?.applying ?? []) {
+    if (!a.id || ownIds.includes(a.id)) continue;
+    // the entry's age against the time since the control gave up: both durations, so the phone's clock offset never matters
+    const gaveUp = list.some((c) => !c.entryId && c.state === 'unconfirmed' && c.action === a.action
+      && (num(c.at) == null || num(a.elapsed_s) == null || a.elapsed_s + 2 >= (nowMs - c.at) / 1000));
+    if (gaveUp) ownIds.push(a.id);
+  }
+  return { ownIds, ownActions };
 }
 /** What the page's live region says once on entering confirming (never with a time). */
 export const CONFIRMING_SAID = 'Sent; waiting for bitcube to show it';

@@ -343,10 +343,10 @@ function bandHTML(m) {
 /** Changes in flight from another phone or the studio chat (status.applying): a quiet ticking line each, so a greyed control's
  *  "Wait: …" has its cause in view. This page's own change in flight is said on its control instead. */
 /** This phone's own changes: its entries by id, whatever its control shows now (confirming, or unconfirmed while the server still
- *  holds it), and a request still in flight, which has no id yet, by its action (R7 #15). */
+ *  holds it), and, without an id, by its action while its control is applying, confirming or unconfirmed (an entry begun before it
+ *  gave up): model.js ownEntries (R7 #15, CR7 #10). A control's name is its action. */
 function ownChanges() {
-  return { ownIds: Object.values(ctl).map((c) => c.entryId).filter(Boolean),
-           ownActions: Object.entries(ctl).filter(([, c]) => c.s.state === 'applying' && !c.entryId).map(([name]) => name) };
+  return M.ownEntries(model, Object.entries(ctl).map(([action, c]) => ({ action, state: c.s.state, entryId: c.entryId ?? null, at: c.s.at })), Date.now());
 }
 function applyingHTML(m) {
   // this phone's own change is said on its control only: never two states for one change (R6 #4)

@@ -6,7 +6,7 @@
 // limit, and what couldn't be read is asked for again by itself. Plain ES module, no build step, no framework.
 import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark, plainError, DOC_LINKS, splitHeadline, announce, goto,
   WARN_MS, LOST_MS, POLL_TIMEOUT_MS } from '/ui.js';
-import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, EXPECT_S } from '/model.js';
+import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, EXPECT_S, ownEntries } from '/model.js';
 import { uprightsFromAtlas } from '/screens.js';
 import { calChecklist, ROOM_CHECK, startWhy, dryWhy, calView, rebuiltFor, runNote, nextLine, captureWhen, driftWords, resultWords,
   mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT, calRead, calLeft, changeSince, stateLevel, applyingNow, stateLive, CAL_COPY, runFine,
@@ -154,11 +154,15 @@ function renderStateLine() {
 /** Screen readers hear the state line's words when they change, never a ticking time (lights.html #state-live; lights-words
  *  stateLive drops "for about 40 s more" and the changes' m:ss). */
 function sayState(t) { const l = $('#state-live'); if (l && l.textContent !== t) l.textContent = t; }
-/** This page's own changes: their controls say them, so the state line doesn't. Its entries by id (R7 #14), and a request still
- *  in flight, which has no id yet, by its action. */
-const ownChanges = () => ({ ids: S.ownIds,
-  actions: [(S.calCtl.start?.state === 'applying' && !S.calCtl.start.entryId) || (S.calCtl.dry?.state === 'applying' && !S.calCtl.dry.entryId) ? 'calibrate' : null,
-            S.calCtl.rebuild?.state === 'applying' && !S.calCtl.rebuild.entryId ? 'rebuild' : null].filter(Boolean) });
+/** This page's own changes: their controls say them, so the state line doesn't. Its entries by id (R7 #14), and, without an id,
+ *  by its action while its control is applying, confirming or unconfirmed (an entry begun before it gave up): model.js
+ *  ownEntries (CR7 #10). */
+const ownChanges = () => {
+  const ctls = [['calibrate', S.calCtl.start], ['calibrate', S.calCtl.dry], ['rebuild', S.calCtl.rebuild]].filter(([, c]) => c)
+    .map(([action, c]) => ({ action, state: c.state, entryId: c.entryId ?? null, at: c.at }));
+  const o = ownEntries(S.m, ctls, Date.now());
+  return { ids: [...new Set([...S.ownIds, ...o.ownIds])], actions: o.ownActions };
+};
 /** "Applying: the restart on the river's year · 0:05 · usually about 1 min" under the state line, one line per change; the
  *  m:ss is painted in place each second, so the spinner never restarts. */
 function paintApplying(lines) {

@@ -507,7 +507,8 @@ export function whyText(why) {
  *  from the button to its status line (never <body>) and back when it ends. The page's one live region (announce) says
  *  applying, done, unconfirmed and failed once each; the status line itself is not live, so its ticking time is never read.
  *  show(state, text) sets a state by hand ('before'/'ready', 'pending'/'applying', 'done', 'failed', 'unconfirmed').
- *  entryId: the id of the server's entry for this control's last change (null before an answer named one). */
+ *  entryId: the id of the server's entry for this control's last change (null before an answer named one); at: when it entered
+ *  its state (Date.now()). */
 export function control(target, opts = {}) {
   const o = { label: 'Do it', before: '', why: null, confirm: null, run: null, done: 'Done', fail: 'Nothing changed', onDone: null, kind: 'plain', siblings: null, lock: null, ...opts };
   let button, status, whyEl, beforeEl, host;
@@ -712,7 +713,8 @@ export function control(target, opts = {}) {
     s = { ...s, state: CTL_RESULT.has(st) ? st : 'failed', at: now(), effect: null }; text = words; ticking(false); paint();
   }
   paint();
-  return { button, host, status, show, update, get state() { return s.state; }, get busy() { return ctlView(s, o.why).busy; }, get entryId() { return entryId; } };
+  return { button, host, status, show, update, get state() { return s.state; }, get busy() { return ctlView(s, o.why).busy; }, get entryId() { return entryId; },
+           get at() { return s.at; } };
 }
 const CTL_RESULT = new Set(['done', 'failed', 'unconfirmed']);
 
