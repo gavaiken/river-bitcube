@@ -4,7 +4,8 @@
 // jargon can't be put into words. The raw line (the command, the path, the address) is kept apart, scrubbed of logins, for the
 // step's tooltip, never on the line itself.
 //
-// describeTool(block, ctx) -> { text, raw, acting }   ctx: { running, calDry } (the live agent's: what TouchDesigner runs, a dry run going)
+// describeTool(block, ctx) -> { text, raw, acting }   ctx: { running, calDry } (the live agent's: what TouchDesigner runs, a dry run going),
+//                                                     or a function that returns it, asked only by a step that needs it (CR9 #18)
 //   text    the line the page shows ("checked TouchDesigner's frame rate and errors")
 //   raw     what the tool was given (a command, a path, a URL, a pattern), logins scrubbed, at most RAW_MAX characters
 //   acting  true only when the step changes something on the installation (set, switched, restarted, turned, …); reading,
@@ -326,10 +327,20 @@ function pastTense(s) {
 
 /** The controls mission control has (bin/mc.mjs <action>): their changes are named as the band and Recent name them. */
 const MC_ACTIONS = new Set(Object.keys(EXPECT_S));
+/** A step's context, asked for when a line needs it and only once (CR9 #18): ctx itself, or what the function returns (the live
+ *  agent's context is a whole snapshot of mission control: never made for a step that doesn't use it). One that throws is none. */
+function lazyContext(ctx) {
+  if (typeof ctx !== 'function') return () => (ctx && typeof ctx === 'object' ? ctx : {});
+  let got = null;
+  return () => {
+    if (got == null) { try { const c = ctx(); got = c && typeof c === 'object' ? c : {}; } catch { got = {}; } }
+    return got;
+  };
+}
 /** A change asked of mission control through its control socket (bin/mc.mjs), by the change's one name (model.js changeLabel, as the
  *  band, Last done and the history name it: R9 #22); null if not one. ctx: { running (the show file TouchDesigner runs: a switch to
  *  it is "the restart on …"), calDry (the run going is a dry run: its Stop is "the dry run stop"; not known: "to stop the run") }. */
-function mcLine(command, ctx = {}) {
+function mcLine(command, ctxOf = () => ({})) {
   // "status first, then one control" in one command: the step is the control, not the look before it
   const all = [...String(command ?? '').matchAll(MC)];
   if (!all.length) return null;
@@ -339,22 +350,25 @@ function mcLine(command, ctx = {}) {
   try { const j = JSON.parse(m[2] ?? (m[3] != null ? m[3].replace(/\\(.)/g, '$1') : '{}')); if (j && typeof j === 'object' && !Array.isArray(j)) body = j; } catch { /* words from the action alone */ }
   if (!MC_ACTIONS.has(m[1])) return null;                // not one of mission control's controls
   const acting = m[1] !== 'check' && !(m[1] === 'calibrate' && body.action === 'status');
+  // the context only where the words depend on it: a Stop (which run), a switch (to the file running: the restart on it)
   if (m[1] === 'calibrate' && body.action === 'cancel') {
-    if (typeof ctx?.calDry !== 'boolean') return { text: 'asked mission control to stop the run', acting };
-    body = { ...body, dry_run: ctx.calDry };
+    const calDry = ctxOf().calDry;
+    if (typeof calDry !== 'boolean') return { text: 'asked mission control to stop the run', acting };
+    body = { ...body, dry_run: calDry };
   }
-  return { text: `asked mission control for ${changeLabel(m[1], body, { running: typeof ctx?.running === 'string' ? ctx.running : null })}`, acting };
+  const running = m[1] === 'switch' ? ctxOf().running : null;
+  return { text: `asked mission control for ${changeLabel(m[1], body, { running: typeof running === 'string' ? running : null })}`, acting };
 }
 
 /** A Bash step: the agent's description in plain words, else a plain fallback; an acting one says what it changed. */
-function bashLine(description, command, ctx = {}) {
+function bashLine(description, command, ctxOf = () => ({})) {
   // a look through mission control chained to a change made around it ("mc.mjs status && ssh bitcube … probe.ps1 -Action
   // switch"): the change, and that it went around mission control's locks, never "looked at what mission control shows" (R7 #34)
   // an inline shell's command (bash -lc "…") is judged by what it runs (CR8 #4)
   const ps = inlineParts(command), viaMc = ps.filter((x) => MC_ONE.test(x)), direct = ps.filter((x) => !MC_ONE.test(x) && changes(x));
   if (viaMc.length && direct.length) return { text: clip(directly(directWords(direct[0])), TEXT_MAX), acting: true };
   if (viaMc.length && ps.some((x) => !MC_ONE.test(x) && SCRIPT_RUN.test(x))) return { text: 'ran a script, not through mission control', acting: true };
-  const mc = viaMc.length ? mcLine(viaMc.join('\n'), ctx) : null;
+  const mc = viaMc.length ? mcLine(viaMc.join('\n'), ctxOf) : null;
   if (mc) return mc;
   const desc = String(description ?? '').replace(/\s+/g, ' ').trim().replace(/[.\s]+$/, '');
   const onBitcube = /bitcube|\bssh\b/i.test(`${desc} ${command ?? ''}`);
@@ -385,7 +399,7 @@ export function describeTool(block, ctx = {}) {
   const line = (text, raw, acting = false) => ({ text: clip(text, TEXT_MAX), raw: rawOf(raw), acting });
   try {
     switch (block?.name) {
-      case 'Bash': { const b = bashLine(i.description, i.command, ctx ?? {}); return line(b.text, i.command ?? i.description ?? '', b.acting); }
+      case 'Bash': { const b = bashLine(i.description, i.command, lazyContext(ctx)); return line(b.text, i.command ?? i.description ?? '', b.acting); }
       case 'Read': return line(`looked at ${plainFile(i.file_path)}`, i.file_path);
       case 'Edit': case 'Write': case 'NotebookEdit': return line(`changed ${plainFile(i.file_path ?? i.notebook_path)}`, i.file_path ?? i.notebook_path);
       case 'Glob': case 'Grep': return line('searched the repo', i.pattern);

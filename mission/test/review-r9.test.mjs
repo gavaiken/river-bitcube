@@ -408,7 +408,7 @@ test('R9 #22: a change asked of mission control is named as the band and Recent 
   assert.deepEqual(await stepOf(mc('check')), ['asked mission control for the full check of bitcube', false]);
   assert.deepEqual(await stepOf(mc('nope'), ''), ['ran a command', false], 'not a control of mission control');
   // the live agent passes what TouchDesigner runs, so a switch to it reads as the restart it is
-  assert.match(page('../lib/agent.mjs'), /ctx = context\?\.\(\) \?\? \{\}; \} catch \{ ctx = \{\}; \} yield \{ kind: 'activity', \.\.\.describeTool\(b, ctx\) \}/);
+  assert.match(page('../lib/agent.mjs'), /yield \{ kind: 'activity', \.\.\.describeTool\(b, context\) \}/, 'handed over lazily (CR9 #18)');
   assert.match(readFileSync(new URL('../server.mjs', import.meta.url), 'utf8'), /context: \(\) => stepContext\(\)/);
 });
 

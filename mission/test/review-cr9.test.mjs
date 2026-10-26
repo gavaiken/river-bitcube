@@ -385,3 +385,25 @@ test('CR9 #17: Lights works out its own changes once a render and hands them on:
   const paint = /function paintCal\([^)]*\) \{[\s\S]*?\n\}/.exec(l)[0];
   assert.ok((paint.match(/ownChanges\(\)/g) ?? []).length <= 1, 'at most once a paint, when no render handed them on');
 });
+
+// ---- #18: the step context (a whole snapshot) only when a step needs it -----------------------------------------------------------
+
+test("CR9 #18: the agent's step context is asked for only by a step that needs it (a switch or a Stop asked of mission control), once, never per tool used", async () => {
+  const { describeTool } = await import('../lib/steps.mjs');
+  let calls = 0;
+  const ctx = () => { calls++; return { running: YEAR, calDry: true }; };
+  const mc = (body) => ({ name: 'Bash', input: { command: `node mission/bin/mc.mjs ${body}`, description: 'Do it' } });
+  for (const b of [{ name: 'Read', input: { file_path: 'docs/plan.md' } }, { name: 'Bash', input: { command: 'ssh bitcube "Get-Process"', description: 'Check' } },
+    mc(`ropes '{"dark":true}'`), mc('status'), mc(`calibrate '{"action":"start","dry_run":true}'`), { name: 'Grep', input: { pattern: 'x' } }]) describeTool(b, ctx);
+  assert.equal(calls, 0, 'nothing that names no switch or Stop asks');
+  assert.equal(describeTool(mc(`switch '{"file":"${YEAR}"}'`), ctx).text, "asked mission control for the restart on the river's year");
+  assert.equal(describeTool(mc(`calibrate '{"action":"cancel"}'`), ctx).text, 'asked mission control for the dry run stop');
+  assert.equal(calls, 2, 'once each');
+  // a context that throws is no context: plain words
+  assert.equal(describeTool(mc(`switch '{"file":"${YEAR}"}'`), () => { throw new Error('no snapshot'); }).text, "asked mission control for the switch to the river's year");
+  // an object still works, as before
+  assert.equal(describeTool(mc(`calibrate '{"action":"cancel"}'`), { calDry: false }).text, 'asked mission control for the calibration stop');
+  const agent = src('../lib/agent.mjs');
+  assert.match(agent, /yield \{ kind: 'activity', \.\.\.describeTool\(b, context\) \}/, 'the agent hands over the function, never its result');
+  assert.doesNotMatch(agent, /context\?\.\(\)/);
+});
