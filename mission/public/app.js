@@ -17,6 +17,9 @@ export async function api(path, body, { timeout = apiTimeout(path, body) } = {})
   } catch (e) {
     // no answer in time: the request may or may not have reached bitcube (noAnswer tells the control to say so)
     if (ctrl.signal.aborted) throw Object.assign(new Error(`no answer in ${Math.round(timeout / 1000)} s`), { noAnswer: true, maybe: posted, waitedS: timeout / 1000, posted });
+    // a POST that failed at the network level (a reset, a phone changing network after the body went out) may have reached
+    // mission control: it may or may not have happened, never "unchanged" (R7 #30). A GET is mission control not answering.
+    if (posted) throw Object.assign(new Error("mission control didn't answer"), { noAnswer: true, maybe: true, posted: true, waitedS: null, notOurs: true, network: true });
     throw e;
   } finally { clearTimeout(timer); }
   if (r.status === 401) { location.href = '/login'; throw new Error('logged out'); }

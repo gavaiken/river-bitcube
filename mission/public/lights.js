@@ -33,18 +33,29 @@ const ropeHue = (r) => `hsl(${(r * 137.5) % 360} 85% 62%)`;   // golden-angle sp
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** GET with a time limit (ui.js poll()'s 8 s), the body read inside it: { r, body } (body null when it isn't JSON). A request
- *  that hangs throws "no answer in 8 s" instead of holding the page's next ask; 401 goes to the login. */
-async function fetchTimed(url, read = (r) => r.json(), timeout = POLL_TIMEOUT_MS) {
-  const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), timeout);
+ *  that hangs throws "no answer in 8 s" instead of holding the page's next ask; 401 goes to the login. `idle`: the limit is on
+ *  silence, not on the whole answer: 8 s with no bytes, so the LED map (big even gzipped) loads on a slow phone link as long as
+ *  it keeps coming (R7 #1). */
+async function fetchTimed(url, read = (r) => r.json(), timeout = POLL_TIMEOUT_MS, { idle = false } = {}) {
+  const ctrl = new AbortController();
+  let t = setTimeout(() => ctrl.abort(), timeout);
+  const heard = () => { clearTimeout(t); t = setTimeout(() => ctrl.abort(), timeout); };
   try {
     const r = await fetch(url, { cache: 'no-store', signal: ctrl.signal });
     if (r.status === 401) { location.href = '/login'; throw new Error('logged out'); }
-    const body = await read(r).catch((e) => { if (ctrl.signal.aborted) throw e; return null; });
+    heard();
+    const body = await (idle && r.body ? readJsonWhileHeard(r, heard) : read(r)).catch((e) => { if (ctrl.signal.aborted) throw e; return null; });
     return { r, body };
   } catch (e) {
     if (ctrl.signal.aborted) throw Object.assign(new Error(`no answer in ${Math.round(timeout / 1000)} s`), { noAnswer: true, waitedS: timeout / 1000 });
     throw e;
   } finally { clearTimeout(t); }
+}
+/** An answer's JSON, read chunk by chunk, each chunk telling the time limit the answer is still coming. */
+async function readJsonWhileHeard(r, heard) {
+  const reader = r.body.getReader(), parts = [];
+  for (;;) { const { done, value } = await reader.read(); if (done) break; parts.push(value); heard(); }
+  return JSON.parse(new TextDecoder().decode(await new Blob(parts).arrayBuffer()));
 }
 
 // ---- state ------------------------------------------------------------------------------------------------------
@@ -175,7 +186,7 @@ async function loadMap() {
   if (S.map.fetching) return;
   S.map.fetching = true;
   try {
-    const { r, body: j } = await fetchTimed('/api/pixelmap');
+    const { r, body: j } = await fetchTimed('/api/pixelmap', undefined, POLL_TIMEOUT_MS, { idle: true });
     if (!r.ok || !j || j.error || j.map?.error) throw Object.assign(new Error(mapError(j?.error || j?.map?.error || `HTTP ${r.status}`)), { status: r.status });
     S.map = { ...S.map, map: j.map ?? null, screens: j.screens ?? null, still: j.still ?? null, error: null, ropes: prepareRopes(j.map), loaded: true };
   } catch (e) {
@@ -767,7 +778,7 @@ function renderCalibrate() {
   const { view, key, dry } = v;
   if (S.html['cal-body'] !== key) {
     const first = S.html['cal-body'] == null;
-    leaveCalView(view);
+    leaveCalView(view, dry);
     const had = !first && body.contains(document.activeElement);
     S.html['cal-body'] = key; S.html['cal-checks'] = null; S.html['cal-stages'] = null;
     body.innerHTML = calHtml(v, p);
@@ -865,8 +876,8 @@ function setWhy(c, why) {
 }
 /** Leaving a view: a confirm its controls still hold open (Start, Dry run, Rebuild) is withdrawn, so a press on it can't send
  *  anything for a block that is gone; a control already sending is left to finish. */
-function leaveCalView(next) {
-  const why = next === 'run' ? 'a calibration is running' : next === 'lost' ? 'bitcube went offline during the run' : 'the calibration changed meanwhile';
+function leaveCalView(next, dry = false) {
+  const why = next === 'run' ? (dry ? 'a dry run started meanwhile' : 'a calibration started meanwhile') : next === 'lost' ? 'bitcube went offline during the run' : 'the calibration changed meanwhile';
   for (const c of Object.values(S.calCtl)) if (c && !c.busy) c.update({ why });
   S.calCtl = {};
 }

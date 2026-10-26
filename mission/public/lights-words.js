@@ -28,11 +28,16 @@ export function calChecklist(m) {
     : /restart|start/i.test(tdSum) ? 'TouchDesigner is still starting' : "TouchDesigner isn't ready";
   const cam = lv('gallery camera');
   const camWhy = cam === 'unknown' ? "the gallery camera hasn't been checked yet" : "the gallery camera isn't reachable";
-  const line = (level, ok, why) => ({ level, why, text: level === 'ok' ? ok : cap(why) });
+  // from a last answer (the full check is old, or contact is lost) a line is never a green ✓ and never in the present tense: the
+  // grey mark and "when last seen", as Status's fine list (R7 #29)
+  const old = (...ids) => ids.some((id) => item(id)?.stale);
+  const line = (level, ok, why, was, ids) => (old(...ids) && level !== 'unknown'
+    ? { level: 'unknown', why: level === 'ok' ? "mission control hasn't heard from bitcube lately" : why, text: level === 'ok' ? `${was} when last seen` : `${cap(why)} (when last seen)` }
+    : { level, why, text: level === 'ok' ? ok : cap(why) });
   return [
-    line(lv('touchdesigner'), 'TouchDesigner answers', tdWhy),
-    line(boxLevel, 'Both rope boxes answer', boxWhy),
-    line(cam, 'The gallery camera is reachable', camWhy),
+    line(lv('touchdesigner'), 'TouchDesigner answers', tdWhy, 'TouchDesigner answered', ['touchdesigner']),
+    line(boxLevel, 'Both rope boxes answer', boxWhy, 'Both rope boxes answered', ['rope box 1', 'rope box 2']),
+    line(cam, 'The gallery camera is reachable', camWhy, 'The gallery camera was reachable', ['gallery camera']),
   ];
 }
 export const ROOM_CHECK = "The room is dark and nobody is in the camera's view (you check)";

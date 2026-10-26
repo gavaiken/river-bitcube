@@ -220,3 +220,60 @@ test('R7 #12, #13: the hidden band region says the headline without its times, a
   assert.equal(entrySaid({ ...m2.show.applying[0], phase: 'confirming', source: 'mission control' }), "Waiting for bitcube to show the boot file change to the river's year.");
   assert.equal(entrySaid({ ...m2.show.applying[0], maybe: true }), "No answer in time for the boot file change to the river's year, from the studio chat: waiting for bitcube to show whether it happened.");
 });
+
+test('R7 #29: the Calibrate checklist from an old full check, or with contact lost, is never a green ✓ and says "when last seen"', async () => {
+  const { derive } = await import('../public/model.js');
+  const { calChecklist } = await import('../public/lights-words.js');
+  const t = 1_792_749_540_000;
+  const fresh = calChecklist(derive(payload({ t }), t));
+  assert.deepEqual(fresh.map((c) => [c.level, c.text]), [['ok', 'TouchDesigner answers'], ['ok', 'Both rope boxes answer'], ['ok', 'The gallery camera is reachable']]);
+  const old = payload({ t }); old.probe = { ...old.probe, at: t - 15 * 60_000 };
+  const stale = calChecklist(derive(old, t));
+  assert.deepEqual(stale.map((c) => [c.level, c.text]), [['unknown', 'TouchDesigner answered when last seen'], ['unknown', 'Both rope boxes answered when last seen'], ['unknown', 'The gallery camera was reachable when last seen']]);
+  const lost = calChecklist(derive(payload({ t }), t + 40_000));
+  assert.ok(lost.every((c) => c.level === 'unknown' && / when last seen$/.test(c.text)), JSON.stringify(lost));
+  // a line that wasn't fine is grey too, its words kept
+  const bad = payload({ t: t - 15 * 60_000 }); bad.probe.value.devices.psac10_1 = false; bad.now = t; bad.bitcube.at = t; bad.seasons.at = t; bad.modal.at = t;
+  const b = calChecklist(derive(bad, t)).find((c) => /rope box/i.test(c.text));
+  assert.deepEqual([b.level, b.text], ['unknown', "Rope box 1 isn't answering (when last seen)"]);
+});
+
+test('R7 #1: text answers are gzipped when asked; files revalidate (ETag, no-cache) instead of no-store; the API stays no-store', async (t) => {
+  const { spawn } = await import('node:child_process');
+  const { mkdtempSync, writeFileSync } = await import('node:fs'), { tmpdir } = await import('node:os'), { join } = await import('node:path');
+  const { request } = await import('node:http');
+  const dir = mkdtempSync(join(tmpdir(), 'r7b-')); writeFileSync(join(dir, 'pw'), 'NOT-A-REAL-PW\n');
+  const base0 = { ...process.env }; delete base0.MISSION_CONTROL_SOCKET;
+  const p = spawn(process.execPath, [new URL('../server.mjs', import.meta.url).pathname], { stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...base0, MISSION_PORT: '0', MISSION_STATE_DIR: join(dir, 'state'), MISSION_PASSWORD_FILE: join(dir, 'pw'), MISSION_FIXTURES: new URL('./fixtures/', import.meta.url).pathname, MISSION_FAKE_AGENT: '1' } });
+  t.after(() => p.kill());
+  const base = await new Promise((resolve, reject) => { let out = ''; p.stdout.on('data', (d) => { out += d; const m = out.match(/http:\/\/127\.0\.0\.1:(\d+)/); if (m) resolve(m[0]); }); p.on('exit', () => reject(new Error(out))); });
+  // raw requests: what goes over the wire (node's fetch would undo the gzip and hide it)
+  const raw = (path, headers = {}) => new Promise((resolve, reject) => {
+    request(base + path, { headers }, (res) => { const chunks = []; res.on('data', (c) => chunks.push(c)); res.on('end', () => resolve({ status: res.statusCode, h: res.headers, body: Buffer.concat(chunks) })); }).on('error', reject).end();
+  });
+  const login = await fetch(base + '/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: 'NOT-A-REAL-PW' }) });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const js = await raw('/model.js', { 'accept-encoding': 'gzip, deflate, br' });
+  assert.deepEqual([js.status, js.h['content-encoding'], js.h['cache-control']], [200, 'gzip', 'no-cache']);
+  assert.ok(js.h.etag && js.h['last-modified'], 'a validator');
+  assert.match(js.h.vary ?? '', /accept-encoding/i);
+  const { gunzipSync } = await import('node:zlib');
+  assert.match(gunzipSync(js.body).toString('utf8'), /export function derive/);
+  assert.ok(js.body.length < 50_000, `model.js compressed: ${js.body.length} bytes`);
+  const again = await raw('/model.js', { 'accept-encoding': 'gzip', 'if-none-match': js.h.etag });
+  assert.deepEqual([again.status, again.body.length], [304, 0]);
+  const plain = await raw('/v2.css');
+  assert.deepEqual([plain.status, plain.h['content-encoding'], plain.h['cache-control']], [200, undefined, 'no-cache'], 'no gzip unless asked');
+  // a page behind the login revalidates too, but only once logged in
+  const page = await raw('/status', { cookie, 'accept-encoding': 'gzip' });
+  assert.deepEqual([page.status, page.h['cache-control']], [200, 'no-cache']);
+  assert.equal((await raw('/status', { 'if-none-match': page.h.etag })).status, 302, 'never a 304 to someone logged out');
+  // the API: gzipped, never stored
+  const map = await raw('/api/pixelmap', { cookie, 'accept-encoding': 'gzip' });
+  assert.deepEqual([map.status, map.h['content-encoding'], map.h['cache-control']], [200, 'gzip', 'no-store']);
+  assert.ok(map.body.length * 4 < gunzipSync(map.body).length, 'the LED map shrinks several times');
+  const st = await raw('/api/status', { cookie, 'accept-encoding': 'gzip' });
+  assert.deepEqual([st.h['content-encoding'], st.h['cache-control']], ['gzip', 'no-store']);
+  assert.equal(JSON.parse(gunzipSync(st.body)).fixture, 'all-good');
+});

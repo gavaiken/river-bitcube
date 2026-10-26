@@ -52,7 +52,8 @@
 //                                              but calibrate { action: 'cancel' } is 403: a person stops a run on the Lights page
 import { createServer } from 'node:http';
 import { connect as netConnect } from 'node:net';
-import { readFileSync, existsSync, mkdirSync, copyFileSync, chmodSync, lstatSync, unlinkSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, copyFileSync, chmodSync, lstatSync, unlinkSync, statSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { userInfo } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -241,16 +242,35 @@ function staticFile(path) {
   return existsSync(file) ? [file, TYPES[m[2]]] : null;
 }
 const MAP_DIR = join(REPO, 'docs', 'system');      // the interactive system map, served with live status
-const page = (name) => readFileSync(join(PUBLIC, name));
-function sendPage(res, name) {
+function sendPage(req, res, name) {
   if (!existsSync(join(PUBLIC, name))) return send(res, 404, { error: 'not built yet' });
-  return send(res, 200, page(name), 'text/html; charset=utf-8');
+  return sendFile(req, res, join(PUBLIC, name), 'text/html; charset=utf-8');
 }
 
+// On a poor phone link (a gallery's Wi-Fi, cellular) every byte counts (R7 #1): text answers are gzipped when the request accepts
+// it (the LED map 481 → 39 KB, model.js 100 → 30 KB, /api/status 6 → 2 KB), and the page files revalidate instead of downloading
+// again on every tab (ETag and Last-Modified, cache-control no-cache: a 304 when unchanged, so a self-update is seen at once).
+// Every API answer stays no-store.
+const ZIPPED = /^(text\/|application\/(json|javascript|manifest\+json)|image\/svg\+xml)/;
+const SECURITY = { 'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin', 'x-frame-options': 'DENY' };
 function send(res, status, body, type = 'application/json', headers = {}) {
-  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
-                          'referrer-policy': 'same-origin', 'x-frame-options': 'DENY', ...headers });
-  res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
+  let data = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body);
+  const h = { 'content-type': type, 'cache-control': 'no-store', ...SECURITY, ...headers };
+  if (ZIPPED.test(type)) {
+    h.vary = 'Accept-Encoding';
+    if (/\bgzip\b/i.test(String(res.req?.headers?.['accept-encoding'] ?? '')) && Buffer.byteLength(data) >= 1024) { data = gzipSync(data); h['content-encoding'] = 'gzip'; }
+  }
+  res.writeHead(status, h);
+  res.end(data);
+}
+/** A file from public/ that may be kept by the browser and revalidated: 304 when its ETag still matches (its size and time), else
+ *  the file (gzipped when asked). Only ever called after the login check for a page. */
+function sendFile(req, res, file, type) {
+  const st = statSync(file);
+  const etag = `W/"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+  const h = { 'cache-control': 'no-cache', etag, 'last-modified': st.mtime.toUTCString() };
+  if (req.headers['if-none-match'] === etag) { res.writeHead(304, { ...SECURITY, ...h, ...(ZIPPED.test(type) ? { vary: 'Accept-Encoding' } : {}) }); return res.end(); }
+  return send(res, 200, readFileSync(file), type, h);
 }
 
 function client(req) { return clientOf(req.headers['x-forwarded-for'], req.socket.remoteAddress); }
@@ -327,8 +347,8 @@ const server = createServer(async (req, res) => {
   const path = url.pathname;
   try {
     const st = req.method === 'GET' && staticFile(path);
-    if (st) return send(res, 200, readFileSync(st[0]), st[1]);
-    if (path === '/login' && req.method === 'GET') return sendPage(res, PAGES['/login']);
+    if (st) return sendFile(req, res, st[0], st[1]);
+    if (path === '/login' && req.method === 'GET') return sendPage(req, res, PAGES['/login']);
     if (path === '/login' && req.method === 'POST') {
       if (!sameOrigin(req)) return send(res, 403, { error: 'cross-origin' });
       const b = await body(req);
@@ -369,7 +389,7 @@ const server = createServer(async (req, res) => {
       const setCalib = CALIBRATION_OUTCOMES.includes(calib) ? `calib=${calib}; Path=/; SameSite=Lax` : 'calib=; Path=/; Max-Age=0';
       return send(res, 302, '', 'text/plain', { location: '/status', 'set-cookie': [`scenario=${fx[1]}; Path=/; SameSite=Lax`, setCalib] });
     }
-    if (PAGES[path]) return sendPage(res, PAGES[path]);
+    if (PAGES[path]) return sendPage(req, res, PAGES[path]);
     if (path === '/map/' || path === '/map/index.html') {
       const html = readFileSync(join(MAP_DIR, 'index.html'), 'utf8')
         .replace('</body>', '<script>' + readFileSync(join(PUBLIC, 'map-live.js'), 'utf8') + '</script></body>');

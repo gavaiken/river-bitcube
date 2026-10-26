@@ -64,3 +64,17 @@ test('plainError never shows raw text, and passes the team words through', () =>
   assert.equal(plainError(Object.assign(new Error('Traceback (most recent call last): probe.ps1'), { status: 500 })), "bitcube couldn't do it");
   assert.equal(plainError(new TypeError('Failed to fetch')), "mission control didn't answer");
 });
+
+test('R7 #30: a POST that fails at the network level (reset, a phone changing network) may or may not have happened: never "unchanged"', async () => {
+  for (const err of [new TypeError('Failed to fetch'), new TypeError('Load failed'), new TypeError('NetworkError when attempting to fetch resource.')]) {
+    globalThis.fetch = async () => { throw err; };
+    const e = await caught(api('/api/control/mode', { mode: 'manual' }));
+    assert.deepEqual([e.maybe, e.noAnswer, e.posted, e.notOurs], [true, true, true, true], err.message);
+    assert.match(noAnswerText(e, 'the Now line shows what bitcube reports'), /^Mission control didn't answer: it may or may not have happened; /);
+  }
+  // a GET that fails is mission control not answering, nothing more
+  globalThis.fetch = async () => { throw new TypeError('Failed to fetch'); };
+  const g = await caught(api('/api/status'));
+  assert.equal(g.maybe, undefined);
+  assert.equal(plainError(g), "mission control didn't answer");
+});
