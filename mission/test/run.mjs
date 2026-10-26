@@ -8,6 +8,6 @@ import { dirname, join } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const env = { ...process.env, MISSION_SHOWS_EXTRA: process.env.MISSION_SHOWS_EXTRA || join(HERE, 'fixtures', '_shows.extra.json') };
-const r = spawnSync(process.execPath, ['--test', ...(process.argv.slice(2).length ? process.argv.slice(2) : ['test/'])],
+const r = spawnSync(process.execPath, ['--test', ...(process.argv.slice(2).length ? process.argv.slice(2) : ['test/*.test.mjs'])],
   { stdio: 'inherit', env, cwd: join(HERE, '..') });
 process.exit(r.status ?? 1);
