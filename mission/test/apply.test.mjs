@@ -290,8 +290,8 @@ test('R6 #1 #12 #17: one set of words on every page: a short change past its usu
 
 test('R6 #16 #4: an unconfirmed change names what was sent; a withdrawn confirm is said in the past tense', () => {
   assert.equal(unconfirmedWords('the change of the boot file to the live river', '21:13', 'look at the Now line, or call Gavin'),
-    "The change of the boot file to the live river was sent at 21:13, but bitcube doesn't show it yet: look at the Now line, or call Gavin.");
-  assert.equal(unconfirmedWords(null, '21:13', 'look at the Now line, or call Gavin'), "Sent at 21:13, but bitcube doesn't show it yet: look at the Now line, or call Gavin.");
+    "The change of the boot file to the live river was sent at 21:13, but bitcube didn't show it in time: look at the Now line, or call Gavin.");
+  assert.equal(unconfirmedWords(null, '21:13', 'look at the Now line, or call Gavin'), "Sent at 21:13, but bitcube didn't show it in time: look at the Now line, or call Gavin.");
   assert.equal(notSentWords("wait: the restart on the river's year is being applied", '21:17'), "Not sent at 21:17: the restart on the river's year was being applied. Press again when it is done.");
   assert.equal(notSentWords('bitcube is offline', '21:04'), 'Not sent at 21:04: bitcube is offline.');
   assert.equal(notSentWords(null, '21:04'), "Not sent at 21:04: this page can't reach mission control.");

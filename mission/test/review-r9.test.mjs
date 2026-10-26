@@ -141,3 +141,75 @@ test('R9 #29: an answer lost on the way back: the entry found by its request id 
   // Status hides its own Wait line only while its line says when it unlocks
   assert.match(page('status.js'), /const ownBlock = \(name\) => !!model && !!ctl\[name\]\?\.entryId && model\.controls\[name\]\?\.by === ctl\[name\]\.entryId && !!ctl\[name\]\.held;/);
 });
+
+// ---- #13, #33: "by" times never come before the lock ends; #14: one tense for one verdict --------------------------------------
+
+test('R9 #13, #33: an unlock time said with "by" is rounded up to the next minute; "at" and "started" times stay as they were', async () => {
+  const { waitWords, byMinute, clock, unconfirmedWords, notSentWords } = await import('../public/model.js');
+  const end = T0 + 50_000;                              // 21:04:50
+  assert.equal(waitWords("the restart on the river's year", { maybe: true, unlockMs: end }), "wait: the restart on the river's year got no answer from bitcube in time; it unlocks by 21:05");
+  assert.equal(waitWords('x', { maybe: true, unlockMs: T0 }), 'wait: x got no answer from bitcube in time; it unlocks by 21:04', 'on the minute: that minute');
+  assert.equal(clock(byMinute(end)), '21:05');
+  assert.equal(byMinute(T0), T0);
+  assert.match(notSentWords(waitWords('x', { maybe: true, unlockMs: end }), '21:04'), /the buttons unlock by 21:05\. Press again then\.$/);
+  // the server's 409 says the same (lib/applying.mjs waitWords)
+  const { Applying } = await import('../lib/applying.mjs');
+  let t = T0;
+  const a = new Applying({ now: () => t });
+  await a.run('switch', { file: YEAR }, async () => ({ ok: false, maybe: true }), { awaits: () => true });
+  t += 10_000;
+  assert.match(a.waitError(a.conflict('ropes')).message, /it unlocks by 21:07$/, '21:04:00 + 3 min');
+  t = T0 + 30_500;
+  const b = new Applying({ now: () => t });
+  await b.run('switch', { file: YEAR }, async () => ({ ok: false, maybe: true }), { awaits: () => true });
+  assert.match(b.waitError(b.conflict('ropes')).message, /it unlocks by 21:08$/, '21:04:30.5 + 3 min is 21:07:30.5: by 21:08');
+  // #14: given up, in the past like every other line
+  assert.equal(unconfirmedWords('the switch to the live river', '21:04'), "The switch to the live river was sent at 21:04, but bitcube didn't show it in time: look at the Now line, or call Gavin.");
+  assert.match(page('status.js'), /heldWords\(c\.o\?\.what, sclock\(byMinute\(own\.unlockAt\)\)\)/);
+  assert.match(page('ui.js'), /heldWords\(o\.what, sclock\(byMinute\(own\.unlockAt\)\)\)/);
+});
+
+// ---- #12, #16, #18: the band's advice while a switch or restart is in flight -------------------------------------------------------
+
+test('R9 #16: while a switch or restart is in flight, the band never says to press it again or to call Gavin', () => {
+  const t = T0 + 5000;
+  const slowTd = { ok: true, file: YEAR, fps: 20, errors: 0, ropes: { source: 'canvas', status: { open: true, active: true, watts: [100, 100] } }, hub75: { brightness: 1, output: true } };
+  const m = derive(payload({ t, td: slowTd, applying: [entry('w.1', { started_at: t - 3000 })] }), t);
+  assert.equal(m.overall.cause, 'td-slow');
+  assert.equal(m.overall.action, "Someone is restarting TouchDesigner on the river's year now: wait a minute and look again.");
+  assert.equal(m.overall.waits, 'w.1', 'the band leaves out its jump\'s Wait line: the action says it');
+  assert.equal(m.overall.chosen, true, 'started on purpose: nothing to call about');
+  const live = derive(payload({ t, td: { ...slowTd, file: LIVE, fps: 60 }, applying: [entry('w.2', { started_at: t - 3000, label: "the switch to the river's year" })] }), t);
+  assert.equal(live.overall.cause, 'online-file');
+  assert.equal(live.overall.action, "Someone is switching TouchDesigner to the river's year now: wait a minute and look again.");
+  const rb = derive(payload({ t, td: slowTd, applying: [entry('w.3', { action: 'rebuild', label: "the rebuild of the river's year", started_at: t - 3000, expect_s: 150 })] }), t);
+  assert.equal(rb.overall.action, "Someone is rebuilding the river's year now: wait a minute and look again.");
+  const none = derive(payload({ t, td: slowTd }), t);
+  assert.match(none.overall.action, /press Restart on the river's year/);
+  assert.equal(none.overall.waits, null);
+  assert.match(page('status.js'), /if \(o\.waits\) return '';/);
+  assert.match(page('status.js'), /m\?\.overall\.chosen/);
+});
+
+test('R9 #12, #18: a held switch says its unlock once, with "by", and points at the button for the file it was going to', () => {
+  const t = T0 + 30_000;
+  const off = { ok: false, error: 'not running' };
+  const held = (file, label) => derive(payload({ t, td: off, applying: [entry('h.1', { file, label, phase: 'confirming', maybe: true, started_at: T0 - 10_000, answered_at: T0 + 20_000 })] }), t);
+  const y = held(YEAR, RESTART);
+  assert.equal(y.overall.cause, 'td-off');
+  assert.equal(y.overall.action, "If TouchDesigner still isn't running when the buttons unlock (by 21:08), press Switch to the river's year below (about a minute).");
+  assert.equal(y.overall.waits, 'h.1');
+  assert.equal(y.overall.chosen, false, 'a maybe explains nothing: Call Gavin stays');
+  const l = held(LIVE, 'the switch to the live river');
+  assert.equal(l.overall.action, "If TouchDesigner still isn't running when the buttons unlock (by 21:08), press Switch to the live river below to try again, or Switch to the river's year if the live river isn't needed tonight (about a minute).");
+  const frozen = derive(payload({ t, td: { ok: false, error: 'not answering' }, applying: [entry('h.2', { file: LIVE, label: 'the switch to the live river', phase: 'confirming', maybe: true, started_at: T0 - 10_000, answered_at: T0 + 20_000 })] }), t);
+  assert.match(frozen.overall.action, /answer the dialog, or press Switch to the live river to try again, or Switch to the river's year if the live river isn't needed tonight \(about a minute dark\)\.$/);
+  assert.doesNotMatch(frozen.overall.action, /got no answer|about 21/);
+});
+
+test('R9 #15: a lighting port change waiting for a full check gives the full check\'s time, on the sending phone and every other', async () => {
+  const { entryWords, BOOT_USUAL } = await import('../public/model.js');
+  const e = { action: 'lightsroute', label: 'the change of the lighting port to the spare router port', phase: 'confirming', expect_s: 20 };
+  assert.equal(entryWords(e, 25), `Waiting for bitcube to show the change of the lighting port to the spare router port · 0:25 · ${BOOT_USUAL}`);
+  assert.match(page('status.js'), /usual: name === 'bootfile' \|\| name === 'lightsroute' \? BOOT_USUAL : null/);
+});

@@ -37,7 +37,7 @@
 // poll at once; after a theme change, 'mc:theme' (detail: 'auto' | 'light' | 'dark').
 import { api as rawApi, esc, md, plainError, noAnswerText, POLL_TIMEOUT_MS } from '/app.js';
 import { dur as modelDur, CONTACTS, TZ, ctlInit, ctlStep, ctlView, applyingWords, applyingText, confirmingWords, CONFIRMING_SAID, unconfirmedWords,
-  notSentWords, failWords, EXPECT_S, newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS, liveNews } from '/model.js';
+  notSentWords, failWords, EXPECT_S, newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS, liveNews, byMinute } from '/model.js';
 
 export { esc, md, plainError, noAnswerText };
 
@@ -753,7 +753,7 @@ export function control(target, opts = {}) {
       // bitcube didn't answer a change whose lock holds (its entry stays to its limit): one state, when the buttons unlock (R8 #18);
       // by its action, the rule Status and the server follow too (model.js heldMaybe, CR8 #10)
       held = heldMaybe(o.action, { maybe, serverMaybe: e?.serverMaybe, entryId });
-      return go(ctlStep(s, { type: 'error', maybe, now: now() }), held ? heldWords(o.what, sclock(serverNow() + confirmLimitS(o.expectS) * 1000))
+      return go(ctlStep(s, { type: 'error', maybe, now: now() }), held ? heldWords(o.what, sclock(byMinute(serverNow() + confirmLimitS(o.expectS) * 1000)))
         : maybe ? noAnswerText(e, o.noAnswer ?? 'the page shows what bitcube reports', serverNow()) : failText(e));
     }
     try { o.onSent?.(result); } catch (e) { console.warn('onSent', e); }
@@ -786,7 +786,7 @@ export function control(target, opts = {}) {
     // (CR7 #4; sent: only a control that says what it sent, o.sent)
     const own = 'model' in n ? ownVerdict(n.model, { state: s.state, entryId, requestId, sent, serverConfirms: !!o.serverConfirms, held, saidExpired, lost }) : null;
     if (own) entryId = own.entryId;
-    if (own?.unlockAt != null && own.step !== 'held') text = heldWords(o.what, sclock(own.unlockAt));
+    if (own?.unlockAt != null && own.step !== 'held') text = heldWords(o.what, sclock(byMinute(own.unlockAt)));
     // its answer still on the way: the server's verdict on its entry ends it now, never at the POST's own limit (R9 #1)
     if (own?.judged && s.state === 'applying') {
       sendToken = null; judgedAt = typeof readAt === 'number' ? readAt : now();
@@ -794,11 +794,11 @@ export function control(target, opts = {}) {
       if (own.step === 'done') return go(ctlStep(s, { type: 'model', confirmed: true, now: now() }));
       if (own.step === 'expired') return go(ctlStep(s, { type: 'expired', now: now() }));
       if (own.step === 'confirming') return go(ctlStep(s, { type: 'pending', now: now() }));
-      if (own.step === 'held') { held = true; return go(ctlStep(s, { type: 'error', maybe: true, now: now() }), heldWords(o.what, sclock(own.unlockAt))); }
+      if (own.step === 'held') { held = true; return go(ctlStep(s, { type: 'error', maybe: true, now: now() }), heldWords(o.what, sclock(byMinute(own.unlockAt)))); }
     }
     // its answer was lost, but its entry shows the server answered it: under way (R9 #29)
     if (own?.judged && own.step === 'confirming') { lost = false; text = ''; return go(ctlStep(s, { type: 'pending', now: now() })); }
-    if (own?.judged && own.step === 'held') { lost = false; held = true; text = heldWords(o.what, sclock(own.unlockAt)); say(text); paint(); return; }
+    if (own?.judged && own.step === 'held') { lost = false; held = true; text = heldWords(o.what, sclock(byMinute(own.unlockAt))); say(text); paint(); return; }
     if (own?.judged) {
       judgedAt = typeof readAt === 'number' ? readAt : now();
       if (own.step === 'done') return go(ctlStep(s, { type: 'model', confirmed: true, now: now() }));

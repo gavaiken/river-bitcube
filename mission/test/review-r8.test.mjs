@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { Applying, ENDED_MAX } from '../lib/applying.mjs';
 import { Mission, awaitsReading } from '../lib/mission.mjs';
 import { History, describeEvent } from '../lib/history.mjs';
-import { derive, entryVerdict, entryIdOf, entryWords, bandSaid, endedSaid, notSentWords, failWords, ENDED_SAID_S, clock } from '../public/model.js';
+import { derive, entryVerdict, entryIdOf, entryWords, bandSaid, endedSaid, notSentWords, failWords, ENDED_SAID_S, clock, byMinute } from '../public/model.js';
 import { lastDoneParts } from '../public/status-words.js';
 
 const YEAR = 'river-local-oct-22-seasons.toe', LIVE = 'river-online-oct-23.toe';
@@ -182,7 +182,8 @@ test('R8 #16: while a maybe restart holds the lock and TouchDesigner is seen not
   const t = T0;
   for (const [err, word, fix] of [['TouchDesigner is not running', 'running', /press Switch to the river's year below/], ['no answer from the TD bridge in 15 s', 'answering', /answer the dialog, or press Switch to the river's year/]]) {
     const m = derive(payload({ t, td: { ok: false, error: err }, applying: [maybeSwitch(t)] }), t + 1000);
-    const want = new RegExp(`^The restart on the river's year got no answer from bitcube at ${clock(t - 30_000)}; if TouchDesigner still isn't ${word} when the buttons unlock \\(about ${clock(t - 30_000 + 180_000)}\\), `);
+    // R9 #18: said once, by when (rounded up, R9 #13): the band's line above says it got no answer
+    const want = new RegExp(`^If TouchDesigner still isn't ${word} when the buttons unlock \\(by ${clock(byMinute(t - 30_000 + 180_000))}\\), `);
     assert.match(m.overall.action, want, err);
     assert.match(m.overall.action, fix);
     assert.match(m.items.find((x) => x.id === 'touchdesigner').action, want, 'the TouchDesigner row says the same');
@@ -200,9 +201,9 @@ test('R8 #16: while a maybe restart holds the lock and TouchDesigner is seen not
 test('R8 #17: every "Wait: …" for a change bitcube didn\'t answer in time says when it unlocks, and a refusal or withdrawn confirm says it in the past', () => {
   const t = T0;
   const m = derive(payload({ t, applying: [maybeSwitch(t, { label: 'the switch to the live river', file: LIVE })] }), t + 1000);
-  for (const k of ['ropes', 'hub75', 'switch', 'rebuild', 'bootfile', 'calibrate']) assert.equal(m.controls[k].why, `wait: the switch to the live river got no answer from bitcube in time; it unlocks by ${clock(t + 150_000)}`, k);
-  assert.equal(notSentWords(m.controls.ropes.why, '21:05'), `Not sent at 21:05: the switch to the live river had got no answer from bitcube; the buttons unlock by ${clock(t + 150_000)}. Press again then.`);
-  assert.equal(failWords('The panels are unchanged', m.controls.hub75.why, '21:05'), `The panels are unchanged: the switch to the live river had got no answer from bitcube; the buttons unlock by ${clock(t + 150_000)}. Press again then.`);
+  for (const k of ['ropes', 'hub75', 'switch', 'rebuild', 'bootfile', 'calibrate']) assert.equal(m.controls[k].why, `wait: the switch to the live river got no answer from bitcube in time; it unlocks by ${clock(byMinute(t + 150_000))}`, k);
+  assert.equal(notSentWords(m.controls.ropes.why, '21:05'), `Not sent at 21:05: the switch to the live river had got no answer from bitcube; the buttons unlock by ${clock(byMinute(t + 150_000))}. Press again then.`);
+  assert.equal(failWords('The panels are unchanged', m.controls.hub75.why, '21:05'), `The panels are unchanged: the switch to the live river had got no answer from bitcube; the buttons unlock by ${clock(byMinute(t + 150_000))}. Press again then.`);
   // an ordinary change in flight reads as before
   const n = derive(payload({ t, applying: [maybeSwitch(t, { maybe: false })] }), t + 1000);
   assert.equal(n.controls.ropes.why, "wait: the restart on the river's year is being applied");

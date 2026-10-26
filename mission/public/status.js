@@ -13,7 +13,7 @@ import { rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows,
   ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash, lastDoneParts, lastDoneWhat, fromWords } from '/status-words.js';
 
 const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, changeLabel, bandParts,
-  newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS, endedOnce, ownMemory } = M;
+  newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS, endedOnce, ownMemory, byMinute } = M;
 const $ = (sel, root = document) => root.querySelector(sel);
 const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
 // One name per thing (the copy rules); descriptors live on the card, never in the name.
@@ -392,6 +392,9 @@ function staleWords(m) {
 }
 /** The jump button, keyed on the cause. */
 function jumpButtons(o, m) {
+  // its advice already says to wait for a change in flight and when the buttons unlock: no jump, and no "Wait: …" line saying it
+  // again (R9 #16, #18)
+  if (o.waits) return '';
   const c = o.cause, b = [];
   const first = m.problems.find((x) => x.id === c)?.items?.[0];
   // the button the jump names takes focus when it can be pressed (R8 #13): data-focus, the first of its selectors that can
@@ -417,7 +420,8 @@ function jumpButtons(o, m) {
 function callLine(cause, m = model) {
   const c = contactFor(cause);
   // a calibration, or a switch, restart or rebuild someone chose here (status.applying holds it): started on purpose (R7 #18)
-  if (cause === 'calibrating' || (cause === 'td-restarting' && m?.show.restart?.chosen)) return '<span class="call">Nothing to call about: this was started on purpose</span>';
+  // and a cause whose advice is to wait for a switch, restart or rebuild someone chose here (R9 #16)
+  if (cause === 'calibrating' || (cause === 'td-restarting' && m?.show.restart?.chosen) || (cause === m?.overall.cause && m?.overall.chosen)) return '<span class="call">Nothing to call about: this was started on purpose</span>';
   if (!c) return '<span class="call">Nobody to call yet: wait and look again</span>';
   const key = Object.keys(CONTACTS).find((k) => CONTACTS[k] === c) ?? c.name.toLowerCase();
   const owns = cause === 'page' ? 'mission control and the Mac mini' : OWNS[key] ?? c.owns;
@@ -790,7 +794,7 @@ function settleControls() {
       if (own.step === 'done') { c.s = ctlStep(c.s, { type: 'model', confirmed: true, now }); finish(name); ended.push(name); }
       else if (own.step === 'expired') { c.s = ctlStep(c.s, { type: 'expired', now }); unconfirm(name); ended.push(name); }
       else if (own.step === 'confirming') { c.s = ctlStep(c.s, { type: 'pending', now }); announce(CONFIRMING_SAID); }
-      else if (own.step === 'held') { c.s = ctlStep(c.s, { type: 'error', maybe: true, now }); c.held = true; c.text = heldWords(c.o?.what, sclock(own.unlockAt)); announce(c.text); ended.push(name); }
+      else if (own.step === 'held') { c.s = ctlStep(c.s, { type: 'error', maybe: true, now }); c.held = true; c.text = heldWords(c.o?.what, sclock(byMinute(own.unlockAt))); announce(c.text); ended.push(name); }
       continue;
     }
     // only a reading taken after the answer can confirm the change or take a done line away
@@ -802,7 +806,7 @@ function settleControls() {
     // known (no id; or no list names it: over 10 min, a restart of the server), a switch to another file or a boot-file change is
     // done once a reading taken after the send shows it (c.sent, CR7 #4); a restart or a rebuild only by its own limit
     const own = model ? ownVerdict(model, { state: c.s.state, entryId: c.entryId, requestId: c.requestId, sent: c.sent, serverConfirms: !!c.o?.serverConfirms, held: c.held, saidExpired: c.saidExpired, lost: c.lost }) : null;
-    if (own?.unlockAt != null) c.text = heldWords(c.o?.what, sclock(own.unlockAt));
+    if (own?.unlockAt != null) c.text = heldWords(c.o?.what, sclock(byMinute(own.unlockAt)));
     if (fresh) { c.entryId = own.entryId; mine.id(c.entryId); }
     if (fresh && own.judged) {
       c.judgedWall = p.receivedWall;
@@ -812,7 +816,7 @@ function settleControls() {
       else if (own.step === 'gave-up') { c.saidExpired = true; unconfirm(name); ended.push(name); }
       // its answer was lost, but its entry shows the server answered it: under way, never "may or may not" with grey buttons (R9 #29)
       else if (own.step === 'confirming') { c.s = ctlStep(c.s, { type: 'pending', now }); c.text = ''; c.lost = false; announce(CONFIRMING_SAID); }
-      else if (own.step === 'held') { c.held = true; c.lost = false; c.text = heldWords(c.o?.what, sclock(own.unlockAt)); announce(c.text); }
+      else if (own.step === 'held') { c.held = true; c.lost = false; c.text = heldWords(c.o?.what, sclock(byMinute(own.unlockAt))); announce(c.text); }
     } else if (fresh && (c.s.state === 'confirming' || c.s.state === 'unconfirmed') && typeof c.o?.confirmed === 'function') {
       let yes = false;
       try { yes = !!c.o.confirmed(model); } catch (e) { console.warn('confirmed', e); }
@@ -901,7 +905,7 @@ async function runControl(name, path, body, o) {
   mine.request(requestId);
   const token = {};                   // this press: an answer that comes after the server's verdict ended it changes nothing (R9 #1)
   Object.assign(c, { s: next, text: '', o: { holds: o.confirmed, ...o }, result: null, refreshAt: null, judgedWall: null, entryId: null, requestId, saidExpired: false, held: false, lost: false, sent, sendToken: token,
-    sentServer: serverNow(), expectS: EXPECT_S[name] ?? null, usual: name === 'bootfile' ? BOOT_USUAL : null, applyText: o.pending ?? M.applyingText(o.what) });
+    sentServer: serverNow(), expectS: EXPECT_S[name] ?? null, usual: name === 'bootfile' || name === 'lightsroute' ? BOOT_USUAL : null, applyText: o.pending ?? M.applyingText(o.what) });
   for (const other of SHARE[name] ?? []) if (ctl[other] && !busy(other)) ctl[other] = { s: ctlInit(), text: '' };
   const a = document.activeElement, idle = !a || a === document.body, here = !!(a && c.host && document.getElementById(c.host)?.contains(a));
   announce(c.applyText.replace(/…$/, ''));     // said once, never with a ticking time
@@ -926,7 +930,7 @@ async function runControl(name, path, body, o) {
     // the buttons unlock, never a "Wait: …" about itself above it (R8 #18; model.js heldMaybe, the rule control() follows: CR8 #10)
     const held = heldMaybe(name, { maybe, serverMaybe: e?.serverMaybe, entryId: c.entryId });
     c.held = held;
-    c.text = held ? heldWords(o.what, sclock(serverNow() + confirmLimitS(EXPECT_S[name]) * 1000))
+    c.text = held ? heldWords(o.what, sclock(byMinute(serverNow() + confirmLimitS(EXPECT_S[name]) * 1000)))
       : maybe ? noAnswerText(e, o.noAnswer ?? 'the Now line shows what bitcube reports', serverNow()) : failText(o.fail, e, sclock(), o.kept);
     announce(c.text);
     if (name === 'check') shell.setChecking(false);

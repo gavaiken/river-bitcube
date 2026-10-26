@@ -134,9 +134,12 @@ export function confirmLimitS(expectS) { return Math.max(3 * (num(expectS) ?? 0)
  *  #17). The server's 409 (lib/applying.mjs waitError) and every page's "Wait: …" line say it. unlockMs: when the lock ends, on
  *  the server's clock. */
 export function waitWords(label, { maybe = false, unlockMs = null } = {}) {
-  return maybe ? `wait: ${label} got no answer from bitcube in time${num(unlockMs) != null ? `; it unlocks by ${clock(unlockMs)}` : ''}`
+  return maybe ? `wait: ${label} got no answer from bitcube in time${num(unlockMs) != null ? `; it unlocks by ${clock(byMinute(unlockMs))}` : ''}`
     : `wait: ${label} is being applied`;
 }
+/** A deadline said with "by" (a lock's end: "it unlocks by 21:05", "the buttons unlock … by 21:05"), rounded up to the next whole
+ *  minute, so the time said is never before the lock really ends (R9 #13, #33). "At" and "started" times keep their minute. */
+export const byMinute = (ms) => (num(ms) == null ? ms : Math.ceil(ms / 60000) * 60000);
 export const INTENSITY_WORDS = [[0.1, 'stillness'], [0.3, 'trickle'], [0.6, 'flowing'], [0.8, 'strong'], [Infinity, 'torrent']];
 export const LEVELS = { down: 0, warning: 1, unknown: 2, ok: 3 };   // what wins the headline (after a stale page), and the items' order
 export const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
@@ -379,7 +382,14 @@ export function derive(status, nowMs) {
   // restart got no answer and what to do once the buttons unlock, never "press Switch" while the button is greyed (R8 #16)
   const held = heldBy && (tdOff || frozen) ? heldBy : null;
   const heldAt = held ? held.answered_at ?? held.started_at : null;
-  const heldAction = (then) => (held ? `${cap(held.label)} got no answer from bitcube${heldAt != null ? ` at ${clock(heldAt)}` : ' in time'}; if TouchDesigner still isn't ${tdOff ? 'running' : 'answering'} when the buttons unlock${held.unlock_at != null ? ` (about ${clock(held.unlock_at)})` : ''}, ${then}` : null);
+  // said once, when the buttons unlock ("by", rounded up: R9 #13, #18), and the button for the file it was going to: one held on
+  // the live river says to try that again, or the river's year if the live river isn't wanted tonight (R9 #12). The band's line
+  // above says it got no answer; this only says what to do (R9 #18)
+  const heldPress = !held ? null : (held.file ?? YEAR_FILE) === LIVE_FILE
+    ? "Switch to the live river below to try again, or Switch to the river's year if the live river isn't needed tonight" : "Switch to the river's year below";
+  const heldBy_ = held?.unlock_at != null ? ` (by ${clock(byMinute(held.unlock_at))})` : '';
+  const heldAction = (how) => (!held ? null : how === 'off' ? `If TouchDesigner still isn't running when the buttons unlock${heldBy_}, press ${heldPress} (about a minute).`
+    : `If TouchDesigner still isn't answering when the buttons unlock${heldBy_}, look at bitcube's screen over screen sharing and answer the dialog, or press ${heldPress.replace(/ below\b/, '')} (about a minute dark).`);
   const restartingOn = !tdRestarting ? null : byEntry ? FILES[restartBy.file ?? YEAR_FILE]?.label ?? 'a show file' : FILES[/on (\S+)/.exec(tdErr)?.[1]]?.label ?? 'a show file';
   const file = tdOk ? FILES[td.file] ?? { kind: 'other', label: UNLISTED } : null;
   const kind = file?.kind ?? null, label = file?.label ?? null;
@@ -512,10 +522,10 @@ export function derive(status, nowMs) {
   else if (!td) unknown('touchdesigner', ['Not reported by the full check', 'The full check answered without a word about TouchDesigner.']);
   else if (tdOffBooting) it('touchdesigner', 'warning', 'Not started yet: bitcube just restarted', `bitcube has been up for ${dur(upS)}; TouchDesigner opens by itself about a minute after it.`, { action: 'Wait a minute and look again.' });
   else if (tdOff) it('touchdesigner', 'down', 'Not running on bitcube', 'bitcube is up but TouchDesigner is not running, so nothing is driving the lights.',
-    { action: heldAction("press Switch to the river's year below (about a minute).") ?? "Start it with Switch to the river's year below (about a minute)." });
+    { action: heldAction('off') ?? "Start it with Switch to the river's year below (about a minute)." });
   else if (tdRestarting) it('touchdesigner', 'warning', `Restarting on ${restartingOn}`, 'The lights are dark for about a minute while it opens.', { action: 'Wait a minute and look again.', raw: tdErr });
   else if (frozen) it('touchdesigner', 'down', 'Frozen: not answering', 'TouchDesigner did not answer within 15 s, which usually means a dialog is blocking it. The lights are not being driven: the rope boxes play their own colour cycle and the panels keep their last picture.',
-    { action: heldAction(`look at bitcube's screen over screen sharing and answer the dialog, or press ${YEAR_PRESS} (about a minute dark).`) ?? `Look at bitcube's screen over screen sharing and answer the dialog, or press ${YEAR_PRESS} (about a minute dark).` });
+    { action: heldAction('frozen') ?? `Look at bitcube's screen over screen sharing and answer the dialog, or press ${YEAR_PRESS} (about a minute dark).` });
   else if (fps == null) it('touchdesigner', 'ok', `Running ${label}; frame rate not known yet`, 'The first check after a start cannot measure the frame rate; the next one can.', { raw: `file: ${td.file}` });
   else if (slow) it('touchdesigner', 'warning', `Running slowly: ${Math.round(fps)} of 60 frames a second`,
     `${cap(label)} at ${fps} frames a second, where it should run at 60${tdErrors ? `, with ${tdErrors} errors in the file` : ''}: the river moves in jerks.`,
@@ -685,9 +695,9 @@ export function derive(status, nowMs) {
     if (!td) add('td-unknown', 'unknown', 75, "bitcube answers, but its check says nothing about TouchDesigner", 'The full check came back without the TouchDesigner part, so the lights cannot be judged.', 'Wait for the next check; if it keeps happening, ask the studio chat.', ['touchdesigner', 'ropes', 'hub75 panels', y ? null : 'seasons']);
     if (frozen) add('td-frozen', 'down', 80, 'TouchDesigner is frozen: the lights are not being driven',
       "It has not answered bitcube's check; a dialog on its screen is probably blocking it. The rope boxes play their own colour cycle and the panels keep their last picture.",
-      heldAction(`look at bitcube's screen over screen sharing and answer the dialog, or press ${YEAR_PRESS} (about a minute dark).`) ?? `Look at bitcube's screen over screen sharing and answer the dialog, or press ${YEAR_PRESS} (about a minute dark).`, ['touchdesigner', 'seasons', 'ropes', 'hub75 panels']);
+      heldAction('frozen') ?? `Look at bitcube's screen over screen sharing and answer the dialog, or press ${YEAR_PRESS} (about a minute dark).`, ['touchdesigner', 'seasons', 'ropes', 'hub75 panels']);
     else if (tdOff && !booted) add('td-off', 'down', 80, 'TouchDesigner is not running: the lights are not being driven', 'bitcube is up, but TouchDesigner is not running on it.',
-      heldAction("press Switch to the river's year below (about a minute).") ?? "Start it with Switch to the river's year below (about a minute).", ['touchdesigner', 'seasons', 'ropes', 'hub75 panels']);
+      heldAction('off') ?? "Start it with Switch to the river's year below (about a minute).", ['touchdesigner', 'seasons', 'ropes', 'hub75 panels']);
     else if (tdRestarting) add('td-restarting', 'warning', 60, `TouchDesigner is restarting on ${restartingOn}`, 'The lights are dark for about a minute while the file opens.', 'Wait a minute and look again.', ['touchdesigner', 'seasons', 'ropes', 'hub75 panels']);
     if (comingUp) add('coming-up', 'warning', 44, booted ? `bitcube restarted ${dur(upS)} ago and is still coming up` : 'TouchDesigner has just restarted and is still coming up',
       `${tdOk ? `${tdWords}${yearOk ? `, in ${year.season}` : ''}` : "TouchDesigner hasn't started yet"}${tdStarting ? '; its frame rate is not known yet' : ''}${linkDown ? "; clips to Dave haven't started yet" : ''}.`,
@@ -768,6 +778,18 @@ export function derive(status, nowMs) {
   if (md.present && md.stale) add('modal-stale', 'unknown', 15, `Mission control hasn't checked Dave's agent for ${dur(md.age_s)}`, 'What is shown about it is the last answer.', 'Wait a minute; if it stays this way, mission control needs a look.', ['modal agent']);
   if (se.present && se.stale && y && online !== false && !pageStale) add('seasons-stale', 'unknown', 20, `Mission control hasn't checked the river's year page for ${dur(se.age_s)}`, 'The season and intensity shown are the last answer.', 'Wait a minute; if it stays this way, mission control needs a look.', ['seasons']);
 
+  // A switch, restart or rebuild in flight (not a maybe) is what happens next: advice that would press the show-file button again
+  // (its lock greys it) says to wait instead, and that it was started on purpose, nothing to call about (R9 #16); one bitcube didn't
+  // answer in time that holds the lock says when the buttons unlock in its own advice (heldAction): the band then leaves out its
+  // jump's "Wait: …" line, which would say the same again (waits: the entry the advice names; R9 #18)
+  const PRESSES = /\b(?:press|start it with) (?:restart on|switch to)\b|\bswitch to the river's year\b/i;
+  if (restartBy) {
+    const fl = FILES[restartBy.file ?? YEAR_FILE]?.label ?? 'a show file';
+    const what = restartBy.action === 'rebuild' ? `rebuilding ${fl}` : /^the restart on /.test(restartBy.label) ? `restarting TouchDesigner on ${fl}` : `switching TouchDesigner to ${fl}`;
+    const wait = `Someone is ${what} now: wait a minute and look again.`;
+    for (const p of P) if (p.action && PRESSES.test(p.action)) Object.assign(p, { action: wait, waits: restartBy.id, chosen: true });
+    for (const x of items) if (x.action && PRESSES.test(x.action)) x.action = wait;
+  } else if (held) for (const p of P) if (p.id === 'td-off' || p.id === 'td-frozen') p.waits = held.id;
   // Unknown must never look like OK: anything still unknown that no cause explains gets a cause of its own.
   const explained = new Set(P.flatMap((p) => p.items));
   const orphans = items.filter((x) => x.level === 'unknown' && !x.muted && !explained.has(x.id));
@@ -795,6 +817,8 @@ export function derive(status, nowMs) {
     stale: pageStale || bc.stale || (online === true && pb.present && pb.stale) || (md.present && md.stale) || (se.present && se.stale && !!y && online !== false),
     cause: top?.id ?? null,
     also: P.slice(1).map((p) => p.headline),
+    waits: top?.waits ?? null,     // the entry its advice says to wait for (R9 #16, #18): the band shows no jump of its own then
+    chosen: !!top?.chosen,         // its advice is to wait for a change someone chose here: nothing to call about (R9 #16)
     checked: { page_age_s, bitcube_age_s: bc.age_s, seasons_age_s: se.age_s, modal_age_s: md.age_s, probe_age_s: pb.age_s },
   };
 
@@ -911,7 +935,7 @@ export function derive(status, nowMs) {
   const sources = {};
   // at: when that source's reading was taken, on the server's clock (ms): a page judges its own change only by a reading after it
   for (const k of Object.keys(S)) sources[k] = { present: S[k].present, ok: S[k].ok, error: S[k].error, at: S[k].at, age_s: S[k].age_s, failing_s: S[k].failing_s, stale: S[k].stale };
-  return { overall, problems: P.map(({ pri, fromProbe: _f, ...p }) => p), show, items, controls, sources };
+  return { overall, problems: P.map(({ pri, fromProbe: _f, waits: _w, chosen: _c, ...p }) => p), show, items, controls, sources };
 }
 
 // ---- one control's state (docs/mission-ui.md "Applying a change") -----------------------------------------------------
@@ -1150,7 +1174,8 @@ export function entryWords(a, elapsedS) {
   const confirming = a?.phase === 'confirming';
   const head = confirming ? `Waiting for bitcube to show ${a?.label ?? 'a change'}` : `Applying: ${a?.label ?? 'a change'}`;
   // the usual time the sending phone gives too: a boot file shows with bitcube's next full check, a run in its progress (R8 #22)
-  const usual = confirming && a?.action === 'bootfile' ? BOOT_USUAL : confirming && a?.action === 'calibrate' ? START_USUAL : usualWords(a?.expect_s);
+  // a lighting port change waits for the same full check as a boot file (R9 #15)
+  const usual = confirming && (a?.action === 'bootfile' || a?.action === 'lightsroute') ? BOOT_USUAL : confirming && a?.action === 'calibrate' ? START_USUAL : usualWords(a?.expect_s);
   return `${head}${from} · ${elapsedClock(elapsedS)} · ${usual}`;
 }
 /** The server's verdict on one entry, by its id (applying_id): 'pending' (still in status.applying: applying or confirming),
@@ -1246,10 +1271,11 @@ export function ownVerdict(m, c = {}) {
 export function heldWords(what, unlockAt) {
   return `${cap(String(what ?? 'the change'))} got no answer from bitcube in time: it may or may not have happened; the buttons unlock when bitcube shows it${unlockAt ? `, or by ${unlockAt}` : ''}.`;
 }
-/** A change no reading showed in time, naming what was sent: "The switch to the live river was sent at 21:13, but bitcube doesn't
- *  show it yet: look at the Now line, or call Gavin." (what: the change in team words, or null for "Sent at 21:13, …"). */
+/** A change no reading showed in time, naming what was sent: "The switch to the live river was sent at 21:13, but bitcube didn't
+ *  show it in time: look at the Now line, or call Gavin." (what: the change in team words, or null for "Sent at 21:13, …"). In the
+ *  past, as Last sent, Recent and the ended line say the same verdict (R9 #14). */
 export function unconfirmedWords(what, at, where = 'look at the Now line, or call Gavin') {
-  return `${what ? `${cap(String(what))} was sent at ${at}` : `Sent at ${at}`}, but bitcube doesn't show it yet: ${where}.`;
+  return `${what ? `${cap(String(what))} was sent at ${at}` : `Sent at ${at}`}, but bitcube didn't show it in time: ${where}.`;
 }
 /** A press judged again and found impossible, or a confirm withdrawn: "Not sent at 21:04: bitcube is offline." Another change in
  *  flight is said in the past tense, so the line stays true after it ends: "Not sent at 21:17: the restart on the river's year
