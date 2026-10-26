@@ -55,6 +55,21 @@ const YEAR_FILE = Object.keys(FILES).find((k) => FILES[k].kind === 'year'), LIVE
 export const CAL_STAGE_S = { 'ropes-capture': 170, 'ropes-decode': 40, 'hub75-capture': 35, 'hub75-locate': 10 };   // calibrate.py EXPECTED_S
 export const CAL_TOTAL_S = Object.values(CAL_STAGE_S).reduce((a, b) => a + b, 0);
 export const CAL_STAGE_WORDS = { 'ropes-capture': 'photographing the ropes', 'ropes-decode': 'working out where each rope is', 'hub75-capture': 'photographing the panels', 'hub75-locate': 'finding the panels' };
+// Applying a change (docs/mission-ui.md): what a change in flight blocks, when the server's entry names no blocks of its own.
+// A switch or a rebuild restarts TouchDesigner on the year: everything that touches either waits; a boot-file change only
+// the file controls (and a calibration's start); a lighting port change the lights; the rest only a second copy of itself.
+const TD_TOUCHING = ['ropes', 'hub75', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
+export const APPLY_BLOCKS = {
+  switch: TD_TOUCHING, rebuild: TD_TOUCHING, bootfile: ['switch', 'rebuild', 'bootfile', 'calibrate'], lightsroute: ['ropes', 'hub75', 'lightsroute', 'calibrate'],
+  ropes: ['ropes'], hub75: ['hub75'], mode: ['mode'], target: ['target'], rules: ['rules'], 'rules-reset': ['rules-reset'], calibrate: ['calibrate'],
+};
+/** The team's words for a change in flight when the server's entry has no label of its own. */
+export const APPLY_LABEL = { switch: 'a show-file switch', rebuild: "a rebuild of the river's year", bootfile: 'the boot file change', lightsroute: 'a lighting port change',
+  ropes: 'a ropes change', hub75: 'a panels change', mode: 'a mode change', target: 'a target change', rules: 'a rules change', 'rules-reset': 'a rules reset', calibrate: 'a calibration start' };
+export const CONFIRM_MIN_S = 120;               // a change not shown by bitcube's reading within max(3 × its usual time, this) is "unconfirmed"
+export const LONG_CHANGE_S = 20;                // a change usually longer than this shows its elapsed m:ss and the usual time
+/** How long a change may go unconfirmed (and an entry in status.applying stay a lock): 3 × its usual time, at least 2 min. */
+export function confirmLimitS(expectS) { return Math.max(3 * (num(expectS) ?? 0), CONFIRM_MIN_S); }
 export const INTENSITY_WORDS = [[0.1, 'stillness'], [0.3, 'trickle'], [0.6, 'flowing'], [0.8, 'strong'], [Infinity, 'torrent']];
 export const LEVELS = { down: 0, warning: 1, unknown: 2, ok: 3 };   // what wins the headline (after a stale page), and the items' order
 export const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
@@ -647,6 +662,20 @@ export function derive(status, nowMs) {
     checked: { page_age_s, bitcube_age_s: bc.age_s, seasons_age_s: se.age_s, modal_age_s: md.age_s, probe_age_s: pb.age_s },
   };
 
+  // ---- changes being applied (status.applying, from every phone and the studio chat) -------------------------------------
+  // Each entry is a lock on the actions in its blocks until its request ends; one older than its limit is a request that never
+  // ended and is ignored. Elapsed time is on the server's clock carried forward by this phone's (as page_age_s), so it ticks.
+  const applyNow = pageNow ?? now;
+  const applying = (Array.isArray(st.applying) ? st.applying : []).map(obj).filter((a) => a && typeof a.action === 'string').map((a) => {
+    const raw = num(a.started_at), started = raw == null ? null : raw < 1e12 ? raw * 1000 : raw;   // ms (seconds accepted)
+    const expect_s = num(a.expect_s) ?? 60, elapsed = started != null ? Math.max(0, (applyNow - started) / 1000) : 0;
+    const label = typeof a.label === 'string' && a.label.trim() ? a.label.trim() : APPLY_LABEL[a.action] ?? 'a change';
+    const blocks = Array.isArray(a.blocks) ? a.blocks.filter((b) => typeof b === 'string') : APPLY_BLOCKS[a.action] ?? [a.action];
+    return { id: a.id ?? null, action: a.action, label, file: typeof a.file === 'string' ? a.file : null, started_at: started, expect_s, elapsed_s: Math.round(elapsed), blocks,
+             words: `${cap(label)} is being applied${started != null ? ` (started ${clock(started)})` : ''}`, old: started != null && elapsed > confirmLimitS(expect_s) };
+  }).filter((a) => !a.old).map(({ old: _o, ...a }) => a);
+  const waitFor = (action) => { const a = applying.find((x) => x.blocks.includes(action)); return a ? `wait: ${a.label} is being applied` : null; };
+
   // ---- show: what the piece is doing -----------------------------------------------------------------------------
   const ropesState = !pr || online === false || !td ? 'unknown' : !tdOk || !senderKnown || senderErr || !rs.open || senderOff || boxesDown.length === 2 ? 'not-reaching' : calRopes ? 'calibrating' : ropesDark ? 'dark' : 'river';
   const ropesWords = { river: kind === 'live' ? (relay?.fresh ? 'the ropes show the live river' : 'the ropes show the rain fallback') : 'the ropes show the river',
@@ -684,6 +713,7 @@ export function derive(status, nowMs) {
     history: Array.isArray(y?.history) ? y.history.map(obj).filter((h) => h && num(h.t) != null)
       .map((h) => ({ t_ms: h.t * 1000, phase: num(h.phase), season: seasonOfPhase(num(h.phase)), intensity: num(h.intensity) })) : [],
     uptime_s: upS != null ? Math.round(upS) : null,   // bitcube's uptime as of the server's clock (its restart = now - uptime)
+    applying,   // [{ id, action, label, file, started_at (ms), expect_s, elapsed_s, blocks, words }]: changes in flight, from any phone
     words: tdOk ? `${cap(tdWords)}${yearOk ? `: ${year.season}, ${intensityWord(intensity)}, ${modeWords}` : ''}. ${cap(ropesWords)}.` : (top?.headline ?? ''),
   };
 
@@ -701,20 +731,88 @@ export function derive(status, nowMs) {
   // never a second switch while TouchDesigner is opening a file: it kills the half-opened one (another minute dark), and
   // while bitcube's own login is still opening it, a second TouchDesigner could start beside it
   const tdBusy = tdRestarting ? 'TouchDesigner is restarting: wait a minute' : tdOffBooting || (tdStarting && booted) ? 'TouchDesigner is still starting: wait a minute' : null;
+  // first the page's contact and bitcube itself, then a change in flight anywhere (status.applying), then the model's own reasons
+  const first = (action) => cantPage ?? cantBitcube ?? waitFor(action);
+  const notYear = kind === 'year' ? null : kind ? "the river's year isn't running: switch to it first" : "what TouchDesigner is running isn't known";
   const controls = {
-    mode: ctl(cantPage ?? cantBitcube ?? cantYear, { dynamic: ctl(cantPage ?? cantBitcube ?? cantYear ?? (counter ? null : "the people counter isn't available yet")) }),
-    target: ctl(cantPage ?? cantBitcube ?? cantYear),
-    rules: ctl(cantPage ?? cantBitcube ?? cantYear),
-    ropes: ctl(cantPage ?? cantBitcube ?? cantTd ?? cantCal),
-    hub75: ctl(cantPage ?? cantBitcube ?? cantTd ?? cantCal),   // the camera is photographing the panels and ropes
+    mode: ctl(first('mode') ?? cantYear, { dynamic: ctl(first('mode') ?? cantYear ?? (counter ? null : "the people counter isn't available yet")) }),
+    target: ctl(first('target') ?? cantYear),
+    rules: ctl(first('rules') ?? cantYear),
+    'rules-reset': ctl(first('rules-reset') ?? cantYear),
+    ropes: ctl(first('ropes') ?? cantTd ?? cantCal),
+    hub75: ctl(first('hub75') ?? cantTd ?? cantCal),   // the camera is photographing the panels and ropes
     // never while TouchDesigner is restarting (a second switch kills the half-opened file: another minute dark), and never on
     // a full check too old to say what runs now (the buttons' labels come from it)
-    switch: ctl(cantPage ?? cantBitcube ?? cantUnknown ?? tdBusy ?? cantOld ?? cantCal),
-    bootfile: ctl(cantPage ?? cantBitcube ?? cantUnknown),
-    lightsroute: ctl(cantPage ?? cantBitcube ?? cantUnknown ?? cantOld ?? cantCal),
+    switch: ctl(first('switch') ?? cantUnknown ?? tdBusy ?? cantOld ?? cantCal),
+    bootfile: ctl(first('bootfile') ?? cantUnknown),
+    lightsroute: ctl(first('lightsroute') ?? cantUnknown ?? cantOld ?? cantCal),
+    // a rebuild bakes the LED map into the river's year and ends in a switch: the switch's reasons, and only on the river's year
+    rebuild: ctl(first('rebuild') ?? cantUnknown ?? tdBusy ?? cantOld ?? cantCal ?? (frozen ? "TouchDesigner isn't answering" : null) ?? notYear),
+    // a calibration's start: TouchDesigner answering on a show file, the gallery camera reachable, nothing running already
+    calibrate: ctl(first('calibrate') ?? (calibrating ? 'a calibration is already running' : null) ?? cantTd ?? (tdOk ? null : "TouchDesigner isn't answering")
+      ?? (galleryDown ? "the gallery camera isn't reachable" : null)),
   };
 
   const sources = {};
   for (const k of Object.keys(S)) sources[k] = { present: S[k].present, ok: S[k].ok, error: S[k].error, age_s: S[k].age_s, failing_s: S[k].failing_s, stale: S[k].stale };
   return { overall, problems: P.map(({ pri, fromProbe: _f, ...p }) => p), show, items, controls, sources };
 }
+
+// ---- one control's state (docs/mission-ui.md "Applying a change") -----------------------------------------------------
+// The pure rules ui.js control() follows (and status.js can): ready, blocked, confirm, applying, confirming, done,
+// unconfirmed, failed. Nothing on screen claims a change until bitcube's reading shows it.
+export const CTL_STATES = ['ready', 'blocked', 'confirm', 'applying', 'confirming', 'done', 'unconfirmed', 'failed'];
+const BUSY = new Set(['confirm', 'applying', 'confirming']);
+/** A control before anything was pressed: ready, or blocked with the model's why. */
+export function ctlInit(why = null) { return { state: why ? 'blocked' : 'ready', sentAt: null, answeredAt: null, at: null, before: null, effect: null, notSent: null }; }
+/** One event on one control → its next state (a new object; `effect` says what the page must do now: 'confirm' open the sheet,
+ *  'send' POST, 'withdraw' close the sheet, else null). Every event carries `now` (ms).
+ *    press { why, confirm }  ready/done/failed/unconfirmed → confirm (asks first) or applying (send); blocked or busy: nothing
+ *    yes { why }             confirm → applying (send), or failed "Not sent: <why>" when it became impossible meanwhile
+ *    no { why }              confirm → what it was before (ready ↔ blocked by the why now)
+ *    why { why }             the model's reason changed: ready ↔ blocked; an open confirm is withdrawn (failed, notSent)
+ *    ok { confirmed }        applying → done, or confirming when confirmed === false (the reading doesn't show it yet)
+ *    error { maybe }         applying → failed, or unconfirmed when it may have happened (no answer, an unreadable one)
+ *    model { confirmed }     confirming → done when bitcube's reading shows it
+ *    tick { expectS }        confirming → unconfirmed after max(3 × expectS, 120) s since it was sent */
+export function ctlStep(s, ev) {
+  s = s ?? ctlInit();
+  const now = ev?.now ?? null, why = ev?.why ?? null;
+  const to = (state, extra = {}) => ({ ...s, state, effect: null, at: now, ...extra });
+  const rest = (st) => (st === 'ready' || st === 'blocked' || st == null ? (why ? 'blocked' : 'ready') : st);
+  const same = { ...s, effect: null };
+  switch (ev?.type) {
+    case 'press':
+      if (BUSY.has(s.state) || why) return s.state === 'ready' && why ? to('blocked') : same;
+      return ev.confirm ? { ...to('confirm', { before: s.state }), effect: 'confirm' } : { ...to('applying', { sentAt: now, answeredAt: null, notSent: null }), effect: 'send' };
+    case 'yes':
+      if (s.state !== 'confirm') return same;
+      return why ? to('failed', { notSent: why }) : { ...to('applying', { sentAt: now, answeredAt: null, notSent: null }), effect: 'send' };
+    case 'no': return s.state === 'confirm' ? to(rest(s.before)) : same;
+    case 'why':
+      if (s.state === 'confirm' && why) return { ...to('failed', { notSent: why }), effect: 'withdraw' };
+      if (s.state === 'ready' && why) return to('blocked');
+      if (s.state === 'blocked' && !why) return to('ready');
+      return same;
+    case 'ok': return s.state !== 'applying' ? same : ev.confirmed === false ? to('confirming', { answeredAt: now }) : to('done', { answeredAt: now });
+    case 'error': return s.state !== 'applying' ? same : to(ev.maybe ? 'unconfirmed' : 'failed', { answeredAt: now });
+    case 'model': return s.state === 'confirming' && ev.confirmed === true ? to('done') : same;
+    case 'tick': return s.state === 'confirming' && now != null && now - (s.sentAt ?? now) > confirmLimitS(ev.expectS) * 1000 ? to('unconfirmed') : same;
+    default: return same;
+  }
+}
+/** What a control in state s shows with the model's why now: the contract's state name, whether the button is disabled,
+ *  whether its inputs are locked (applying, confirming, or blocked), and busy (a request in flight or awaiting the reading). */
+export function ctlView(s, why = null) {
+  const st = s?.state ?? 'ready';
+  const busy = st === 'applying' || st === 'confirming';
+  return { state: st === 'ready' || st === 'blocked' ? (why ? 'blocked' : 'ready') : st, busy, disabled: busy || !!why, lockInputs: busy || !!why };
+}
+/** Elapsed seconds as m:ss ("0:34", "12:05"). */
+export function elapsedClock(s) { s = Math.max(0, Math.floor(num(s) ?? 0)); return `${Math.floor(s / 60)}:${pad(s % 60)}`; }
+/** The applying line: a long change (usually over 20 s) adds its elapsed m:ss and the usual time; a short one, the text alone. */
+export function applyingWords(text, elapsedS, expectS) {
+  return num(expectS) != null && expectS > LONG_CHANGE_S ? `${text} · ${elapsedClock(elapsedS)} · usually about ${dur(expectS)}` : text;
+}
+/** The confirming line: sent, waiting for bitcube's reading to show it, with the time since it was sent. */
+export function confirmingWords(elapsedS) { return `Sent · waiting for bitcube to show it · ${elapsedClock(elapsedS)}`; }
