@@ -32,6 +32,10 @@
 //                                                          time, so it may or may not have happened; applying_id: its entry
 //                                                          (lib/applying.mjs), so a page can tell it is still being confirmed
 //                                                          (status.applying), confirmed or expired. Logins are scrubbed.
+//   { kind: 'verdict', t, applying_id, verdict }           the server's verdict on the last action's entry ('confirmed' or
+//                                                          'expired'), read from status.confirmed / status.expired: kept with the
+//                                                          history, so Last done knows it after those 10 min and after a restart
+//                                                          (summary().last_action.verdict, CR7 #5). Bookkeeping: not in recent().
 //
 // Rules, and why:
 // - 'unknown' is the absence of knowledge, not a state. A piece that can't be checked (bitcube offline, the server
@@ -68,7 +72,7 @@ const obj = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : null);
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
 const str = (x, max) => (typeof x === 'string' ? x.slice(0, max) : null);
 /** The state a key is in is told by its latest event, so those are kept whatever their age (null: not a state). */
-const keyOf = (ev) => (ev.kind === 'item' ? `item:${ev.id}` : ev.kind === 'show' ? `show:${ev.field}` : ['overall', 'calibration', 'action'].includes(ev.kind) ? ev.kind : null);
+const keyOf = (ev) => (ev.kind === 'item' ? `item:${ev.id}` : ev.kind === 'show' ? `show:${ev.field}` : ['overall', 'calibration', 'action', 'verdict'].includes(ev.kind) ? ev.kind : null);
 /** An item's reason, from its summary without the numbers that change with every answer ("Running slowly: 4 of 60 frames
  *  a second" and "…: 5 of 60…" are one reason; "Dark on purpose: sending black" is another). */
 export const reasonOf = (summary) => String(summary ?? '').replace(/\d+(?:[.:]\d+)*\s*(?:s|min|h|days|%|W|GB)?(?![A-Za-z])/g, '#').trim();
@@ -155,6 +159,14 @@ export class History {
         rec({ kind: 'show', field, from: p?.value ?? null, to });
       }
       // The calibration job (lib/lights.mjs: the full check carries its progress file while one ran in the last 24 h).
+      // The server's verdict on the last action's entry (status.confirmed / status.expired keep it 10 min): kept once, with the
+      // history, so Last done still knows it later (CR7 #5)
+      const la = this.state.last_action, lid = typeof la?.applying_id === 'string' ? la.applying_id : null;
+      if (lid && !la.verdict) {
+        const named = (list) => Array.isArray(list) && list.some((e) => obj(e)?.id === lid);
+        const verdict = named(st.confirmed) ? 'confirmed' : named(st.expired) ? 'expired' : null;
+        if (verdict) rec({ kind: 'verdict', applying_id: lid, verdict });
+      }
       const cal = obj(obj(obj(st.probe)?.value)?.calibration);
       if (cal && (typeof cal.running === 'boolean' || typeof cal.stage === 'string')) {
         const running = cal.running === true, stage = str(cal.stage, 40), calStale = cal.stale === true, p = this.state.calibration;
@@ -194,13 +206,14 @@ export class History {
     return s ? { value: s.value, since: s.t, for_s: forS(s.t, num(nowMs) ?? this.now()), at_least: s.at_least } : null;
   }
 
-  /** Newest first (the last recorded first among equal times). kinds: one kind or a list; sinceT: strictly after that
-   *  time (default: the keepMs window, which hides the old markers kept for since()). */
+  /** Newest first (the last recorded first among equal times). kinds: one kind or a list (default: every kind but the
+   *  verdicts, which are bookkeeping); sinceT: strictly after that time (default: the keepMs window, which hides the old markers
+   *  kept for since()). */
   recent({ limit = 50, kinds, sinceT } = {}) {
     const from = num(sinceT) ?? this.now() - this.keepMs;
     const ks = kinds == null ? null : new Set([].concat(kinds));
     const out = [];
-    for (let i = this.events.length - 1; i >= 0; i--) { const e = this.events[i]; if (e.t > from && (!ks || ks.has(e.kind))) out.push(e); }
+    for (let i = this.events.length - 1; i >= 0; i--) { const e = this.events[i]; if (e.t > from && (ks ? ks.has(e.kind) : e.kind !== 'verdict')) out.push(e); }
     return out.sort((a, b) => b.t - a.t).slice(0, Math.max(0, num(limit) ?? 50));
   }
 
@@ -233,6 +246,9 @@ export class History {
       case 'show': if (typeof ev.field === 'string') S.show[ev.field] = { value: ev.to, t: ev.t, at_least: ev.from == null }; break;
       case 'calibration': S.calibration = { running: ev.running === true, stage: ev.stage ?? null, stale: ev.stale === true, t: ev.t }; break;
       case 'action': S.last_action = ev; break;
+      case 'verdict':
+        if (S.last_action && S.last_action.applying_id === ev.applying_id && ['confirmed', 'expired'].includes(ev.verdict)) S.last_action = { ...S.last_action, verdict: ev.verdict };
+        break;
     }
   }
 

@@ -233,3 +233,58 @@ test('CR7 #15: 2>&1, >&2 and &> are redirections, not command separators', async
   const d = bash('node mission/bin/mc.mjs status 2>&1 & ssh bitcube "powershell -File C:\\x\\probe.ps1 -Action ropes -Dark" 2>&1', 'Look');
   assert.match(d.text, /^changed the ropes on bitcube directly, not through mission control$/);
 });
+
+// ---- Last done: the server's verdict, kept with the history --------------------------------------------------------------
+test('CR7 #5: the server\'s verdict on the last action is kept with the history (persisted) and served on last_action', async () => {
+  const { History } = await import('../lib/history.mjs');
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const file = join(mkdtempSync(join(tmpdir(), 'cr7-history-')), 'history.jsonl');
+  let t = T0;
+  const h = new History({ file, now: () => t });
+  h.action({ action: 'switch', body: { file: LIVE }, ok: true, source: 'mission control', label: 'the switch to the live river', applying_id: 'ax.1' });
+  t += 5000;
+  h.observe(payload({ t, applying: [{ id: 'ax.1', action: 'switch', label: 'the switch to the live river', file: LIVE, phase: 'confirming', started_at: t - 6000, expect_s: 60, blocks: ['switch'] }] }));
+  assert.equal(h.summary(t).last_action.verdict, undefined, 'still being confirmed: no verdict yet');
+  t += 30_000;
+  h.observe({ ...payload({ t }), confirmed: [{ id: 'ax.1', action: 'switch', file: LIVE, started_at: t - 40_000, at: t - 2000 }] });
+  assert.equal(h.summary(t).last_action.verdict, 'confirmed');
+  h.observe({ ...payload({ t: t + 5000 }), confirmed: [{ id: 'ax.1', action: 'switch', file: LIVE, started_at: t - 40_000, at: t - 2000 }] });
+  assert.equal(h.events.filter((e) => e.kind === 'verdict').length, 1, 'recorded once');
+  // a restart of the server (and long after the 10 min the status keeps it): still known
+  t += 3 * 24 * 3600e3;
+  const again = new History({ file, now: () => t });
+  assert.equal(again.summary(t).last_action.verdict, 'confirmed');
+  assert.equal(again.summary(t).last_action.applying_id, 'ax.1');
+  // a verdict is bookkeeping, not a line of Recent
+  assert.ok(again.recent({ limit: 50, sinceT: 0 }).every((e) => e.kind !== 'verdict'));
+  // expired the same way; a quick change confirmed before its line was written is caught by the next look
+  again.action({ action: 'bootfile', body: { file: YEAR }, ok: true, source: 'studio chat', applying_id: 'ax.2' });
+  again.observe({ ...payload({ t }), expired: [{ id: 'ax.2', action: 'bootfile', file: YEAR, started_at: t - 200_000, at: t - 1000 }] });
+  assert.equal(again.summary(t).last_action.verdict, 'expired');
+  again.action({ action: 'ropes', body: { dark: true }, ok: true, source: 'mission control', applying_id: 'ax.3' });
+  again.observe({ ...payload({ t }), confirmed: [{ id: 'ax.3', action: 'ropes', started_at: t - 2000, at: t - 1000 }] });
+  assert.equal(again.summary(t).last_action.verdict, 'confirmed');
+});
+
+test('CR7 #5: Last done uses the kept verdict; with none known, a switch, rebuild, boot-file change or calibration start says "Last sent"', async () => {
+  const { lastDoneParts } = await import('../public/status-words.js');
+  const none = { applying: [], confirmed: [], expired: [] };
+  const sw = { action: 'switch', body: { file: LIVE }, ok: true, applying_id: 'ax.1' };
+  assert.deepEqual(lastDoneParts({ ...sw, verdict: 'confirmed' }, none), { head: 'Last done', tail: '' });
+  assert.deepEqual(lastDoneParts({ ...sw, verdict: 'expired' }, none), { head: 'Last sent', tail: " · bitcube didn't show it in time" });
+  // the status's own lists still come first (the verdict reaches the history within a few seconds)
+  assert.deepEqual(lastDoneParts(sw, { ...none, confirmed: [{ id: 'ax.1' }] }), { head: 'Last done', tail: '' });
+  // no verdict known (aged out of the status, a server restart before it was kept, an older history line): never "done"
+  for (const a of [sw, { ...sw, applying_id: undefined }, { action: 'rebuild', body: { file: YEAR }, ok: true, applying_id: 'ax.4' },
+                   { action: 'bootfile', body: { file: YEAR }, ok: true, applying_id: 'ax.5' }, { action: 'calibrate', body: { action: 'start' }, ok: true, applying_id: 'ax.6' },
+                   { action: 'calibrate', body: { action: 'start', dry_run: true }, ok: true, applying_id: 'ax.7' }]) {
+    assert.equal(lastDoneParts(a, none).head, 'Last sent', JSON.stringify(a));
+  }
+  // a change whose own answer was the change is done; a stop is done; a failure is tried
+  assert.equal(lastDoneParts({ action: 'ropes', body: { dark: true }, ok: true, applying_id: 'ax.8' }, none).head, 'Last done');
+  assert.equal(lastDoneParts({ action: 'calibrate', body: { action: 'cancel' }, ok: true }, none).head, 'Last done');
+  assert.equal(lastDoneParts({ action: 'check', body: {}, ok: true }, none).head, 'Last done');
+  assert.equal(lastDoneParts({ ...sw, ok: false, applying_id: undefined, note: 'bitcube did not answer' }, none).head, 'Last tried');
+});
