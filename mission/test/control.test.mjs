@@ -91,6 +91,8 @@ test('the control socket: 0600 in the state folder, the same controls and locks 
   assert.equal(swDone.code, 0);
   const during = await mc(socket, 'status');
   assert.deepEqual(during.json.applying.map((x) => [x.id, x.action, x.phase, x.source]), [[swDone.json.applying_id, 'switch', 'confirming', 'studio chat']], 'the entry by the id its answer named');
+  assert.match(swDone.json.request_id, /^mc[a-z0-9]+$/, 'mc.mjs prints the request id it sent');
+  assert.equal(during.json.applying[0].request_id, swDone.json.request_id, 'and the entry carries it: a lost answer is still found (R8 #2, #30)');
   assert.match(during.json.blocked.ropes, /^wait: the switch to the live river is being applied/);
   for (let i = 0; i < 150 && (await status()).applying.length; i++) await sleep(20);
   a = await lastAction();
@@ -112,6 +114,7 @@ test('the control socket: 0600 in the state folder, the same controls and locks 
   const stop = await mc(socket, 'calibrate', '{"action":"cancel"}');
   assert.deepEqual([stop.code, stop.json.ok, stop.json.cancelled], [0, true, true]);
   assert.equal((await lastAction()).source, 'studio chat', 'recorded as the chat\'s');
+  assert.equal((await lastAction()).words, 'Stopped the calibration from the studio chat', 'Recent and Last done say the chat stopped it (R8 #36: verified)');
 
   // the CLI's own refusals: unknown action, a body that is not a JSON object
   assert.equal((await mc(socket, 'shell', '{}')).code, 2);

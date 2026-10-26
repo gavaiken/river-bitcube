@@ -5,15 +5,22 @@
 // it, and only it, for every change; reading and looking over SSH stay as they are.
 //
 //   node mission/bin/mc.mjs status                          what mission control sees now: the verdict, what is being
-//                                                           applied, a calibration, the show file, what is blocked and why
+//                                                           applied (with each entry's id), a calibration, the show file,
+//                                                           what is blocked and why, and the server's verdicts: confirmed,
+//                                                           expired and verdicts name the applying_id of each change that
+//                                                           ended (done, or not shown in time: R8 #30)
 //   node mission/bin/mc.mjs <action> ['<json body>']        one control, the body as a page sends it:
 //     ropes '{"dark":true}'   hub75 '{"brightness":0.8}'   switch '{"file":"river-local-oct-22-seasons.toe"}'
 //     bootfile '{"file":"river-online-oct-23.toe"}'   rebuild '{"file":"river-local-oct-22-seasons.toe"}'
 //     lightsroute '{"route":"router"}'   mode '{"mode":"manual"}'   target '{"season":"summer","intensity":0.7}'
 //     rules '{"rules":{"cycle_seconds":240}}'   rules-reset   check   calibrate '{"action":"start"}'   calibrate '{"action":"cancel"}'
 //
-// Prints mission control's JSON answer. Exit 0: done (ok); 1: refused, failed or may not have happened (the answer says which:
-// a 409 "wait: …" means try again when that is done; maybe: true means look at status before trying again); 2: a usage error,
+// Prints mission control's JSON answer, with the request_id it sent (its own id for this request: status names the entry by it
+// too, so a change whose answer was lost can still be found). A change that waits for bitcube's reading (a switch, a rebuild, a
+// boot-file or lighting port change, a calibration start) is done only when status's confirmed (or verdicts) names its
+// applying_id; expired means bitcube didn't show it in time. Exit 0: answered OK (ok); 1: refused, failed or may not have
+// happened (the answer says which: a 409 "wait: …" means try again when that is done; maybe: true means look at status before
+// trying again); 2: a usage error,
 // or mission control isn't answering on its socket. The socket: MISSION_CONTROL_SOCKET (the server sets it for the agent), else
 // $MISSION_STATE_DIR/mc.sock, else ~/mission-state/mc.sock.
 import { request } from 'node:http';
@@ -29,7 +36,8 @@ const socketPath = (env) => env.MISSION_CONTROL_SOCKET || join(env.MISSION_STATE
 const USAGE = `usage: node mission/bin/mc.mjs status
        node mission/bin/mc.mjs <action> ['<json body>']     actions: ${ACTIONS.join(', ')}
 Run status first; when something is being applied or a calibration runs, wait for it (or say so) instead of retrying.
-A calibration is stopped on the Lights page, by a person: the chat can't stop one.`;
+A change is done when status's confirmed (or verdicts) names its applying_id; expired: bitcube didn't show it in time.
+Stop a calibration with: calibrate '{"action":"cancel"}' (recorded as the studio chat's).`;
 
 /** One request over the socket -> { status, body } (body: the parsed JSON, or { ok: false, error } in words). */
 export function call(socket, method, path, body, limitS) {
@@ -70,9 +78,11 @@ export async function main(argv, env = process.env) {
     try { body = JSON.parse(json); } catch { return { code: 2, out: `the body is not JSON: ${json}\n${USAGE}` }; }
     if (!body || typeof body !== 'object' || Array.isArray(body)) return { code: 2, out: `the body must be a JSON object, like '{"dark":true}'\n${USAGE}` };
   }
-  const r = await call(socket, 'POST', `/control/${cmd}`, body, LIMIT_S[cmd] ?? 75);
+  // this request's own id: the entry carries it, so a change whose answer is lost is still found in status (R8 #2, #30)
+  const requestId = `mc${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const r = await call(socket, 'POST', `/control/${cmd}`, { ...body, request_id: requestId }, LIMIT_S[cmd] ?? 75);
   if (r.unreachable) return { code: 2, out: JSON.stringify(r.body, null, 2) };
-  return { code: r.status === 200 && r.body?.ok !== false ? 0 : 1, out: JSON.stringify({ status: r.status || null, ...r.body }, null, 2) };
+  return { code: r.status === 200 && r.body?.ok !== false ? 0 : 1, out: JSON.stringify({ status: r.status || null, request_id: requestId, ...r.body }, null, 2) };
 }
 
 const runAsScript = (() => { try { return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; } })();
