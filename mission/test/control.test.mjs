@@ -90,10 +90,16 @@ test('the control socket: 0600 in the state folder, the same controls and locks 
   const swDone = await sw;
   assert.equal(swDone.code, 0);
   const during = await mc(socket, 'status');
-  assert.deepEqual(during.json.applying.map((x) => [x.id, x.action, x.phase, x.source]), [[swDone.json.applying_id, 'switch', 'confirming', 'studio chat']], 'the entry by the id its answer named');
+  // still confirming while the fixture's TouchDesigner restarts (MISSION_FIXTURE_APPLY_S), or, on a busy machine, already
+  // confirmed by the time the agent looks (CR8 #9): either way the agent finds its entry by the id its answer named
+  const id = swDone.json.applying_id, held = during.json.applying.find((x) => x.id === id), done = during.json.confirmed.find((x) => x.id === id);
+  assert.ok(held || done, 'the entry by the id its answer named');
+  assert.deepEqual(during.json.applying.filter((x) => x.id !== id), [], 'and nothing else in flight');
+  const mine = held ?? done;
+  assert.deepEqual([mine.action, mine.source, held ? held.phase : 'confirmed'], ['switch', 'studio chat', held ? 'confirming' : 'confirmed']);
   assert.match(swDone.json.request_id, /^mc[a-z0-9]+$/, 'mc.mjs prints the request id it sent');
-  assert.equal(during.json.applying[0].request_id, swDone.json.request_id, 'and the entry carries it: a lost answer is still found (R8 #2, #30)');
-  assert.match(during.json.blocked.ropes, /^wait: the switch to the live river is being applied/);
+  assert.equal(mine.request_id, swDone.json.request_id, 'and the entry carries it: a lost answer is still found (R8 #2, #30)');
+  if (held) assert.match(during.json.blocked.ropes, /^wait: the switch to the live river is being applied/);
   for (let i = 0; i < 150 && (await status()).applying.length; i++) await sleep(20);
   a = await lastAction();
   assert.deepEqual([a.action, a.source, a.words], ['switch', 'studio chat', 'Switched TouchDesigner to the live river from the studio chat']);
