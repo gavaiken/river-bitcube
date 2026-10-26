@@ -69,6 +69,17 @@ def test_calibrate_start_says_whether_it_launched_the_job():
     assert '-ErrorAction Stop' in block[launch:block.index('} catch {', launch)]
 
 
+def test_calibrate_start_launches_through_a_scheduled_task_by_default():
+    # 26 Oct: a Start-Process child died with the SSH session 0.1 s into every run ("its process is gone"). Mission control
+    # calls this over SSH, so the default launch must be the scheduled task; Start-Process only on an explicit -Detached.
+    block = start_block()
+    launch = block[block.index('try {'):block.index('} catch {', block.index('try {'))]
+    first = launch.split('\n        } else {')[0]
+    assert 'if (-not $Detached) {' in first and 'Start-ScheduledTask' in first, 'the default branch is the scheduled task'
+    assert 'Start-Process' not in first
+    assert 'if (-not $Detached) { Unregister-ScheduledTask' in block
+
+
 def test_calibrate_start_answers_started_with_the_pid_and_its_clock_and_pending_before_the_first_write():
     block = start_block()
     reported, waiting = block.split('} else {\n        # Launched (Start-Process gave a pid), but no first write yet')

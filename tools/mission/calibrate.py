@@ -212,7 +212,8 @@ class Job:
         self.repo = Path(repo)
         self.max_drift = max_drift
         self.scripts = Path(scripts) if scripts else self.repo / 'tools' / 'pixelmap'
-        self.python = python or sys.executable
+        # launched windowless (pythonw.exe, calibrate.ps1's scheduled task): its children run on python.exe, CREATE_NO_WINDOW
+        self.python = python or re.sub(r'pythonw\.exe$', 'python.exe', sys.executable, flags=re.IGNORECASE)
         self.bridge, self.cam, self.brightness, self.settle = bridge, cam, brightness, settle
         self.dry_run, self.dry_wait, self.decode_only, self.poll, self.now = dry_run, dry_wait, decode_only, poll, now
         state_dir = Path(state_dir)

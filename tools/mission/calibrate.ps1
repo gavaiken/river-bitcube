@@ -1,22 +1,23 @@
 # Mission control's calibration job on bitcube (tools/mission/calibrate.py). Prints ONE line of JSON. From the mini:
 #   ssh bitcube powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\user\River\river-bitcube\tools\mission\calibrate.ps1
-#       -Action start [-DryRun] [-DecodeOnly pixelmap-YYYYMMDD-HHMMSS] [-Task]    launch the job detached; returns at once
+#       -Action start [-DryRun] [-DecodeOnly pixelmap-YYYYMMDD-HHMMSS] [-Detached] launch the job; returns at once
 #       -Action status                                                            calibration.json, or {"running": false, "none": true}
 #       -Action cancel                                                            stop the job; the ropes are put back
 # start: {ok, started: true, running, pid, requested, log, calibration} once the job is launched and has written its first
 # state (started is true whenever the job was launched; requested is this script's clock as it launched it, bitcube's, so the
 # run's own progress file has started >= requested - 1). A refusal before anything was launched: {ok: false, started: false,
-# error}. Launched, but no first write within 6 s (a cold Python, the -Task path): {ok: false, maybe: true, started: true, pid,
+# error}. Launched, but no first write within 6 s (a cold Python, the scheduled task): {ok: false, maybe: true, started: true, pid,
 # requested, error} and no calibration (the file there is the run before): mission control keeps its lock and reads the
 # progress until the run shows up. cancel: {ok, cancelled, forced, calibration}.
-# The job runs with the repo's venv python, hidden, with its own console, so it outlives this SSH session (Start-Process).
-# -Task launches it through a one-off interactive scheduled task instead (as probe.ps1 -Action switch does), the fallback
-# if a detached process turns out to die with the SSH session.
+# The job is launched through a one-off interactive scheduled task (as probe.ps1 -Action switch does), so it outlives
+# this SSH session: Windows OpenSSH kills every process of a session when it closes, Start-Process children included
+# (26 Oct: every run died 0.1 s in, as soon as this script answered). -Task is accepted and changes nothing (older
+# mission controls send it). -Detached uses Start-Process instead, only for running this script from a desktop console.
 # cancel is cooperative: calibration.cancel makes the job stop its child and restore the ropes itself (Stop-Process would
 # skip capture.py's own restore). Only if the job has not stopped after 20 s is it killed, and then "forced": true and
 # "restored": false tell the portal the ropes may still show a pattern (the Ropes control puts them back).
 param([ValidateSet('start', 'status', 'cancel')][string]$Action = 'status', [switch]$DryRun, [string]$DecodeOnly,
-      [switch]$Task, [ValidateSet('gallery', 'river')][string]$Cam = 'gallery')
+      [switch]$Task, [switch]$Detached, [ValidateSet('gallery', 'river')][string]$Cam = 'gallery')
 $ErrorActionPreference = 'Continue'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $river = Split-Path $repo -Parent
@@ -24,6 +25,7 @@ $state = Join-Path $river 'calibration.json'
 $lock = Join-Path $river 'calibration.lock'
 $cancelFile = Join-Path $river 'calibration.cancel'
 $py = Join-Path $repo '.venv\Scripts\python.exe'
+$pyw = Join-Path $repo '.venv\Scripts\pythonw.exe'      # the scheduled task's: no console window on the show's desktop
 $script = Join-Path $PSScriptRoot 'calibrate.py'
 
 function Read-State {
@@ -62,8 +64,8 @@ if ($Action -eq 'start') {
     $t0 = Epoch
     $procId = $null
     try {
-        if ($Task) {
-            $act = New-ScheduledTaskAction -Execute $py -Argument $jobArgs -WorkingDirectory $repo
+        if (-not $Detached) {
+            $act = New-ScheduledTaskAction -Execute $(if (Test-Path $pyw) { $pyw } else { $py }) -Argument $jobArgs -WorkingDirectory $repo
             $prin = New-ScheduledTaskPrincipal -UserId "$env:COMPUTERNAME\$env:USERNAME" -LogonType Interactive
             Register-ScheduledTask -TaskName 'MissionCalibrate' -Action $act -Principal $prin -Force -ErrorAction Stop | Out-Null
             Start-ScheduledTask -TaskName 'MissionCalibrate' -ErrorAction Stop
@@ -78,12 +80,12 @@ if ($Action -eq 'start') {
     # Wait (briefly) for the job's first progress write, so the answer carries its initial state.
     $deadline = (Get-Date).AddSeconds(6)
     do { Start-Sleep -Milliseconds 250; $n = Read-State } while ((Get-Date) -lt $deadline -and -not ($n -and $n.started -ge ($t0 - 1)))
-    if ($Task) { Unregister-ScheduledTask -TaskName 'MissionCalibrate' -Confirm:$false -ErrorAction SilentlyContinue }
+    if (-not $Detached) { Unregister-ScheduledTask -TaskName 'MissionCalibrate' -Confirm:$false -ErrorAction SilentlyContinue }
     if ($n -and $n.started -ge ($t0 - 1)) {
         if (-not $procId) { $procId = $n.pid }
         Out-Json ([ordered]@{ ok = [bool]$n.running -or [bool]$n.ok; started = $true; running = [bool]$n.running; pid = $procId; requested = $t0; log = $log; calibration = $n; error = $(if ($n.reason) { $n.reason } else { $n.error }); raw = $n.error })
     } else {
-        # Launched (Start-Process gave a pid), but no first write yet (a cold venv loading numpy and OpenCV, or the -Task path):
+        # Launched (Start-Process gave a pid), but no first write yet (a cold venv loading numpy and OpenCV, or the scheduled task):
         # it is starting. Not a refusal and not a maybe: this script knows it launched the job. Mission control keeps the
         # starting lock and reads the progress until the run shows up. No calibration here: the file there now is the run before.
         $tail = @(if (Test-Path $log) { Get-Content $log -Tail 5 })
