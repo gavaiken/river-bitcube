@@ -117,7 +117,7 @@ test('the same payload again adds nothing; wording that moves with the clock add
   h.observe(payload('all-good'), T0);
   for (let i = 1; i <= 5; i++) assert.deepEqual(h.observe(payload('all-good'), T0 + i * 5000), [], `poll ${i}`);
   assert.equal(h.summary().count, 20);
-  // the Modal agent's summary says how long ago it ticked; a different wording with the same level is no event
+  // a newer tick of Dave's agent ("Updating on schedule" either way, its clock times in the detail) is no event
   const p = payload('all-good'); p.modal.value.finished_at = '2026-10-23T09:50:00+00:00';
   assert.deepEqual(h.observe(p, T0 + 30_000), []);
   // /api/status extras (studio, fixture) are ignored
@@ -327,7 +327,7 @@ test('describeEvent: one plain sentence for every kind, in glossary words', () =
   assert.equal(describeEvent(item(a, 'bitcube')), 'bitcube is fine: online', 'no age frozen at the time ("up 3 h") beside the feed\'s own');
   assert.equal(describeEvent(item(a, 'touchdesigner')), "TouchDesigner is fine: running the river's year at 60 frames a second");
   assert.equal(describeEvent(item(a, 'seasons')), "The river's year is fine: automatic, spring, flowing");
-  assert.equal(describeEvent(item(a, 'modal agent')), "Dave's agent is fine");
+  assert.equal(describeEvent(item(a, 'modal agent')), "Dave's agent is fine: updating on schedule", 'its summary carries no age that froze ("last updated 3 min ago")');
   assert.equal(describeEvent(show(a, 'file')), "TouchDesigner is showing the river's year");
   assert.equal(describeEvent(show(a, 'mode')), 'The year runs in automatic mode: the clock turns the year, one season a minute');
   assert.equal(describeEvent(show(a, 'season')), 'The season is spring');

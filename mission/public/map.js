@@ -92,12 +92,14 @@ function linkWord(link, it, m) {
       return L === 'ok' ? 'running' : 'see details';
     case 'ropes': {
       const st = m.show.ropes.state;
+      if (st === 'calibrating') return 'calibrating';
       if (st === 'dark') return 'sending black';
       if (st === 'not-reaching') return /frozen|not running|not being driven/i.test(s) ? 'not driven' : /restart|starts/i.test(s) ? 'dark, restarting' : 'not reaching';
       if (L === 'warning') return /slowly|frames a second/i.test(s) ? 'driven slowly' : 'see details';
       return L === 'ok' ? 'sender open' : 'see details';
     }
     case 'hub75 panels':
+      if (m.show.panels.state === 'calibrating') return 'calibrating';
       if (/frozen/i.test(s)) return 'picture frozen';
       if (L === 'down') return 'no sender';
       if (L === 'warning') return /dark|off|brightness 0/i.test(s) ? 'dark' : 'see details';

@@ -12,6 +12,14 @@
 .band .stale-note { font-size: 15px; font-weight: 600; color: var(--unk-text); margin-top: 8px; }
 .band .check-line .btn.link { margin-left: auto; }
 .band .last-done b { font-weight: 700; color: var(--text); }
+.band .check-line .ctl-status { flex: 1 1 100%; color: var(--muted); }
+.band .check-line .ctl-status.done { color: var(--ok-text); }
+.band .check-line .ctl-status.failed { color: var(--down-text); }
+.band .check-line .ctl-status.unconfirmed { color: var(--warn-text); }
+/* another phone's change in flight: quiet, so a greyed control's "Wait: …" has its cause in view */
+.applying-now { display: grid; gap: 4px; margin-top: 8px; }
+.applying-line { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; font-weight: 600; color: var(--muted); line-height: 1.35; }
+.applying-line .spin { width: 14px; height: 14px; margin-top: 2px; }
 
 /* ---- the piece now: season, strip, intensity, tiles, the room ---- */
 .now { padding: 14px var(--gutter) 10px; }
@@ -48,11 +56,22 @@
 /* ---- steer the year ---- */
 details.sub .sub-body { padding-top: 2px; }
 .target-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.target-grid .btn { padding: 8px 4px; font-size: 14px; text-transform: capitalize; min-width: 0; }
-.rules { display: grid; gap: 10px; }
-.rule { display: grid; grid-template-columns: 1fr 112px; gap: 10px; align-items: center; font-size: 14px; }
-.rule input { min-height: 44px; width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; font: inherit; font-size: 16px; background: var(--panel-solid); color: var(--text); }
-.rule .unit { display: block; color: var(--muted); font-size: 14px; }   /* the range, on its own muted line */
+.target-grid .btn { padding: 8px 4px; font-size: 14px; text-transform: capitalize; min-width: 0; overflow-wrap: normal; }
+.now-on { font-size: 14px; color: var(--muted); font-weight: 600; }   /* "now 240 s on bitcube" under a draft */
+.rules { display: grid; gap: 14px; }
+/* a rule: its label and range, then the box with its unit beside it; the error and bitcube's value under, across both */
+.rule { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; font-size: 15px; }
+.rule .rule-l { display: grid; gap: 2px; }
+.rule .rule-l label { font-weight: 600; }
+.rule .range { color: var(--muted); font-size: 14px; }
+.rule .box { display: flex; align-items: center; gap: 6px; }
+.rule input { min-height: 44px; width: 88px; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; font: inherit; font-size: 16px; background: var(--panel-solid); color: var(--text); }
+.rule input:disabled { opacity: 0.6; }
+.rule .u { color: var(--muted); font-size: 15px; font-weight: 600; width: 4.2em; overflow-wrap: normal; }   /* the same width for every unit: the boxes line up */
+.rule.bad input { border: 2px solid var(--down); }
+.rule .err, .rule .now-on { grid-column: 1 / -1; }
+.rule .err { color: var(--down-text); font-size: 14px; font-weight: 700; }
+.rule .err:empty, .rule .now-on:empty { display: none; }
 .ctl .row-btns { margin-top: 0; }
 .ctl .ctl-why { order: -1; }       /* "Not possible now: …" reads above the greyed control */
 .ctl .ctl-h { order: -2; }
@@ -70,6 +89,30 @@ details.sub .sub-body { padding-top: 2px; }
 .dave .lbl { color: var(--muted); font-weight: 600; }
 .fine-names { text-transform: none; }
 details.fine > summary .mk { flex: none; }
+
+/* ---- very narrow (a 390 px phone at 200 % zoom is 195 px): words wrap at spaces, never letter by letter ---- */
+@media (max-width: 300px) {
+  .target-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rule { grid-template-columns: minmax(0, 1fr); }
+  .rule .box { justify-self: start; }
+  .rule .rule-l label, .rule .range, .now-on, .rule .err, .applying-line, .mode, .season-word.muted, .intensity, .now .tile .words { overflow-wrap: break-word; }
+  /* four season names can't fit their quarters at this width: the one now, whole, under its quarter (the rest are the strip's colours) */
+  .strip-labels span { visibility: hidden; min-width: 0; overflow-wrap: normal; word-break: normal; }
+  .strip-labels span.on { visibility: visible; }
+  .season-word { font-size: 26px; }
+  /* a box and its unit side by side, at the unit's own width */
+  .rule .u { width: auto; }
+  .rule input { width: 80px; }
+  /* a stepper: the value on a line of its own, − and + side by side under it, its other buttons on lines of their own */
+  .stepper { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .stepper output { grid-column: 1 / -1; grid-row: 1; min-width: 0; font-size: 18px; overflow-wrap: break-word; }
+  .stepper .btn.step { width: auto; }
+  .stepper > .btn:not(.step) { grid-column: 1 / -1; }
+  /* a row's name keeps its longest word whole ("TouchDesigner"): a size down, and the chevron needs no gap of its own */
+  details.row > summary { gap: 6px; padding-right: 4px; }
+  details.row > summary .name { font-size: 15px; overflow-wrap: break-word; }
+  details.fine > summary .fine-names { display: none; }   /* no room for a sliver of names: the count says it */
+}
 
 /* ---- footer ---- */
 footer.foot .fine-print { margin-top: 4px; }
