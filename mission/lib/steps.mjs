@@ -31,6 +31,8 @@ const PAST = { check: 'checked', run: 'ran', restart: 'restarted', set: 'set', s
 /** Verbs that change something on the installation: only these lines are acting lines (highlighted on the page). */
 const CHANGE = new Set(['set', 'switch', 'restart', 'turn', 'start', 'stop', 'kill', 'rebuild', 'dim', 'raise', 'lower', 'move', 'aim',
   'reboot', 'change', 'reset', 'apply', 'light', 'enable', 'disable', 'put', 'reload', 'cancel', 'calibrate', 'send', 'save']);
+/** Words that are as often things as actions after "and" ("the ropes and light"), so only a first word is taken as a verb. */
+const NOUNISH = new Set(['light', 'note', 'view', 'report', 'count', 'call', 'watch', 'test', 'copy', 'record', 'build', 'search']);
 const RAW_CMD = /[|;&`$<>{}]|^\s*(ssh|scp|powershell|pwsh|python3?|node|git|curl|ffmpeg|ls|dir|cat|type|grep|tail|head|cd|npm|pytest|tasklist|Get-[A-Z]\w+)\b/;
 
 const clip = (s, n) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
@@ -118,7 +120,7 @@ function bashLine(description, command) {
   const [first, verb] = pastTense(plainWords(desc));
   // "Commit and push the plan": every verb of a list in the past tense, not only the first
   const verbs = verb ? [verb] : [];
-  const past = (m, j, w) => (PAST[w] ? (verbs.push(w), `${j}${PAST[w]}`) : m);
+  const past = (m, j, w) => (PAST[w] && !NOUNISH.has(w) ? (verbs.push(w), `${j}${PAST[w]}`) : m);
   const line = first.replace(/\b((?:and|then) )([a-z]+)\b/g, past).replace(/(, )([a-z]+)\b/g, past);
   if (!line || BANNED.test(line)) return fallback;
   return { text: clip(line, TEXT_MAX), acting: verbs.some((v) => CHANGE.has(v)) };

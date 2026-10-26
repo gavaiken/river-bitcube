@@ -16,6 +16,7 @@ test('a Bash step reads as what it did, in the past tense and the glossary words
     ['Check bitcube is online', 'checked bitcube is online'],
     ['Look at old-river.toe', 'looked at an old show file'],
     ['Commit and push the plan', 'committed and pushed the plan'],
+    ['Compare the map and light in the room', 'compared the map and light in the room'],
     ['Read the newest calibration log on bitcube', 'looked at the newest calibration log on bitcube'],
     ['Run python tools/pixelmap/screens.py', 'ran a command on bitcube'],   // the command went to bitcube
   ];
