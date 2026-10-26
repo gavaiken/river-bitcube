@@ -76,7 +76,7 @@ test('only one rebuild, switch or boot-file change at a time: a second answers 4
   let td = { ok: false, error: 'restarting on river-local-oct-22-seasons.toe' };
   const m = new Mission({ probe: async (_h, args) => { if (args) calls.push(args); if (/rebuild/.test(args)) await gate; return { ok: true, td }; }, later: () => {} });
   const first = m.control('rebuild', { file: 'river-local-oct-22-seasons.toe' });
-  await assert.rejects(m.control('rebuild', { file: 'river-local-oct-22-seasons.toe' }), (e) => e.status === 409 && /^wait: a rebuild of the river's year is being applied \(started \d\d:\d\d\)$/.test(e.message));
+  await assert.rejects(m.control('rebuild', { file: 'river-local-oct-22-seasons.toe' }), (e) => e.status === 409 && /^wait: the rebuild of the river's year is being applied \(started \d\d:\d\d\)$/.test(e.message));
   await assert.rejects(m.control('switch', { file: 'river-online-oct-23.toe' }), (e) => e.status === 409);
   await assert.rejects(m.control('ropes', { dark: false }), (e) => e.status === 409, 'a rebuild ends in a restart: nothing touches TouchDesigner meanwhile');
   release();
@@ -185,20 +185,20 @@ test('what blocks what: a boot-file change, a lighting port change, and two phon
   const m = new Mission({ seasonsUrl: 'http://127.0.0.1:9', probe: async (_h, args) => { const a = /-Action (\w+)/.exec(args ?? '')?.[1]; if (a && gates[a]) return gates[a].gate; return { ok: true, td: { ok: true } }; } });
   gates.bootfile = gated();
   const bf = m.control('bootfile', { file: LIVE });
-  assert.deepEqual(m.snapshot().applying.map((e) => [e.label, e.blocks]), [['the boot file change', ['switch', 'rebuild', 'bootfile', 'calibrate']]]);
-  for (const [a, b] of [['switch', { file: LIVE }], ['rebuild', { file: YEAR }], ['bootfile', { file: YEAR }]]) await assert.rejects(m.control(a, b), (e) => e.status === 409 && /^wait: the boot file change is being applied/.test(e.message), a);
+  assert.deepEqual(m.snapshot().applying.map((e) => [e.label, e.blocks]), [['the boot file change to the live river', ['switch', 'rebuild', 'bootfile', 'calibrate']]]);
+  for (const [a, b] of [['switch', { file: LIVE }], ['rebuild', { file: YEAR }], ['bootfile', { file: YEAR }]]) await assert.rejects(m.control(a, b), (e) => e.status === 409 && /^wait: the boot file change to the live river is being applied/.test(e.message), a);
   assert.equal((await m.control('ropes', { dark: false })).ok, true, 'the ropes are not held up by it');
   gates.bootfile.release({ ok: true }); await bf;
   gates.lightsroute = gated();
   const lr = m.control('lightsroute', { route: 'router' });
-  for (const [a, b] of [['ropes', { dark: true }], ['hub75', { brightness: 1 }], ['lightsroute', { route: 'direct' }]]) await assert.rejects(m.control(a, b), (e) => e.status === 409 && /^wait: a lighting port change/.test(e.message), a);
+  for (const [a, b] of [['ropes', { dark: true }], ['hub75', { brightness: 1 }], ['lightsroute', { route: 'direct' }]]) await assert.rejects(m.control(a, b), (e) => e.status === 409 && /^wait: the lighting port change to the spare router port/.test(e.message), a);
   gates.lightsroute.release({ ok: true }); await lr;
   gates.ropes = gated();
   const rp = m.control('ropes', { dark: true });
-  await assert.rejects(m.control('ropes', { dark: false }), (e) => e.status === 409 && /^wait: a ropes change is being applied/.test(e.message));
+  await assert.rejects(m.control('ropes', { dark: false }), (e) => e.status === 409 && /^wait: the ropes change to dark is being applied/.test(e.message));
   gates.hub75 = gated();
   const hb = m.control('hub75', { brightness: 0.4 });
-  assert.deepEqual(m.snapshot().applying.map((e) => [e.action, e.label, e.expect_s]), [['ropes', 'a ropes change', 15], ['hub75', 'a panels change', 15]]);
+  assert.deepEqual(m.snapshot().applying.map((e) => [e.action, e.label, e.expect_s]), [['ropes', 'the ropes change to dark', 15], ['hub75', 'the panels change to 40 %', 15]]);
   gates.ropes.release({ ok: true }); gates.hub75.release({ ok: true }); await rp; await hb;
   // a seasons change that throws (the page didn't answer) frees its lock as surely as one that answers
   await assert.rejects(m.control('mode', { mode: 'manual' }));
@@ -306,7 +306,7 @@ test('code review: the lock holds both ways (a switch waits for a ropes change i
   const m = new Mission({ probe: async (_h, args) => (/-Action ropes/.test(args ?? '') ? g.gate : { ok: true, td: { ok: true, file: YEAR } }) });
   await m.pollProbe();
   const ropes = m.control('ropes', { dark: true });
-  await assert.rejects(m.control('switch', { file: LIVE }), (e) => e.status === 409 && /^wait: a ropes change is being applied/.test(e.message));
+  await assert.rejects(m.control('switch', { file: LIVE }), (e) => e.status === 409 && /^wait: the ropes change to dark is being applied/.test(e.message));
   g.release({ ok: true, td: { ok: true, file: YEAR } }); await ropes;
   const g2 = gated();
   const lights = fakeLights(); lights.calibrate = async () => g2.gate;

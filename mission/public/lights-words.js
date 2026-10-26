@@ -2,7 +2,7 @@
 // buttons can't run, which view the Calibrate block shows, whether the river's year uses a run's map, the run's "last heard"
 // note, the state line's next line, the LED map's provenance words, and where the rope numbers sit on the map. Pure ES
 // module, no DOM: lights.js uses it in the browser and test/lights-words.test.mjs under node --test.
-import { dur, entryWords } from './model.js';
+import { dur, entryWords, entrySaid, untimed, changeLabel } from './model.js';
 
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s ?? '');
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -45,7 +45,7 @@ export function startWhy(m) {
 }
 /** The reasons that stop a dry run too: no contact, bitcube itself, another change being applied, a run already on. A dry run
  *  touches no lights and no camera and runs nothing on TouchDesigner (calibrate.py --dry-run), so those reasons don't. */
-const DRY_STOPS = [/^wait: /, /^a calibration is already running$/, /^this page can't reach mission control$/, /^bitcube is offline$/,
+const DRY_STOPS = [/^wait: /, /^a calibration is already running$/, /^a dry run is already running$/, /^this page can't reach mission control$/, /^bitcube is offline$/,
   /^bitcube hasn't been checked yet$/, /^mission control hasn't checked bitcube for /];
 export function dryWhy(m) {
   if (!m) return NO_CONTACT;
@@ -154,10 +154,8 @@ export function stateLevel({ levels, lost = false, stale = false, change = null 
 export function applyingNow(m, own = []) {
   const ids = Array.isArray(own) ? [] : own?.ids ?? [], actions = Array.isArray(own) ? own : own?.actions ?? [];
   return (m?.show.applying ?? []).filter((a) => !actions.includes(a.action) && !(a.id && ids.includes(a.id))).map((a) => {
-    const line = entryWords(a, a.elapsed_s);
-    const said = a.maybe === true ? `No answer in time for ${a.label}: waiting for bitcube to show whether it happened.`
-      : a.phase === 'confirming' ? `Waiting for bitcube to show ${a.label}.` : `Applying: ${a.label}.`;
-    return { label: a.label, line, said };
+    // said with its source, as Status's band region says it: "Applying: <label>, from the studio chat." (R7 #12)
+    return { label: a.label, line: entryWords(a, a.elapsed_s), said: entrySaid(a) };
   });
 }
 /** The status with its calibration taken from a newer progress read that shows the run ended (p: GET /api/calibration's
@@ -169,12 +167,9 @@ export function calNewer(status, p) {
   if (cur && typeof cur === 'object' && (cur.running !== true || (typeof cur.updated === 'number' && cur.updated >= p.updated))) return status;
   return { ...status, probe: { ...status.probe, value: { ...pv, calibration: p } } };
 }
-/** A text without its ticking times ("for about 40 s more", "for 3 min", "6 min ago"): what a live region may say. */
-export function untimed(text) {
-  return String(text ?? '')
-    .replace(/\s*\b(?:for\s+)?(?:about\s+|over\s+)?\d+(?:[.,]\d+)?\s*(?:s|min|h|days?)\b(?:\s+(?:more|ago|left))?/g, '')
-    .replace(/\s+([.,;:])/g, '$1').replace(/\s{2,}/g, ' ').trim();
-}
+/** A text without its ticking times ("for about 40 s more", "for 3 min", "6 min ago"): what a live region may say (model.js,
+ *  shared with Status's band region). */
+export { untimed };
 /** What the state line's hidden polite region says: its words without a ticking time, and each change in flight by name, so
  *  a screen reader hears it again only when the state changes, never at every poll of a calibration (R6 #8). */
 export function stateLive({ words, lost = false, stale = false, applying = [] }) {
@@ -198,14 +193,15 @@ export function runFine({ started, cam, dry }) {
 }
 /** A finished run's heading: not "Map made" over a line that starts "Map made 23 Oct …" (R6 #24). */
 export const resultHead = (dry) => (dry ? 'Dry run finished' : 'New LED map');
-/** What each Calibrate control is applying, for ui.js control()'s own "Applying: <what>…" line and announcement: the same
- *  words as every other control (and a calibration's start as lib/applying.mjs labels it for the other phones). */
+/** What each Calibrate control is applying, for ui.js control()'s own "Applying: <what>…" line and announcement: the change's
+ *  one name (model.js changeLabel, as lib/applying.mjs labels it for the other phones, R7 #19). Stop is no change in flight
+ *  anyone else sees: it says what it does, "Stopping the calibration…", never "Applying: the stop of …". */
 export const CAL_CTL = {
-  start: { what: 'the start of a calibration' },
-  dry: { what: 'the start of a dry run' },
-  stop: { what: 'the stop of the calibration' },
-  stopDry: { what: 'the stop of the dry run' },
-  rebuild: { what: "a rebuild of the river's year" },
+  start: { what: changeLabel('calibrate', { action: 'start' }) },
+  dry: { what: changeLabel('calibrate', { action: 'start', dry_run: true }) },
+  stop: { what: 'the stop of the calibration', pending: 'Stopping the calibration…' },
+  stopDry: { what: 'the stop of the dry run', pending: 'Stopping the dry run…' },
+  rebuild: { what: changeLabel('rebuild', { file: 'river-local-oct-22-seasons.toe' }) },
 };
 
 // ---- the state line's next line --------------------------------------------------------------------------------

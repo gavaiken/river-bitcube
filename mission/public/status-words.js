@@ -3,7 +3,7 @@
 // file: probe.ps1 writes boot-file.txt for a switch), the tiles' state words, the band's line for a change in flight from
 // another phone, and when the room's still is due again. status.js lays them out. Relative imports: in the browser these are
 // the same /model.js and /app.js every page loads.
-import { seasonPace, FILES, applyingWords, confirmingWords, entryWords, failWords, notSentWords, LONG_CHANGE_S } from './model.js';
+import { seasonPace, FILES, applyingWords, confirmingWords, entryWords, failWords, notSentWords, LONG_CHANGE_S, changeLabel } from './model.js';
 import { plainError } from './app.js';
 
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s ?? '');
@@ -132,6 +132,15 @@ export function failText(fail, e, clock, kept = '') { return failWords(fail, pla
 export const notSentText = (why, clock) => notSentWords(why, clock);
 
 // ---- Last done: from the server's history, and its verdict on that change ------------------------------------------------
+/** What the band's "Last done" line names: the change's one name (model.js changeLabel, the same as its entry on every phone),
+ *  in one form for every action: "The ropes change to dark", "The restart on the river's year", "The stop of the calibration"
+ *  (R7 #19). A restart is told by the label the server recorded (the file it ran then). */
+export function lastDoneWhat(a) {
+  const restart = a?.action === 'switch' && /^the restart on /i.test(String(a?.label ?? ''));
+  return cap(restart ? a.label : changeLabel(a?.action, a?.body ?? {}));
+}
+/** Where a change came from, as every line says it: "from mission control", "from the studio chat" (R7 #19). */
+export const fromWords = (source) => (source === 'studio chat' ? 'from the studio chat' : 'from mission control');
 /** The band's "Last done" line's head and tail for the last action (status.last_action) and the status it came with: "Last sent"
  *  and "waiting for bitcube to show it" while the server is still confirming its entry (status.applying, by applying_id), "didn't
  *  show it in time" when it gave up (status.expired), "Last done" once confirmed or when it is no longer listed; a failure is

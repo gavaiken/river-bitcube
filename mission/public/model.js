@@ -64,9 +64,37 @@ export const APPLY_BLOCKS = {
   ropes: ['ropes'], hub75: ['hub75'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
   calibrate: ['ropes', 'hub75', 'switch', 'lightsroute', 'rebuild', 'calibrate'],   // a calibration's start: what a running one blocks, and a second start
 };
-/** The team's words for a change in flight when the server's entry has no label of its own. */
-export const APPLY_LABEL = { switch: 'a show-file switch', rebuild: "a rebuild of the river's year", bootfile: 'the boot file change', lightsroute: 'a lighting port change',
-  ropes: 'a ropes change', hub75: 'a panels change', mode: 'a mode change', target: 'a target change', rules: 'a rules change', 'rules-reset': 'a rules reset', calibrate: 'a calibration start' };
+/** The team's words for a change in flight when the server's entry has no label of its own (an older server). */
+export const APPLY_LABEL = { switch: 'a show-file switch', rebuild: "the rebuild of the river's year", bootfile: 'the boot file change', lightsroute: 'the lighting port change',
+  ropes: 'the ropes change', hub75: 'the panels change', mode: 'the mode change', target: 'the target change', rules: 'the rules change', 'rules-reset': 'the rules reset', calibrate: 'the start of a calibration' };
+/** One name per change (R7 #19), made here for the server's entries (lib/applying.mjs applyLabel), this phone's own applying
+ *  line, every other phone's band, Last done and the unconfirmed line: a noun phrase that names what it changes to, and reads in
+ *  every frame ("Applying: …", "Wait: … is being applied.", "Waiting for bitcube to show …", "… was sent at 21:04"). `running`:
+ *  the show file TouchDesigner runs now, so a switch to it is the button's "the restart on …". */
+export function changeLabel(action, body = {}, { running = null } = {}) {
+  const b = obj(body) ?? {}, f = typeof b.file === 'string' ? b.file : null, fl = FILES[f]?.label ?? 'a show file';
+  const x = num(typeof b.brightness === 'string' ? Number(b.brightness) : b.brightness);
+  switch (action) {
+    case 'switch': return f && f === running ? `the restart on ${fl}` : `the switch to ${fl}`;
+    case 'rebuild': return `the rebuild of ${fl}`;
+    case 'bootfile': return f ? `the boot file change to ${fl}` : 'the boot file change';
+    case 'lightsroute': return b.route === 'direct' ? "the lighting port change to bitcube's LIGHTS port" : b.route === 'router' ? 'the lighting port change to the spare router port' : 'the lighting port change';
+    case 'ropes': return b.dark === true ? 'the ropes change to dark' : 'the ropes change to the river';   // as planControl: only a real true goes dark
+    case 'hub75': return x != null ? `the panels change to ${Math.round(Math.min(1, Math.max(0, x)) * 100)} %` : 'the panels change';
+    case 'mode': return typeof b.mode === 'string' && b.mode ? `the mode change to ${cap(b.mode)}` : 'the mode change';
+    case 'target': {
+      const i = num(typeof b.intensity === 'string' && b.intensity !== '' ? Number(b.intensity) : b.intensity), w = i != null ? intensityWord(Math.min(1, Math.max(0, i))) : null;
+      const to = [typeof b.season === 'string' ? b.season : null, w].filter(Boolean).join(', ');
+      return to ? `the target change to ${to}` : 'the target change';
+    }
+    case 'rules': { const n = Object.keys(obj(b.rules) ?? {}).length; return n ? `the change of ${n} rule${n === 1 ? '' : 's'}` : 'the rules change'; }
+    case 'rules-reset': return 'the rules reset';
+    case 'calibrate': return b.action === 'cancel' ? 'the stop of the calibration' : b.action === 'status' ? 'a look at the calibration'
+      : b.dry_run === true ? 'the start of a dry run' : 'the start of a calibration';
+    case 'check': return 'the full check of bitcube';
+    default: return 'a change';
+  }
+}
 /** The usual time of each change, in seconds, until bitcube's reading shows it: the server's own table (lib/applying.mjs EXPECT_S,
  *  kept equal by test/model.test.mjs), so a page can say "usually about 1 min" for its own change before status.applying has it. */
 export const EXPECT_S = { switch: 60, rebuild: 150, bootfile: 15, lightsroute: 20, ropes: 15, hub75: 15, mode: 3, target: 3, rules: 3, 'rules-reset': 3, calibrate: 10,
@@ -77,6 +105,9 @@ export const SHORT_CHANGE_S = 10;               // a change with no usual time o
 export const NEARLY_DONE_S = 45;                // a calibration's last 45 s (or last quarter, for a short scripted run) are "nearly done" on every page
 export const CONFIRM_MIN_S = 120;               // a change not shown by bitcube's reading within max(3 × its usual time, this) is "unconfirmed"
 export const LONG_CHANGE_S = 20;                // a change usually longer than this shows its elapsed m:ss and the usual time
+/** Why the lights can't be changed while a calibration that touches them runs: the server's 409 (lib/mission.mjs calBlocked) and
+ *  bitcube's (probe.ps1) in the same words; one sentence per thought (R7 #20). */
+export const CAL_RUNNING = 'a calibration is running. Stop it on the Lights page first';
 /** How long a change may go unconfirmed (and an entry in status.applying stay a lock): 3 × its usual time, at least 2 min. */
 export function confirmLimitS(expectS) { return Math.max(3 * (num(expectS) ?? 0), CONFIRM_MIN_S); }
 export const INTENSITY_WORDS = [[0.1, 'stillness'], [0.3, 'trickle'], [0.6, 'flowing'], [0.8, 'strong'], [Infinity, 'torrent']];
@@ -277,7 +308,7 @@ export function derive(status, nowMs) {
     const label = typeof a.label === 'string' && a.label.trim() ? a.label.trim() : APPLY_LABEL[a.action] ?? 'a change';
     const blocks = Array.isArray(a.blocks) ? a.blocks.filter((b) => typeof b === 'string') : APPLY_BLOCKS[a.action] ?? [a.action];
     return { id: a.id ?? null, action: a.action, label, file: typeof a.file === 'string' ? a.file : null, started_at: started, expect_s, elapsed_s: Math.round(elapsed), blocks,
-             phase: a.phase === 'confirming' ? 'confirming' : 'applying', source: typeof a.source === 'string' ? a.source : null, maybe: a.maybe === true,
+             phase: a.phase === 'confirming' ? 'confirming' : 'applying', source: typeof a.source === 'string' ? a.source : null, maybe: a.maybe === true, dry: a.dry === true,
              words: `${cap(label)} is being applied${started != null ? ` (started ${clock(started)})` : ''}`,
              // its limit runs from the answer once there is one (lib/applying.mjs #prune): a slow rebuild keeps its whole limit
              old: (answered ?? started) != null && (applyNow - (answered ?? started)) / 1000 > confirmLimitS(expect_s) };
@@ -723,7 +754,8 @@ export function derive(status, nowMs) {
 
   // both ways: a change in flight blocks what it names, and an action that would block it waits for it (a switch restarts
   // TouchDesigner, so it waits for a ropes change still in flight), as the server's Applying.conflict does
-  const waitFor = (action) => { const a = applying.find((x) => x.blocks.includes(action) || (APPLY_BLOCKS[action] ?? []).includes(x.action)); return a ? `wait: ${a.label} is being applied` : null; };
+  // A dry run's start touches no lights: nothing waits for it but a second start (its entry's blocks), R7 #20
+  const waitFor = (action) => { const a = applying.find((x) => x.blocks.includes(action) || (!x.dry && (APPLY_BLOCKS[action] ?? []).includes(x.action))); return a ? `wait: ${a.label} is being applied` : null; };
 
   // ---- show: what the piece is doing -----------------------------------------------------------------------------
   // a restart (a switch, a rebuild, TouchDesigner opening a file at boot) has the ropes dark for a minute: never "not getting the
@@ -787,7 +819,8 @@ export function derive(status, nowMs) {
     : kind === 'live' || kind === 'other' ? "the river's year isn't running: switch to it first" : frozen ? "TouchDesigner isn't answering" : tdOff ? "TouchDesigner isn't running" : tdRestarting ? 'TouchDesigner is restarting'
     : se.present ? "the river's year page isn't answering" : "the river's year page hasn't been checked yet";
   const cantUnknown = !pr ? (pb.present ? 'the full check of bitcube failed' : "bitcube's full check hasn't run yet") : null;   // what it would change isn't known
-  const cantCal = calibrating ? 'a calibration is running: stop it on the Lights page first' : null;
+  // a dry run (or a decode of earlier photos) touches no lights, no camera and no TouchDesigner: it locks nothing on them (R7 #20)
+  const cantCal = calibrating && !calDry ? CAL_RUNNING : null;
   const cantOld = pr && pb.stale ? `mission control hasn't heard from bitcube for ${dur(pb.age_s)}` : null;
   // never a second switch while TouchDesigner is opening a file: it kills the half-opened one (another minute dark), and
   // while bitcube's own login is still opening it, a second TouchDesigner could start beside it
@@ -810,7 +843,7 @@ export function derive(status, nowMs) {
     // a rebuild bakes the LED map into the river's year and ends in a switch: the switch's reasons, and only on the river's year
     rebuild: ctl(first('rebuild') ?? cantUnknown ?? tdBusy ?? cantOld ?? cantCal ?? (frozen ? "TouchDesigner isn't answering" : null) ?? notYear),
     // a calibration's start: TouchDesigner answering on a show file, the gallery camera reachable, nothing running already
-    calibrate: ctl(first('calibrate') ?? (calibrating ? 'a calibration is already running' : null) ?? cantTd ?? (tdOk ? null : "TouchDesigner isn't answering")
+    calibrate: ctl(first('calibrate') ?? (calibrating ? (calDry ? 'a dry run is already running' : 'a calibration is already running') : null) ?? cantTd ?? (tdOk ? null : "TouchDesigner isn't answering")
       ?? (galleryDown ? "the gallery camera isn't reachable" : null)),
   };
 
@@ -923,6 +956,30 @@ export function confirmingWords(elapsedS, usual = null) {
 /** Words without their numbers ("for about 40 s more" and "for about 35 s more" read the same): a live region says a headline
  *  again only when this changes, so a ticking time is never re-announced (R6 #8; Status's band and Lights' state line). */
 export const sansTime = (t) => String(t ?? '').replace(/\b\d+:\d{2}\b|\d+(?:[.,]\d+)?[\s\u00a0]*(?:s|min|h|days?)\b/g, '#');
+/** A text without its ticking times ("for about 40 s more", "for 3 min", "6 min ago"): what a live region may say (Status's band
+ *  and Lights' state line, R7 #13). */
+export function untimed(text) {
+  return String(text ?? '')
+    .replace(/\s*\b(?:for\s+)?(?:about\s+|over\s+)?\d+(?:[.,]\d+)?\s*(?:s|min|h|days?)\b(?:\s+(?:more|ago|left))?/g, '')
+    .replace(/\s+([.,;:])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+}
+/** A change in flight from another phone or the studio chat, as a live region says it (no times): "Applying: <label>, from the
+ *  studio chat.", "Waiting for bitcube to show <label>.", "No answer in time for <label>: waiting for bitcube to show whether it
+ *  happened." (R7 #12) */
+export function entrySaid(a) {
+  const label = a?.label ?? 'a change', from = a?.source === 'studio chat' ? ', from the studio chat' : '';
+  if (a?.maybe === true) return `No answer in time for ${label}${from}: waiting for bitcube to show whether it happened.`;
+  return a?.phase === 'confirming' ? `Waiting for bitcube to show ${label}${from}.` : `Applying: ${label}${from}.`;
+}
+/** What Status's hidden band region says: the level and the headline without their times (R7 #13), then each change in flight
+ *  but this phone's own (ownIds: its entries; ownActions: a request still in flight with no id yet) by name and source (R7 #12). */
+export function bandSaid(m, { ownIds = [], ownActions = [] } = {}) {
+  if (!m) return '';
+  const head = `${{ ok: 'OK', warning: 'Attention', down: 'Down', unknown: 'Unknown' }[m.overall.level] ?? 'Unknown'}. ${untimed(m.overall.headline.replace(/\s*\(no answer for [^()]*\)$/, ''))}.`;
+  if (m.overall.cause === 'page') return head;
+  const others = (m.show.applying ?? []).filter((a) => !(a.id && ownIds.includes(a.id)) && !ownActions.includes(a.action));
+  return [head.replace(/\.\.$/, '.'), ...others.map(entrySaid)].join(' ');
+}
 /** What the page's live region says once on entering confirming (never with a time). */
 export const CONFIRMING_SAID = 'Sent; waiting for bitcube to show it';
 /** Another phone's change in flight (a show.applying entry), for the band: "Applying: the switch to the live river · 0:23 · usually
@@ -963,7 +1020,8 @@ export function notSentWords(why, at) {
  *  tail: the last words, where the page that has no verdict points ("Try again, or check Status."). */
 export function failWords(fail, why, at, { kept = '', tail = 'Try again, or see the verdict above.' } = {}) {
   const w = String(why ?? '').replace(/[.\s]+$/, ''), k = kept ? ` ${kept}` : '';
-  if (/^wait: /i.test(w)) return `${fail}: ${w.slice(6)}.${k} Try again when it is done.`;
+  // another change in flight: in the past tense, as a withdrawn confirm says it, so the line stays true once it ends (R7 #21)
+  if (/^wait: /i.test(w)) return `${fail}: ${w.slice(6).replace(/ is being applied\b/, ' was being applied')}.${k} Press again when it is done.`;
   if (/^a calibration is running\b/i.test(w)) return `${fail}: a calibration is running (${at}).${k} Stop it on the Lights page, or try again when it ends.`;
   return `${fail}: ${w} (${at}).${k}${/try again|apply again/i.test(w) ? '' : ` ${tail}`}`;
 }

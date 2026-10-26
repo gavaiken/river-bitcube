@@ -113,11 +113,11 @@ test("a control's status line in each state: applying (m:ss and the usual time w
 
 test('a failure in words: a 409 reads as the server wrote it, a refusal that says "apply again" adds nothing', () => {
   const e409 = Object.assign(new Error('wait: the switch to the live river is being applied (started 21:04)'), { status: 409 });
-  assert.equal(failText('The ropes are unchanged', e409, '21:05'), 'The ropes are unchanged: the switch to the live river is being applied (started 21:04). Try again when it is done.');
+  assert.equal(failText('The ropes are unchanged', e409, '21:05'), 'The ropes are unchanged: the switch to the live river was being applied (started 21:04). Press again when it is done.');
   const e502 = Object.assign(new Error('HTTP 502'), { status: 502 });
   assert.equal(failText('The ropes are unchanged', e502, '21:05'), "The ropes are unchanged: mission control couldn't reach bitcube (21:05). Try again, or see the verdict above.");
   assert.equal(failText('The rules are unchanged', e502, '21:05', 'What you typed is kept.'), "The rules are unchanged: mission control couldn't reach bitcube (21:05). What you typed is kept. Try again, or see the verdict above.");
-  const cal = Object.assign(new Error('a calibration is running: stop it on the Lights page first'), { status: 409 });
+  const cal = Object.assign(new Error('a calibration is running. Stop it on the Lights page first'), { status: 409 });
   assert.equal(failText('The show file is unchanged', cal, '21:14'), 'The show file is unchanged: a calibration is running (21:14). Stop it on the Lights page, or try again when it ends.', 'R6 #14');
   const refused = Object.assign(new Error('"quieter" must be below "busier"'), { status: 400 });
   assert.match(failText('The rules are unchanged', refused, '21:05'), /apply again \(21:05\)\.$/);

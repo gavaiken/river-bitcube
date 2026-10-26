@@ -97,10 +97,10 @@ test('the control socket: 0600 in the state folder, the same controls and locks 
   // while a calibration runs, what it would spoil is refused for the chat as for a phone
   assert.equal((await post('/api/control/calibrate', { action: 'start' }, phone)).status, 200);
   const spoil = await mc(socket, 'ropes', '{"dark":false}');
-  assert.deepEqual([spoil.code, spoil.json.status, spoil.json.error], [1, 409, 'a calibration is running: stop it on the Lights page first']);
+  assert.deepEqual([spoil.code, spoil.json.status, spoil.json.error], [1, 409, 'a calibration is running. Stop it on the Lights page first']);
   const cs = await mc(socket, 'status');
   assert.equal(cs.json.calibration.running, true);
-  assert.equal(cs.json.blocked.switch, 'a calibration is running: stop it on the Lights page first');
+  assert.equal(cs.json.blocked.switch, 'a calibration is running. Stop it on the Lights page first');
   // the chat never stops a teammate's run: a calibration is stopped on the Lights page, by a person (R7 #36); a phone's Stop
   // always gets through
   const stop = await mc(socket, 'calibrate', '{"action":"cancel"}');

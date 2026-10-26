@@ -8,18 +8,21 @@ import { join } from 'node:path';
 import { scrubCreds } from './scrub.mjs';
 import { Applying, applyLabel } from './applying.mjs';
 import { checkedCalibrate, noAnswer } from './lights.mjs';
+import { CAL_RUNNING } from '../public/model.js';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 const PROBE = PS + 'probe.ps1';
 export const CAMERAS = ['gallery', 'river'];
 const SNAP_CACHE_MS = 45_000;
 /** Controls refused while a calibration runs (model.js refuses the same ones on the pages). A rebuild ends in the switch
- *  path (TouchDesigner stopped and restarted), so it spoils a run as surely as a switch. */
+ *  path (TouchDesigner stopped and restarted), so it spoils a run as surely as a switch. A dry run (or a decode of earlier
+ *  photos) touches no lights, camera or TouchDesigner: it refuses none of them (R7 #20). */
 export const CAL_BLOCKED = ['ropes', 'hub75', 'switch', 'lightsroute', 'rebuild'];
+const calDry = (cal) => cal?.dry_run === true || cal?.mode === 'dry-run' || cal?.mode === 'decode-only' || !!cal?.decode_only;
 /** The 409 a control gets while a calibration runs (shared with fixture mode), or null. */
 export function calBlocked(action, cal) {
-  if (!CAL_BLOCKED.includes(action) || cal?.running !== true || cal.stale === true) return null;
-  return Object.assign(new Error('a calibration is running: stop it on the Lights page first'), { status: 409 });
+  if (!CAL_BLOCKED.includes(action) || cal?.running !== true || cal.stale === true || calDry(cal)) return null;
+  return Object.assign(new Error(CAL_RUNNING), { status: 409 });
 }
 // Show files mission control may open: the river's year and the live river. Retired files start with old- (D27) and
 // are never offered, for the boot file or a switch.

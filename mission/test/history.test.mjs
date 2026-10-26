@@ -384,9 +384,9 @@ test('describeEvent: one plain sentence for every kind, in glossary words', () =
   evs = cal({ running: false, stage: 'done', mode: 'full', ok: true }, T0 + 6 * MIN);
   assert.equal(describeEvent(evs[0]), 'The calibration finished');
   evs = cal({ running: true, stage: 'ropes-capture', mode: 'dry-run', ok: null }, T0 + 7 * MIN);
-  assert.equal(describeEvent(evs[0]), 'A dry-run calibration started: photographing the ropes');
+  assert.equal(describeEvent(evs[0]), 'A dry run started: photographing the ropes');
   evs = cal({ running: false, stage: 'ropes-capture', mode: 'dry-run', ok: false, cancelled: true }, T0 + 8 * MIN);
-  assert.equal(describeEvent(evs[0]), 'A dry-run calibration was cancelled');
+  assert.equal(describeEvent(evs[0]), 'A dry run was stopped');
   evs = cal({ running: false, stage: 'hub75-locate', mode: 'full', ok: false, error: 'Traceback (most recent call last): ssh exited 255' }, T0 + 9 * MIN);
   assert.equal(describeEvent(evs[0]), 'The calibration failed');
   assert.equal(evs[0].error, 'Traceback (most recent call last): ssh exited 255', 'the raw error stays on the event for the details');
@@ -407,9 +407,9 @@ test('describeEvent: one plain sentence for every kind, in glossary words', () =
   assert.equal(act('bootfile', { file: 'river-local-oct-22-seasons.toe' }), "Set the boot file to the river's year from mission control");
   assert.equal(act('lightsroute', { route: 'router' }), 'Moved the lighting network to the spare router port from mission control');
   assert.equal(act('lightsroute', { route: 'direct' }), "Moved the lighting network to bitcube's LIGHTS port from mission control");
-  assert.equal(act('calibrate', { action: 'start', dry_run: true }), 'Started a dry-run calibration from mission control');
+  assert.equal(act('calibrate', { action: 'start', dry_run: true }), 'Started a dry run from mission control');
   assert.equal(act('calibrate', { action: 'start' }), 'Started a calibration from mission control');
-  assert.equal(act('calibrate', { action: 'cancel' }), 'Cancelled the calibration from mission control');
+  assert.equal(act('calibrate', { action: 'cancel' }), 'Stopped the calibration from mission control');
   assert.equal(act('hub75', { brightness: 2 }, { ok: false, note: 'brightness is 0 to 1' }), 'Tried to set the panel brightness to 200 % from mission control, but brightness is 0 to 1');
   assert.equal(act('ropes', { dark: true }, { ok: false, note: 'HTTP 502' }), 'Tried to turn the ropes dark from mission control, but the page did not answer');
   assert.equal(act('mode', { mode: 'manual' }, { ok: false, note: 'bitcube took too long to answer' }), "Tried to set the year's mode to manual from mission control, but it took too long");

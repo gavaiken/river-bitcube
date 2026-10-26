@@ -9,9 +9,9 @@ import * as M from '/model.js';
 import { mountShell, poll, tick, watchContact, focusKey, refocus, park, focusShown, drawn, art, fmt, confirm, sheet, api, plainError, noAnswerText, esc, goto, mark, chip, WORD, MARK,
   NAMES_FROM_BITCUBE, sinceAgrees as sinceAgreesWith, splitHeadline, WARN_MS, LOST_MS, announce, whyText, POLL_TIMEOUT_MS } from '/ui.js';
 import { rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows, bootWords, controlLine, failText, notSentText, applyingLine,
-  ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash, lastDoneParts } from '/status-words.js';
+  ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash, lastDoneParts, lastDoneWhat, fromWords } from '/status-words.js';
 
-const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, sansTime, entryVerdict } = M;
+const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, entryVerdict, changeLabel, bandSaid } = M;
 const $ = (sel, root = document) => root.querySelector(sel);
 const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
 // One name per thing (the copy rules); descriptors live on the card, never in the name.
@@ -29,17 +29,6 @@ const LINKS = { bitcube: [["See bitcube's screen (needs Tailscale)", 'vnc://100.
   'modal agent': [["Dave's app", 'https://to-be-a-river--river.modal.run/']] };
 // Short "what they own" for the Call line (the menu's Who to call has the full version).
 const OWNS = { gavin: 'bitcube and the show file', lilian: 'the lights and the rigging', andi: 'the panels', will: 'network and cameras', dave: 'his agent', colin: 'how the piece should look' };
-// What a recorded action reads as on the band's "Last done" line (never a name: the source is a place).
-const ACTION_WORDS = {
-  ropes: (b) => `Ropes → ${b?.dark ? 'Dark' : 'On'}`, hub75: (b) => `Panels → ${b?.brightness != null ? fmt.pct(b.brightness) : 'set'}`,
-  switch: (b) => `Switch to ${FILES[b?.file]?.label ?? b?.file ?? 'a show file'}`, mode: (b) => `Mode → ${cap(b?.mode ?? '')}`,
-  target: (b) => `Target → ${b?.season ?? ''}${b?.intensity != null ? `, ${M.intensityWord(b.intensity)}` : ''}`,
-  rules: () => 'Rules applied', 'rules-reset': () => 'Rules reset', bootfile: (b) => `Boot file → ${FILES[b?.file]?.label ?? b?.file ?? ''}`,
-  lightsroute: (b) => `Lighting port → ${b?.route === 'direct' ? "bitcube's LIGHTS port" : b?.route === 'router' ? 'the spare router port' : b?.route ?? ''}`,
-  // a start and a rebuild are said as the change itself, so "Last sent: … · waiting for bitcube to show it" reads as well as "Last done"
-  check: () => 'Full check of bitcube', calibrate: (b) => (b?.action === 'start' ? `Start of a ${b?.dry_run ? 'dry run' : 'calibration'}` : `Calibration ${b?.action === 'cancel' ? 'stopped' : 'looked at'}`),
-  rebuild: () => "Rebuild of the river's year with the new LED map",
-};
 
 // ---- state ------------------------------------------------------------------------------------------------------
 let model = null;
@@ -258,11 +247,12 @@ function render() {
   const band = $('#band');
   band.className = `band lv-${m ? m.overall.level : 'unknown'}`;
   setHTML(band, m ? bandHTML(m) : connectingHTML());
-  // screen readers hear the level and the headline when they change, never a ticking time: a headline whose only change is a
-  // number ("for about 40 s more", "restarted 7 min ago") is not said again (R6 #8)
-  const said = m ? `${WORD[m.overall.level]}. ${m.overall.headline.replace(/\s*\(no answer for [^()]*\)$/, '')}.` : (performance.now() - p.startedAt > LOST_MS ? "This page can't reach mission control." : '');
+  // screen readers hear the level and the headline when they change, never a time (R6 #8; not even the first time, R7 #13), and
+  // each change in flight from another phone or the studio chat by name and source (R7 #12): this phone's own is said on its control
+  const own = ownChanges();
+  const said = m ? bandSaid(m, own) : (performance.now() - p.startedAt > LOST_MS ? "This page can't reach mission control." : '');
   const live = $('#band-live');
-  if (live && sansTime(live.textContent) !== sansTime(said)) live.textContent = said;
+  if (live && live.textContent !== said) live.textContent = said;
   $('.card.now').hidden = !m;
   setHTML($('#now-head'), m ? nowHTML(m) : '');
   setHTML($('#now-steer'), m ? steerHTML(m) : '');
@@ -312,12 +302,16 @@ function bandHTML(m) {
 }
 /** Changes in flight from another phone or the studio chat (status.applying): a quiet ticking line each, so a greyed control's
  *  "Wait: …" has its cause in view. This page's own change in flight is said on its control instead. */
+/** This phone's own changes: its entries by id, whatever its control shows now (confirming, or unconfirmed while the server still
+ *  holds it), and a request still in flight, which has no id yet, by its action (R7 #15). */
+function ownChanges() {
+  return { ownIds: Object.values(ctl).map((c) => c.entryId).filter(Boolean),
+           ownActions: Object.entries(ctl).filter(([, c]) => c.s.state === 'applying' && !c.entryId).map(([name]) => name) };
+}
 function applyingHTML(m) {
-  // this phone's own change is said on its control only: never two states for one change (R6 #4). Its entry by id, whatever its
-  // control shows now (confirming, or unconfirmed while the server still holds it); a request still in flight, which has no id
-  // yet, by its action (R7 #15)
-  const ownIds = new Set(Object.values(ctl).map((c) => c.entryId).filter(Boolean));
-  const others = (m.show.applying ?? []).filter((a) => !(a.id && ownIds.has(a.id)) && !(ctl[a.action]?.s.state === 'applying' && !ctl[a.action].entryId));
+  // this phone's own change is said on its control only: never two states for one change (R6 #4)
+  const { ownIds, ownActions } = ownChanges();
+  const others = (m.show.applying ?? []).filter((a) => !(a.id && ownIds.includes(a.id)) && !ownActions.includes(a.action));
   if (!others.length || lostContact(m)) return '';
   return `<div class="applying-now">${others.map((a) => `<div class="applying-line"><span class="spin" aria-hidden="true"></span><span data-el="${a.started_at != null ? Math.max(0, Math.round((p.last.now - a.started_at) / 1000)) : a.elapsed_s}" data-label="${esc(a.label)}" data-exp="${a.expect_s ?? ''}" data-phase="${esc(a.phase ?? 'applying')}" data-source="${esc(a.source ?? '')}"></span></div>`).join('')}</div>`;
 }
@@ -373,11 +367,10 @@ function checkLine(m) {
 function lastDone() {
   const a = p.last?.last_action;
   if (!a || typeof a.t !== 'number') return '';
-  const restart = a.action === 'switch' && /^the restart on /i.test(String(a.label ?? ''));
-  const what = restart ? `Restart on ${FILES[a.body?.file]?.label ?? 'the show file'}` : ACTION_WORDS[a.action]?.(a.body) ?? a.words ?? a.action;
-  const when = fmt.clock(a.t);
+  // the change's one name (the same as its entry on every phone) in one form, and "from the studio chat" as every line says it (R7 #19)
+  const what = lastDoneWhat(a), when = fmt.clock(a.t);
   const { head, tail } = lastDoneParts(a, p.last);
-  return `<div class="last-done">${head}: <b>${esc(what)}</b> · ${esc(when)} · from ${esc(a.source ?? 'mission control')}${esc(tail)}</div>`;
+  return `<div class="last-done">${head}: <b>${esc(nb(what))}</b> · ${esc(when)} · ${esc(fromWords(a.source))}${esc(tail)}</div>`;
 }
 
 // ---- the piece now: season, tiles, the room ----------------------------------------------------------------------------
@@ -885,17 +878,17 @@ document.addEventListener('click', async (e) => {
       const dark = b.dataset.dark === '1';
       runControl('ropes', '/api/control/ropes', { dark }, { btn: b,
         ask: dark ? { title: 'Make the ropes dark?', body: 'The ropes in the gallery go black now and stay black until someone presses On. The panels keep showing the river.', ok: 'Go dark', cancel: 'Keep showing the river' } : null,
-        what: dark ? 'ropes dark' : 'ropes on', done: dark ? 'Now dark: the ropes go black within a few seconds' : 'Now on: the ropes show the river again within a few seconds', fail: 'The ropes are unchanged',
+        what: changeLabel('ropes', { dark }), done: dark ? 'Now dark: the ropes go black within a few seconds' : 'Now on: the ropes show the river again within a few seconds', fail: 'The ropes are unchanged',
         holds: (mm) => mm.show.ropes.state === (dark ? 'dark' : 'river') });
       break;
     }
     case 'hub-step': { const cur = m?.show.panels.brightness == null ? null : Math.round(m.show.panels.brightness * 100); if (cur == null && hubDraft == null) break; hubDraft = clamp((hubDraft ?? cur) + Number(b.dataset.d), 0, 100); render(); announce(`${hubDraft} %`); break; }
-    case 'hub-set': { const v = hubDraft; runControl('hub75', '/api/control/hub75', { brightness: v / 100 }, { btn: b, what: `panels at ${nb(`${v} %`)}`, done: `Now ${nb(`${v} %`)}: it shows on the panels within a few seconds`, fail: 'The panels are unchanged',
+    case 'hub-set': { const v = hubDraft; runControl('hub75', '/api/control/hub75', { brightness: v / 100 }, { btn: b, what: changeLabel('hub75', { brightness: v / 100 }), done: `Now ${nb(`${v} %`)}: it shows on the panels within a few seconds`, fail: 'The panels are unchanged',
       holds: (mm) => mm.show.panels.brightness != null && Math.round(mm.show.panels.brightness * 100) === v, onDone: () => { hubDraft = null; } }); break; }
     case 'hub-off': runControl('hub75', '/api/control/hub75', { brightness: 0 }, { btn: b, ask: { title: 'Switch the panels off?', body: `The panels in the gallery go dark now (brightness ${nb('0 %')}). Set a brightness to bring them back.`, ok: 'Panels off', cancel: 'Keep them on' },
-      what: 'panels off', done: `Now off (${nb('0 %')}); set a brightness to bring them back`, fail: 'The panels are unchanged',
+      what: changeLabel('hub75', { brightness: 0 }), done: `Now off (${nb('0 %')}); set a brightness to bring them back`, fail: 'The panels are unchanged',
       holds: (mm) => mm.show.panels.brightness === 0, onDone: () => { hubDraft = null; } }); break;
-    case 'mode': { const md = b.dataset.mode; runControl('mode', '/api/control/mode', { mode: md }, { btn: b, what: `mode ${cap(md)}`, done: `Now ${cap(md)}${md === 'manual' ? ': taken over by hand' : ''}`, fail: 'The mode is unchanged',
+    case 'mode': { const md = b.dataset.mode; runControl('mode', '/api/control/mode', { mode: md }, { btn: b, what: changeLabel('mode', { mode: md }), done: `Now ${cap(md)}${md === 'manual' ? ': taken over by hand' : ''}`, fail: 'The mode is unchanged',
       noAnswer: 'the lit Mode button and the Season card show the mode bitcube reports', holds: (mm) => mm.show.mode?.id === md }); break; }
     case 'tseason': targetDraft.season = b.dataset.season; render(); break;
     case 'tint': { const t = targetForm(m?.show.target, targetDraft, m?.show.intensity?.value ?? 0.5); targetDraft.intensity = Math.round(clamp(t.intensity + Number(b.dataset.d), 0, 1) * 10) / 10; render(); announce(`${M.intensityWord(targetDraft.intensity)} (${targetDraft.intensity.toFixed(1)})`); break; }
@@ -903,7 +896,7 @@ document.addEventListener('click', async (e) => {
       const t = targetForm(m?.show.target, targetDraft, m?.show.intensity?.value ?? 0.5);
       if (!t.canApply) break;
       const word = M.intensityWord(t.intensity);
-      runControl('target', '/api/control/target', { season: t.season, intensity: t.intensity }, { btn: b, what: `target ${t.season}, ${word}`,
+      runControl('target', '/api/control/target', { season: t.season, intensity: t.intensity }, { btn: b, what: changeLabel('target', { season: t.season, intensity: t.intensity }),
         done: `Now heading for ${t.season}, ${word}: the river travels there by hand`, fail: 'The target is unchanged', kept: 'Your choice is kept.',
         noAnswer: 'the Season card says where bitcube is heading', holds: (mm) => mm.show.target?.season === t.season && Math.abs((mm.show.target?.intensity ?? -1) - t.intensity) < 0.05,
         onDone: () => { targetDraft.season = null; targetDraft.intensity = null; } });
@@ -913,7 +906,7 @@ document.addEventListener('click', async (e) => {
       const f = rulesForm(p.last?.seasons?.value?.rules, rulesDraft);
       if (!f.canApply) break;
       const n = Object.keys(f.changed).length, sent = { ...rulesDraft };
-      runControl('rules', '/api/control/rules', { rules: f.changed }, { btn: b, what: plural(n, 'rule change'), done: `${plural(n, 'rule')} changed; ${n === 1 ? 'it applies' : 'they apply'} from now on`,
+      runControl('rules', '/api/control/rules', { rules: f.changed }, { btn: b, what: changeLabel('rules', { rules: f.changed }), done: `${plural(n, 'rule')} changed; ${n === 1 ? 'it applies' : 'they apply'} from now on`,
         fail: 'The rules are unchanged', kept: 'What you typed is kept.', noAnswer: 'a box whose value bitcube doesn\'t have says "now … on bitcube" under it',
         holds: () => Object.entries(f.changed).every(([k, v]) => Number(p.last?.seasons?.value?.rules?.[k]?.value) === v),
         // only what was sent is cleared: a box typed into meanwhile keeps its draft
@@ -921,7 +914,7 @@ document.addEventListener('click', async (e) => {
       break;
     }
     case 'rules-reset': runControl('rules-reset', '/api/control/rules-reset', {}, { btn: b, ask: { title: 'Reset every rule to its default?', body: 'All the numbers go back to their defaults from now on. The river itself does not move.', ok: 'Reset all', cancel: 'Keep them' },
-      what: 'the rules reset', done: 'Every rule is back at its default, from now on', fail: 'The rules are unchanged', noAnswer: 'the boxes show the values bitcube has', onDone: () => { for (const k of Object.keys(rulesDraft)) delete rulesDraft[k]; } }); break;
+      what: changeLabel('rules-reset'), done: 'Every rule is back at its default, from now on', fail: 'The rules are unchanged', noAnswer: 'the boxes show the values bitcube has', onDone: () => { for (const k of Object.keys(rulesDraft)) delete rulesDraft[k]; } }); break;
     case 'switch': {
       const f = b.dataset.file, w = switchWords(f, m?.show.file?.name, m?.show.boot_file);   // the button's own words
       runControl('switch', '/api/control/switch', { file: f }, { btn: b, ask: () => { const x = switchWords(f, model?.show.file?.name, model?.show.boot_file); return { title: x.title, body: x.body, ok: x.ok, cancel: 'Leave it' }; },
@@ -932,14 +925,14 @@ document.addEventListener('click', async (e) => {
     case 'bootfile': {
       const f = b.dataset.file, label = fileLabel(f);
       runControl('bootfile', '/api/control/bootfile', { file: f }, { btn: b, ask: { title: `Open ${label} at boot?`, body: 'From the next restart of bitcube, TouchDesigner opens this file. What is showing now does not change.', ok: 'Change the boot file', cancel: 'Leave it' },
-        what: `the boot file change to ${label}`, done: `Now ${label} opens at boot, from bitcube's next restart`, fail: 'The boot file is unchanged', serverConfirms: true, holds: (mm) => bootShows(mm, f),
+        what: changeLabel('bootfile', { file: f }), done: `Now ${label} opens at boot, from bitcube's next restart`, fail: 'The boot file is unchanged', serverConfirms: true, holds: (mm) => bootShows(mm, f),
         noAnswer: 'the Now line shows what bitcube reports' });
       break;
     }
     case 'lightsroute': {
       const route = b.dataset.route, where = route === 'direct' ? "bitcube's LIGHTS port" : 'the spare router port';
       runControl('lightsroute', '/api/control/lightsroute', { route }, { btn: b, ask: { title: route === 'direct' ? "Use bitcube's LIGHTS port?" : 'Use the spare router port?', body: 'Moves the lighting network to that port. If the lighting switch is plugged into the other one, all 20 ropes go dark until it is moved back.', ok: 'Change the port', cancel: 'Leave it' },
-        what: 'the lighting port change', done: `Now the lighting network is on ${where}`, fail: 'The port is unchanged', holds: (mm) => mm.show.ropes.route === route });
+        what: changeLabel('lightsroute', { route }), done: `Now the lighting network is on ${where}`, fail: 'The port is unchanged', holds: (mm) => mm.show.ropes.route === route });
       break;
     }
     default: break;

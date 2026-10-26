@@ -14,7 +14,8 @@ TOOLS = pathlib.Path(__file__).resolve().parents[1]
 PROBE = TOOLS / 'mission' / 'probe.ps1'
 CALIBRATE = TOOLS / 'mission' / 'calibrate.ps1'
 MISSION_MJS = TOOLS.parent / 'mission' / 'lib' / 'mission.mjs'
-WORDS = 'a calibration is running: stop it on the Lights page first'
+MODEL_JS = TOOLS.parent / 'mission' / 'public' / 'model.js'     # CAL_RUNNING: mission.mjs's 409 and the pages' reason
+WORDS = 'a calibration is running. Stop it on the Lights page first'
 
 
 def quoted(s):
@@ -27,7 +28,7 @@ def test_probe_refuses_what_a_calibration_blocks_the_same_list_as_mission_contro
     js = re.search(r"export const CAL_BLOCKED = \[([^\]]*)\]", MISSION_MJS.read_text(encoding='utf-8'))
     assert ps and js
     assert quoted(ps.group(1)) == quoted(js.group(1)) == sorted(['ropes', 'hub75', 'switch', 'rebuild', 'lightsroute'])
-    assert WORDS in src and WORDS in MISSION_MJS.read_text(encoding='utf-8'), 'the team words, the same on both sides'
+    assert WORDS in src and WORDS in MODEL_JS.read_text(encoding='utf-8'), 'the team words, the same on both sides'
 
 
 def test_probe_checks_before_anything_acts_and_then_only_reports():
@@ -40,6 +41,8 @@ def test_probe_checks_before_anything_acts_and_then_only_reports():
     # running, from the progress file, and alive (its job's process is there): a stale file never blocks
     assert "Join-Path $river 'calibration.json'" in block
     assert '.running' in block and 'Get-Process -Id ([int]$calRun.pid)' in block
+    # a dry run (or a decode of earlier photos) touches no lights: it refuses nothing (R7 #20)
+    assert '-not $calDry' in block and "$calRun.mode -eq 'dry-run'" in block and '$calRun.dry_run' in block
     # refused: ok false, the words, and the action becomes a plain status report
     assert '$out.ok = $false' in block and f"$out.error = '{WORDS}'" in block
     assert "$Action = 'status'" in block

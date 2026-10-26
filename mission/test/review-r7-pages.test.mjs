@@ -80,10 +80,10 @@ test('R7 #3, #16, #28: Last done says "Last sent … waiting for bitcube to show
 });
 
 test('R7 #14, #15: Lights leaves this page\'s own change out of the state line by its id, whatever its control\'s state', () => {
-  const m = at({ applying: [{ ...RESTART, id: 'ax.8', action: 'rebuild', label: "a rebuild of the river's year" }, { ...RESTART, id: 'ax.9', action: 'ropes', label: 'a ropes change', phase: 'applying' }] });
-  assert.deepEqual(applyingNow(m).map((l) => l.label), ["a rebuild of the river's year", 'a ropes change']);
+  const m = at({ applying: [{ ...RESTART, id: 'ax.8', action: 'rebuild', label: "the rebuild of the river's year" }, { ...RESTART, id: 'ax.9', action: 'ropes', label: 'a ropes change', phase: 'applying' }] });
+  assert.deepEqual(applyingNow(m).map((l) => l.label), ["the rebuild of the river's year", 'a ropes change']);
   assert.deepEqual(applyingNow(m, { ids: ['ax.8'] }).map((l) => l.label), ['a ropes change'], 'its own rebuild, confirming after its control ended');
-  assert.deepEqual(applyingNow(m, { actions: ['ropes'] }).map((l) => l.label), ["a rebuild of the river's year"], 'a request still in flight (no id yet) by its action');
+  assert.deepEqual(applyingNow(m, { actions: ['ropes'] }).map((l) => l.label), ["the rebuild of the river's year"], 'a request still in flight (no id yet) by its action');
   assert.deepEqual(applyingNow(m, ['rebuild']).map((l) => l.label), ['a ropes change'], 'a list of actions as before');
   const said = stateLive({ words: 'The ropes show the river · the panels show the river.', applying: applyingNow(m, { ids: ['ax.8', 'ax.9'] }) });
   assert.doesNotMatch(said, /rebuild|ropes change/);

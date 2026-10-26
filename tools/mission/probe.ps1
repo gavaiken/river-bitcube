@@ -10,7 +10,8 @@
 #                                                                tools/td_save.ps1, then the switch path above (restart on it, ~1 min
 #                                                                dark). Reports rebuilt / saved / switched (booleans) with the status.
 #   ropes, hub75, switch, rebuild and lightsroute are refused while a calibration runs ({ ok: false, error: "a calibration is
-#   running: stop it on the Lights page first", refused: <action> } with the status), whoever runs this script.
+#   running. Stop it on the Lights page first", refused: <action> } with the status), whoever runs this script; a dry run (or a
+#   decode of earlier photos) touches no lights and refuses nothing.
 param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute)
 $ErrorActionPreference = 'Continue'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
@@ -34,7 +35,8 @@ $tdPs1 = Join-Path $repo 'tools\td.ps1'
 # A calibration photographs the ropes and the panels: while one runs (calibration.json says running and its job's process is
 # alive), nothing that changes them, restarts TouchDesigner or moves the lighting port may run, whoever asks (a phone, the
 # studio chat, a hand-run SSH). The same rule as mission control's calBlocked (mission/lib/mission.mjs CAL_BLOCKED). The
-# action is refused and only the status is reported; Stop goes through calibrate.ps1 -Action cancel, never through here.
+# action is refused and only the status is reported; Stop goes through calibrate.ps1 -Action cancel, never through here. A dry
+# run (or a decode of earlier photos) photographs nothing and touches no lights or TouchDesigner: it refuses nothing.
 $CAL_BLOCKED = @('ropes', 'hub75', 'switch', 'rebuild', 'lightsroute')
 if ($CAL_BLOCKED -contains $Action) {
     $calRun = $null
@@ -44,9 +46,10 @@ if ($CAL_BLOCKED -contains $Action) {
             try { $calRun = Get-Content -Raw -LiteralPath $calFile -ErrorAction Stop | ConvertFrom-Json; break } catch { Start-Sleep -Milliseconds 100 }
         }
     }
-    $calAlive = $calRun -and $calRun.running -and ([int]$calRun.pid -gt 0) -and [bool](Get-Process -Id ([int]$calRun.pid) -ErrorAction SilentlyContinue)
+    $calDry = $calRun -and ($calRun.dry_run -or $calRun.decode_only -or $calRun.mode -eq 'dry-run' -or $calRun.mode -eq 'decode-only')
+    $calAlive = $calRun -and $calRun.running -and -not $calDry -and ([int]$calRun.pid -gt 0) -and [bool](Get-Process -Id ([int]$calRun.pid) -ErrorAction SilentlyContinue)
     if ($calAlive) {
-        $out.ok = $false; $out.error = 'a calibration is running: stop it on the Lights page first'; $out.refused = $Action
+        $out.ok = $false; $out.error = 'a calibration is running. Stop it on the Lights page first'; $out.refused = $Action
         $Action = 'status'
     }
 }

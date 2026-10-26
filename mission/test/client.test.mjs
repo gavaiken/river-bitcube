@@ -59,7 +59,7 @@ test('a request that hangs past its limit is given up: no answer, it may or may 
 
 test('plainError never shows raw text, and passes the team words through', () => {
   assert.equal(plainError(new Error('wait: a ropes change is being applied (started 02:58)')), 'wait: a ropes change is being applied (started 02:58)');
-  assert.equal(plainError(Object.assign(new Error('wait: a rebuild of the river\'s year is being applied (started 02:58)'), { status: 409 })), "wait: a rebuild of the river's year is being applied (started 02:58)");
+  assert.equal(plainError(Object.assign(new Error('wait: the rebuild of the river\'s year is being applied (started 02:58)'), { status: 409 })), "wait: the rebuild of the river's year is being applied (started 02:58)");
   assert.equal(plainError(new TypeError("Cannot read properties of null (reading 'x')")), "mission control couldn't do it");
   assert.equal(plainError(Object.assign(new Error('Traceback (most recent call last): probe.ps1'), { status: 500 })), "bitcube couldn't do it");
   assert.equal(plainError(new TypeError('Failed to fetch')), "mission control didn't answer");

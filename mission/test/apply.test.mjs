@@ -52,7 +52,7 @@ test('what blocks what: a ropes change blocks the ropes, and what would block it
   for (const k of ['switch', 'rebuild', 'bootfile', 'calibrate']) assert.equal(m.controls[k].why, 'wait: the boot file change is being applied', k);
   for (const k of ['ropes', 'hub75', 'mode', 'rules']) assert.equal(m.controls[k].possible, true, k);
   m = run([{ id: 'l', action: 'lightsroute', started_at: NOW - 1000, expect_s: 30 }]);
-  for (const k of ['ropes', 'hub75', 'lightsroute', 'calibrate', 'switch', 'rebuild']) assert.equal(m.controls[k].why, 'wait: a lighting port change is being applied', k);
+  for (const k of ['ropes', 'hub75', 'lightsroute', 'calibrate', 'switch', 'rebuild']) assert.equal(m.controls[k].why, 'wait: the lighting port change is being applied', k);
   assert.equal(m.controls.mode.possible, true, 'the year is not touched by the lighting port');
   for (const a of ['switch', 'rebuild']) assert.deepEqual([...APPLY_BLOCKS[a]].sort(), [...EVERY].sort(), a);
   for (const a of ['ropes', 'hub75', 'mode', 'target']) assert.deepEqual(APPLY_BLOCKS[a], [a], a);
@@ -221,7 +221,7 @@ test('R6 #26: a switch or rebuild still in status.applying reads TouchDesigner n
     assert.equal(m.show.panels.state, 'restarting');
   }
   // a rebuild ends in a switch to the river's year: the same, on the river's year
-  const r = afterSwitch({ ok: false, error: 'not running' }, [{ id: 'b', action: 'rebuild', label: "a rebuild of the river's year", file: YEAR, started_at: NOW - 90_000, expect_s: 150 }]);
+  const r = afterSwitch({ ok: false, error: 'not running' }, [{ id: 'b', action: 'rebuild', label: "the rebuild of the river's year", file: YEAR, started_at: NOW - 90_000, expect_s: 150 }]);
   assert.equal(r.overall.headline, "TouchDesigner is restarting on the river's year");
   // the live river: its own label
   const live = afterSwitch({ ok: false, error: 'not running' }, [SWITCH]);
@@ -298,10 +298,10 @@ test('R6 #16 #4: an unconfirmed change names what was sent; a withdrawn confirm 
 });
 
 test('R6 #14: a change refused because a calibration is running says to stop it or wait, never "try again" alone', () => {
-  assert.equal(failWords('The ropes are unchanged', 'a calibration is running: stop it on the Lights page first', '21:14'),
+  assert.equal(failWords('The ropes are unchanged', 'a calibration is running. Stop it on the Lights page first', '21:14'),
     'The ropes are unchanged: a calibration is running (21:14). Stop it on the Lights page, or try again when it ends.');
   assert.equal(failWords('The ropes are unchanged', "wait: the switch to the live river is being applied (started 21:04)", '21:05'),
-    'The ropes are unchanged: the switch to the live river is being applied (started 21:04). Try again when it is done.');
+    'The ropes are unchanged: the switch to the live river was being applied (started 21:04). Press again when it is done.');
   assert.equal(failWords('The ropes are unchanged', "bitcube didn't answer", '21:04'), "The ropes are unchanged: bitcube didn't answer (21:04). Try again, or see the verdict above.");
   assert.equal(failWords('The ropes are unchanged', "bitcube didn't answer", '21:04', { tail: 'Try again, or check Status.' }), "The ropes are unchanged: bitcube didn't answer (21:04). Try again, or check Status.");
   assert.equal(failWords('The rules are unchanged', 'no answer', '21:04', { kept: 'What you typed is kept.' }), 'The rules are unchanged: no answer (21:04). What you typed is kept. Try again, or see the verdict above.');

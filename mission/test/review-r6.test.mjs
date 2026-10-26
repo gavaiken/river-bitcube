@@ -31,7 +31,7 @@ test('a confirming lock is counted from the answer, not the start (a slow rebuil
   t += 100_000;                                  // 500 s after the start, 100 s after the answer
   assert.equal(a.list()[0]?.phase, 'confirming');
   const m = at((st) => ({ ...st, applying: a.list(st.now) }));
-  assert.match(m.controls.switch.why ?? '', /^wait: a rebuild/, 'the pages keep the lock too');
+  assert.match(m.controls.switch.why ?? '', /^wait: the rebuild/, 'the pages keep the lock too');
 });
 
 test('a maybe switch never hides a crash; a switch that answered and a rebuild in progress read as a restart', () => {

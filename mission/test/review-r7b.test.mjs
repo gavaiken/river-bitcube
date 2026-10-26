@@ -137,3 +137,86 @@ test('R7 #18: while a chosen switch, restart or rebuild restarts TouchDesigner, 
   assert.equal(derive(payload({ t, td: { ok: false, error: 'not answering' } }), t).show.ropes.state, 'not-reaching');
   assert.equal(derive(payload({ t }), t).show.restart, null);
 });
+
+test('R7 #19: one name per change, made in one place and the same on every phone, in Last done and in the history', async () => {
+  const { changeLabel } = await import('../public/model.js');
+  const { applyLabel } = await import('../lib/applying.mjs');
+  const { lastDoneWhat } = await import('../public/status-words.js');
+  const { describeEvent } = await import('../lib/history.mjs');
+  const cases = [
+    ['ropes', { dark: true }, 'the ropes change to dark'], ['ropes', { dark: false }, 'the ropes change to the river'],
+    ['hub75', { brightness: 0.9 }, 'the panels change to 90 %'], ['hub75', { brightness: 0 }, 'the panels change to 0 %'],
+    ['mode', { mode: 'manual' }, 'the mode change to Manual'], ['target', { season: 'summer', intensity: 0.7 }, 'the target change to summer, strong'],
+    ['rules', { rules: { cycle_seconds: 300 } }, 'the change of 1 rule'], ['rules', { rules: { a: 1, b: 2 } }, 'the change of 2 rules'], ['rules-reset', {}, 'the rules reset'],
+    ['bootfile', { file: YEAR }, "the boot file change to the river's year"], ['lightsroute', { route: 'router' }, 'the lighting port change to the spare router port'],
+    ['switch', { file: LIVE }, 'the switch to the live river'], ['rebuild', { file: YEAR }, "the rebuild of the river's year"],
+    ['calibrate', { action: 'start' }, 'the start of a calibration'], ['calibrate', { action: 'start', dry_run: true }, 'the start of a dry run'],
+  ];
+  for (const [action, body, want] of cases) {
+    assert.equal(changeLabel(action, body), want, action);
+    assert.equal(applyLabel(action, body), want, `the server's entry: ${action}`);
+  }
+  assert.equal(changeLabel('switch', { file: YEAR }, { running: YEAR }), "the restart on the river's year");
+  // Last done: the same name, one form ("The ropes change to dark"), for every action
+  assert.equal(lastDoneWhat({ action: 'ropes', body: { dark: true } }), 'The ropes change to dark');
+  assert.equal(lastDoneWhat({ action: 'switch', body: { file: YEAR }, label: "the restart on the river's year" }), "The restart on the river's year");
+  assert.equal(lastDoneWhat({ action: 'calibrate', body: { action: 'cancel' } }), 'The stop of the calibration');
+  assert.equal(lastDoneWhat({ action: 'calibrate', body: { action: 'start', dry_run: true } }), 'The start of a dry run');
+  assert.equal(lastDoneWhat({ action: 'check', body: {} }), 'The full check of bitcube');
+  // Recent: a stop is a stop, a dry run is a dry run
+  assert.equal(describeEvent({ kind: 'action', action: 'calibrate', body: { action: 'cancel' }, ok: true, source: 'studio chat' }), 'Stopped the calibration from the studio chat');
+  assert.equal(describeEvent({ kind: 'action', action: 'calibrate', body: { action: 'start', dry_run: true }, ok: true, source: 'mission control' }), 'Started a dry run from mission control');
+});
+
+test('R7 #20: a dry run touches no lights, so it locks nothing on them, on the pages and on the server', async () => {
+  const { derive } = await import('../public/model.js');
+  const { calBlocked } = await import('../lib/mission.mjs');
+  const { Applying } = await import('../lib/applying.mjs');
+  const t = 1_792_749_540_000;
+  const run = (mode) => ({ running: true, stage: 'ropes-capture', mode, dry_run: mode === 'dry-run', started: t / 1000 - 10, updated: t / 1000, elapsed_s: 10, expected_s: 170, read_age_s: 0 });
+  const dry = derive(payload({ t, calibration: run('dry-run') }), t);
+  for (const a of ['ropes', 'hub75', 'switch', 'lightsroute', 'rebuild']) assert.equal(dry.controls[a].why, null, a);
+  assert.equal(dry.controls.calibrate.why, 'a dry run is already running');
+  for (const a of ['ropes', 'hub75', 'switch', 'lightsroute', 'rebuild']) assert.equal(calBlocked(a, run('dry-run')), null, a);
+  // a full run: one sentence per thought
+  const full = derive(payload({ t, calibration: run('full') }), t);
+  assert.equal(full.controls.ropes.why, 'a calibration is running. Stop it on the Lights page first');
+  assert.equal(calBlocked('ropes', run('full')).message, 'a calibration is running. Stop it on the Lights page first');
+  // a dry run's start is no lock on the lights either (its entry blocks only a second start), and nothing waits for it
+  let now = t;
+  const a = new Applying({ now: () => now });
+  let release; const gate = new Promise((r) => { release = r; });
+  const start = a.run('calibrate', { action: 'start', dry_run: true }, () => gate);
+  const e = a.list()[0];
+  assert.deepEqual([e.label, e.blocks, e.dry], ['the start of a dry run', ['calibrate'], true]);
+  for (const x of ['ropes', 'switch', 'rebuild', 'bootfile', 'lightsroute']) assert.equal(a.conflict(x), null, x);
+  assert.notEqual(a.conflict('calibrate'), null);
+  const m = derive({ ...payload({ t }), applying: a.list(t) }, t);
+  for (const x of ['ropes', 'switch', 'bootfile']) assert.equal(m.controls[x].why, null, x);
+  release({ ok: true, started: true }); await start;
+});
+
+test('R7 #21: a refusal for another change in flight is in the past tense, in the same words as a withdrawn confirm', async () => {
+  const { failWords, notSentWords } = await import('../public/model.js');
+  assert.equal(failWords('The panels are unchanged', "wait: the switch to the river's year is being applied (started 02:58)", '03:00'),
+    "The panels are unchanged: the switch to the river's year was being applied (started 02:58). Press again when it is done.");
+  assert.equal(notSentWords("wait: the switch to the river's year is being applied", '22:47'),
+    "Not sent at 22:47: the switch to the river's year was being applied. Press again when it is done.");
+});
+
+test('R7 #12, #13: the hidden band region says the headline without its times, and each change in flight from elsewhere by name and source', async () => {
+  const { derive, bandSaid, entrySaid } = await import('../public/model.js');
+  const t = 1_792_749_540_000;
+  const cal = { running: true, stage: 'ropes-capture', mode: 'full', started: t / 1000 - 10, updated: t / 1000, elapsed_s: 10, expected_s: 170, read_age_s: 0 };
+  const m = derive(payload({ t, calibration: cal }), t);
+  assert.equal(bandSaid(m), 'Attention. Calibrating the lights: the ropes are in patterns.');
+  const boot = { id: 'a.9', action: 'bootfile', label: "the boot file change to the river's year", phase: 'applying', source: 'studio chat', started_at: t - 4000, expect_s: 15, blocks: ['bootfile'] };
+  const m2 = derive({ ...payload({ t }), applying: [boot] }, t);
+  assert.equal(entrySaid(m2.show.applying[0]), "Applying: the boot file change to the river's year, from the studio chat.");
+  const head = `${{ ok: 'OK', warning: 'Attention', unknown: 'Unknown', down: 'Down' }[m2.overall.level]}. ${m2.overall.headline}.`;
+  assert.equal(bandSaid(m2), `${head} Applying: the boot file change to the river's year, from the studio chat.`);
+  // this phone's own change is said on its control only
+  assert.equal(bandSaid(m2, { ownIds: ['a.9'] }), head);
+  assert.equal(entrySaid({ ...m2.show.applying[0], phase: 'confirming', source: 'mission control' }), "Waiting for bitcube to show the boot file change to the river's year.");
+  assert.equal(entrySaid({ ...m2.show.applying[0], maybe: true }), "No answer in time for the boot file change to the river's year, from the studio chat: waiting for bitcube to show whether it happened.");
+});

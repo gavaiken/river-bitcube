@@ -30,7 +30,7 @@
 //                                              maybe? }], the entries that ended confirmed or ran out unconfirmed in the last
 //                                              ENDED_KEEP_MS, so every phone (and the one that sent it) sees the server's verdict
 // Only the actions in BLOCKS are recorded or checked (a calibration only for its start: Stop must always get through).
-import { FILES, TZ, EXPECT_S, APPLY_BLOCKS as BLOCKS, confirmLimitS } from '../public/model.js';
+import { TZ, EXPECT_S, APPLY_BLOCKS as BLOCKS, confirmLimitS, changeLabel, FILES } from '../public/model.js';
 
 /** What an action in flight blocks (mission-ui.md "What blocks what"): one table for the server and the pages, model.js
  *  APPLY_BLOCKS. A boot-file change also keeps a calibration from starting, so the pages grey Calibrate exactly when the server
@@ -55,26 +55,10 @@ export const ENDED_KEEP_MS = 10 * 60_000;
 /** Fields kept on an entry for the server's own use, never served. */
 const INTERNAL = ['t0', 'answered', 'restart', 'sawDown'];
 
-const fileLabel = (f) => FILES[f]?.label ?? 'a show file';
-/** The entry's label, in team words ("the switch to the live river"); `running` is the show file TouchDesigner runs now, so a
- *  switch to that same file reads as the button does ("the restart on the river's year"). */
-export function applyLabel(action, body = {}, { running = null } = {}) {
-  const f = body && typeof body === 'object' ? body.file : null;
-  switch (action) {
-    case 'switch': return f && f === running ? `the restart on ${fileLabel(f)}` : `the switch to ${fileLabel(f)}`;
-    case 'rebuild': return `a rebuild of ${fileLabel(f)}`;
-    case 'bootfile': return 'the boot file change';
-    case 'lightsroute': return 'a lighting port change';
-    case 'ropes': return 'a ropes change';
-    case 'hub75': return 'a panels change';
-    case 'mode': return 'a mode change';
-    case 'target': return 'a target change';
-    case 'rules': return 'a rules change';
-    case 'rules-reset': return 'a rules reset';
-    case 'calibrate': return 'the start of a calibration';
-    default: return 'a change';
-  }
-}
+/** The entry's label, in team words ("the switch to the live river", "the ropes change to dark"): model.js changeLabel, the one
+ *  name every phone, Last done and the unconfirmed line use for it (R7 #19); `running` is the show file TouchDesigner runs now, so
+ *  a switch to that same file reads as the button does ("the restart on the river's year"). */
+export function applyLabel(action, body = {}, { running = null } = {}) { return changeLabel(action, body, { running }); }
 
 const HHMM = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 /** A moment as the team's clock reads it: 24-hour Pacific, "21:04". */
@@ -145,7 +129,7 @@ export class Applying {
   conflict(action) {
     this.#prune();
     const mine = BLOCKS[action] ?? [];
-    for (const e of this.entries.values()) if (e.blocks.includes(action) || mine.includes(e.action)) return e;
+    for (const e of this.entries.values()) if (e.blocks.includes(action) || (!e.dry && mine.includes(e.action))) return e;
     return null;
   }
 
@@ -168,8 +152,11 @@ export class Applying {
     if (c) throw this.waitError(c, clock ? clock() : this.now());
     const id = `${this.prefix}${++this.seq}`;
     const f = FILE_ACTIONS.includes(action) && body && typeof body === 'object' && typeof body.file === 'string' && FILES[body.file] ? body.file : null;
+    // a dry run's start touches no lights, camera or TouchDesigner: it blocks only a second start, and nothing waits for it (R7 #20)
+    const dry = action === 'calibrate' && body?.dry_run === true;
     const entry = { id, action, label: applyLabel(action, body, { running }), ...(f ? { file: f } : {}), source: SOURCES.includes(source) ? source : 'mission control',
-                    phase: 'applying', t0: this.now(), expect_s: EXPECT_S[action], blocks: BLOCKS[action], restart: action === 'switch' && !!f && f === running };
+                    phase: 'applying', t0: this.now(), expect_s: EXPECT_S[action], blocks: dry ? ['calibrate'] : BLOCKS[action], ...(dry ? { dry: true } : {}),
+                    restart: action === 'switch' && !!f && f === running };
     this.entries.set(id, entry);
     if (typeof onConfirmed === 'function') this.hooks.set(id, onConfirmed);
     let r;

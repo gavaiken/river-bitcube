@@ -131,7 +131,7 @@ test('round 6 #20: a step that changes the installation never reads only "worked
   const mc = (cmd) => shown(describeTool({ name: 'Bash', input: { description: 'Turn the ropes dark through mission control', command: cmd } }));
   assert.deepEqual(Object.values(mc(`node mission/bin/mc.mjs ropes '{"dark":true}'`)), ['asked mission control to turn the ropes dark', `node mission/bin/mc.mjs ropes '{"dark":true}'`, true]);
   assert.equal(mc(`node mission/bin/mc.mjs switch '{"file":"river-local-oct-22-seasons.toe"}'`).text, "asked mission control to switch TouchDesigner to the river's year");
-  assert.equal(mc('node mission/bin/mc.mjs calibrate \'{"action":"start","dry_run":true}\'').text, 'asked mission control to start a dry-run calibration');
+  assert.equal(mc('node mission/bin/mc.mjs calibrate \'{"action":"start","dry_run":true}\'').text, 'asked mission control to start a dry run');
   assert.deepEqual([mc('node mission/bin/mc.mjs status').text, mc('node mission/bin/mc.mjs status').acting], ['looked at what mission control shows', false]);
   assert.equal(mc('node mission/bin/mc.mjs check').acting, false);
   // the earlier lines too: none is reworded by the page

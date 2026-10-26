@@ -387,12 +387,12 @@ function showWords(ev) {
 }
 
 function calibrationWords(ev) {
-  const what = ev.mode === 'dry-run' ? 'A dry-run calibration' : ev.mode === 'decode-only' ? 'A calibration from earlier photos' : 'The calibration';
+  const what = ev.mode === 'dry-run' ? 'A dry run' : ev.mode === 'decode-only' ? 'A calibration from earlier photos' : 'The calibration';
   const stage = STAGE[ev.stage] ?? null;
   if (ev.stale) return `${what} stopped answering: its process is gone`;
   if (ev.running && !ev.from?.running) return `${what} started${stage && stage !== 'done' ? `: ${stage}` : ''}`;
   if (ev.running) return `${what} is ${stage ?? 'running'}`;
-  if (ev.cancelled) return `${what} was cancelled`;
+  if (ev.cancelled) return `${what} was stopped`;
   if (ev.ok === false) return `${what} failed`;
   if (ev.from?.running || ev.stage === 'done') return `${what} finished`;
   return `${what} is not running`;
@@ -418,8 +418,9 @@ export function actionPhrase(ev) {
     case 'lightsroute': return ['Moved', 'move', `the lighting network to ${b.route === 'router' ? 'the spare router port' : "bitcube's LIGHTS port"}`];
     case 'check': return ['Ran', 'run', 'the full check of bitcube'];
     case 'rebuild': return ['Rebuilt', 'rebuild', `${fileLabel(b.file)} with the new LED map`];
-    case 'calibrate': return b.action === 'cancel' ? ['Cancelled', 'cancel', 'the calibration'] : b.action === 'status' ? ['Checked', 'check', 'the calibration']
-      : ['Started', 'start', `a ${b.dry_run === true ? 'dry-run ' : ''}calibration${b.decode_only ? ' from earlier photos' : ''}`];   // as planCalibrate
+    // Stop, as the page's button says it; a dry run by its own name (R7 #19, #20)
+    case 'calibrate': return b.action === 'cancel' ? ['Stopped', 'stop', 'the calibration'] : b.action === 'status' ? ['Checked', 'check', 'the calibration']
+      : ['Started', 'start', b.dry_run === true ? 'a dry run' : `a calibration${b.decode_only ? ' from earlier photos' : ''}`];   // as planCalibrate
     default: return ['Used', 'use', `the "${ev.action ?? 'unknown'}" control`];
   }
 }
