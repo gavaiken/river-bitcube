@@ -84,3 +84,8 @@ test('password file: trailing newline ignored, contents never logged', () => {
 test('cookies parse', () => {
   assert.deepEqual(parseCookies('a=1; mc=x%3Dy'), { a: '1', mc: 'x=y' });
 });
+
+test("a cookie another app on the same host name set with a stray % never breaks the login cookie (it was a 500 'URI malformed')", () => {
+  assert.deepEqual(parseCookies('other_app=progress=50%; mc=tok%3Den; x=%E0%A4%A'), { other_app: 'progress=50%', mc: 'tok=en', x: '%E0%A4%A' });
+  assert.deepEqual(parseCookies('=v; ; mc=a'), { mc: 'a' });
+});

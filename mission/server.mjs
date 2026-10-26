@@ -188,6 +188,10 @@ async function body(req, limit = 64_000) {
   try { return JSON.parse(b); } catch { throw Object.assign(new Error('bad JSON'), { status: 400 }); }
 }
 
+/** A request body is a JSON object (or form fields); null, a list, a number or a string is refused before anything reads it. */
+const isObject = (b) => !!b && typeof b === 'object' && !Array.isArray(b);
+const NOT_OBJECT = "mission control didn't accept it: the request must be a JSON object";
+
 function sameOrigin(req) {
   // State-changing requests must come from our own pages (cookie is SameSite=Lax; this is belt and braces).
   const o = req.headers.origin;
@@ -253,6 +257,7 @@ const server = createServer(async (req, res) => {
     if (path === '/login' && req.method === 'POST') {
       if (!sameOrigin(req)) return send(res, 403, { error: 'cross-origin' });
       const b = await body(req);
+      if (!isObject(b)) return send(res, 400, { error: NOT_OBJECT });
       const r = auth.login(client(req), b.password);
       if (!r.ok) {
         await new Promise((ok) => setTimeout(ok, 400));           // every wrong answer costs time
@@ -315,10 +320,15 @@ const server = createServer(async (req, res) => {
     if (req.method === 'POST' && !sameOrigin(req)) return send(res, 403, { error: 'cross-origin' });
     if (path === '/api/chat/send' && req.method === 'POST') {
       const b = await body(req);
+      if (!isObject(b)) return send(res, 400, { error: NOT_OBJECT });
       try { return send(res, 200, { id: studio.send(b.text), status: studio.status() }); }
       catch (e) { return send(res, 400, { error: e.message }); }
     }
-    if (path === '/api/chat/stop' && req.method === 'POST') { const b = await body(req); return send(res, 200, studio.stop({ clear: b.clear === true })); }
+    if (path === '/api/chat/stop' && req.method === 'POST') {
+      const b = await body(req);
+      if (!isObject(b)) return send(res, 400, { error: NOT_OBJECT });
+      return send(res, 200, studio.stop({ clear: b.clear === true }));
+    }
 
     // mission control
     if (path === '/api/status') {
@@ -365,7 +375,7 @@ const server = createServer(async (req, res) => {
       const action = m[1];
       const b = await body(req);
       // a control's body is a JSON object; anything else (null, a list, a number) is refused before it is run or recorded
-      if (!b || typeof b !== 'object' || Array.isArray(b)) return send(res, 400, { error: "mission control didn't accept it: the request must be a JSON object" });
+      if (!isObject(b)) return send(res, 400, { error: NOT_OBJECT });
       try {
         let r;
         if (action === 'calibrate') {

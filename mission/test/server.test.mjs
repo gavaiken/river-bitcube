@@ -275,3 +275,31 @@ test('the v2 routes on the real fixtures: lights, pixelmap, calibration (scripte
   assert.equal((await post('/logout', {}, { cookie: mc, origin: 'https://evil.example' })).status, 403);
   assert.equal((await get('/api/status', { cookie: mc })).status, 200, 'still logged in');
 });
+
+test("a body that isn't a JSON object, or a foreign cookie with a stray %, gets mission control's own words, never JavaScript's", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mission-junk-'));
+  const fixtures = join(dir, 'fixtures'); mkdirSync(fixtures);
+  writeFileSync(join(fixtures, 'all-good.json'), JSON.stringify({ status: {}, cameras: {} }));
+  writeFileSync(join(dir, 'pw'), 'NOT-A-REAL-PW\n');
+  const { p, base } = await startServer({ MISSION_PORT: '0', MISSION_STATE_DIR: join(dir, 'state'), MISSION_PASSWORD_FILE: join(dir, 'pw'),
+                                          MISSION_FIXTURES: fixtures, MISSION_FAKE_AGENT: '1', MISSION_FAKE_AGENT_DELAY_MS: '1' });
+  t.after(() => p.kill());
+  const post = (path, raw, headers = {}) => fetch(base + path, { method: 'POST', body: raw, redirect: 'manual', headers: { 'content-type': 'application/json', ...headers } });
+  for (const junk of ['null', '[1]', '7', '"x"']) {
+    const r = await post('/login', junk);
+    assert.equal(r.status, 400, `login ${junk}`);
+    assert.doesNotMatch((await r.json()).error, /Cannot read|TypeError|properties/);
+  }
+  const login = await post('/login', JSON.stringify({ password: 'NOT-A-REAL-PW' }));
+  const mc = login.headers.get('set-cookie').split(';')[0];
+  for (const path of ['/api/chat/send', '/api/chat/stop']) {
+    for (const junk of ['null', '[1]', '7']) {
+      const r = await post(path, junk, { cookie: mc });
+      assert.equal(r.status, 400, `${path} ${junk}`);
+      assert.doesNotMatch((await r.json()).error, /Cannot read|TypeError|properties/);
+    }
+  }
+  const foreign = `other_app=progress=50%; ${mc}`;
+  assert.equal((await fetch(base + '/api/status', { headers: { cookie: foreign } })).status, 200);
+  assert.equal((await fetch(base + '/status', { headers: { cookie: foreign }, redirect: 'manual' })).status, 200);
+});
