@@ -291,6 +291,10 @@ async function send() {
   } finally { sending = false; if (sendStatus.className.includes('failed')) sendBtn.disabled = !text.value.trim(); }
 }
 sendBtn.addEventListener('click', send);
+// A press of Send or the agent's Stop while the box has focus keeps focus in the box (a pressed button takes focus in Chrome on
+// Android and on a desktop): nothing on the page moves between the finger going down and coming up, so the first tap lands, in
+// landscape, at 200 % zoom and with a keyboard up (R10 #0; the tab bar stays aside while focus is in the composer: chat.css)
+for (const b of [sendBtn, $('stop')]) b.addEventListener('mousedown', (e) => { if (document.activeElement === text && !b.disabled) e.preventDefault(); });
 text.addEventListener('input', () => { autogrow(); if (!sending) sendBtn.disabled = !text.value.trim(); if (sendStatus.className.includes('failed') && text.value.trim()) sendShow('before'); });
 text.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' || e.isComposing) return;

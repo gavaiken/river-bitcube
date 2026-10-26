@@ -69,7 +69,7 @@ details.more .steps { padding: 0 4px 6px; }
    height, --composer-h, is measured by chat.js), as it counts the tab bar */
 html:has(main.chat) { scroll-padding-bottom: calc(var(--composer-h, 160px) + var(--tabbar-h) + env(safe-area-inset-bottom) + 8px); }
 @media (min-width: 900px) { html:has(main.chat) { scroll-padding-bottom: calc(var(--composer-h, 160px) + env(safe-area-inset-bottom) + 8px); } }
-@media (max-height: 640px) and (max-width: 899px) { html:has(.compose textarea:focus) { scroll-padding-bottom: calc(var(--composer-h, 160px) + env(safe-area-inset-bottom) + 8px); } }
+@media (max-height: 640px) and (max-width: 899px) { html:has(.composer:focus-within) { scroll-padding-bottom: calc(var(--composer-h, 160px) + env(safe-area-inset-bottom) + 8px); } }
 @media (max-width: 300px) { html:has(main.chat) { scroll-padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px); } }
 
 /* the composer: fixed above the tab bar, the pinned status bar on top */
@@ -104,11 +104,13 @@ html:has(main.chat) { scroll-padding-bottom: calc(var(--composer-h, 160px) + var
 .compose .btn:disabled { opacity: 0.5; }
 .hint { font-size: 14px; color: var(--muted); }
 
-/* while typing on a phone (landscape, or portrait with the keyboard up), the tab bar steps aside so the thread keeps its room */
+/* while typing on a phone (landscape, or portrait with the keyboard up), the tab bar steps aside so the thread keeps its room; it stays
+   aside while focus is anywhere in the composer (Send, Stop), so a press that moves focus from the box never moves the button out
+   from under the finger mid-tap (R10 #0) */
 @media (max-height: 640px) and (max-width: 899px) {
-  body:has(.compose textarea:focus) nav.tabs { display: none; }
-  body:has(.compose textarea:focus) .composer { bottom: 0; padding-bottom: env(safe-area-inset-bottom); }
-  body:has(.compose textarea:focus) main.chat { padding-bottom: calc(var(--composer-h) + env(safe-area-inset-bottom) + 12px); }
+  body:has(.composer:focus-within) nav.tabs { display: none; }
+  body:has(.composer:focus-within) .composer { bottom: 0; padding-bottom: env(safe-area-inset-bottom); }
+  body:has(.composer:focus-within) main.chat { padding-bottom: calc(var(--composer-h) + env(safe-area-inset-bottom) + 12px); }
 }
 /* very short screens (a landscape phone, or 200 % zoom): the box stays at three lines at most */
 @media (max-height: 500px) { .compose textarea { max-height: 96px; } }
@@ -117,9 +119,9 @@ html:has(main.chat) { scroll-padding-bottom: calc(var(--composer-h, 160px) + var
    composer stays fixed, so Stop and the working state stay in reach while reading up the thread */
 @media (max-width: 300px) {
   .composer { position: static; border-top: 1px solid var(--line); }
-  main.chat, body:has(.compose textarea:focus) main.chat { padding-bottom: 12px; }
+  main.chat, body:has(.composer:focus-within) main.chat { padding-bottom: 12px; }
   body { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
-  body:has(.compose textarea:focus) { padding-bottom: env(safe-area-inset-bottom); }
+  body:has(.composer:focus-within) { padding-bottom: env(safe-area-inset-bottom); }
   .pinned { flex-wrap: nowrap; }
   .pin-text { flex: 1 1 0; }
   .stop-host { flex: none; }
