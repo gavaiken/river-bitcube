@@ -113,7 +113,7 @@ main.map { max-width: 760px; overflow-wrap: break-word; }
 .sh .rows .r .s { grid-column: 2 / 4; font-size: 14px; color: var(--muted); line-height: 1.35; }
 .sh .rows .r.muted-sub .n, .sh .rows .r.muted-sub .w { color: var(--muted); font-weight: 600; }
 .sh .rows .r.lnk-row { background: color-mix(in srgb, var(--accent-soft) 60%, transparent); margin: 0 -8px; padding: 10px 8px; border-radius: 8px; }
-.sh .rows .r .arrow-k { font-size: 14px; color: var(--muted); font-weight: 600; }
+.sh .arrow-k { font-size: 14px; color: var(--muted); font-weight: 600; }
 .sh .addr code { word-break: break-all; }
 .sh .addr .links { margin-top: 2px; }
 
