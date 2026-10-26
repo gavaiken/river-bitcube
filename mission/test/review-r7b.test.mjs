@@ -294,3 +294,14 @@ test('R7 #4, #23: a piece not OK before a restart and still not OK after it star
   const lines = feed(h.events.slice(n)).map((e) => e.words);
   assert.ok(lines.some((w) => /^TouchDesigner still needs attention: running slowly/.test(w)), JSON.stringify(lines));
 });
+
+test('R7 #35 (the step line, not the permissions): a TouchDesigner bridge call that sets a parameter is an acting line that says what it changed', () => {
+  const s = bash(`ssh bitcube powershell -File C:\\x\\tools\\td.ps1 "op('/project1/ropes').par.Source='black'"`, 'Check the ropes');
+  assert.deepEqual([s.text, s.acting], ['changed the ropes', true]);
+  // a bridge read stays a read
+  const r = bash(`ssh bitcube powershell -File C:\\x\\tools\\td.ps1 "op('/project1/ropes').par.Source.eval()"`, 'Check the ropes');
+  assert.deepEqual([r.text, r.acting], ['checked the ropes', false]);
+  // a change command whose description says only "check" says what it changed
+  const k = bash('ssh bitcube "Stop-Process -Name TouchDesigner"', 'Check something');
+  assert.deepEqual([k.text, k.acting], ['changed TouchDesigner', true]);
+});

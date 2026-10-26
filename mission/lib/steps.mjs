@@ -70,7 +70,9 @@ function actingFallback(verb, ...texts) {
   return `${FALLBACK_VERB[verb] ?? 'changed'} ${thing}`;
 }
 /** A command that changes the installation whatever its description says (the page's CHANGE_CMD, and calibrate.ps1). */
-const CHANGE_CMD = /-Action\s+(ropes|hub75|switch|bootfile|lightsroute|rebuild|calibrate|mode|target|rules)\b|\/api\/control\/|Restart-Computer|Stop-Process|Start-Process|taskkill|\bkill\b|schtasks\s+\/(run|end|change)|ptz\.py\s+\w+\s+(?!presets)|td_save|calibrate\.ps1\s+-Action\s+(start|cancel)/i;
+// A TouchDesigner bridge call that assigns a parameter (td.ps1 "op('/project1/ropes').par.Source='black'") changes the show too,
+// though it looks like a read (R7 #35)
+const CHANGE_CMD = /-Action\s+(ropes|hub75|switch|bootfile|lightsroute|rebuild|calibrate|mode|target|rules)\b|\/api\/control\/|Restart-Computer|Stop-Process|Start-Process|taskkill|\bkill\b|schtasks\s+\/(run|end|change)|ptz\.py\s+\w+\s+(?!presets)|td_save|calibrate\.ps1\s+-Action\s+(start|cancel)|td\.ps1\b.*\.par\.\w+(?:\.val)?\s*=(?!=)/i;
 /** node mission/bin/mc.mjs <action> ['<body>']: a change asked of mission control (or its status read). An action can hold
  *  digits (hub75: R7 #22). */
 const MC = /\bmc\.mjs\s+([a-z0-9-]+)(?:\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)"))?/g;
@@ -225,7 +227,8 @@ function bashLine(description, command) {
   // acting: a change verb on something that makes up the installation ("set the ropes dark"), never on a repo file or a folder;
   // or a command that changes it, whatever the description says
   const acting = (verbs.some((v) => CHANGE.has(v)) && ACTS.test(`${line} ${desc}`)) || cmdActs;
-  if (!line || unplain(line)) {
+  // a command that changes the installation under a description that only looks ("Check the ropes") says what it changed
+  if (!line || unplain(line) || (cmdActs && !verbs.some((v) => CHANGE.has(v)))) {
     // a change is never only "ran a command": say what it changed
     return acting ? { text: actingFallback(verbs.find((v) => CHANGE.has(v)) ?? null, desc, command), acting: true } : fallback;
   }
