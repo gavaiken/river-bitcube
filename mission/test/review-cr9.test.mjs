@@ -91,3 +91,24 @@ test("CR9 #14: mysql's -P<port> is no password: only a lower-case -p<pw> is mask
   assert.equal(scrubCreds('mysql -u root -P3306 -pNOT-A-REAL-PW river'), 'mysql -u root -P3306 -p*** river');
   assert.match(src('../../tools/mission/probe.ps1'), /^\$CRED_MYSQL = '[^\n]*\(\?-i:-p\)/m, 'the same case rule on bitcube');
 });
+
+// ---- #5: "pass" is a login only in a login's shape, never in prose ------------------------------------------------------------
+
+test('CR9 #5: prose keeps its "pass"; a pass= in a query or form, --pass, or a JSON "pass" beside a user or login is still masked', async () => {
+  const { scrubCreds } = await import('../lib/scrub.mjs');
+  const F = 'NOT-A-REAL-PW-cr9';
+  for (const line of ['First pass: all 20 ropes answer', 'Second pass: 3 patterns photographed again', 'pass: the ropes are fine', 'one pass = 29 patterns',
+    '{"stage":"ropes-capture","pass":"A","step":12}', "{'pass': 'B', 'of': 29}", '"pass": 2', 'else: pass']) assert.equal(scrubCreds(line), line, line);
+  for (const [line, want] of [
+    [`https://cam/api.cgi?cmd=Snap&user=admin&pass=${F}`, 'https://cam/api.cgi?cmd=Snap&user=admin&pass=***'],
+    [`pass=${F} x`, 'pass=*** x'],
+    [`db_pass=${F} DB_PASS: ${F}`, 'db_pass=*** DB_PASS: ***'],
+    [`openssl enc --pass ${F}`, 'openssl enc --pass ***'],
+    [`{"user":"admin","pass":"${F}"}`, '{"user":"admin","pass":"***"}'],
+    [`{"pass":"${F}","user":"admin"}`, '{"pass":"***","user":"admin"}'],
+    [`{"username": "admin", "pass": "${F}"}`, '{"username": "admin", "pass": "***"}'],
+    [`{'login': 'admin', 'pass': '${F}'}`, "{'login': 'admin', 'pass': '***'}"],
+    [`{\\"user\\":\\"admin\\",\\"pass\\":\\"${F}\\"}`, '{\\"user\\":\\"admin\\",\\"pass\\":\\"***\\"}'],
+    [`{"user":"admin","pass":"ab\\"${F}"}`, '{"user":"admin","pass":"***"}'],
+  ]) assert.equal(scrubCreds(line), want, line);
+});

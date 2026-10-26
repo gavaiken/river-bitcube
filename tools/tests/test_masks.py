@@ -143,6 +143,10 @@ PROBE_CASES = CASES + [
     ('{"ssid":"gray-river","key":"hunter2"}', '{"ssid":"gray-river","key":"***"}'),
     (f'token sk-ant-oat01-{FAKE}', 'token sk-ant-***'),
     ('op("x").bypass = True; sort key=name', 'op("x").bypass = True; sort key=name'),
+    # CR9 #5: prose keeps its pass; a JSON pass beside a user or login is still masked, in either order
+    ('First pass: all 20 ropes answer; one pass = 29 patterns', 'First pass: all 20 ropes answer; one pass = 29 patterns'),
+    ('{"stage":"ropes-capture","pass":"A"}', '{"stage":"ropes-capture","pass":"A"}'),
+    ('{"pass":"hunter2","user":"admin"}', '{"pass":"***","user":"admin"}'),
     # CR9 #14: mysql's port is -P, its password -p: only the lower case is masked (case-sensitive inside -replace)
     ('mysql -h db -P3306 -u root -phunter2 river', 'mysql -h db -P3306 -u root -p*** river'),
     ('mysqldump -P3306 river', 'mysqldump -P3306 river'),

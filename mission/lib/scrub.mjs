@@ -22,8 +22,15 @@ const CREDS = String.raw`([a-z][a-z0-9+.-]*:\/\/)[^\s/?#"<>]*@`;
 /** A password-like key: password, passwd, pwd, passphrase, token, secret, api_key (apikey, api-key), also with a prefix
  *  (cam_password, CLAUDE_CODE_OAUTH_TOKEN, X-Auth-Token, access_token: R8 #38), glued too (PGPASSWORD, MYSQLPWD, accessToken:
  *  CR8 #5); a whole word that ends with one, never one that goes on (input_tokens, max_tokens, tokens_used, passwords, secret_ref).
- *  And pass alone or after a separator (pass=, db_pass, "pass":), and SSHPASS: never bypass, compass or a passage (R9 #37). */
-const NAMES = String.raw`(?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])?pass|sshpass)(?![\w-])`;
+ *  And pass after a separator (db_pass, DB-PASS), and SSHPASS: never bypass, compass or a passage (R9 #37). pass alone only in a
+ *  login's shape (CR9 #5): pass= with nothing between (a query, a form, an environment variable), or a JSON or dict "pass" beside
+ *  a user, username or login key, in either order (plain or escaped quotes); never in prose ("First pass: all 20 ropes answer", a
+ *  calibration's "pass": "A"). --pass is FLAG's. Lookaheads only: probe.ps1's copy runs under Python's re in the tests too. */
+const USERS = String.raw`(?:user(?:name)?|login|usr)`;
+/** A quoted value, only to find where it ends (an escaped quote inside it passes): the pass alternatives' context. */
+const QV = String.raw`\\?["'](?:\\[\s\S]|[^"'\\\r\n])*?\\?["']`;
+const NAMES = String.raw`(?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])pass|sshpass|pass(?==)`
+  + String.raw`|\\?["']${USERS}\\?["']\s*:\s*(?:${QV}|[\w.@-]+)\s*,\s*\\?["']pass(?=\\?["']\s*:)|pass(?=\\?["']\s*:\s*${QV}\s*,\s*\\?["']${USERS}\\?["']))(?![\w-])`;
 /** The key (never part of a longer word: input_tokens, passwords), its own quote (plain or escaped), then : or =. */
 const KEY = String.raw`(${NAMES}(?:\\?["'])?\s*[:=]\s*)`;
 /** The key in JSON text: quoted (plain or escaped: group 2, the quote the masked value gets), then :. */
