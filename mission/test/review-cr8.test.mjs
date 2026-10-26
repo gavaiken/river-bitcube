@@ -207,3 +207,21 @@ test('CR8 #10: whether a maybe holds its lock, and the verdict on a page\'s own 
   assert.match(words, /rebuild: \{ action: 'rebuild',/);
   assert.match(lights, /\.\.\.CAL_CTL\.rebuild/);
 });
+
+// ---- #13: one server clock for every page --------------------------------------------------------------------------------------
+
+test('CR8 #13: Status, Lights and the chat read the server\'s clock from one helper in ui.js; no page carries its own arithmetic', () => {
+  const ui = src('../public/ui.js'), st = src('../public/status.js'), lights = src('../public/lights.js'), chat = src('../public/chat.js');
+  assert.match(ui, /^export function serverClock\(\)/m);
+  assert.match(ui, /^export function serverNow\(\)/m);
+  assert.match(ui, /^export function sclock\(/m);
+  // the arithmetic once, in serverClock (the poll's own elapsed(): a phone that slept never reads an old answer as new)
+  assert.equal((ui.match(/\.now \+ /g) ?? []).length, 1, 'ui.js: one place adds the time since the answer');
+  assert.doesNotMatch(ui, /lastStatus\.j\.now/);
+  assert.doesNotMatch(st, /const (?:serverNow|sclock) =/, 'Status has no clock of its own');
+  assert.match(st, /\bserverNow\b[^;]*\bsclock\b[^;]*\} from '\/ui\.js'|\bsclock\b[^;]*\bserverNow\b[^;]*\} from '\/ui\.js'/);
+  assert.doesNotMatch(lights, /serverNowMs|status\.last\.now \+ status\.elapsed\(\)/, 'Lights neither');
+  assert.doesNotMatch(chat, /p\.last\.now \+ p\.elapsed\(\)|S\.skew/, 'the chat neither: what it hears of the server\'s time goes to the helper');
+  assert.match(chat, /noteServerTime\(/);
+  for (const [name, s] of [['status.js', st], ['lights.js', lights], ['map.js', src('../public/map.js')]]) assert.doesNotMatch(s, /\.last\.now \+ \w+\.elapsed\(\)/, name);
+});

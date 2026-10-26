@@ -7,7 +7,8 @@
 // status-words.js, where node's tests check them.
 import * as M from '/model.js';
 import { mountShell, poll, tick, watchContact, focusKey, refocus, park, focusShown, drawn, art, fmt, confirm, sheet, api, plainError, noAnswerText, esc, goto, mark, chip, WORD, MARK,
-  NAMES_FROM_BITCUBE, sinceAgrees as sinceAgreesWith, splitHeadline, WARN_MS, LOST_MS, announce, setLive, whyText, POLL_TIMEOUT_MS, onScreen, keepInView, placeOf, bringIntoView, closedAround, morphKeeping } from '/ui.js';
+  NAMES_FROM_BITCUBE, sinceAgrees as sinceAgreesWith, splitHeadline, WARN_MS, LOST_MS, announce, setLive, whyText, POLL_TIMEOUT_MS, onScreen, keepInView, placeOf, bringIntoView, closedAround, morphKeeping,
+  serverNow, serverClock, sclock } from '/ui.js';
 import { rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows, bootWords, controlLine, failText, notSentText, applyingLine,
   ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash, lastDoneParts, lastDoneWhat, fromWords } from '/status-words.js';
 
@@ -62,11 +63,7 @@ function cap(s) { return s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice
 const nb = fmt.nb;
 const rid = (id) => 'r-' + id.replace(/\s+/g, '-');
 const elapsedS = () => (p.last ? p.elapsed() / 1000 : 0);
-/** The server's clock now (its last answer carried forward), else the phone's: every time a control line states is the server's,
- *  so it agrees with Last done and a 409's "(started 21:04)" on a phone whose clock is off (R8 #35). */
-const serverNow = () => (p.last ? p.last.now + p.elapsed() : Date.now());
-/** "21:04" on the server's clock. */
-const sclock = (ms = serverNow()) => fmt.clock(ms, serverNow());
+// every time a control line states is on the server's clock (ui.js serverNow, sclock: one clock for every page, R8 #35, CR8 #13)
 const C = (name) => (ctl[name] ??= { s: ctlInit(), text: '' });
 /** A request of this control is in flight or awaiting bitcube's reading: it, its siblings and its inputs are locked. */
 const busy = (name) => !!ctl[name] && ctlView(ctl[name].s).busy;
@@ -292,7 +289,7 @@ function render() {
   keepInView(n, before);
 }
 function renderNow() {
-  model = p.last ? derive(p.last, p.last.now + p.elapsed()) : null;
+  model = p.last ? derive(p.last, serverNow()) : null;
   const m = model;
   const { withdrawn, ended } = settleControls();
   art.setSeason(m?.show.weights ?? null);
@@ -864,7 +861,7 @@ async function runControl(name, path, body, o) {
     if (c.asking !== pr) return;               // withdrawn meanwhile (settleControls): it already says "Not sent"
     c.asking = null;
     // judged again now it is answered: a control that became impossible meanwhile sends nothing
-    model = p.last ? derive(p.last, p.last.now + p.elapsed()) : null;
+    model = p.last ? derive(p.last, serverNow()) : null;
     next = ctlStep(c.s, { type: yes ? 'yes' : 'no', why: whyOf(name), now: Date.now() });
     if (next.notSent) { c.s = next; c.text = notSentText(next.notSent, sclock()); announce(c.text); render(); focusStatus(name); return; }
   }
@@ -872,7 +869,7 @@ async function runControl(name, path, body, o) {
   // applying: the control, its siblings and its inputs locked; focus waits on its status line
   // what was sent, and when on the server's clock, for when the server's verdict can't be known (CR7 #4)
   let sent = null;
-  try { sent = typeof o.sent === 'function' ? { ...o.sent(model), sentAt: p.last ? p.last.now + p.elapsed() : null } : null; } catch { sent = null; }
+  try { sent = typeof o.sent === 'function' ? { ...o.sent(model), sentAt: serverClock() } : null; } catch { sent = null; }
   // the page's own id for this press, sent with it: a page whose answer is lost still finds its entry and verdict by it (R8 #2)
   const requestId = name === 'check' ? null : newRequestId();
   Object.assign(c, { s: next, text: '', o: { holds: o.confirmed, ...o }, result: null, refreshAt: null, judgedWall: null, entryId: null, requestId, saidExpired: false, held: false, sent,

@@ -263,7 +263,7 @@ test('R8 #16, #17, #22, #23, #33, #35: Status wires them: the band line\'s maybe
   assert.match(st, /Maybe restarting on <b>/);
   assert.doesNotMatch(st.replace(/fmt\.clock\(a\.t\)/, ''), /fmt\.clock\(Date\.now\(\)\)/, 'no control line stamped with the phone\'s clock');
   const chat = readFileSync(new URL('../public/chat.js', import.meta.url), 'utf8');
-  assert.match(chat, /Date\.now\(\) \+ \(S\.skew \?\? 0\) - e\.t/, 'the chat counts a request from its start on the server\'s clock');
+  assert.match(chat, /serverNow\(\) - e\.t/, 'the chat counts a request from its start on the server\'s clock (ui.js serverNow, CR8 #13)');
 });
 
 test('every page script parses (a slip in a page file breaks the whole page, and no other test loads it)', async () => {

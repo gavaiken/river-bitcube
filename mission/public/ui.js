@@ -22,8 +22,8 @@
 //   const p = poll('/api/status', { every: 5000,
 //     onData: () => { shell.setAge(0); shell.setStale(null); render(); },
 //     onError: (e, downForMs) => { shell.setStale(downForMs > 30_000 ? 'down' : downForMs > 12_000 ? 'warning' : null); render(); } });
-//   function render() {               // the model judges on the server's clock, carried forward by this phone's monotonic clock
-//     const m = p.last ? derive(p.last, p.last.now + (performance.now() - p.receivedAt)) : null;
+//   function render() {               // the model judges on the server's clock, carried forward since its last answer (serverNow)
+//     const m = p.last ? derive(p.last, serverNow()) : null;
 //     art.setSeason(m?.show.weights ?? null);
 //     …
 //   }
@@ -183,12 +183,27 @@ export function tick(fn) {
 // ---- poll: the last good payload and when it arrived ----------------------------------------------------------
 /** poll(url, { every, onData(payload, receivedAt), onError(err, downForMs) }) → { stop, refresh, last, receivedAt, failedSince }.
  *  `last` is the last good JSON (with `now` filled in when the server sent none), `receivedAt` the performance.now()
- *  it arrived, so a page renders derive(p.last, p.last.now + (performance.now() - p.receivedAt)). 401 → /login. */
+ *  it arrived; a page polling /api/status renders derive(p.last, serverNow()). 401 → /login. */
 export { POLL_TIMEOUT_MS };          // a request that hangs this long counts as a failure (a phone's handover, a lock mid-fetch): app.js
-const lastStatus = { j: null, wall: null };   // the newest /api/status any poll() on this page received, and when (Date.now())
-/** The server's clock now (the newest status answer carried forward), else the phone's: a control's times are the server's, so they
- *  agree with Last done and a 409's "(started 21:04)" on a phone whose clock is off (R8 #35). */
-export function serverNow() { return lastStatus.j?.now != null && lastStatus.wall != null ? lastStatus.j.now + Math.max(0, Date.now() - lastStatus.wall) : Date.now(); }
+const lastStatus = { j: null, wall: null, h: null };   // the newest /api/status any poll() on this page received, when (Date.now()), and its poll
+let skewMs = null;            // the server's clock minus this phone's, as a page last heard it some other way (noteServerTime)
+/** The server's clock now (ms), one helper for every page (Status, Lights, the chat, every control: R8 #35, CR8 #13): the newest
+ *  /api/status answer any poll() on this page received, carried forward by that poll's elapsed() (the larger of the monotonic and
+ *  the wall clock's view, so a phone that slept never reads an old answer as new); before one, this phone's clock moved by what a
+ *  page heard of the server's time (noteServerTime: the chat's history and its stream's pings); else null. */
+export function serverClock() {
+  const h = lastStatus.h;
+  if (h?.last && typeof h.last.now === 'number') return h.last.now + (h.elapsed() ?? 0);
+  return skewMs != null ? Date.now() + skewMs : null;
+}
+/** The server's clock now, else the phone's: a control's times are the server's, so they agree with Last done and a 409's
+ *  "(started 21:04)" on a phone whose clock is off (R8 #35). */
+export function serverNow() { return serverClock() ?? Date.now(); }
+/** "21:04" on the server's clock: a moment on it (default now), as fmt.clock says it against the server's today. */
+export function sclock(ms = serverNow()) { return fmt.clock(ms, serverNow()); }
+/** The server's time as a page heard it outside /api/status (an answer's own `now`, a ping's `t`): serverClock() goes by it until
+ *  a status answer comes. */
+export function noteServerTime(serverMs) { if (typeof serverMs === 'number' && Number.isFinite(serverMs)) skewMs = serverMs - Date.now(); }
 export function poll(url, { every = 5000, onData, onError, timeout = POLL_TIMEOUT_MS } = {}) {
   const h = { last: null, receivedAt: null, receivedWall: null, failedSince: null, startedAt: performance.now(), stop, refresh: () => once(true), elapsed };
   let timer = null, ctrl = null, stopped = false;
@@ -211,7 +226,7 @@ export function poll(url, { every = 5000, onData, onError, timeout = POLL_TIMEOU
       if (mine !== ctrl) return;                            // replaced meanwhile: the newer request reports
       if (typeof j.now !== 'number') j.now = Date.now();
       h.last = j; h.receivedAt = performance.now(); h.receivedWall = Date.now(); h.failedSince = null;
-      if (/^\/api\/status\b/.test(url)) { lastStatus.j = j; lastStatus.wall = h.receivedWall; }
+      if (/^\/api\/status\b/.test(url)) { lastStatus.j = j; lastStatus.wall = h.receivedWall; lastStatus.h = h; }
       onData?.(j, h.receivedAt);
     } catch (e) {
       if (mine !== ctrl) return;
@@ -671,7 +686,7 @@ export function control(target, opts = {}) {
     const was = s.state, idle = !document.activeElement || document.activeElement === document.body;
     const focusHere = host.contains(document.activeElement) || (idle && next.state === 'applying');
     s = next;
-    const clockNow = fmt.clock(serverNow(), serverNow());
+    const clockNow = sclock();
     // a control no longer on the page (its block moved on: the run's view replaced Start) says nothing: the new view speaks
     const announce = (t) => { if (host.isConnected) say(t); };
     if (s.state === 'applying' && was !== 'applying') { text = ''; judgedAt = null; announce(String(applyText ?? o.pending ?? (o.what ? applyingText(o.what) : 'Sending to bitcube…')).replace(/…$/, '')); }
@@ -682,7 +697,7 @@ export function control(target, opts = {}) {
       announce(text);
       try { o.onDone?.(result); } catch (e) { console.warn('onDone', e); }
     } else if (s.state === 'unconfirmed' && was !== 'unconfirmed') {
-      text = words ?? unconfirmedWords(o.what, fmt.clock(sentServer ?? serverNow(), serverNow()), o.unconfirmed ?? 'look at the Now line, or call Gavin');   // names what was sent (R6 #16)
+      text = words ?? unconfirmedWords(o.what, sclock(sentServer ?? serverNow()), o.unconfirmed ?? 'look at the Now line, or call Gavin');   // names what was sent (R6 #16)
       announce(text);
     } else if (s.state === 'failed') { text = words ?? text; announce(text); }
     ticking(s.state === 'applying' || s.state === 'confirming');
@@ -698,12 +713,12 @@ export function control(target, opts = {}) {
     if (s.state === 'applying' && was !== 'applying') bringIntoView(status);
   }
   /** The failure in model.js's words, the same as Status's; this page has no verdict of its own, so it points at Status. */
-  const failText = (e) => failWords(o.fail, plainError(e), fmt.clock(serverNow(), serverNow()), { tail: 'Try again, or check Status.' });
+  const failText = (e) => failWords(o.fail, plainError(e), sclock(), { tail: 'Try again, or check Status.' });
   async function send(next) {
     applyText = null; entryId = null; saidExpired = false; held = false; sentServer = serverNow();
     requestId = newRequestId();          // this press's own id, sent with it (R8 #2)
     // what was sent, and when on the server's clock (its last answer carried forward), for when its verdict can't be known (CR7 #4)
-    try { sent = typeof o.sent === 'function' ? { ...o.sent(), sentAt: lastStatus.j?.now != null ? lastStatus.j.now + Math.max(0, Date.now() - lastStatus.wall) : null } : null; } catch { sent = null; }
+    try { sent = typeof o.sent === 'function' ? { ...o.sent(), sentAt: serverClock() } : null; } catch { sent = null; }
     go(next);
     try {
       const r = await o.run?.({ requestId });
@@ -718,7 +733,7 @@ export function control(target, opts = {}) {
       // bitcube didn't answer a change whose lock holds (its entry stays to its limit): one state, when the buttons unlock (R8 #18);
       // by its action, the rule Status and the server follow too (model.js heldMaybe, CR8 #10)
       held = heldMaybe(o.action, { maybe, serverMaybe: e?.serverMaybe, entryId });
-      return go(ctlStep(s, { type: 'error', maybe, now: now() }), held ? heldWords(o.what, fmt.clock(serverNow() + confirmLimitS(o.expectS) * 1000, serverNow()))
+      return go(ctlStep(s, { type: 'error', maybe, now: now() }), held ? heldWords(o.what, sclock(serverNow() + confirmLimitS(o.expectS) * 1000))
         : maybe ? noAnswerText(e, o.noAnswer ?? 'the page shows what bitcube reports', serverNow()) : failText(e));
     }
     try { o.onSent?.(result); } catch (e) { console.warn('onSent', e); }
@@ -738,7 +753,7 @@ export function control(target, opts = {}) {
     // judged again now it is answered: a control that became impossible meanwhile sends nothing
     const ans = ctlStep(s, { type: yes ? 'yes' : 'no', why: o.why, now: now() });
     if (ans.effect === 'send') return send(ans);
-    if (ans.notSent) return go(ans, notSentWords(ans.notSent, fmt.clock(serverNow(), serverNow())));
+    if (ans.notSent) return go(ans, notSentWords(ans.notSent, sclock()));
     s = ans; paint();
   });
   function update(n = {}) {
@@ -751,7 +766,7 @@ export function control(target, opts = {}) {
     // (CR7 #4; sent: only a control that says what it sent, o.sent)
     const own = 'model' in n ? ownVerdict(n.model, { state: s.state, entryId, requestId, sent, serverConfirms: !!o.serverConfirms, held, saidExpired }) : null;
     if (own) entryId = own.entryId;
-    if (own?.unlockAt != null) text = heldWords(o.what, fmt.clock(own.unlockAt, serverNow()));
+    if (own?.unlockAt != null) text = heldWords(o.what, sclock(own.unlockAt));
     if (own?.judged) {
       judgedAt = typeof readAt === 'number' ? readAt : now();
       if (own.step === 'done') return go(ctlStep(s, { type: 'model', confirmed: true, now: now() }));
@@ -759,7 +774,7 @@ export function control(target, opts = {}) {
       // one that may or may not have happened, which the server then gave up on: bitcube didn't show it (said once)
       if (own.step === 'gave-up') {
         saidExpired = true;
-        text = unconfirmedWords(o.what, fmt.clock(sentServer ?? serverNow(), serverNow()), o.unconfirmed ?? 'look at the Now line, or call Gavin');
+        text = unconfirmedWords(o.what, sclock(sentServer ?? serverNow()), o.unconfirmed ?? 'look at the Now line, or call Gavin');
         if (host.isConnected) say(text);
         paint();
         return;
@@ -781,7 +796,7 @@ export function control(target, opts = {}) {
       // a confirm still open for a control that just became impossible is withdrawn, with the reason on the control and
       // focus on its status line (the sheet's close() puts it there: the button is disabled now)
       const a = asking; asking = null;
-      go(next, notSentWords(next.notSent, fmt.clock(serverNow(), serverNow())));
+      go(next, notSentWords(next.notSent, sclock()));
       a?.close();
       if (!host.contains(document.activeElement)) focusEl(status);
       return;

@@ -1,7 +1,8 @@
 // Studio chat v2 (docs/mission-ui.md, "Studio chat"). The shell (header, tab bar, menu, art) comes from ui.js; this file
 // turns the chat's events (GET /api/chat/history, the SSE /api/chat/events) into one card per request, pairs replies with
 // their request by id, and keeps the pinned status bar and the composer. Server API unchanged: history, events, send, stop.
-import { mountShell, tick, art, fmt, control, confirm, api, esc, md, chip, mark, plainError, noAnswerText, WARN_MS, LOST_MS, poll, announce, setLive } from '/ui.js';
+import { mountShell, tick, art, fmt, control, confirm, api, esc, md, chip, mark, plainError, noAnswerText, WARN_MS, LOST_MS, poll, announce, setLive,
+  serverNow, serverClock, sclock, noteServerTime } from '/ui.js';
 import { TZ, applyingWords, derive, entryWords, entrySaid, entriesAt, endedSaid } from '/model.js';
 import { stateOf as judge, stepWords, stepsToggle, excerpt } from '/chat-words.js';
 
@@ -20,8 +21,6 @@ const S = {
   statusWall: 0,            // Date.now() the status arrived
   startedAt: new Map(),     // id → { at: performance.now(), wall: Date.now() } when it started (for the m:ss; see runS)
   lastEventT: null,         // the newest event's t (server clock)
-  skew: null,               // the server's clock minus this phone's (ms), from the history's now and every ping: a request's
-                            // m:ss counts from its start on the server's clock, never the phone's (R8 #35)
   lostAt: null,             // performance.now() the stream dropped, or null
   lastEventAt: null,        // { at: performance.now(), wall: Date.now() } of the stream's last event (chat, status or ping)
   everOpen: false,
@@ -59,7 +58,7 @@ function take(e) {
   if (!r) { r = { id, t: e.t, text: '', steps: [], texts: [], notices: [], orphan: true }; S.reqs.set(id, r); S.order.push(id); }
   S.dirty.add(id);
   switch (e.kind) {
-    case 'started': r.started = e.t; r.startedArrivedAt = performance.now(); if (!S.startedAt.has(id)) { const ago = Math.max(0, Date.now() + (S.skew ?? 0) - e.t); S.startedAt.set(id, { at: performance.now() - ago, wall: Date.now() - ago }); } break;
+    case 'started': r.started = e.t; r.startedArrivedAt = performance.now(); if (!S.startedAt.has(id)) { const ago = Math.max(0, serverNow() - e.t); S.startedAt.set(id, { at: performance.now() - ago, wall: Date.now() - ago }); } break;
     case 'activity': r.steps.push({ t: e.t, ...stepWords(e) }); break;   // { text, title, act }: the team's words, the raw line for the tooltip
     case 'text': if (e.text) r.texts.push(e.text); break;
     case 'notice': r.notices.push(e.text ?? ''); break;
@@ -267,8 +266,8 @@ async function send() {
   } catch (e) {
     // no usable answer (none in time, one that couldn't be read, a proxy's error page): it may or may not have been sent
     sendShow('failed', e?.noAnswer || e?.unreadable || e?.notOurs
-      ? `${noAnswerText(e, 'look for it above before sending again', Date.now() + (S.skew ?? 0))} Your message is still in the box.`
-      : `Not sent: ${plainError(e)} (${fmt.clock(Date.now() + (S.skew ?? 0))}). Your message is still in the box.`);
+      ? `${noAnswerText(e, 'look for it above before sending again', serverNow())} Your message is still in the box.`
+      : `Not sent: ${plainError(e)} (${sclock()}). Your message is still in the box.`);
   } finally { sending = false; if (sendStatus.className.includes('failed')) sendBtn.disabled = !text.value.trim(); }
 }
 sendBtn.addEventListener('click', send);
@@ -306,24 +305,24 @@ let applyingMemo = { at: null, list: [], m: null };   // the model, derived once
 function applyingNow() {
   const p = applyingPoll;
   if (!p.last || p.elapsed() > LOST_MS) return [];
-  const serverNow = p.last.now + p.elapsed();
-  memoApplying(serverNow);
-  return entriesAt(applyingMemo.list, serverNow);   // the tick moves only the m:ss
+  const at = serverClock();                        // the server's clock (ui.js: one for every page, CR8 #13)
+  memoApplying(at);
+  return entriesAt(applyingMemo.list, at);   // the tick moves only the m:ss
 }
-function memoApplying(serverNow) {
+function memoApplying(at) {
   const p = applyingPoll;
   if (applyingMemo.at === p.receivedAt) return;
   let m = null;
-  try { m = derive(p.last, serverNow); } catch { m = null; }
+  try { m = derive(p.last, at); } catch { m = null; }
   applyingMemo = { at: p.receivedAt, list: m?.show.applying ?? [], m };
 }
 /** How a change from a phone ended, said once by the bar's region (the chat has no change of its own here: every one is another's). */
 function endedNow() {
   const p = applyingPoll;
   if (!p.last || p.elapsed() > LOST_MS) return [];
-  const serverNow = p.last.now + p.elapsed();
-  memoApplying(serverNow);
-  return applyingMemo.m ? endedSaid(applyingMemo.m, {}, serverNow) : [];
+  const at = serverClock();
+  memoApplying(at);
+  return applyingMemo.m ? endedSaid(applyingMemo.m, {}, at) : [];
 }
 function paintApplying() {
   const host = $('chat-applying'), list = applyingNow();
@@ -354,7 +353,9 @@ function setStatus(st) {
 }
 async function fetchHistory() {
   const h = await api('/api/chat/history?limit=500');
-  if (typeof h.now === 'number') S.skew = h.now - Date.now();     // before the events: a running request's m:ss counts from the server's clock
+  // before the events: a running request's m:ss counts from its start on the server's clock, never the phone's (R8 #35); the one
+  // server clock every page reads (ui.js serverNow) goes by it until a status answer comes (CR8 #13)
+  noteServerTime(h.now);
   const fresh = [];
   for (const e of h.events ?? []) if (take(e)) fresh.push(e);
   if (h.status) setStatus(h.status);
@@ -382,7 +383,7 @@ function connect() {
     let e; try { e = JSON.parse(m.data); } catch { return; }
     if (take(e)) layout();
   });
-  es.addEventListener('ping', (m) => { heard(); try { const t = JSON.parse(m.data)?.t; if (typeof t === 'number') S.skew = t - Date.now(); } catch { /* a ping without its time */ } });
+  es.addEventListener('ping', (m) => { heard(); try { noteServerTime(JSON.parse(m.data)?.t); } catch { /* a ping without its time */ } });
   es.addEventListener('status', (m) => {
     heard();
     let st; try { st = JSON.parse(m.data); } catch { return; }

@@ -337,7 +337,7 @@ test('CR7 #4: Status and ui.js control() judge their own change by serverJudged,
   assert.match(readFileSync(new URL('../public/model.js', import.meta.url), 'utf8'), /const v = serverJudged\(m, entryId, c\?\.sent \?\? null\)/);
   assert.match(st, /sent: \(mm\) => \(\{ action: 'switch', file: f, before: mm\?\.show\.file\?\.name \?\? null \}\)/);
   assert.match(st, /sent: \(mm\) => \(\{ action: 'bootfile', file: f, before: mm\?\.show\.boot_file\?\.name \?\? null \}\)/);
-  assert.match(st, /sentAt: p\.last \? p\.last\.now \+ p\.elapsed\(\) : null/, 'the send on the server\'s clock');
+  assert.match(st, /sentAt: serverClock\(\)/, 'the send on the server\'s clock (ui.js, CR8 #13)');
   assert.match(ui, /ownVerdict\(n\.model, \{ state: s\.state, entryId, requestId, sent,/);
   assert.doesNotMatch(st + ui, /entryVerdict\(/, 'never the verdict alone');
 });

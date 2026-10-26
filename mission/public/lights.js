@@ -5,7 +5,7 @@
 // Dry run, Stop, Use this map) follow the contract in "Applying a change" through ui.js control(). Every fetch has a time
 // limit, and what couldn't be read is asked for again by itself. Plain ES module, no build step, no framework.
 import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark, plainError, DOC_LINKS, splitHeadline, announce, unannounce, setLive, goto, bringIntoView,
-  WARN_MS, LOST_MS, POLL_TIMEOUT_MS } from '/ui.js';
+  WARN_MS, LOST_MS, POLL_TIMEOUT_MS, serverNow, serverClock } from '/ui.js';
 import { fetchTimed } from '/app.js';
 import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, EXPECT_S, ownEntries, endedSaid, START_USUAL } from '/model.js';
 import { uprightsFromAtlas } from '/screens.js';
@@ -55,7 +55,7 @@ const status = poll('/api/status', { every: 5000,
   onError: () => { S.m = model(); render(); } });   // before any answer, watchContact's header says "No answer yet · N s"
 /** The model, with the calibration from a newer progress read when that shows the run ended (the status's copy can be up to a
  *  poll behind): Rebuild on a run's result is never blocked by the run that just ended (R7 #31). */
-function model() { return status.last ? derive(calNewer(status.last, S.cal.p), status.last.now + status.elapsed()) : null; }
+function model() { return status.last ? derive(calNewer(status.last, S.cal.p), serverNow()) : null; }
 /** Each new status answer: the Calibrate block's controls that wait for the server's verdict on their own entry (a start held as
  *  'starting', a rebuild while TouchDesigner restarts) are judged on it (ui.js control serverConfirms). */
 function judgeControls() {
@@ -68,8 +68,6 @@ function own(id) { if (typeof id === 'string' && !S.ownIds.includes(id)) S.ownId
 // the shared rule (ui.js): greyed and bannered from the time since the last answer, so a hung request counts too
 const contact = watchContact(status, shell, () => { S.m = model(); render(); });
 const pageDown = () => contact.lost;
-/** The server's clock now (its last answer's `now`, carried forward), for comparing with bitcube's own times. */
-const serverNowMs = () => (status.last ? status.last.now + status.elapsed() : null);
 
 // ---- render: every part, in page order -----------------------------------------------------------------------------
 function render() {
@@ -123,7 +121,7 @@ function renderStateLine() {
   const own = ownChanges(), lines = lost ? [] : applyingNow(m, own);
   paintApplying(lines);
   // and, once, how another phone's change ended (R8 #9)
-  const ended = lost || !status.last ? [] : endedSaid(m, { ownIds: own.ids }, status.last.now + status.elapsed());
+  const ended = lost || !status.last ? [] : endedSaid(m, { ownIds: own.ids }, serverClock());
   sayState(stateLive({ words, lost, stale, applying: lines, ended }));
 }
 /** Screen readers hear the state line's words when they change, never a ticking time (lights.html #state-live; lights-words
@@ -700,7 +698,7 @@ async function pollCal() {
     // that ended, and the status is asked again so every lock follows (R7 #31)
     if (wasRunning && !j.running) { S.m = model(); status.refresh(); }
     // ended before this page opened: show only a recent one, judged on the server's clock (never this phone's)
-    const nowS = typeof j.age_s === 'number' ? null : serverNowMs() != null ? serverNowMs() / 1000 : null;
+    const at = serverClock(), nowS = typeof j.age_s === 'number' ? null : at != null ? at / 1000 : null;   // the server's clock (ui.js, CR8 #13)
     if (!wasRunning && !j.running && !S.cal.seenStarted) S.cal.old = typeof j.age_s === 'number' ? j.age_s > OLD_RUN_S : nowS != null && typeof j.updated === 'number' && nowS - j.updated > OLD_RUN_S;
     if (j.running) { S.cal.old = false; S.cal.seenStarted = true; }
     if (wasRunning && !j.running && j.ok === true && j.result && !j.result.dry_run) loadMap();   // a new map: draw it

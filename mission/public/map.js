@@ -4,7 +4,7 @@
 // /model.js (never the worst of a bundle); every link pill is that link's item in a word or two; a tap opens the
 // item's sheet with "Addresses and links (for Will)". Below it, the engineers' full diagram (/map/) in a frame.
 // Plain ES module, no build, no framework, no external scripts.
-import { mountShell, poll, tick, watchContact, art, fmt, sheet, esc, mark, chip, WORD, MARK, DOC_LINKS, sinceAgrees, NAMES_FROM_BITCUBE, WARN_MS, setLive } from '/ui.js';
+import { mountShell, poll, tick, watchContact, art, fmt, sheet, esc, mark, chip, WORD, MARK, DOC_LINKS, sinceAgrees, NAMES_FROM_BITCUBE, WARN_MS, setLive, serverNow } from '/ui.js';
 import { derive, dur } from '/model.js';
 import { shownLevel, notYet, rowWord, sinceWords, mapAction, pointsAtStatus, contactNotice, linkWord, linkWordNow } from '/map-words.js';
 
@@ -64,7 +64,7 @@ document.addEventListener('mc:check', () => p.refresh());
 document.addEventListener('mc:theme', () => requestAnimationFrame(drawLinks));
 
 /** The model on the server's clock, carried forward by this phone's monotonic clock. */
-function model() { return p.last ? derive(p.last, p.last.now + p.elapsed()) : null; }
+function model() { return p.last ? derive(p.last, serverNow()) : null; }
 const itemOf = (m, id) => m?.items.find((x) => x.id === id) ?? null;
 const lost = () => contact.lost || (S.m && S.m.overall.cause === 'page');
 const elapsedS = () => (p.receivedAt == null ? 0 : p.elapsed() / 1000);
