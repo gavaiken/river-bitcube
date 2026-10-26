@@ -21,6 +21,8 @@ import { randomUUID } from 'node:crypto';
 import { scrubCreds } from './scrub.mjs';
 
 const HISTORY_IN_MEMORY = 3000;
+/** Requests waiting behind the running one, at most (R10 #35): one more is refused, never kept and scrubbed on every status. */
+export const QUEUE_MAX = 20;
 
 export class Studio extends EventEmitter {
   constructor({ runner, dir, now = () => Date.now() }) {
@@ -40,10 +42,10 @@ export class Studio extends EventEmitter {
 
   /** What every open page is told (GET /api/status's studio, every SSE status event, the send answer): the requests' words
    *  scrubbed of logins, as every chat event is (a camera URL pasted into the chat holds its password). The agent itself still
-   *  gets the request as it was typed. */
+   *  gets the request as it was typed. Scrubbed once, when it is queued (shown), never again at every status (R10 #35). */
   status() {
-    return { running: !!this.current, current: this.current && { id: this.current.id, text: scrubCreds(this.current.text) },
-             queue: this.queue.map(({ id, text }) => ({ id, text: scrubCreds(text) })), session: !!this.state.sessionId };
+    return { running: !!this.current, current: this.current && { id: this.current.id, text: this.current.shown },
+             queue: this.queue.map(({ id, shown }) => ({ id, text: shown })), session: !!this.state.sessionId };
   }
 
   history(limit = 500) { return this.events.slice(-limit); }
@@ -52,7 +54,8 @@ export class Studio extends EventEmitter {
     text = String(text ?? '').trim();
     if (!text) throw new Error('empty message');
     if (text.length > 20_000) throw new Error('message too long');
-    const item = { id: randomUUID(), text };
+    if (this.queue.length >= QUEUE_MAX) throw new Error('too many requests waiting');
+    const item = { id: randomUUID(), text, shown: scrubCreds(text) };
     this.queue.push(item);
     this.#record({ kind: 'user', id: item.id, text, queued: !!this.current || this.queue.length > 1 });
     this.#pump();

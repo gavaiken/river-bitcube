@@ -222,7 +222,7 @@ test('R8 #9: another phone\'s change that ended is said once by the band\'s regi
                                                 { id: 'ax.2', action: 'ropes', label: 'the change of the ropes to dark', source: 'mission control', at: t - 4000 }],
                                     expired: [{ id: 'ax.3', action: 'switch', label: 'the switch to the live river', source: 'mission control', at: t - 2000 }] } });
   const m = derive(st, t);
-  assert.deepEqual(endedSaid(m, {}, t), ['Done: the change of the boot file to the live river, from the studio chat.', "The switch to the live river: bitcube didn't show it in time."]);
+  assert.deepEqual(endedSaid(m, {}, t), ['Done: the change of the boot file to the live river, from the studio chat.', "The switch to the live river, from another phone: bitcube didn't show it in time."]);   // R10 #9
   // R9 #5: how a change ended is said once beside the band's words (model.js endedOnce), never part of them
   assert.doesNotMatch(bandSaid(m, {}), /Done:|didn't show it in time/);
   assert.deepEqual(endedSaid(m, { ownIds: ['ax.3'] }, t), ['Done: the change of the boot file to the live river, from the studio chat.'], 'this phone\'s own is said on its control');

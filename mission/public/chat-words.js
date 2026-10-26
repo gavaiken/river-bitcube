@@ -207,11 +207,12 @@ export function stepWords(e) {
   // lib/steps.mjs sends `acting`; `act` is the older name
   const flag = typeof e?.acting === 'boolean' ? e.acting : typeof e?.act === 'boolean' ? e.act : null;
   if (typeof e?.raw === 'string') {
-    const t = !text ? plainStep(e.raw).text : bad(text) ? plainWords(text, plainStep(e.raw).text) : text.replace(/[.\s]+$/, '');
+    const t = (!text ? plainStep(e.raw).text : bad(text) ? plainWords(text, plainStep(e.raw).text) : text.replace(/[.\s]+$/, ''))
+      .replace(/\bthe session notes\b/g, "the team's work log");   // a step kept before R9 #27 reads in today's words (R10 #24)
     return { text: t, title: e.raw, act: flag ?? actOf(t) };
   }
   const p = plainStep(text);
-  return { text: p.text, title: text, act: flag ?? p.act };
+  return { text: p.text.replace(/\bthe session notes\b/g, "the team's work log"), title: text, act: flag ?? p.act };
 }
 
 /** The "N steps" toggle: its visible words, and its accessible name starting with them (label in name: a Voice Control

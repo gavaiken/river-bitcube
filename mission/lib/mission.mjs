@@ -185,6 +185,7 @@ export class Mission {
     const ended = this.applying.ended();
     out.confirmed = ended.confirmed;
     out.expired = ended.expired;
+    out.failed = ended.failed;      // refused or failed: a page whose answer was lost learns it by its request id (R10 #31)
     return out;
   }
 
@@ -330,7 +331,8 @@ export class Mission {
     // never for one whose TouchDesigner doesn't come back (R7 #26)
     let baked = null;
     return this.applying.run(action, checked, async () => {
-      if (plan.kind === 'seasons') return this.#seasons(plan.path, plan.body);
+      // the year page's answer (or its error) as a browser gets it: scrubbed, as the copy kept in data is (R10 #40)
+      if (plan.kind === 'seasons') return scrubCreds(await this.#seasons(plan.path, plan.body));
       const r = await this.#probeAction(plan.args, plan.timeout, action);
       if (action === 'rebuild' && (rebuildSucceeded(r) || r?.maybe === true)) baked = this.#rebuildOf(checked.file, r);
       return r;
@@ -433,7 +435,11 @@ export function planControl(action, body = {}) {
       return { kind: 'seasons', path: '/rules', body: r };
     }
     case 'rules-reset': return { kind: 'seasons', path: '/rules/reset', body: {} };
-    case 'ropes': return { kind: 'probe', args: `-Action ropes${body.dark === true ? ' -Dark' : ''}` };   // only a real true goes dark
+    case 'ropes': {
+      // a real true or false, nothing else: "true", 1 or a missing dark is refused, never read as "on" (R10 #37)
+      if (typeof body.dark !== 'boolean') throw bad('dark is true or false');
+      return { kind: 'probe', args: `-Action ropes${body.dark ? ' -Dark' : ''}` };
+    }
     case 'hub75': {
       const x = num(body.brightness);
       if (!(x >= 0 && x <= 1)) throw bad('brightness is 0 to 1');

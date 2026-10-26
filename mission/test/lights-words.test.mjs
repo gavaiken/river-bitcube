@@ -233,7 +233,7 @@ test('R6 #8: the state line\'s hidden live region never carries a ticking time',
   assert.doesNotMatch(said1, /\d+ (s|min)\b/);
   // a change in flight is said once, by its name, without its m:ss
   const live = stateLive({ words: 'The ropes show the river.', applying: [{ label: "the restart on the river's year", line: "Applying: the restart on the river's year · 0:05 · usually about 1 min" }] });
-  assert.equal(live, "The ropes show the river. Applying: the restart on the river's year.");
+  assert.equal(live, "The ropes show the river. Applying: the restart on the river's year.");   // stateLive keeps the words it is given
   assert.equal(stateLive({ words: 'The ropes show the river.', lost: true }), 'No contact with mission control. The ropes show the river.');
   assert.equal(stateLive({ words: 'The ropes show the river.', stale: true }), 'Last seen: The ropes show the river.');
 });
@@ -274,7 +274,7 @@ test('R6 #3: while a change that alters the lights is in flight, a reading from 
   const lines = applyingNow(m);
   assert.equal(lines.length, 1);
   assert.match(lines[0].line, /^Applying: the restart on the river's year · 0:0\d · usually about 1\smin$/);
-  assert.equal(lines[0].said, "Applying: the restart on the river's year.");
+  assert.equal(lines[0].said, "Applying: the restart on the river's year, from another phone.");   // whose it is, said (R10 #9)
   assert.deepEqual(applyingNow(m, ['switch']), []);
   const short = applyingNow(model('all-good', sw(1000, 'ropes', 'a ropes change', 15)));
   assert.match(short[0].line, /^Applying: a ropes change(…| · 0:0\d · usually a few seconds)$/);
@@ -287,7 +287,7 @@ test('R6 #22, #24: Calibrate says the ropes go back to what they showed before, 
     'Started 21:14, using the gallery camera. When it ends, the ropes go back to what they showed before, by themselves.');
   assert.equal(runFine({ started: '21:14', cam: null, dry: false }), 'Started 21:14. When it ends, the ropes go back to what they showed before, by themselves.');
   // a dry run touches no lights and no camera
-  assert.equal(runFine({ started: '21:14', cam: 'gallery', dry: true }), 'Started 21:14. The lights stay as they are.');
+  assert.equal(runFine({ started: '21:14', cam: 'gallery', dry: true }), 'Started 21:14.');   // the heading says the lights stay as they are, once (R10 #19)
   // the result's heading isn't the first words of its own line ("Map made" over "Map made 23 Oct …")
   assert.equal(resultHead(false), 'New LED map');
   assert.doesNotMatch(resultWords(DONE.result), new RegExp(`^${resultHead(false)}`));

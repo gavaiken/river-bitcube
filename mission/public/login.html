@@ -39,7 +39,7 @@
 </head>
 <body>
 <main class="login">
-  <form class="card" id="f" novalidate>
+  <form class="card" id="f" method="post" action="/login" novalidate>
     <div class="wordmark">Mission control</div>
     <h1>A River Becoming</h1>
     <p class="lede">Mission control and the studio chat. Team only.</p>
@@ -55,50 +55,62 @@
   </form>
   <footer class="foot links"><a href="https://gavaiken.github.io/river-bitcube/" target="_blank" rel="noopener">About the piece</a></footer>
 </main>
+<script>
+  // The password's way in: a classic script that needs nothing from the network, so a page whose modules failed to load (a poor
+  // gallery link) still posts the password and never puts it in a URL. The form itself posts too (method="post"): with no script
+  // at all, the server answers a form with a redirect (R10 #36).
+  (() => {
+    const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const f = document.getElementById('f'), pw = document.getElementById('pw'), err = document.getElementById('err'), go = document.getElementById('go'), show = document.getElementById('show');
+    const MARK = '<span class="mk lv-down" aria-hidden="true">✕</span>';
+    show.addEventListener('change', () => { const at = pw.selectionStart; pw.type = show.checked ? 'text' : 'password'; try { pw.setSelectionRange(at, at); } catch {} pw.focus(); });
+    let waitTimer = null;
+    // a screen reader hears each failure once (a hidden alert), never the countdown: the visible line ticks without a live region
+    const live = document.getElementById('err-live');
+    const say = (text) => { live.textContent = ''; setTimeout(() => { live.textContent = text; }, 50); };
+    function fail(text) {
+      clearInterval(waitTimer);
+      err.innerHTML = `${MARK}<span>${esc(text)}</span>`;
+      say(text);
+      pw.setAttribute('aria-invalid', 'true');
+      pw.focus(); pw.select();
+    }
+    function failWait(lead, waitMs) {
+      let left = Math.ceil(waitMs / 1000);
+      const paint = () => { err.innerHTML = `${MARK}<span>${esc(lead)} ${left > 0 ? `Wait ${left} s, then try again.` : 'Try again now.'}</span>`; };
+      clearInterval(waitTimer); paint();
+      say(left > 0 ? `${lead} Wait ${left} s, then try again.` : `${lead} Try again now.`);
+      pw.setAttribute('aria-invalid', 'true'); pw.focus(); pw.select();
+      if (left > 0) waitTimer = setInterval(() => { left -= 1; paint(); if (left <= 0) { clearInterval(waitTimer); say('You can try again now.'); } }, 1000);
+    }
+    // a form posted without this script came back here with what went wrong
+    const back = new URLSearchParams(location.search).get('failed');
+    if (back === 'wrong') fail('Wrong password. Try again.');
+    else if (back === 'wait') failWait('Too many tries.', 30_000);
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!pw.value) return fail('Type the team password first.');
+      go.disabled = true; go.textContent = 'Logging in…'; clearInterval(waitTimer); err.textContent = ''; live.textContent = ''; pw.removeAttribute('aria-invalid');
+      let r, j = {};
+      try {
+        r = await fetch('/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pw.value }) });
+        j = await r.json().catch(() => ({}));
+      } catch { r = null; }
+      go.disabled = false; go.textContent = 'Log in';
+      if (r && r.ok) { const next = new URLSearchParams(location.search).get('next'); location.href = next && /^\/[a-z]/.test(next) ? next : '/status'; return; }
+      if (!r) return fail("Mission control didn't answer. Check your connection and try again.");
+      if (r.status === 429) return failWait('Too many tries.', j.wait_ms ?? 30_000);
+      if (r.status === 401) return j.wait_ms > 1500 ? failWait('Wrong password.', j.wait_ms) : fail('Wrong password. Try again.');
+      if (r.status === 403) return fail("Mission control didn't accept the request from this address. Open the page from its own link and try again.");
+      // never the server's raw reason (an exit code, a stack): the team's words, the raw text stays in the server's log
+      fail(r.status >= 500 ? "Mission control couldn't check the password just now. Try again, or call Gavin." : "Mission control didn't accept the request. Try again, or call Gavin.");
+    });
+  })();
+</script>
 <script type="module">
   import { art, esc } from '/ui.js';
   import { CONTACTS } from '/model.js';
   art.mount(); art.setSeason(null);
-  const f = document.getElementById('f'), pw = document.getElementById('pw'), err = document.getElementById('err'), go = document.getElementById('go'), show = document.getElementById('show');
-  const MARK = '<span class="mk lv-down" aria-hidden="true">✕</span>';
-  show.addEventListener('change', () => { const at = pw.selectionStart; pw.type = show.checked ? 'text' : 'password'; try { pw.setSelectionRange(at, at); } catch {} pw.focus(); });
-  let waitTimer = null;
-  // a screen reader hears each failure once (a hidden alert), never the countdown: the visible line ticks without a live region
-  const live = document.getElementById('err-live');
-  const say = (text) => { live.textContent = ''; setTimeout(() => { live.textContent = text; }, 50); };
-  function fail(text) {
-    clearInterval(waitTimer);
-    err.innerHTML = `${MARK}<span>${esc(text)}</span>`;
-    say(text);
-    pw.setAttribute('aria-invalid', 'true');
-    pw.focus(); pw.select();
-  }
-  function failWait(lead, waitMs) {
-    let left = Math.ceil(waitMs / 1000);
-    const paint = () => { err.innerHTML = `${MARK}<span>${esc(lead)} ${left > 0 ? `Wait ${left} s, then try again.` : 'Try again now.'}</span>`; };
-    clearInterval(waitTimer); paint();
-    say(left > 0 ? `${lead} Wait ${left} s, then try again.` : `${lead} Try again now.`);
-    pw.setAttribute('aria-invalid', 'true'); pw.focus(); pw.select();
-    if (left > 0) waitTimer = setInterval(() => { left -= 1; paint(); if (left <= 0) { clearInterval(waitTimer); say('You can try again now.'); } }, 1000);
-  }
-  f.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!pw.value) return fail('Type the team password first.');
-    go.disabled = true; go.textContent = 'Logging in…'; clearInterval(waitTimer); err.textContent = ''; live.textContent = ''; pw.removeAttribute('aria-invalid');
-    let r, j = {};
-    try {
-      r = await fetch('/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pw.value }) });
-      j = await r.json().catch(() => ({}));
-    } catch { r = null; }
-    go.disabled = false; go.textContent = 'Log in';
-    if (r && r.ok) { const next = new URLSearchParams(location.search).get('next'); location.href = next && /^\/[a-z]/.test(next) ? next : '/status'; return; }
-    if (!r) return fail("Mission control didn't answer. Check your connection and try again.");
-    if (r.status === 429) return failWait('Too many tries.', j.wait_ms ?? 30_000);
-    if (r.status === 401) return j.wait_ms > 1500 ? failWait('Wrong password.', j.wait_ms) : fail('Wrong password. Try again.');
-    if (r.status === 403) return fail("Mission control didn't accept the request from this address. Open the page from its own link and try again.");
-    // never the server's raw reason (an exit code, a stack): the team's words, the raw text stays in the server's log
-    fail(r.status >= 500 ? "Mission control couldn't check the password just now. Try again, or call Gavin." : "Mission control didn't accept the request. Try again, or call Gavin.");
-  });
   // Who to call when there is no password: names and what they own from model.js. GET /api/contacts holds the numbers but sits
   // behind the login today; set CONTACTS_PUBLIC true once the server serves it (or a public subset) to a logged-out browser.
   const CONTACTS_PUBLIC = false;

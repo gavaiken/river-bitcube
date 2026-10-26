@@ -84,7 +84,8 @@ test('planCalibrate is a whitelist with checked arguments', () => {
   assert.equal(planCalibrate('start', { dry_run: true }), '-Action start -DryRun');
   assert.equal(planCalibrate('start', { decode_only: 'pixelmap-20261018-154155', cam: 'gallery' }), '-Action start -DecodeOnly pixelmap-20261018-154155 -Cam gallery');
   assert.equal(planCalibrate('start', { task: true }), '-Action start -Task');
-  assert.equal(planCalibrate('start', { dry_run: 'no', task: 'x' }), '-Action start', 'only a real true is a flag');
+  assert.equal(planCalibrate('start', { dry_run: false, task: false }), '-Action start', 'only a real true is a flag');
+  assert.throws(() => planCalibrate('start', { dry_run: 'no' }), (e) => e.status === 400, 'a flag that isn\'t a real boolean is refused (R10 #37)');
   assert.equal(planCalibrate('cancel', { dry_run: true }), '-Action cancel');
   assert.equal(planCalibrate('status'), '-Action status');
   for (const [a, b] of [['shell', {}], ['start', { decode_only: 'x; rm -rf' }], ['start', { decode_only: '..\\..\\secrets' }],

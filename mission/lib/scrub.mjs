@@ -18,7 +18,12 @@
 // Everything up to the LAST @ of the authority (before the path, query or fragment): ffmpeg takes the last @ too, so a raw @
 // or ' in the password is all login. Whitespace, " and <> end a URL in a log line or JSON text.
 // tools/mission/probe.ps1 Mask-Creds does the same on bitcube, with these very patterns (test/review-cr7.test.mjs compares them).
-const CREDS = String.raw`([a-z][a-z0-9+.-]*:\/\/)[^\s/?#"<>]*@`;
+// The scheme is read from the start of its run of scheme characters (anything before its first letter kept in the group), never
+// from every place inside the run: a long run of letters with no :// after it is scanned once, never once per letter (R10 #35).
+const CREDS = String.raw`(?<![a-z0-9+.-])([0-9+.-]*[a-z][a-z0-9+.-]*:\/\/)[^\s/?#"<>]*@`;
+/** An SMB login with no scheme (mount_smbfs //user:pw@bitcube/River, mount -t smbfs //user:pw@host/share): to the authority's
+ *  last @, as CREDS; never a scheme's own // (that is CREDS'), never a path (R10 #38). */
+const SMB = String.raw`((?<![:\w/])\/\/[^\s/@:"'<>]+:)[^\s/"'<>]*@`;
 /** A password-like key: password, passwd, pwd, passphrase, token, secret, api_key (apikey, api-key), also with a prefix
  *  (cam_password, CLAUDE_CODE_OAUTH_TOKEN, X-Auth-Token, access_token: R8 #38), glued too (PGPASSWORD, MYSQLPWD, accessToken:
  *  CR8 #5); a whole word that ends with one, never one that goes on (input_tokens, max_tokens, tokens_used, passwords, secret_ref).
@@ -32,7 +37,7 @@ const CREDS = String.raw`([a-z][a-z0-9+.-]*:\/\/)[^\s/?#"<>]*@`;
 const USERS = String.raw`(?:user(?:name)?|login|usr)`;
 /** A quoted value, only to find where it ends (an escaped quote inside it passes): the pass alternatives' context. */
 const QV = String.raw`\\?["'](?:\\[\s\S]|[^"'\\\r\n])*?\\?["']`;
-const NAMES = String.raw`(?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])pass|sshpass|pass(?==)|key(?=\\?["']\s*:\s*\\?["'])`
+const NAMES = String.raw`(?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key|psk|(?:wpa|wep|auth)[_-]?key|pw)|(?:[\w-]*[_-])pass|sshpass|pass(?==)|key(?=\\?["']\s*:\s*\\?["'])`
   + String.raw`|\\?["']${USERS}\\?["']\s*:\s*(?:${QV}|[\w.@-]+)\s*,\s*\\?["']pass(?=\\?["']\s*:)|pass(?=\\?["']\s*:\s*${QV}\s*,\s*\\?["']${USERS}\\?["']))(?![\w-])`;
 /** The key (never part of a longer word: input_tokens, passwords), its own quote (plain or escaped), then : or =. */
 const KEY = String.raw`(${NAMES}(?:\\?["'])?\s*[:=]\s*)`;
@@ -63,25 +68,33 @@ const BARE_VALUE = String.raw`(?!\\?["'])(?!(?:null|true|false)(?![^\s"'&,;}\]])
  *  --password-like flag's value after a space, and sshpass -p's. Each keeps what names it and masks the value. */
 const AUTH = String.raw`(\bAuthorization\s*[:=]\s*["']?(?:(?:Bearer|Basic|Token|Digest)\s+)?)([^\s"',;]+)`;
 const BEARER = String.raw`(\bBearer\s+)([A-Za-z0-9._~+/=-]{12,})`;
-const USER = String.raw`((?:^|[\s"'\\/])(?:curl|wget|https?|xh)(?:\.exe)?\s(?:[^\n;&|]*?[\s"'])?(?:-u|--user)(?:[\s=]+|(?=[^\s=-]))[^\s:"'*]+:)([^\s"']+)`;
-const FLAG = String.raw`((?:^|\s)--?(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|pass|token|secret|api[_-]?key)\s+)(?![-*])([^\s"']+)`;
+const USER = String.raw`((?:^|[\s"'\\/])(?:curl|wget|https?|xh)(?:\.exe)?\s(?:(?:(?![\s"'\\/](?:curl|wget|https?|xh)(?:\.exe)?\s)[^\n;&|])*?[\s"'])?(?:-u|--user)(?:[\s=]+|(?=[^\s=-]))[^\s:"'*]+:)([^\s"']+)`;
+const FLAG = String.raw`((?:^|\s)--?(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|pass|token|secret|api[_-]?key|auth[_-]?key|psk)\s+)(?![-*])([^\s"']+)`;
 const SSHPASS = String.raw`(\bsshpass\s+-p\s*)([^\s"']+)`;
 /** R9 #37: mysql's password attached to -p (with a space it is a database name, and it asks; -P is its port, so -p is matched by
  *  its case, CR9 #14); the Wi-Fi key the router keeps
  *  (UCI, below); a bare Anthropic token (sk-ant-…), wherever it stands. ("key" as a JSON key is
  *  one of the NAMES: CR9 #12.) */
-const MYSQL = String.raw`(\b(?:mysql|mysqldump|mysqladmin|mariadb)(?:\.exe)?\s(?:[^\n;&|]*?\s)?(?-i:-p))([^\s"'-][^\s"']*)`;
+const MYSQL = String.raw`(\b(?:mysql|mysqldump|mysqladmin|mariadb)(?:\.exe)?\s(?:(?:(?!\b(?:mysql|mysqldump|mysqladmin|mariadb)(?:\.exe)?\s)[^\n;&|])*?\s)?(?-i:-p))('[^'\r\n]*'|"[^"\r\n]*"|[^\s"'-][^\s"']*)`;
 /** The router's Wi-Fi key wherever uci writes it (CR9 #4): <anything>.key= (uci show's lines, wireless.default_radio0.key='…', and uci
  *  set's; key1-key4 for WEP) and "option key" (uci export, the config file), quoted or not: a quoted value to its own closing
  *  quote, a space or uci's '\'' (an apostrophe) inside it included. (.password= is one of the NAMES.) */
 const UCI = String.raw`((?<=[\w\]@-])\.key[1-4]?=["']?|\boption\s+key[1-4]?\s+["']?)((?<=')(?:[^'\r\n]|'\\'')*|(?<=")[^"\r\n]*|(?<!['"])[^\s"']+)`;
 const SKANT = String.raw`(\bsk-ant-)([A-Za-z0-9_-]{8,})`;
+/** A login given on a Windows or Wi-Fi command line (R10 #38): smbclient's -U user%pw, schtasks' /rp pw, net use's password after
+ *  /user:name, a SecureString made from a literal (ConvertTo-SecureString 'pw' -AsPlainText), and wpa_cli's set_network <n> psk "…".
+ *  A quoted value to its own quote; a bare one to the next space. */
+const LOGIN = String.raw`((?-i:\s-U)\s*[^\s%"']+%|(?<=\s)\/rp\s+|(?<=\s)\/user:[^\s"']+\s+(?![\/-])|\bConvertTo-SecureString\s+(?:-String\s+)?["']?|\bset_network\s+\S+\s+(?:psk|password|sae_password|wep_key[0-3])\s+["']?)((?<=')[^'\r\n]*|(?<=")[^"\r\n]*|(?<!['"])[^\s"']+)`;
+/** A token known by its own prefix, wherever it stands (R10 #38): GitHub's (ghp_, gho_, github_pat_…), a Tailscale key (tskey-…),
+ *  mission control's own session cookie (mc=…), and an HTTP Basic credential with no Authorization: before it (only one that looks
+ *  like base64: a digit, +, / or =). At least 16 characters, so a word that happens to follow is never one. */
+const TOKEN = String.raw`(\b(?:gh[pousr]_|github_pat_|tskey-|mc=)|\bBasic\s+(?=[A-Za-z0-9+/]*[0-9+/=]))([A-Za-z0-9_+/-]{16,}={0,2})`;
 /** The patterns, as probe.ps1 writes them too (the tests compare the two). */
-export const PATTERNS = { CREDS, KEY, KEY_JSON, QUOTED, ESCAPED, ELEM, NESTED, BARE_JSON: KEY_JSON + BARE_VALUE, BARE: KEY + BARE_VALUE, AUTH, BEARER, USER, FLAG, SSHPASS, MYSQL, UCI, SKANT };
-const RE = Object.fromEntries(['CREDS', 'QUOTED', 'ESCAPED', 'BARE_JSON', 'BARE', 'AUTH', 'BEARER', 'USER', 'FLAG', 'SSHPASS', 'MYSQL', 'UCI', 'SKANT'].map((k) => [k, new RegExp(PATTERNS[k], 'gi')]));
+export const PATTERNS = { CREDS, SMB, KEY, KEY_JSON, QUOTED, ESCAPED, ELEM, NESTED, BARE_JSON: KEY_JSON + BARE_VALUE, BARE: KEY + BARE_VALUE, AUTH, BEARER, USER, FLAG, SSHPASS, MYSQL, UCI, SKANT, LOGIN, TOKEN };
+const RE = Object.fromEntries(['CREDS', 'SMB', 'QUOTED', 'ESCAPED', 'BARE_JSON', 'BARE', 'AUTH', 'BEARER', 'USER', 'FLAG', 'SSHPASS', 'MYSQL', 'UCI', 'SKANT', 'LOGIN', 'TOKEN'].map((k) => [k, new RegExp(PATTERNS[k], 'gi')]));
 /** An object's key whose value is a login, whatever it holds (a password-like key, a prefix allowed, glued too: never
  *  input_tokens, passwords, secret_ref; db_pass, SSHPASS). A number under one is masked too: a PIN is a password. */
-const SECRET_KEY = /^(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])pass|sshpass)$/i;
+const SECRET_KEY = /^(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key|psk|(?:wpa|wep|auth)[_-]?key|pw)|(?:[\w-]*[_-])pass|sshpass|(?:set-)?cookie|authorization)$/i;
 /** "pass" and "key" alone are logins only by what is beside them (CR9 #13): pass beside a user, username or login key (a camera's
  *  { user, pass }), key beside a Wi-Fi network's ssid or encryption, or anywhere under the router's wireless settings (a key named
  *  wireless, wifi, wlan, radio or router above it); and only a string, an object or an array, never a number or a boolean (a
@@ -94,10 +107,11 @@ const loginBy = (k, keys, wifi) => (/^pass$/i.test(k) && keys.some((x) => USER_K
  *  the router's wireless settings (an object's "key" there is its Wi-Fi key). */
 export function scrubCreds(x, depth = 0, wifi = false) {
   if (typeof x === 'string') {
-    return x.replace(RE.CREDS, '$1***@').replace(RE.QUOTED, '$1$2***$4').replace(RE.ESCAPED, '$1$2***$5')
+    return x.replace(RE.CREDS, '$1***@').replace(RE.SMB, '$1***@').replace(RE.QUOTED, '$1$2***$4').replace(RE.ESCAPED, '$1$2***$5')
       .replace(RE.BARE_JSON, '$1$2***$2').replace(RE.BARE, '$1***')
       .replace(RE.AUTH, '$1***').replace(RE.BEARER, '$1***').replace(RE.USER, '$1***').replace(RE.FLAG, '$1***').replace(RE.SSHPASS, '$1***')
-      .replace(RE.MYSQL, '$1***').replace(RE.UCI, '$1***').replace(RE.SKANT, '$1***');
+      .replace(RE.MYSQL, '$1***').replace(RE.UCI, '$1***').replace(RE.SKANT, '$1***')
+      .replace(RE.LOGIN, '$1***').replace(RE.TOKEN, '$1***');
   }
   if (depth > 20 || x == null || typeof x !== 'object') return x;
   if (Array.isArray(x)) return x.map((v) => scrubCreds(v, depth + 1, wifi));

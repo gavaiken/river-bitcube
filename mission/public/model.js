@@ -57,12 +57,15 @@ export const CAL_TOTAL_S = Object.values(CAL_STAGE_S).reduce((a, b) => a + b, 0)
 export const CAL_STAGE_WORDS = { 'ropes-capture': 'photographing the ropes', 'ropes-decode': 'working out where each rope is', 'hub75-capture': 'photographing the panels', 'hub75-locate': 'finding the panels' };
 /** A run's stages, in order (calibrate.py STAGES). */
 export const CAL_STAGES = Object.keys(CAL_STAGE_S);
-/** A dry run's stage as a step (it touches no lights and no camera, so its stages are steps, never "photographing the ropes": R9
- *  #19): { n, of, words: "step 2 of 4" }, or null for what is no stage (starting, done). One helper for derive(), Lights and the
- *  history (CR9 #16). */
+/** What a dry run walks at each stage, without the camera (it photographs nothing, so never "photographing the ropes": R9 #19), and
+ *  never a bare step number (R10 #18): [the stage list's name, the words "it is at … now" uses]. */
+export const DRY_STAGE_WORDS = { 'ropes-capture': ['Ropes', 'the ropes'], 'ropes-decode': ['Rope map', 'the rope map'], 'hub75-capture': ['Panels', 'the panels'],
+  'hub75-locate': ['Panel places', "the panels' places"] };
+/** A dry run's stage: { n, of, label: "Rope map", words: "the rope map" }, or null for what is no stage (starting, done). One helper
+ *  for derive(), Lights and the history (CR9 #16), in words, never "step 2 of 4" (R10 #18). */
 export function calStep(stage) {
-  const i = CAL_STAGES.indexOf(stage);
-  return i < 0 ? null : { n: i + 1, of: CAL_STAGES.length, words: `step ${i + 1} of ${CAL_STAGES.length}` };
+  const i = CAL_STAGES.indexOf(stage), w = DRY_STAGE_WORDS[stage];
+  return i < 0 || !w ? null : { n: i + 1, of: CAL_STAGES.length, label: w[0], words: w[1] };
 }
 /** A run that is a dry run by name (calibrate.py --dry-run: its own flag, or its mode): "the dry run", its stop "the dry run stop"
  *  (R8 #21), its stages steps (calStep). A decode of earlier photos is not one: it is "a calibration from earlier photos", whose stage
@@ -203,9 +206,11 @@ const ROPE_BOX = { 'rope box 1': ['2.0.0.10', '1–10'], 'rope box 2': ['2.0.0.1
  *  null (not reported). Its words: one name for the spare port everywhere (R9 #25), and plain words for both and neither (R9 #35). */
 const routeKind = (raw) => { const r = typeof raw === 'string' ? raw.trim() : ''; return !r ? null : r === 'direct' || r === 'router' ? r : /^both$/i.test(r) ? 'both' : /^none$/i.test(r) ? 'none' : 'other'; };
 const ROUTE_WORDS = { direct: "bitcube's LIGHTS port", router: 'the spare router port', both: 'both ports', none: 'neither port', other: 'another port' };
-const ROUTE_NOTE = { both: 'the lighting address should be on one; press the port the lighting switch is plugged into',
-  none: "the ropes can't be reached; press the port the lighting switch is plugged into" };
-const ROUTE_DETAIL = { ...ROUTE_WORDS, both: 'both ports: move the address to one', none: "neither port: the ropes can't be reached" };
+/** The Installer's whole readout for both ports or neither: one instruction, the same as the Ropes row's (R10 #27). */
+const ROUTE_NOTE = { both: 'the lighting network is set on both ports; press the port the lighting switch is plugged into',
+  none: "the lighting network is set on neither port, so the ropes can't be reached; press the port the lighting switch is plugged into" };
+const ROUTE_DETAIL = { ...ROUTE_WORDS, both: 'both ports: under Installer, press the port the lighting switch is plugged into',
+  none: "neither port, so the ropes can't be reached: under Installer, press the port the lighting switch is plugged into" };
 // name, where it is checked from, address for the details drawer
 const NAMES = {
   'mission control': ['Mission control (the Mac mini)', 'mini', 'gav-m1-mini.tailddc624.ts.net'],
@@ -378,8 +383,10 @@ export function derive(status, nowMs) {
   const ended = (list) => (Array.isArray(list) ? list : []).map(obj).filter((e) => e && typeof e.id === 'string' && typeof e.action === 'string')
     .map((e) => ({ id: e.id, request_id: typeof e.request_id === 'string' ? e.request_id : null, action: e.action, file: typeof e.file === 'string' ? e.file : null,
                    label: typeof e.label === 'string' && e.label.trim() ? e.label.trim() : APPLY_LABEL[e.action] ?? 'a change', source: typeof e.source === 'string' ? e.source : null,
-                   maybe: e.maybe === true, at: num(e.at) }));
-  const confirmedList = ended(st.confirmed), expiredList = ended(st.expired);
+                   maybe: e.maybe === true, at: num(e.at), ...(typeof e.error === 'string' && e.error ? { error: e.error } : {}) }));
+  // and the ones it saw fail (refused, failed, a quick change bitcube didn't answer: maybe), so a page whose answer was lost learns
+  // its change failed, by its request id, at once (R10 #31)
+  const confirmedList = ended(st.confirmed), expiredList = ended(st.expired), failedList = ended(st.failed);
   // The verdicts the server's history kept (status.verdicts: the last few changes that waited for one, for hours and across a
   // restart of the server), so a phone that slept past the lists' 10 min still learns the verdict on its own change (R8 #0)
   const verdictList = (Array.isArray(st.verdicts) ? st.verdicts : []).map(obj)
@@ -473,7 +480,7 @@ export function derive(status, nowMs) {
   const calWords = calRopes ? (calNearly ? 'in calibration patterns, nearly done' : `in calibration patterns for ${calLeftWords}`) : null;
   // a dry run touches no lights and no camera: its stage is a step, never "photographing the ropes" (R9 #19); a decode of earlier
   // photos is real work, so its stage is said as a run's is (one rule, model.js calDryRun, calStep: CR9 #8, #16)
-  const calStageWords = !calibrating ? null : calDry ? calStep(cal.stage)?.words ?? 'at work' : CAL_STAGE_WORDS[cal.stage] ?? 'at work';
+  const calStageWords = !calibrating ? null : calDry ? calStep(cal.stage)?.words ?? null : CAL_STAGE_WORDS[cal.stage] ?? 'at work';
 
   // Dave's agent: a past next tick is a fault only by day (it rests overnight), measured in daytime minutes.
   const finMs = m ? Date.parse(m.finished_at) : NaN, nextMs = m && num(m.next_tick_epoch) != null ? m.next_tick_epoch * 1000 : null;
@@ -526,7 +533,8 @@ export function derive(status, nowMs) {
     const stale = pageStale || (src ? src.stale && !(srcKey === 'probe' && online === false) : false);
     items.push({ id, name, level, summary, detail, action: extra.action ?? null, checked_from: from,
                  age_s: extra.age_s ?? src?.age_s ?? null, stale, address: extra.address ?? address, cause: null, muted: !!extra.muted,
-                 raw: extra.raw ?? null });   // raw text for "Addresses and links (for Will)", never the main view
+                 raw: extra.raw ?? null,   // raw text for "Addresses and links (for Will)", never the main view
+                 ...(extra.waits ? { waits: extra.waits } : {}) });   // its advice says when a held change unlocks: no Wait line beside it (R10 #16)
   };
   const unknown = (id, [summary, detail], extra) => it(id, 'unknown', summary, detail, extra);
 
@@ -535,7 +543,7 @@ export function derive(status, nowMs) {
               : 'It checks bitcube every 5 s and runs a full check about once a minute.', { age_s: page_age_s });
 
   const upWords = uptimeH == null ? 'a while' : dur(uptimeH * 3600);   // dur()'s form, like every other duration
-  if (online === false) it('bitcube', 'down', 'Offline: not reachable from the Mac mini',
+  if (online === false) it('bitcube', 'down', 'Offline: not reachable',   // the row's source line says from where (R10 #33)
     `The Mac mini could not connect to bitcube${pb.error ? `; its full check has been failing for ${dur(pb.failing_s ?? pb.age_s)}` : ''}. The show may still be running by itself.`,
     { source: 'bitcube', action: "Someone at Gray Area checks bitcube's power light and the router; a restart takes about a minute and it comes back by itself." });
   else if (online === true && pr) it('bitcube', 'ok', `Online; up ${upWords}${diskLow ? `, only ${diskGb} GB of disk free` : ''}`,   // the disk only when it is the reason
@@ -550,10 +558,10 @@ export function derive(status, nowMs) {
   else if (!td) unknown('touchdesigner', ['Not reported by the full check', 'The full check answered without a word about TouchDesigner.']);
   else if (tdOffBooting) it('touchdesigner', 'warning', 'Not started yet: bitcube just restarted', `bitcube has been up for ${dur(upS)}; TouchDesigner opens by itself about a minute after it.`, { action: 'Wait a minute and look again.' });
   else if (tdOff) it('touchdesigner', 'down', 'Not running on bitcube', 'bitcube is up but TouchDesigner is not running, so nothing is driving the lights.',
-    { action: heldAction('off') ?? "Start it with Switch to the river's year below (about a minute)." });
+    { action: heldAction('off') ?? "Start it with Switch to the river's year below (about a minute).", ...(held ? { waits: held.id } : {}) });
   else if (tdRestarting) it('touchdesigner', 'warning', `Restarting on ${restartingOn}`, 'The lights are dark for about a minute while it opens.', { action: 'Wait a minute and look again.', raw: tdErr });
   else if (frozen) it('touchdesigner', 'down', 'Frozen: not answering', 'TouchDesigner did not answer within 15 s, which usually means a dialog is blocking it. The lights are not being driven: the rope boxes play their own colour cycle and the panels keep their last picture.',
-    { action: heldAction('frozen') ?? `Look at bitcube's screen over screen sharing and answer the dialog, or press ${YEAR_PRESS} (about a minute dark).` });
+    { action: heldAction('frozen') ?? `Look at bitcube's screen over screen sharing and answer the dialog, or press ${YEAR_PRESS} (about a minute dark).`, ...(held ? { waits: held.id } : {}) });
   else if (fps == null) it('touchdesigner', 'ok', `Running ${label}; frame rate not known yet`, 'The first check after a start cannot measure the frame rate; the next one can.', { raw: `file: ${td.file}` });
   else if (slow) it('touchdesigner', 'warning', `Running slowly: ${Math.round(fps)} of 60 frames a second`,
     `${cap(label)} at ${fps} frames a second, where it should run at 60${tdErrors ? `, with ${tdErrors} errors in the file` : ''}: the river moves in jerks.`,
@@ -658,7 +666,8 @@ export function derive(status, nowMs) {
 
   if (behind) unknown('internet', behind);
   else if (!dv) unknown('internet', ['Not reported by the full check', '']);
-  else if (internetDown) it('internet', 'down', 'No internet from bitcube', routerDown ? 'The router is not answering either.' : "The router answers, so its internet connection has gone (the venue's staff Wi-Fi, or the wired connection). Mission control still reaches bitcube.",
+  // the row's source line says "from bitcube": the summary doesn't say it again (R10 #33)
+  else if (internetDown) it('internet', 'down', 'No internet', routerDown ? 'The router is not answering either.' : "The router answers, so its internet connection has gone (the venue's staff Wi-Fi, or the wired connection). Mission control still reaches bitcube.",
     { action: INTERNET_ACTION });
   else it('internet', 'ok', 'bitcube reaches the internet', 'A connection out of Gray Area works.');
 
@@ -753,7 +762,7 @@ export function derive(status, nowMs) {
       if (slow) add('td-slow', 'warning', 60, 'TouchDesigner is running slowly: the river will look jerky', `${cap(label)} at ${fps} frames a second instead of 60${tdErrors ? `, with ${tdErrors} errors in the file` : ''}.`,
         `Look at bitcube's screen for what is slow or erroring; if it doesn't recover in a few minutes, press ${YEAR_PRESS} (about a minute dark).`, ['touchdesigner', 'ropes']);
       if (calibrating && calDry) add('calibrating', 'warning', 61, "Calibration dry run: the lights stay as they are",
-        `It walks the calibration's steps without touching the lights (${calStageWords} now) and ends by itself in about a minute.`,
+        `It walks the calibration's steps without touching the lights${calStageWords ? `; it is at ${calStageWords} now,` : ','} and ends by itself in about a minute.`,
         'Nothing to do; it ends by itself. To end it now, stop it on the Lights page.', ['ropes']);
       // a decode of earlier photos: a calibration, never "a dry run", that touches no lights (CR9 #8)
       else if (calibrating && calQuiet) add('calibrating', 'warning', 61, 'Calibrating from earlier photos: the lights stay as they are',
@@ -777,6 +786,18 @@ export function derive(status, nowMs) {
         `The camera answers but sends nothing${clips.river.present && clips.river.failing ? `; no clips to Dave ${sinceWords(clips.river)}` : ''}.`,
         "Ask Will to restart the river camera, or wait for the Starlink link to settle. If the live river isn't needed tonight, switch to the river's year, which doesn't use it.",
         ['river camera', clips.river.failing ? 'modal link' : null, recErr ? 'recorder' : null]);
+    } else if (td) {
+      // TouchDesigner restarting, starting, not running or frozen: the rope boxes and the panel sender are read by bitcube itself, so
+      // a cabling fault is still known, and still a fault of its own: a restart never ranks above it, nor files it under itself (R10 #29)
+      const after = tdRestarting || tdOffBooting ? 'after it restarts' : 'when it is back';
+      if (boxesDown.length === 2) add('lights', 'down', 70, `The lights aren't connected: neither rope box answers${ledMissing ? ' and bitcube sees no panel sender' : ''}`,
+        `Both rope boxes are silent${ledMissing ? ' and bitcube sees no panel sender' : ''}: that is the cabling, not TouchDesigner, so the ropes${ledMissing ? ' and the panels' : ''} stay dark ${after}.`,
+        "In the ceiling: plug the lighting switch into bitcube's LIGHTS port and the panel sender into bitcube's HDMI. The ropes pick up by themselves; then check here that both boxes answer and bitcube sees the panel sender.",
+        ['rope box 1', 'rope box 2', ledMissing ? 'hub75 panels' : null]);
+      else if (boxesDown.length) add('box', 'warning', 64, `${cap(boxWords(boxesDown[0]))} isn't answering: those ropes may be dark`, `The box does not answer bitcube, whatever TouchDesigner is doing.`,
+        'Check power to that box and its cable to the lighting switch.', [boxesDown[0]]);
+      if (ledMissing && boxesDown.length < 2) add('panels', 'down', 65, 'The panels have no sender: bitcube sees no panel sender', 'The panels get their picture over HDMI through the panel sender; bitcube does not see it, so they are dark.',
+        "Check the HDMI cable from bitcube to the panel sender and the sender's power.", ['hub75 panels']);
     }
     if (internetDown) add('no-internet', 'warning', 54, routerDown ? "The router isn't answering: no internet and no gallery camera, but the show runs by itself"
                                                      : "No internet at Gray Area: the show runs, but clips can't reach Dave's agent and the river site is unreachable",
@@ -818,9 +839,15 @@ export function derive(status, nowMs) {
   if (restartBy) {
     const fl = FILES[restartBy.file ?? YEAR_FILE]?.label ?? 'a show file';
     const what = restartBy.action === 'rebuild' ? `rebuilding ${fl}` : /^the restart on /.test(restartBy.label) ? `restarting TouchDesigner on ${fl}` : `switching TouchDesigner to ${fl}`;
-    const wait = `Someone is ${what} now: wait a minute and look again.`;
-    for (const p of P) if (p.action && PRESSES.test(p.action)) Object.assign(p, { action: wait, waits: restartBy.id, chosen: true });
-    for (const x of items) if (x.action && PRESSES.test(x.action)) x.action = wait;
+    // a rebuild builds and saves before it restarts: a few minutes, never "a minute" under "usually about 2.5 min" (R10 #13)
+    const wait = `Someone is ${what} now: wait ${restartBy.action === 'rebuild' ? 'a few minutes' : 'a minute'} and look again.`;
+    // only where the change in flight is the remedy the advice names (R10 #13): any restart for TouchDesigner slow, not running or
+    // frozen; one that ends on the river's year for the live river or an old file showing, the year's page and the river camera's
+    // rain. A restart of the live river never fixes a dead camera: that advice, and its call line, stay the cause's own
+    const toYear = (restartBy.file ?? YEAR_FILE) === YEAR_FILE;
+    const remedy = (id) => ['td-slow', 'td-off', 'td-frozen', 'touchdesigner'].includes(id) || toYear;
+    for (const p of P) if (p.action && PRESSES.test(p.action) && remedy(p.id)) Object.assign(p, { action: wait, waits: restartBy.id, chosen: true });
+    for (const x of items) if (x.action && PRESSES.test(x.action) && remedy(x.id)) x.action = wait;
   } else if (held) for (const p of P) if (p.id === 'td-off' || p.id === 'td-frozen') p.waits = held.id;
   // Unknown must never look like OK: anything still unknown that no cause explains gets a cause of its own.
   const explained = new Set(P.flatMap((p) => p.items));
@@ -922,6 +949,7 @@ export function derive(status, nowMs) {
     confirmed: confirmedList,   // [{ id, request_id, action, file, label, source, maybe, at }]: changes the server confirmed in the last 10 min (entryVerdict)
     expired: expiredList,       // the same, for changes it gave up on (no reading showed them within their limit)
     verdicts: verdictList,      // [{ id, request_id, verdict }]: the verdicts the history kept, for longer (R8 #0)
+    failed: failedList,         // [{ …, error?, maybe }]: changes refused or failed (or a quick one bitcube didn't answer: maybe) (R10 #31)
     words: tdOk ? `${cap(tdWords)}${yearOk ? `: ${year.season}, ${intensityWord(intensity)}, ${modeWords}` : ''}. ${cap(ropesWords)}.` : (top?.headline ?? ''),
   };
 
@@ -984,9 +1012,10 @@ export function derive(status, nowMs) {
  *  bitcube has only just booted. No reading at all (none yet, or the check failed) says nothing (the pages have their own reasons,
  *  and bitcube answers a switch itself); a reading that can't say (no td, an uptime that isn't a number) is TD_UNREADABLE_WHY: a
  *  switch then waits for a check that can. A change in flight that restarts TouchDesigner is derive()'s to add (byEntry). */
-export const TD_STARTING_WHY = 'TouchDesigner is still starting: wait a minute';
-export const TD_RESTARTING_WHY = 'TouchDesigner is restarting: wait a minute';
-export const TD_UNREADABLE_WHY = "bitcube's full check can't say whether TouchDesigner is starting: wait a minute and try again";
+// in the band's own words for the same state (bitcube just booted: "still coming up"), one colon after "Not possible now:" (R10 #15)
+export const TD_STARTING_WHY = 'bitcube is still coming up; wait a minute';
+export const TD_RESTARTING_WHY = 'TouchDesigner is restarting; wait a minute';
+export const TD_UNREADABLE_WHY = "bitcube's full check can't say whether TouchDesigner is starting; wait a minute and try again";
 export function tdStartingWhy(pr) {
   if (pr == null) return null;
   const p = obj(pr), td = obj(p?.td), up = p?.uptime_h;
@@ -1127,10 +1156,13 @@ export function entriesAt(list, serverNowMs) {
  *  studio chat.", "Waiting for bitcube to show <label>.", "No answer in time for <label>: waiting for bitcube to show whether it
  *  happened." (R7 #12) */
 export function entrySaid(a) {
-  const label = a?.label ?? 'a change', from = a?.source === 'studio chat' ? ', from the studio chat' : '';
-  if (a?.maybe === true) return `No answer in time for ${label}${from}: waiting for bitcube to show whether it happened.`;
+  const label = a?.label ?? 'a change', from = saidFrom(a);
+  if (a?.maybe === true) return `No answer in time for ${label}: waiting for bitcube to show whether it happened${from}.`;
   return a?.phase === 'confirming' ? `Waiting for bitcube to show ${label}${from}.` : `Applying: ${label}${from}.`;
 }
+/** Who sent a change, said (R10 #9): ", from the studio chat", else ", from another phone": a region only ever says another phone's
+ *  change (this phone's is said on its control), and a refused press of the same thing never hears "Applying: …" as its own. */
+const saidFrom = (a) => (a?.source === 'studio chat' ? ', from the studio chat' : ', from another phone');
 /** How long after another phone's change ended a live region still says how it ended (R8 #9): said once, when it appears. */
 export const ENDED_SAID_S = 30;
 /** A change ended confirmed or expired that waited for the server's verdict (a switch, a rebuild, a boot-file change, a lighting
@@ -1140,12 +1172,14 @@ const endedAwaited = (e) => e.maybe || Object.hasOwn(AWAITED, e.action);   // an
  *  the change of the boot file to the live river, from the studio chat." or "The change of the boot file to the live river: bitcube
  *  didn't show it in time." (R8 #9). own: { ownIds } (ownEntries): this phone's own change is said on its control. nowMs: the
  *  server's clock. A page says each once, by its id (endedOnce, R9 #5). */
-export function endedEntries(m, { ownIds = [] } = {}, nowMs = null) {
+export function endedEntries(m, { ownIds = [], skip = null } = {}, nowMs = null) {
   const now = num(nowMs);
   if (!m?.show || now == null) return [];
-  const recent = (list, verdict) => (list ?? []).filter((e) => e.id && !ownIds.includes(e.id) && endedAwaited(e) && num(e.at) != null && now - e.at >= 0 && now - e.at <= ENDED_SAID_S * 1000)
-    .map((e) => ({ id: e.id, label: e.label, at: e.at, said: verdict === 'confirmed' ? `Done: ${e.label}${e.source === 'studio chat' ? ', from the studio chat' : ''}.`
-      : `${cap(e.label)}${e.source === 'studio chat' ? ', from the studio chat' : ''}: bitcube didn't show it in time.` }));
+  // skip(entry, verdict): what a page says another way (Lights: a calibration's start, said by the Calibrate block's new view, R10 #20)
+  const recent = (list, verdict) => (list ?? []).filter((e) => e.id && !ownIds.includes(e.id) && endedAwaited(e) && num(e.at) != null && now - e.at >= 0 && now - e.at <= ENDED_SAID_S * 1000
+      && !(typeof skip === 'function' && skip(e, verdict)))
+    .map((e) => ({ id: e.id, label: e.label, at: e.at, said: verdict === 'confirmed' ? `Done: ${e.label}${saidFrom(e)}.`
+      : `${cap(e.label)}${saidFrom(e)}: bitcube didn't show it in time.` }));
   return [...recent(m.show.confirmed, 'confirmed'), ...recent(m.show.expired, 'expired')].sort((a, b) => a.at - b.at);
 }
 /** The words of endedEntries. */
@@ -1195,7 +1229,7 @@ export function bandSaid(m, own = {}) { const p = bandParts(m, own); return [p.h
 function mineIds(m, mine = {}) {
   const ids = (mine?.ids ?? []).filter((x) => typeof x === 'string' && x !== '');
   const reqs = new Set((mine?.requestIds ?? []).filter((x) => typeof x === 'string' && x !== ''));
-  if (reqs.size) for (const list of [m?.show?.applying, m?.show?.confirmed, m?.show?.expired, m?.show?.verdicts]) {
+  if (reqs.size) for (const list of [m?.show?.applying, m?.show?.confirmed, m?.show?.expired, m?.show?.failed, m?.show?.verdicts]) {
     for (const e of list ?? []) if (typeof e?.id === 'string' && e.request_id && reqs.has(e.request_id) && !ids.includes(e.id)) ids.push(e.id);
   }
   return ids;
@@ -1233,7 +1267,8 @@ export const CONFIRMING_SAID = 'Sent; waiting for bitcube to show it';
 export function entryWords(a, elapsedS) {
   const from = a?.source === 'studio chat' ? ' · from the studio chat' : '';
   // one bitcube didn't answer in time (maybe): not an ordinary change in progress, and its usual time means nothing now (R7 #15)
-  if (a?.maybe === true) return `No answer in time for ${a?.label ?? 'a change'}${from}: waiting for bitcube to show whether it happened · ${elapsedClock(elapsedS)}`;
+  // its source after its words, as every other entry line has it, and as the hidden region says it (R10 #26)
+  if (a?.maybe === true) return `No answer in time for ${a?.label ?? 'a change'}: waiting for bitcube to show whether it happened${from} · ${elapsedClock(elapsedS)}`;
   const confirming = a?.phase === 'confirming';
   const head = confirming ? `Waiting for bitcube to show ${a?.label ?? 'a change'}` : `Applying: ${a?.label ?? 'a change'}`;
   // the usual time the sending phone gives too: a boot file shows with bitcube's next full check, a run in its progress (R8 #22)
@@ -1249,6 +1284,7 @@ export function entryVerdict(m, id) {
   if ((m.show.applying ?? []).some((e) => e.id === id)) return 'pending';
   if ((m.show.confirmed ?? []).some((e) => e.id === id)) return 'confirmed';
   if ((m.show.expired ?? []).some((e) => e.id === id)) return 'expired';
+  if ((m.show.failed ?? []).some((e) => e.id === id)) return 'failed';
   // the lists keep 10 min; the history keeps the verdict for longer, and across a restart of the server (R8 #0)
   return (m.show.verdicts ?? []).find((v) => v.id === id)?.verdict ?? null;
 }
@@ -1257,7 +1293,7 @@ export function entryVerdict(m, id) {
  *  the history's verdicts. null when no list names it. */
 export function entryIdOf(m, requestId) {
   if (!requestId || !m?.show) return null;
-  for (const list of [m.show.applying, m.show.confirmed, m.show.expired, m.show.verdicts]) {
+  for (const list of [m.show.applying, m.show.confirmed, m.show.expired, m.show.failed, m.show.verdicts]) {
     const e = (list ?? []).find((x) => x.request_id === requestId && typeof x.id === 'string');
     if (e) return e.id;
   }
@@ -1319,8 +1355,11 @@ export function ownVerdict(m, c = {}) {
   if (flying || (state === 'unconfirmed' && c?.lost && !c?.held)) {
     const v = flying ? (entryId ? entryVerdict(m, entryId) : null) : serverJudged(m, entryId, c?.sent ?? null);
     const step = v === 'confirmed' ? 'done' : v === 'expired' ? (flying ? 'expired' : c?.saidExpired ? null : 'gave-up')
+      : v === 'failed' ? 'failed'
       : v === 'pending' && holds ? 'held' : v === 'pending' && !pend.maybe && (!flying || pend.phase === 'confirming') ? 'confirming' : null;
-    return { entryId, unlockAt: step === 'held' ? num(pend.unlock_at) : null, judged: !!step, step };
+    // one the server saw fail (R10 #31): its words, and whether it may still have happened (a quick change bitcube didn't answer)
+    const f = step === 'failed' ? (m.show.failed ?? []).find((x) => x.id === entryId) : null;
+    return { entryId, unlockAt: step === 'held' ? num(pend.unlock_at) : null, judged: !!step, step, ...(f ? { failed: { error: f.error ?? null, maybe: f.maybe === true } } : {}) };
   }
   const unlockAt = c?.held && state === 'unconfirmed' && pend ? num(pend.unlock_at) : null;
   // the server's verdict decides a change it confirms, and any change whose entry is known (a quick one found by its request id)
@@ -1330,6 +1369,13 @@ export function ownVerdict(m, c = {}) {
   const step = v === 'confirmed' ? 'done' : v === 'expired' && state === 'confirming' ? 'expired' : v === 'expired' && !c?.saidExpired ? 'gave-up' : null;
   return { entryId, unlockAt, judged, step };
 }
+/** A press mission control hasn't got (R10 #2): once this many status answers since the press came without its request id (in no
+ *  list: in flight, confirmed, expired, failed or the history's verdicts), its line says so; at its limit, or as soon as its answer
+ *  was lost on the network, it is "Not sent": nothing changed, and its buttons unlock. */
+export const UNKNOWN_ANSWERS = 2;
+export const NOT_RECEIVED = 'Not received by mission control yet';
+/** "Not sent at 21:04: mission control never got it; nothing changed. Press again." */
+export function neverGotWords(at) { return `Not sent at ${at}: mission control never got it; nothing changed. Press again.`; }
 /** This page's own change that bitcube didn't answer in time while its lock holds (R8 #18), said once on its control in place of a
  *  "Wait: …" line about itself: "The switch to the live river got no answer from bitcube in time: it may or may not have happened;
  *  the buttons unlock when bitcube shows it, or by 21:07." */
@@ -1342,12 +1388,31 @@ export function heldWords(what, unlockAt) {
 export function unconfirmedWords(what, at, where = 'look at the Now line, or call Gavin') {
   return `${what ? `${cap(String(what))} was sent at ${at}` : `Sent at ${at}`}, but bitcube didn't show it in time: ${where}.`;
 }
+/** A confirm left open asks what it asked at the press; whether it would ask something else now (R10 #28): its title or its action
+ *  (the show file changed meanwhile: "Restart on the river's year now?" is a switch away from the live river once that runs).
+ *  asked: what the sheet shows; now: what a press would ask now (null when it can't be told: nothing to compare). */
+export function confirmChanged(asked, now) {
+  if (!asked || !now) return false;
+  return asked.title !== now.title || asked.ok !== now.ok;
+}
+/** Why a confirm whose question changed is withdrawn: "Not sent at 21:04: the show file changed meanwhile." */
+export const CHANGED_MEANWHILE = 'the show file changed meanwhile';
 /** A press judged again and found impossible, or a confirm withdrawn: "Not sent at 21:04: bitcube is offline." Another change in
  *  flight is said in the past tense, so the line stays true after it ends: "Not sent at 21:17: the restart on the river's year
  *  was being applied. Press again when it is done." (R6 #4, #16) */
+/** TouchDesigner starting or restarting with no entry holding it (model.js tdStartingWhy, the server's 409 too), in the past tense so it
+ *  stays true once it has started, with one instruction (R10 #14): "bitcube was still coming up. Press again in a minute.", or null. */
+function pastStarting(w) {
+  const x = /^(bitcube is still coming up|TouchDesigner is (?:still starting|restarting)|bitcube's full check can't say whether TouchDesigner is starting)[:;] wait a minute(?: and try again)?$/i.exec(w);
+  if (!x) return null;
+  return x[1].replace(/^bitcube is still/, 'bitcube was still').replace(/^TouchDesigner is still/, 'TouchDesigner was still').replace(/^TouchDesigner is restarting/, 'TouchDesigner was restarting')
+    .replace(/can't say whether TouchDesigner is starting/, "couldn't say whether TouchDesigner was starting");
+}
 export function notSentWords(why, at) {
   const w = String(why ?? "this page can't reach mission control").replace(/[.\s]+$/, '');
   if (/^wait: /i.test(w)) return `Not sent at ${at}: ${pastWait(w.slice(6), { started: false })}`;
+  const st = pastStarting(w);
+  if (st) return `Not sent at ${at}: ${st}. Press again in a minute.`;
   return `Not sent at ${at}: ${w}.`;
 }
 /** A "wait: …" reason in the past tense, so it stays true once that change ends: "the switch to the live river was being applied.
@@ -1368,5 +1433,7 @@ export function failWords(fail, why, at, { kept = '', tail = 'Try again, or see 
   // another change in flight: in the past tense, as a withdrawn confirm says it, so the line stays true once it ends (R7 #21)
   if (/^wait: /i.test(w)) return `${fail}: ${pastWait(w.slice(6), { kept })}`;
   if (/^a calibration is running\b/i.test(w)) return `${fail}: a calibration is running (${at}).${k} Stop it on the Lights page, or try again when it ends.`;
+  const st = pastStarting(w);
+  if (st) return `${fail}: ${st} (${at}).${k} Press again in a minute.`;
   return `${fail}: ${w} (${at}).${k}${/try again|apply again/i.test(w) ? '' : ` ${tail}`}`;
 }

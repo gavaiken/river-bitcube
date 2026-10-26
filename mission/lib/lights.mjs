@@ -158,6 +158,8 @@ export function planCalibrate(action, body = {}) {
   if (!body || typeof body !== 'object') throw bad('bad body');
   if (!CALIBRATE_ACTIONS.includes(action)) throw bad('action is start, cancel or status');
   if (action !== 'start') return `-Action ${action}`;
+  // a flag is a real true or false: "true", 1 or "yes" is refused, never read as false (a full run that interrupts the show, R10 #37)
+  for (const k of ['dry_run', 'task']) if (body[k] !== undefined && typeof body[k] !== 'boolean') throw bad(`${k} is true or false`);
   let args = '-Action start';
   if (body.dry_run === true) args += ' -DryRun';
   if (body.decode_only != null && body.decode_only !== '') {

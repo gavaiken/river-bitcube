@@ -107,7 +107,12 @@ const STATE_CODE = new RegExp([
 const CURL_POSTS = String.raw`(?-i:\s(?:-[A-Za-z]*(?:[dF]|X\s*POST\b)|--request(?:\s+|=)POST\b|--data(?:-[a-z]+)?\b|--form(?:-string)?\b|--json\b))`;
 const CURL_GET = String.raw`(?-i:\s(?:-[A-Za-z]*G|--get\b))`;
 const POST_YEAR = new RegExp(String.raw`\bcurl(?:\.exe)?\b(?![^;&|\n]*${CURL_GET})(?=[^;&|\n]*:9981\b)(?=[^;&|\n]*${CURL_POSTS})`
-  + String.raw`|Invoke-(?:RestMethod|WebRequest)\b(?=[^;&|\n]*-Method\s+['"]?Post\b)(?=[^;&|\n]*:9981\b)`, 'i');
+  + String.raw`|Invoke-(?:RestMethod|WebRequest)\b(?=[^;&|\n]*-Method\s+['"]?Post\b)(?=[^;&|\n]*:9981\b)`
+  // R10 #39: any other client that sends one: wget's --post-data, --post-file or --method=POST; HTTPie's or xh's method word; Python's
+  // requests or httpx; a fetch with method POST
+  + String.raw`|\bwget(?:\.exe)?\b(?=[^;&|\n]*:9981\b)(?=[^;&|\n]*\s--(?:post-data|post-file|body-data|body-file|method[=\s]+['"]?(?:POST|PUT|PATCH|DELETE)\b))`
+  + String.raw`|\b(?:https?|xh)\s+(?:-\S+\s+)*(?:POST|PUT|PATCH|DELETE)\s+[^;&|\n]*:9981\b`
+  + String.raw`|\b(?:requests|httpx|session|s)\.(?:post|put|patch|delete)\s*\([^)]*:9981\b|\bfetch\s*\([^)]*:9981\b[^)]*\bmethod\s*:\s*['"](?:POST|PUT|PATCH|DELETE)`, 'i');
 /** Direct changes that read like checks, each with its words (R9 #38): the lighting port's own script, Will's rope lights and any
  *  scheduled task, TouchDesigner's launcher, bitcube's restart or shutdown and its network adapters, a POST to the year's page, the
  *  router's settings and its services, and a bridge call into the year's own setters. */
@@ -116,7 +121,15 @@ const CHANGE_WORDS = [
   [/\bStart-ScheduledTask\b[^;&|\n]*\bRopeLights\b|\bStart-Rope-Lights\b|\bschtasks\b[^;&|\n]*\/run\b[^;&|\n]*\bRopeLights\b/i, "started Will's rope lights"],
   [/\b(?:Stop|Disable)-ScheduledTask\b[^;&|\n]*\bRopeLights\b|\bStop-Rope-Lights\b|\bschtasks\b[^;&|\n]*\/end\b[^;&|\n]*\bRopeLights\b/i, "stopped Will's rope lights"],
   [/\b(?:Start|Stop|Enable|Disable|Register|Unregister|Set)-ScheduledTask\b/i, 'changed a scheduled task on bitcube'],
+  [/\bschtasks\b[^;&|\n]*\/(?:create|delete|change)\b/i, 'changed a scheduled task on bitcube'],
   [/\bStart-River\.cmd\b/i, 'started TouchDesigner'],
+  // R10 #39: bitcube's other start scripts, its services and its settings; a camera told to restart
+  [/\bStart-Modal\.cmd\b/i, 'started Clips to Dave'],
+  [/\bStart-Presence\.cmd\b/i, 'started the people counter'],
+  [/\bStart-[\w-]+\.cmd\b/i, 'started a program on bitcube'],
+  [/\b(?:Start|Stop|Restart|Set|Suspend|Resume|New|Remove)-Service\b|\bsc(?:\.exe)?\s+(?:start|stop|config|delete|create)\b|\bnet(?:\.exe)?\s+(?:start|stop)\s+\S/i, 'changed a service on bitcube'],
+  [/\b(?:Set|New|Remove|Rename)-ItemProperty\b|\breg(?:\.exe)?\s+(?:add|delete|import)\b|\bpowercfg(?:\.exe)?\b(?=[^;&|\n]*\s[-/](?:change|setactive|set(?:ac|dc)valueindex|hibernate|x)\b)/i, "changed bitcube's settings"],
+  [/\bcmd=Reboot\b/i, 'restarted a camera'],
   [/\bshutdown(?:\.exe)?\s+(?:\S+\s+)*?\/r\b|\bRestart-Computer\b/i, 'restarted bitcube'],
   [/\bshutdown(?:\.exe)?\s+(?:\S+\s+)*?\/[sp]\b|\bStop-Computer\b/i, 'shut down bitcube'],
   [/\b(?:Disable|Enable|Restart|Set|Rename)-NetAdapter\w*\b|\b(?:New|Remove|Set)-NetIP(?:Address|Interface)\b|\b(?:New|Remove|Set)-NetRoute\b|\bnetsh\b[^;&|\n]*\b(?:set|add|delete)\b/i, "changed bitcube's network"],
@@ -124,6 +137,14 @@ const CHANGE_WORDS = [
   [/\buci\s+(?:set|commit|delete|add|add_list|del_list|rename|revert)\b/i, "changed the router's settings"],
   [/\/etc\/init\.d\/network\s+(?:restart|reload|stop|start)\b/i, "restarted the router's network"],
   [/\/etc\/init\.d\/\S+\s+(?:restart|reload|stop|start)\b/i, 'restarted a service on the router'],
+  // R10 #39: the router restarted, its Wi-Fi or its uplink taken down and up, its own calls that change it, its scheduled jobs. A
+  // Linux reboot is the router's (bitcube restarts with shutdown /r); wifi alone reloads it; wifi status, crontab -l, a ubus status
+  // or get stay checks
+  [/(?<![\w./=@-])reboot(?![\w.=-])/i, 'restarted the router'],
+  [/(?<![\w./=@-])wifi(?:\s+(?:down|up|reload)\b|(?=\s*(?:$|[;&|\n"'])))/i, "restarted the router's Wi-Fi"],
+  [/(?<![\w./=@-])if(?:down|up)(?![\w.-])|\bubus\s+call\s+network\.interface\S*\s+(?:down|up|restart|reload|renew)\b|\bubus\s+call\s+network\s+(?:restart|reload)\b/i, "restarted the router's network"],
+  [/\bubus\s+call\s+\S+\s+(?!(?:status|list|dump|info|board|get\w*|state)(?![\w-]))[A-Za-z]\w*/i, "changed the router's settings"],
+  [/\bcrontab\b(?![^;&|\n]*\s-l\b)/i, "changed the router's scheduled jobs"],
   [/\btd\.ps1\b[\s\S]*?\bset_(?:mode|target|rules?|season|intensity|manual|cycle)\w*\s*\(/i, "changed the river's year"],
 ];
 /** A direct change whose own words are known whatever else the command holds (the state files above, then CHANGE_WORDS). */
@@ -172,7 +193,7 @@ function actingFallback(verb, ...texts) {
 // setattr( (CR7 #9); a comparison (==, !=) or a read is not one
 // R8 #37: also a write to the installation's state (writesState, above), a build script run inside the show (td.ps1 -File), and an
 // operator switched off or recooked through the bridge (.bypass =, .allowCooking =, .cook(, .store()
-const CHANGE_CMD = new RegExp(String.raw`-Action\s+(ropes|hub75|switch|bootfile|lightsroute|rebuild|calibrate|mode|target|rules)\b|\/api\/control\/|Restart-Computer|Stop-Process|Start-Process|taskkill|\bkill\b|schtasks\s+\/(run|end|change)|ptz\.py\s+\w+\s+(?!presets)|td_save|calibrate\.ps1\s+-Action\s+(start|cancel)`
+const CHANGE_CMD = new RegExp(String.raw`-Action\s+(ropes|hub75|switch|bootfile|lightsroute|rebuild|calibrate|mode|target|rules)\b|\/api\/control\/|Restart-Computer|Stop-Process|Start-Process|taskkill|\bkill\b|schtasks\s+\/(run|end|change|create|delete)|ptz\.py\s+\w+\s+(?!presets)|td_save|calibrate\.ps1\s+-Action\s+(start|cancel)`
   + String.raw`|td\.ps1\b[\s\S]*?(?:\.par\.\w+(?:\.\w+)?\s*=(?!=)|\.(?:val|expr|mode|bindExpr|bypass|allowCooking|lock|display|render)\s*=(?!=)|\bsetattr\s*\(|\.(?:cook|store|unstore|destroy|copy|create)\s*\(|\bset_\w+\s*\(|\s-File\b)`, 'i');
 /** A command part that changes the installation: a control, a process, the bridge, a write to its state (also by code, or copied in
  *  with scp), or one of the direct changes that read like checks (R9 #38); a control, a process or a direct change only where it is

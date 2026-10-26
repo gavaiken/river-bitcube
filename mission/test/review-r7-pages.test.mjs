@@ -61,7 +61,7 @@ test('a page\'s own limit counts from the answer, as the server\'s does (a slow 
 test('R7 #15: a change the server got no answer for reads as that on the other phones, not as an ordinary change in progress', () => {
   const w = entryWords({ ...RESTART, label: 'the switch to the live river', maybe: true }, 75);
   assert.equal(w, 'No answer in time for the switch to the live river: waiting for bitcube to show whether it happened · 1:15');
-  assert.equal(entryWords({ ...RESTART, maybe: true, source: 'studio chat' }, 5), "No answer in time for the restart on the river's year · from the studio chat: waiting for bitcube to show whether it happened · 0:05");
+  assert.equal(entryWords({ ...RESTART, maybe: true, source: 'studio chat' }, 5), "No answer in time for the restart on the river's year: waiting for bitcube to show whether it happened · from the studio chat · 0:05");
   assert.equal(entryWords(RESTART, 14), "Waiting for bitcube to show the restart on the river's year · 0:14 · usually about 1\u00a0min");
 });
 

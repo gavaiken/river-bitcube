@@ -506,13 +506,15 @@ test('round 6 #40: only the checked fields of a request reach status.applying an
   const { checkedControl } = await import('../lib/mission.mjs');
   const { checkedCalibrate } = await import('../lib/lights.mjs');
   assert.deepEqual(checkedControl('switch', { file: LIVE, extra: junk }), { file: LIVE });
-  assert.deepEqual(checkedControl('ropes', { dark: 'true', x: 1 }), { dark: false });
+  assert.deepEqual(checkedControl('ropes', { dark: false, x: 1 }), { dark: false });
+  assert.throws(() => checkedControl('ropes', { dark: 'true' }), (e) => e.status === 400);       // R10 #37: refused, never "on"
   assert.deepEqual(checkedControl('target', { season: 'summer', intensity: '0.7', why: junk }), { season: 'summer', intensity: 0.7 });
   assert.deepEqual(checkedControl('rules', { rules: { cycle_seconds: '240' }, x: 1 }), { rules: { cycle_seconds: 240 } });
   assert.deepEqual(checkedControl('hub75', { brightness: '0.5', y: 2 }), { brightness: 0.5 });
   assert.deepEqual(checkedControl('rules-reset', { anything: junk }), {});
   assert.deepEqual(checkedCalibrate('cancel', { dry_run: true, x: 1 }), { action: 'cancel' });
-  assert.deepEqual(checkedCalibrate('start', { dry_run: 'yes', decode_only: 'pixelmap-20261018-154155', task: true }), { action: 'start', decode_only: 'pixelmap-20261018-154155', task: true });
+  assert.deepEqual(checkedCalibrate('start', { dry_run: false, decode_only: 'pixelmap-20261018-154155', task: true }), { action: 'start', decode_only: 'pixelmap-20261018-154155', task: true });
+  assert.throws(() => checkedCalibrate('start', { dry_run: 'yes' }), (e) => e.status === 400);    // R10 #37
   assert.throws(() => checkedControl('mode', { mode: 'chaos' }), (err) => err.status === 400);
   // a control's entry names its show file only for a switch, rebuild or boot-file change, and only a known one
   const g2 = gated();

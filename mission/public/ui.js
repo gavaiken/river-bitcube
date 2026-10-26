@@ -37,7 +37,8 @@
 // poll at once; after a theme change, 'mc:theme' (detail: 'auto' | 'light' | 'dark').
 import { api as rawApi, esc, md, plainError, noAnswerText, POLL_TIMEOUT_MS } from '/app.js';
 import { dur as modelDur, CONTACTS, TZ, ctlInit, ctlStep, ctlView, applyingWords, applyingText, confirmingWords, CONFIRMING_SAID, unconfirmedWords,
-  notSentWords, failWords, EXPECT_S, newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS, liveNews, byMinute } from '/model.js';
+  notSentWords, failWords, EXPECT_S, newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS, liveNews, byMinute, UNKNOWN_ANSWERS, NOT_RECEIVED,
+  neverGotWords, elapsedClock } from '/model.js';
 
 export { esc, md, plainError, noAnswerText };
 
@@ -509,16 +510,18 @@ export function setLive(region, words, { once = [] } = {}) {
   const queued = speech.queue.find((x) => x.region === region);
   if (!head && !lines.length && !extra.length) { speech.queue = speech.queue.filter((x) => x !== queued); if (region.textContent) region.textContent = ''; return; }   // emptied silently
   const news = liveNews(prev, { head, lines });
+  // how a change ended is said before what is new: "Done: the change of the boot file to the live river. Applying: … the river's
+  // year." never the new one first, which makes the ended one sound like it (R10 #21)
   if (queued) {
-    // not said yet: what of it still stands (and what it says once), then what is new
-    const parts = (queued.parts ?? []).filter((p) => p.once || p.text === head || lines.includes(p.text));
+    // not said yet: what it says once (and the new once lines), then what of it still stands, then what is new
+    const kept = (queued.parts ?? []).filter((p) => p.once || p.text === head || lines.includes(p.text));
+    const parts = [...kept.filter((p) => p.once), ...extra.map((text) => ({ text, once: true })), ...kept.filter((p) => !p.once)];
     for (const t of news) if (!parts.some((p) => p.text === t)) parts.push({ text: t });
-    for (const t of extra) parts.push({ text: t, once: true });
     if (!parts.length) { speech.queue = speech.queue.filter((x) => x !== queued); return; }
     queued.parts = parts; queued.text = joinSaid(parts.map((p) => p.text));
     return;
   }
-  const parts = [...news.map((text) => ({ text })), ...extra.map((text) => ({ text, once: true }))];
+  const parts = [...extra.map((text) => ({ text, once: true })), ...news.map((text) => ({ text }))];
   if (parts.length) say(joinSaid(parts.map((p) => p.text)), region, null, parts);
 }
 /** speakBy(fn): the page's other speech takes its turn in the one queue (R9 #10). The chat thread is a log (role="log") that speaks by
@@ -674,12 +677,18 @@ export function control(target, opts = {}) {
   const box = host.closest('.ctl') ?? (host.classList.contains('ctl') ? host : null);
   let s = ctlInit(o.why), text = '', applyText = null, result = null, asking = null, untick = null, judgedAt = null, parked = false, entryId = null, sent = null,
     requestId = null, saidExpired = false, sentServer = null, held = false, lost = false, sendToken = null;
+  // a press's standing with mission control (R10 #2, #6): the status answers since it that didn't know its request id, whether one
+  // did, its answer lost on the network (it waits for its entry, saying nothing), and the line saying it hasn't been received
+  let seenAt = null, unknown = 0, received = false, lostNet = false, lostErr = null, notReceived = false;
+  /** Only a control whose press is recorded by its request id (o.action: Lights' Start, Dry run, Rebuild) is looked for by it. */
+  const tracked = () => !!o.action && !!requestId;
   const now = () => Date.now();
   const elapsedS = () => (s.sentAt == null ? 0 : (now() - s.sentAt) / 1000);
   const lockEls = () => { const l = typeof o.lock === 'function' ? o.lock() : o.lock; return l ? Array.from(l instanceof Element ? [l] : l).filter((x) => x instanceof Element) : []; };
   const sibs = () => (o.siblings ?? Array.from((box ?? host).querySelectorAll('button'))).filter((b) => b !== button);
   const hold = (els, on, flag) => { for (const b of els) { if (on) { if (!b.disabled) { b.disabled = true; b.dataset[flag] = '1'; } } else if (b.dataset[flag]) { b.disabled = false; delete b.dataset[flag]; } } };
   const busyLine = () => (s.state === 'confirming' ? confirmingWords(elapsedS(), o.usual ?? o.expectS ?? null)
+    : notReceived ? `${NOT_RECEIVED} · ${elapsedClock(elapsedS())}`
     : applyingWords(applyText ?? o.pending ?? (o.what ? applyingText(o.what) : 'Sending to bitcube…'), elapsedS(), o.expectS));
   function paint() {
     const v = ctlView(s, o.why);
@@ -756,6 +765,7 @@ export function control(target, opts = {}) {
       announce(text);
       try { o.onDone?.(result); } catch (e) { console.warn('onDone', e); }
     } else if (s.state === 'unconfirmed' && was !== 'unconfirmed') {
+      if (words == null) saidExpired = true;   // the server gave up on it, or this page did: never said again as "gave up" (R10 #30)
       text = words ?? unconfirmedWords(o.what, sclock(sentServer ?? serverNow()), o.unconfirmed ?? 'look at the Now line, or call Gavin');   // names what was sent (R6 #16)
       announce(text);
     } else if (s.state === 'failed') { text = words ?? text; announce(text); }
@@ -777,6 +787,7 @@ export function control(target, opts = {}) {
   const failText = (e) => failWords(o.fail, plainError(e), sclock(), { tail: 'Try again, or check Status.' });
   async function send(next) {
     applyText = null; entryId = null; saidExpired = false; held = false; lost = false; sentServer = serverNow();
+    seenAt = null; unknown = 0; received = false; lostNet = false; lostErr = null; notReceived = false;
     requestId = newRequestId();          // this press's own id, sent with it (R8 #2)
     const token = sendToken = {};        // this press: an answer that comes after the server's verdict ended it changes nothing (R9 #1)
     // what was sent, and when on the server's clock (its last answer carried forward), for when its verdict can't be known (CR7 #4)
@@ -791,7 +802,18 @@ export function control(target, opts = {}) {
       result = r;
     } catch (e) {
       if (sendToken !== token) return;   // ended meanwhile on the server's verdict (R9 #1)
+      // its answer lost on the network: nothing said and focus left where it is; the next status answer finds its entry by the request
+      // id it sent (update) and says the one state it is in, or that mission control never got it (R10 #6, #22, #31, #32)
+      if (e?.network && tracked()) { lostNet = true; lostErr = e; try { lastStatus.h?.refresh?.(); } catch { /* the next poll */ } return; }
       if (typeof e?.applyingId === 'string') entryId = e.applyingId;     // a maybe answer still names its entry
+      // no answer in its time, and the status answers since the press never knew its request id: mission control never got it (R10 #2)
+      const contact = lastStatus.wall != null && Date.now() - lastStatus.wall <= LOST_MS;
+      if (tracked() && e?.noAnswer && !e?.serverMaybe && !received && unknown >= UNKNOWN_ANSWERS && contact) {
+        notReceived = false;
+        try { o.onFail?.(e); } catch (x) { console.warn('onFail', x); }
+        return go(ctlStep(s, { type: 'error', maybe: false, now: now() }), neverGotWords(sclock()));
+      }
+      notReceived = false;
       const maybe = !!(e?.maybe || (e?.noAnswer && e?.posted));
       lost = maybe && !e?.serverMaybe;   // lost on the network, or no answer in time: its entry may still say where it is (R9 #29)
       try { o.onFail?.(e); } catch (x) { console.warn('onFail', x); }
@@ -801,6 +823,7 @@ export function control(target, opts = {}) {
       return go(ctlStep(s, { type: 'error', maybe, now: now() }), held ? heldWords(o.what, sclock(byMinute(serverNow() + confirmLimitS(o.expectS) * 1000)))
         : maybe ? noAnswerText(e, o.noAnswer ?? 'the page shows what bitcube reports', serverNow()) : failText(e));
     }
+    notReceived = false;
     try { o.onSent?.(result); } catch (e) { console.warn('onSent', e); }
     go(ctlStep(s, { type: 'ok', confirmed: typeof o.confirmed === 'function' || o.serverConfirms ? false : null, now: now() }));
   }
@@ -831,15 +854,42 @@ export function control(target, opts = {}) {
     // (CR7 #4; sent: only a control that says what it sent, o.sent)
     const own = 'model' in n ? ownVerdict(n.model, { state: s.state, entryId, requestId, sent, serverConfirms: !!o.serverConfirms, held, saidExpired, lost }) : null;
     if (own) entryId = own.entryId;
+    // each status answer since the press: does it know this press at all (R10 #2)? An answer lost on the network waits for it, saying
+    // nothing (R10 #6, #22, #32); one whose entry left with no verdict, or that mission control never got, ends here
+    if (own && s.state === 'applying' && tracked() && !own.judged) {
+      // known: the server has an entry with its request id (ownVerdict finds it by that id while it is applying)
+      const known = !!own.entryId;
+      if (typeof readAt === 'number' && readAt !== seenAt && s.sentAt != null && readAt > s.sentAt) {
+        seenAt = readAt;
+        if (known) { unknown = 0; received = true; } else unknown += 1;
+      }
+      const gone = received && !known, never = !received && unknown >= UNKNOWN_ANSWERS;
+      if (lostNet && (gone || never || elapsedS() * 1000 > (o.expectS === EXPECT_S.rebuild ? 420_000 : 75_000))) {
+        sendToken = null; judgedAt = readAt ?? now(); notReceived = false;
+        try { o.onFail?.(lostErr); } catch (x) { console.warn('onFail', x); }
+        if (never) return go(ctlStep(s, { type: 'error', maybe: false, now: now() }), neverGotWords(sclock()));
+        lost = true;
+        return go(ctlStep(s, { type: 'error', maybe: true, now: now() }), noAnswerText(lostErr, o.noAnswer ?? 'the page shows what bitcube reports', serverNow()));
+      }
+      if (!lostNet && never && !notReceived) { notReceived = true; if (host.isConnected) say(NOT_RECEIVED); }
+      else if (known && notReceived) notReceived = false;
+    }
     if (own?.unlockAt != null && own.step !== 'held') text = heldWords(o.what, sclock(byMinute(own.unlockAt)));
     // its answer still on the way: the server's verdict on its entry ends it now, never at the POST's own limit (R9 #1); its late
     // answer is dropped (sendToken), so the hooks its page refreshes on run here, as send() would have run them: onSent for done and
     // confirming, onFail (with its entry) for expired and held, so Lights' Start, Dry run and Rebuild ask again (CR9 #10)
     if (own?.judged && s.state === 'applying') {
       sendToken = null; judgedAt = typeof readAt === 'number' ? readAt : now();
+      notReceived = false;
       if (own.step === 'done' || own.step === 'confirming') hook('onSent', null);
       else if (own.step === 'expired') hook('onFail', Object.assign(new Error("bitcube didn't show it in time"), { applyingId: own.entryId, expired: true }));
       else if (own.step === 'held') hook('onFail', Object.assign(new Error("bitcube didn't answer in time"), { applyingId: own.entryId, maybe: true, serverMaybe: true }));
+      else if (own.step === 'failed') hook('onFail', Object.assign(new Error(own.failed?.error || "bitcube couldn't do it"), { applyingId: own.entryId, status: 200, maybe: !!own.failed?.maybe }));
+      // the server saw it fail (refused or failed; a quick one bitcube didn't answer: maybe), said once (R10 #31)
+      if (own.step === 'failed') {
+        const e = Object.assign(new Error(own.failed?.error || "bitcube couldn't do it"), { status: 200, serverMaybe: !!own.failed?.maybe });
+        return go(ctlStep(s, { type: 'error', maybe: !!own.failed?.maybe, now: now() }), own.failed?.maybe ? noAnswerText(e, o.noAnswer ?? 'the page shows what bitcube reports', serverNow()) : failText(e));
+      }
       if (own.step === 'done') return go(ctlStep(s, { type: 'model', confirmed: true, now: now() }));
       if (own.step === 'expired') return go(ctlStep(s, { type: 'expired', now: now() }));
       if (own.step === 'confirming') return go(ctlStep(s, { type: 'pending', now: now() }));
@@ -851,6 +901,8 @@ export function control(target, opts = {}) {
     if (own?.judged) {
       judgedAt = typeof readAt === 'number' ? readAt : now();
       if (own.step === 'done') return go(ctlStep(s, { type: 'model', confirmed: true, now: now() }));
+      // one that may or may not have happened, which the server saw fail: it didn't happen (R10 #31)
+      if (own.step === 'failed' && !own.failed?.maybe) { lost = false; return go({ ...s, state: 'failed', at: now(), effect: null }, failText(Object.assign(new Error(own.failed?.error || "bitcube couldn't do it"), { status: 200 }))); }
       if (own.step === 'expired') return go(ctlStep(s, { type: 'expired', now: now() }));
       // one that may or may not have happened, which the server then gave up on: bitcube didn't show it (said once)
       if (own.step === 'gave-up') {
@@ -1173,7 +1225,8 @@ export function mountShell({ page = 'status', title = '' } = {}) {
   function paint() {
     const a = age();
     let text, cls = 'fresh';
-    if (st.checking) text = 'Checking…';
+    // "Checking…" only before the first answer: while polls succeed the header keeps its age, a check in flight or not (R10 #3)
+    if (st.checking && a == null && !st.stale) text = 'Checking…';
     else if (st.stale) { text = a == null ? `No answer yet${st.waitingSince != null ? ` · ${nbsp(modelDur((performance.now() - st.waitingSince) / 1000))}` : ''}` : `No answer for ${nbsp(modelDur(a / 1000))}`; cls += ` lv-${st.stale}`; }
     else text = a == null ? 'Connecting…' : `Updated ${nbsp(modelDur(a / 1000))} ago`;
     if (fresh.textContent !== text) fresh.textContent = text;

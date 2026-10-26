@@ -17,7 +17,9 @@ test('planControl: the whitelist accepts the fixed actions and rejects everythin
   assert.deepEqual(probes.map((p) => p.args), ['-Action ropes -Dark', '-Action hub75 -Brightness 0.50', '-Action bootfile -BootFile river-online-oct-23.toe',
                                                '-Action switch -BootFile river-local-oct-22-seasons.toe', '-Action lightsroute -LightsRoute router', '-Action rebuild -BootFile river-local-oct-22-seasons.toe']);
   assert.ok(probes[5].timeout >= 300_000, 'a rebuild builds, saves and restarts: minutes');
-  for (const dark of ['no', 1, 'true', {}]) assert.equal(planControl('ropes', { dark }).args, '-Action ropes', `dark: ${JSON.stringify(dark)} is not true`);
+  // a dark that isn't a real true or false is refused, never read as "on" (R10 #37)
+  for (const dark of ['no', 1, 'true', {}]) assert.throws(() => planControl('ropes', { dark }), (e) => e.status === 400, `dark: ${JSON.stringify(dark)}`);
+  assert.equal(planControl('ropes', { dark: false }).args, '-Action ropes');
   for (const [a, b] of [['mode', { mode: 'chaos' }], ['target', { season: 'monsoon' }], ['hub75', { brightness: 3 }],
                         ['bootfile', { file: 'evil.toe; rm -rf' }], ['bootfile', { file: 'old-river-online-oct-20.toe' }], ['switch', { file: 'river-online-oct-20.toe' }], ['lightsroute', { route: 'both' }], ['rules', { rules: { 'x; y': 1 } }], ['shell', {}],
                         ['ropes', null], ['mode', 'manual'], ['rebuild', { file: 'river-online-oct-23.toe' }], ['rebuild', {}],
@@ -60,8 +62,8 @@ test('scenarios: listed alphabetically; the cookie picks one, all-good is the de
 test('snapshot: the fixture status plus the scenario name, read again on every call', () => {
   const dir = fixtureDir();
   const m = fm(dir);
-  assert.deepEqual(m.snapshot(), { ...STATUS, applying: [], confirmed: [], expired: [], fixture: 'all-good', now: 5_000_000 });          // no _scenario.now: served on the real clock
-  assert.deepEqual(m.snapshot('bitcube-offline'), { ...STATUS, applying: [], confirmed: [], expired: [], fixture: 'bitcube-offline', now: 5_000_000 });
+  assert.deepEqual(m.snapshot(), { ...STATUS, applying: [], confirmed: [], expired: [], failed: [], fixture: 'all-good', now: 5_000_000 });          // no _scenario.now: served on the real clock
+  assert.deepEqual(m.snapshot('bitcube-offline'), { ...STATUS, applying: [], confirmed: [], expired: [], failed: [], fixture: 'bitcube-offline', now: 5_000_000 });
   assert.equal(m.snapshot('nope').fixture, 'all-good');
   // edit the file: no restart needed
   writeFileSync(join(dir, 'all-good.json'), scenario('all-good', { status: { bitcube: { at: 4_990_000, value: { online: false } }, probe: { age_s: 70, error: 'x' }, modal: null } }));

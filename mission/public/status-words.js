@@ -3,7 +3,7 @@
 // file: probe.ps1 writes boot-file.txt for a switch), the tiles' state words, the band's line for a change in flight from
 // another phone, and when the room's still is due again. status.js lays them out. Relative imports: in the browser these are
 // the same /model.js and /app.js every page loads.
-import { seasonPace, FILES, applyingWords, confirmingWords, entryWords, failWords, notSentWords, LONG_CHANGE_S, changeLabel, awaited } from './model.js';
+import { seasonPace, FILES, applyingWords, confirmingWords, entryWords, failWords, notSentWords, LONG_CHANGE_S, changeLabel, awaited, NOT_RECEIVED, elapsedClock } from './model.js';
 import { plainError } from './app.js';
 
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s ?? '');
@@ -112,6 +112,8 @@ export function bootWords(boot) { return boot ? `${boot.label}${boot.default ? '
 export function controlLine(c, nowMs) {
   const st = c?.s?.state ?? 'ready', el = c?.s?.sentAt != null ? Math.max(0, (nowMs - c.s.sentAt) / 1000) : 0;
   if (st === 'applying') {
+    // a press mission control hasn't got yet (R10 #2): said so, with its time, never "Applying" as if bitcube were at it
+    if (c.notReceived) return { cls: 'pending applying', spin: true, text: `${NOT_RECEIVED} · ${elapsedClock(el)}` };
     // a long change's time follows its words: "Applying: the switch to the live river · 0:23 · usually about 1 min" (no "…" before it)
     const t = c.applyText ?? 'Sending to bitcube…', long = num(c.expectS) != null && c.expectS > LONG_CHANGE_S;
     return { cls: 'pending applying', spin: true, text: applyingWords(long ? t.replace(/…$/, '') : t, el, c.expectS) };

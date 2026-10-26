@@ -36,11 +36,13 @@ test('every control answer names its entry (applying_id), a maybe answer too; a 
   assert.equal(m.maybe, true);
   assert.equal(a.list()[0].id, m.applying_id, 'the maybe answer names the entry it left confirming');
   assert.notEqual(m.applying_id, r.applying_id);
-  // a refused change made an entry too, but it is neither confirmed nor expired: it failed
+  // a refused change made an entry too, but it is neither confirmed nor expired: it failed (kept as the server's verdict: R10 #31)
   const a2 = new Applying({ now: () => t });
   const f = await a2.run('hub75', { brightness: 0.5 }, async () => ({ ok: false, error: 'TouchDesigner did not answer' }));
   assert.equal(typeof f.applying_id, 'string');
-  assert.deepEqual(a2.ended(), { confirmed: [], expired: [] });
+  assert.deepEqual(a2.ended().confirmed, []);
+  assert.deepEqual(a2.ended().expired, []);
+  assert.deepEqual(a2.ended().failed.map((e) => [e.id, e.error]), [[f.applying_id, 'TouchDesigner did not answer']]);
   // an action that isn't recorded (a calibration's cancel, the full check) has none
   assert.equal((await a.run('calibrate', { action: 'cancel' }, async () => ({ ok: true }))).applying_id, undefined);
   // ids from two servers (a restart) never collide
@@ -66,7 +68,7 @@ test('status.confirmed and status.expired: { id, action, file, started_at, at } 
   assert.equal(a.ended().expired.length, 1);
   assert.equal(a.ended().confirmed.length, 0, 'the switch confirmed over 10 min ago is forgotten');
   t += 200_000;
-  assert.deepEqual(a.ended(), { confirmed: [], expired: [] });
+  assert.deepEqual(a.ended(), { confirmed: [], expired: [], failed: [] });
 });
 
 test('a restart or a rebuild that got no answer in time is confirmed only once TouchDesigner was seen restarting: the old one answering proves nothing', async () => {

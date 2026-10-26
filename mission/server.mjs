@@ -75,6 +75,7 @@ import { History, describeEvent, feed } from './lib/history.mjs';
 import { describeTool } from './lib/steps.mjs';
 import { SelfUpdate } from './lib/update.mjs';
 import { Zipper } from './lib/zip.mjs';
+import { scrubCreds } from './lib/scrub.mjs';
 import { CONTACTS, derive, calDryRun } from './public/model.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -227,7 +228,7 @@ async function runControl(action, b, { scenario, source = 'mission control', cal
     return { status: 200, body: r };
   } catch (e) {
     if (!e.status || e.status >= 500) recordAction(scenario, action, checked, null, e, { source, label, requestId });
-    return { status: e.status || 502, body: { ok: false, error: e.message } };
+    return { status: e.status || 502, body: { ok: false, error: scrubCreds(e.message) } };
   }
 }
 
@@ -321,6 +322,16 @@ async function body(req, limit = 64_000) {
   try { return JSON.parse(b); } catch { throw Object.assign(new Error('bad JSON'), { status: 400 }); }
 }
 
+/** A control's body (a page's POST /api/control/<action>, the control socket): JSON only. A form (curl -d sends one by default) or
+ *  any other type is refused (400) before it is read, never taken as one odd key and run with its flags missing (R10 #37). */
+async function controlBody(req) {
+  const type = String(req.headers['content-type'] ?? '');
+  const b = await body(req);
+  const empty = isObject(b) && !Object.keys(b).length;          // no body at all (mc.mjs check, rules-reset)
+  if (!empty && !/^application\/json\b/i.test(type)) throw Object.assign(new Error("mission control didn't accept it: the request must be JSON (content-type: application/json)"), { status: 400 });
+  return b;
+}
+
 /** A request body is a JSON object (or form fields); null, a list, a number or a string is refused before anything reads it. */
 const isObject = (b) => !!b && typeof b === 'object' && !Array.isArray(b);
 const NOT_OBJECT = "mission control didn't accept it: the request must be a JSON object";
@@ -333,7 +344,7 @@ function sameOrigin(req) {
 
 /** A failed frames fetch, in the words the Lights page shows (the raw reason rides along for the engineers' drawer). */
 function plainLightsError(raw) {
-  const s = String(raw ?? '');
+  const s = scrubCreds(String(raw ?? ''));
   const error = /not running/i.test(s) ? "TouchDesigner isn't running: no frames"
     : /can't reach bitcube|ssh/i.test(s) ? 'bitcube is offline: no frames'
     : /too long|timed out|timeout/i.test(s) ? "bitcube didn't answer in time: no frames"
@@ -341,6 +352,18 @@ function plainLightsError(raw) {
     : /no answer|bridge/i.test(s) ? "TouchDesigner isn't answering: no frames"
     : "Can't show the lights right now";
   return { ok: false, error, raw: s || null };
+}
+
+/** What TouchDesigner sends, as a browser gets it: every field scrubbed of logins as every live answer is (R10 #40), but the frames'
+ *  pixels (base64 rgb) left as they are: they hold no words, and a mask that happened to match inside one would spoil the picture. */
+function scrubFrames(r) {
+  const keepRgb = (part) => (part && typeof part === 'object' && typeof part.rgb === 'string' ? { ...scrubCreds({ ...part, rgb: '' }), rgb: part.rgb } : scrubCreds(part));
+  const f = r?.frames;
+  if (!f || typeof f !== 'object') return scrubCreds(r);
+  const out = scrubCreds({ ...r, frames: null });
+  out.frames = { ...scrubCreds({ ...f, ropes: null, panels: null, screens: null }) };
+  for (const k of ['ropes', 'panels', 'screens']) if (k in f) out.frames[k] = keepRgb(f[k]);
+  return out;
 }
 
 /** Who to call: names and what they own from model.js, numbers from the untracked contacts file (missing: tel null). */
@@ -360,7 +383,7 @@ async function pixelmapPayload(scenario) {
     if (summary?.file && (!local || local.error || summary.file > local.file)) {
       const remote = await lights.pixelmap(summary);
       if (remote && !remote.error && remote.ok !== false) map = remote;
-      else if (!map) map = { file: summary.file, error: remote?.error ?? 'could not fetch the map from bitcube' };
+      else if (!map) map = { file: summary.file, error: scrubCreds(remote?.error ?? 'could not fetch the map from bitcube') };
     }
   }
   void scenario;
@@ -391,15 +414,19 @@ const server = createServer(async (req, res) => {
       if (!sameOrigin(req)) return send(res, 403, { error: 'cross-origin' });
       const b = await body(req);
       if (!isObject(b)) return send(res, 400, { error: NOT_OBJECT });
+      // the login page's form posted by the browser itself (its scripts didn't load): answered with a page to go to, never JSON (R10 #36)
+      const form = String(req.headers['content-type'] ?? '').includes('application/x-www-form-urlencoded');
       const r = auth.login(client(req), b.password);
       if (!r.ok) {
         await new Promise((ok) => setTimeout(ok, 400));           // every wrong answer costs time
+        if (form) return send(res, 303, '', 'text/plain', { location: `/login?failed=${r.throttled ? 'wait' : 'wrong'}` });
         if (r.throttled) return send(res, 429, { error: 'too many tries', wait_ms: r.wait });
         return send(res, 401, { error: 'wrong password', wait_ms: r.wait });
       }
       const secure = req.headers['x-forwarded-proto'] === 'https' || !!req.headers['x-forwarded-for'];
-      return send(res, 200, { ok: true }, 'application/json', {
-        'set-cookie': `${COOKIE}=${r.token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE_S}${secure ? '; Secure' : ''}` });
+      const cookie = `${COOKIE}=${r.token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE_S}${secure ? '; Secure' : ''}`;
+      if (form) return send(res, 303, '', 'text/plain', { location: '/status', 'set-cookie': cookie });
+      return send(res, 200, { ok: true }, 'application/json', { 'set-cookie': cookie });
     }
     if (path === '/healthz') return send(res, 200, { ok: true });
     if (path === '/version') return send(res, 200, VERSION);
@@ -440,7 +467,8 @@ const server = createServer(async (req, res) => {
     // now: the server's clock, so a page counts a running request's time from its start on that clock (R8 #35)
     if (path === '/api/chat/history') return send(res, 200, { events: studio.history(Number(url.searchParams.get('limit') || 500)), status: studio.status(), now: Date.now() });
     if (path === '/api/chat/events') {
-      res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
+      // the shared security headers too, as every other answer has them (R10 #41)
+      res.writeHead(200, { ...SECURITY, 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
       const push = (type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
       const onEvent = (e) => push('chat', e);
       const onStatus = (s) => push('status', s);
@@ -492,7 +520,7 @@ const server = createServer(async (req, res) => {
       if (mission.snapshot().bitcube?.value?.online === false) return send(res, 503, { ok: false, error: 'bitcube is offline: no frames' });
       const r = await lights.frames();
       if (!r || r.ok === false || !r.frames) return send(res, 503, plainLightsError(r?.error));
-      return send(res, 200, r);
+      return send(res, 200, scrubFrames(r));
     }
     if (path === '/api/pixelmap') return send(res, 200, await pixelmapPayload(scenario));
     if (path === '/api/calibration') {
@@ -500,7 +528,7 @@ const server = createServer(async (req, res) => {
       const rebuilt = mission.rebuilt(scenario);
       if (FIXTURES) return send(res, 200, { ...mission.calibration(scenario), rebuilt });
       const r = await mission.calibrationStatus();           // kept as the newest copy: the lock follows the run at once
-      if (!r || (r.ok === false && !('running' in r))) return send(res, 503, { ok: false, error: `Can't read the calibration: ${plainLightsError(r?.error).error.replace(/: no frames$/, '')}`, raw: r?.error ?? null, rebuilt });
+      if (!r || (r.ok === false && !('running' in r))) return send(res, 503, { ok: false, error: `Can't read the calibration: ${plainLightsError(r?.error).error.replace(/: no frames$/, '')}`, raw: scrubCreds(r?.error ?? null), rebuilt });
       return send(res, 200, { ...r, rebuilt });
     }
     const cam = path.match(/^\/api\/camera\/([a-z]+)\.jpg$/);
@@ -512,7 +540,7 @@ const server = createServer(async (req, res) => {
     }
     const m = path.match(/^\/api\/control\/([a-z0-9-]+)$/);
     if (m && req.method === 'POST') {
-      const b = await body(req);
+      const b = await controlBody(req);
       // a control's body is a JSON object; anything else (null, a list, a number) is refused before it is run or recorded
       if (!isObject(b)) return send(res, 400, { error: NOT_OBJECT });
       const calib = CALIBRATION_OUTCOMES.includes(url.searchParams.get('calib')) ? url.searchParams.get('calib') : CALIBRATION_OUTCOMES.includes(cookies.calib) ? cookies.calib : 'ok';
@@ -521,7 +549,7 @@ const server = createServer(async (req, res) => {
     }
     return send(res, 404, { error: 'not found' });
   } catch (e) {
-    return send(res, e.status || 500, { error: e.message });
+    return send(res, e.status || 500, { error: scrubCreds(e.message) });
   }
 });
 
@@ -533,7 +561,7 @@ const local = createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/status') return send(res, 200, localStatus(scenario));
     const m = url.pathname.match(/^\/control\/([a-z0-9-]+)$/);
     if (m && req.method === 'POST') {
-      const b = await body(req);
+      const b = await controlBody(req);
       if (!isObject(b)) return send(res, 400, { ok: false, error: NOT_OBJECT });
       // every control a page has, Stop of a calibration included (Gavin, 26 Oct: the studio chat does what it is asked), recorded
       // "from the studio chat"
@@ -541,7 +569,7 @@ const local = createServer(async (req, res) => {
       return send(res, r.status, r.body);
     }
     return send(res, 404, { ok: false, error: 'not here: GET /status or POST /control/<action>' });
-  } catch (e) { return send(res, e.status || 500, { ok: false, error: e.message }); }
+  } catch (e) { return send(res, e.status || 500, { ok: false, error: scrubCreds(e.message) }); }
 });
 let socketMine = false;
 /** Whether a server answers on the socket now (a live mission control), rather than a file left by one that was killed. */
