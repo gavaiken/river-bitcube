@@ -85,6 +85,7 @@ export class History {
     this.state = { overall: null, items: {}, show: {}, calibration: null, last_action: null };   // last known, each with its t
     this.knownAt = {};           // item id -> the observation it was last known in (in memory: after a restart, a gap)
     this.prevObs = null;         // the observation before this one
+    this.restarted = new Set();  // pieces seen dark while TouchDesigner restarted (no lines of their own), until seen after it
     this.#load();
   }
 
@@ -115,8 +116,16 @@ export class History {
         // a five-minute run is never an "unseen stretch" that restarts their since.
         // The same for a restart (a switch, a rebuild, TouchDesigner restarting on a file): the overall line says it once, so
         // TouchDesigner, the ropes, the panels and the year's page dark meanwhile are not lines of their own (R7 #23)
-        if (it.cause === 'calibrating' || it.cause === 'td-restarting') { if (!it.stale) this.knownAt[it.id] = t; continue; }
+        if (it.cause === 'calibrating' || it.cause === 'td-restarting') { if (!it.stale) this.knownAt[it.id] = t; if (it.cause === 'td-restarting') this.restarted.add(it.id); continue; }
         const p = this.state.items[it.id], seen = this.knownAt[it.id];
+        // after a restart, a piece still not OK in the same way is a new instance of it: "still needs attention", and its since
+        // starts again there, as the band's does (never "for 12 min" beside a band that says 6)
+        const afterRestart = this.restarted.delete(it.id);
+        if (afterRestart && !it.stale && p && p.level === it.level && it.level !== 'ok' && p.reason === reasonOf(it.summary)) {
+          this.knownAt[it.id] = t;
+          rec({ kind: 'item', id: it.id, from: p.level, to: it.level, summary: it.summary, still: true });
+          continue;
+        }
         const gap = !!p && (seen == null || (this.prevObs != null && seen < this.prevObs));
         if (!it.stale) this.knownAt[it.id] = t;          // a last answer from a quiet source is not a sighting
         // a new reason at the same level is news too ("Attention for 2 h" must never carry over from running slowly to dark

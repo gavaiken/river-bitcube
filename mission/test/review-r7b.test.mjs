@@ -277,3 +277,20 @@ test('R7 #1: text answers are gzipped when asked; files revalidate (ETag, no-cac
   assert.deepEqual([st.h['content-encoding'], st.h['cache-control']], ['gzip', 'no-store']);
   assert.equal(JSON.parse(gunzipSync(st.body)).fixture, 'all-good');
 });
+
+test('R7 #4, #23: a piece not OK before a restart and still not OK after it starts its since again (the band and the row agree)', async () => {
+  const { History, feed } = await import('../lib/history.mjs');
+  let t = 1_792_749_540_000;
+  const h = new History({ file: null, now: () => t });
+  const slow = { ok: true, file: YEAR, fps: 4, errors: 0, ropes: { source: 'canvas', status: { open: true, active: true, watts: [100, 100] } }, hub75: { brightness: 1, output: true } };
+  const at = (td, applying = []) => { const p = payload({ t, td, applying }); return p; };
+  h.observe(at(slow)); t += 10 * 60_000; h.observe(at(slow)); t += 5000;
+  assert.equal(h.since('touchdesigner', t).for_s, 605);
+  for (const td of [{ ok: false, error: 'not running' }, { ok: false, error: 'not answering' }]) { h.observe(at(td, SWITCH_ENTRY(t))); t += 5000; }
+  const n = h.events.length;
+  h.observe(at(slow)); t += 60_000;
+  assert.equal(h.since('touchdesigner', t).for_s, 60, 'slow again since the restart ended, not since before it');
+  assert.equal(h.since('ropes', t).for_s, 60);
+  const lines = feed(h.events.slice(n)).map((e) => e.words);
+  assert.ok(lines.some((w) => /^TouchDesigner still needs attention: running slowly/.test(w)), JSON.stringify(lines));
+});
