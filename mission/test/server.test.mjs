@@ -221,6 +221,8 @@ test('the v2 routes on the real fixtures: lights, pixelmap, calibration (scripte
   assert.equal((await post('/api/control/rebuild', {}, on('all-good'))).status, 400);
   const rb = await (await post('/api/control/rebuild', { file: 'river-local-oct-22-seasons.toe' }, on('all-good'))).json();
   assert.deepEqual([rb.ok, rb.fixture, rb.action], [true, true, 'rebuild']);
+  // it ends in a restart: confirming until TouchDesigner answers on the file (MISSION_FIXTURE_APPLY_S later here)
+  for (let i = 0; i < 100 && (await (await get('/api/status', on('all-good'))).json()).applying.length; i++) await sleep(20);
 
   // the scripted calibration: none -> start -> progress -> done; the probe mirrors it; cancel; the drift flag
   // (the rebuild above went all the way: /api/calibration says which map the river's year now uses, on every phone)
@@ -326,7 +328,8 @@ test('applying a change over HTTP: status.applying on every phone, 409 "wait: ..
   let st;
   for (let i = 0; i < 50; i++) { st = await status(); if (st.applying.length) break; await sleep(20); }
   const [e] = st.applying;
-  assert.deepEqual([e.action, e.label, e.file, e.expect_s, e.blocks.includes('ropes'), e.blocks.includes('calibrate')], ['switch', 'the switch to the live river', 'river-online-oct-23.toe', 60, true, true]);
+  assert.deepEqual([e.action, e.label, e.file, e.expect_s, e.blocks.includes('ropes'), e.blocks.includes('calibrate'), e.phase, e.source],
+                   ['switch', 'the switch to the live river', 'river-online-oct-23.toe', 60, true, true, 'applying', 'mission control']);
   assert.ok(e.started_at <= st.now && st.now - e.started_at < 2_000, 'started_at on the clock the page judges by');
   for (const [path, body] of [['/api/control/ropes', { dark: true }], ['/api/control/mode', { mode: 'manual' }], ['/api/control/calibrate', { action: 'start' }], ['/api/control/rebuild', { file: 'river-local-oct-22-seasons.toe' }]]) {
     const r = await post(path, body, on);
@@ -337,7 +340,13 @@ test('applying a change over HTTP: status.applying on every phone, 409 "wait: ..
   }
   assert.equal((await post('/api/control/ropes', { dark: false }, other)).status, 200, 'another scenario is another world');
   assert.equal((await sw).status, 200);
+  // answered: TouchDesigner restarts on the file and the switch stays as "confirming", still a lock, until it answers there
   st = await status();
+  assert.deepEqual([st.applying.map((x) => [x.action, x.phase, x.file]), st.probe.value.td.error], [[['switch', 'confirming', 'river-online-oct-23.toe']], 'restarting on river-online-oct-23.toe']);
+  assert.ok(st.applying[0].answered_at >= st.applying[0].started_at);
+  const second = await post('/api/control/switch', { file: 'river-local-oct-22-seasons.toe' }, on);
+  assert.deepEqual([second.status, (await second.json()).error.startsWith('wait: the switch to the live river is being applied')], [409, true]);
+  for (let i = 0; i < 150; i++) { st = await status(); if (!st.applying.length) break; await sleep(20); }
   assert.deepEqual([st.applying, st.probe.value.td.file, st.probe.value.boot_file], [[], 'river-online-oct-23.toe', 'river-online-oct-23.toe']);
   assert.equal((await status(other)).probe.value.td.file, 'river-local-oct-22-seasons.toe');
   // a refused request is not something that happened: only the switch and the other scenario's ropes are in the history

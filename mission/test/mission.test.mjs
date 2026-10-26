@@ -18,17 +18,17 @@ function fakeSeasons() {
 test('controls are fixed actions with checked arguments', async () => {
   const { srv, calls, url } = await fakeSeasons();
   const probes = [];
-  const m = new Mission({ seasonsUrl: url, probe: async (_h, args) => { probes.push(args); return { ok: true, td: {} }; } });
+  const m = new Mission({ seasonsUrl: url, probe: async (_h, args) => { probes.push(args); return { ok: true, td: {} }; }, later: () => {} });
   await m.control('mode', { mode: 'manual' });
   await m.control('target', { season: 'summer', intensity: 0.8 });
   await m.control('ropes', { dark: true });
   await m.control('hub75', { brightness: 0.5 });
   await m.control('bootfile', { file: 'river-online-oct-23.toe' });
-  await m.control('switch', { file: 'river-local-oct-22-seasons.toe' });
   await m.control('lightsroute', { route: 'router' });
+  await m.control('switch', { file: 'river-local-oct-22-seasons.toe' });     // last: it holds its lock until TouchDesigner answers on the file
   assert.deepEqual(calls.map((c) => c.path), ['/mode', '/target']);
   assert.deepEqual(calls[1].body, { season: 'summer', intensity: 0.8 });
-  assert.deepEqual(probes, ['-Action ropes -Dark', '-Action hub75 -Brightness 0.50', '-Action bootfile -BootFile river-online-oct-23.toe', '-Action switch -BootFile river-local-oct-22-seasons.toe', '-Action lightsroute -LightsRoute router']);
+  assert.deepEqual(probes, ['-Action ropes -Dark', '-Action hub75 -Brightness 0.50', '-Action bootfile -BootFile river-online-oct-23.toe', '-Action lightsroute -LightsRoute router', '-Action switch -BootFile river-local-oct-22-seasons.toe']);
   for (const [a, b] of [['mode', { mode: 'chaos' }], ['target', { season: 'monsoon' }], ['hub75', { brightness: 3 }],
                         ['bootfile', { file: 'evil.toe; rm -rf' }], ['bootfile', { file: 'old-river-online-oct-20.toe' }], ['switch', { file: 'river-online-oct-20.toe' }], ['lightsroute', { route: 'both' }], ['rules', { rules: { 'x; y': 1 } }], ['shell', {}]]) {
     await assert.rejects(m.control(a, b), (e) => e.status === 400, a);
@@ -73,14 +73,18 @@ test('only one rebuild, switch or boot-file change at a time: a second answers 4
   let release;
   const gate = new Promise((r) => { release = r; });
   const calls = [];
-  const m = new Mission({ probe: async (_h, args) => { calls.push(args); if (/rebuild/.test(args)) await gate; return { ok: true, td: {} }; } });
+  let td = { ok: false, error: 'restarting on river-local-oct-22-seasons.toe' };
+  const m = new Mission({ probe: async (_h, args) => { if (args) calls.push(args); if (/rebuild/.test(args)) await gate; return { ok: true, td }; }, later: () => {} });
   const first = m.control('rebuild', { file: 'river-local-oct-22-seasons.toe' });
   await assert.rejects(m.control('rebuild', { file: 'river-local-oct-22-seasons.toe' }), (e) => e.status === 409 && /^wait: a rebuild of the river's year is being applied \(started \d\d:\d\d\)$/.test(e.message));
   await assert.rejects(m.control('switch', { file: 'river-online-oct-23.toe' }), (e) => e.status === 409);
   await assert.rejects(m.control('ropes', { dark: false }), (e) => e.status === 409, 'a rebuild ends in a restart: nothing touches TouchDesigner meanwhile');
   release();
   assert.equal((await first).ok, true);
-  assert.equal((await m.control('switch', { file: 'river-online-oct-23.toe' })).ok, true, 'free again once it ended');
+  await assert.rejects(m.control('switch', { file: 'river-online-oct-23.toe' }), (e) => e.status === 409, 'still confirming: TouchDesigner is opening the file');
+  td = { ok: true, file: 'river-local-oct-22-seasons.toe', fps: 60 };
+  await m.pollProbe();
+  assert.equal((await m.control('switch', { file: 'river-online-oct-23.toe' })).ok, true, 'free again once the full check shows it');
   assert.equal(calls.filter((a) => /rebuild/.test(a)).length, 1);
 });
 
@@ -157,8 +161,8 @@ test('every control in flight is in status.applying (label in team words, file, 
   assert.deepEqual(m.snapshot().applying, []);
   const sw = m.control('switch', { file: LIVE });
   const [e] = m.snapshot().applying;
-  assert.deepEqual({ ...e, id: typeof e.id }, { id: 'string', action: 'switch', label: 'the switch to the live river', file: LIVE, started_at: AT_2104, expect_s: 60,
-                                                blocks: ['ropes', 'hub75', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'] });
+  assert.deepEqual({ ...e, id: typeof e.id }, { id: 'string', action: 'switch', label: 'the switch to the live river', file: LIVE, source: 'mission control', phase: 'applying',
+                                                started_at: AT_2104, expect_s: 60, blocks: ['ropes', 'hub75', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'] });
   t += 30_000;
   for (const [action, body] of [['ropes', { dark: true }], ['hub75', { brightness: 0.5 }], ['mode', { mode: 'manual' }], ['target', { season: 'summer' }], ['rules', { rules: { x: 1 } }],
                                 ['rules-reset', {}], ['lightsroute', { route: 'router' }], ['switch', { file: YEAR }], ['rebuild', { file: YEAR }], ['bootfile', { file: YEAR }]]) {
@@ -204,12 +208,15 @@ test('what blocks what: a boot-file change, a lighting port change, and two phon
 test('a calibration cannot start while a switch, rebuild or boot-file change is in flight; Stop always gets through', async () => {
   for (const [action, body] of [['switch', { file: LIVE }], ['rebuild', { file: YEAR }], ['bootfile', { file: LIVE }]]) {
     const g = gated(), lights = fakeLights();
-    const m = new Mission({ lights, probe: async (_h, args) => (args ? g.gate : { ok: true, td: { ok: true, file: YEAR } }) });
+    let file = YEAR;
+    const m = new Mission({ lights, probe: async (_h, args) => (args ? g.gate : { ok: true, td: { ok: true, file } }), later: () => {} });
+    await m.pollProbe();
     const p = m.control(action, body);
     await assert.rejects(m.calibrate('start', {}), (e) => e.status === 409 && /^wait: /.test(e.message), action);
     assert.deepEqual(lights.calls, [], 'nothing reached bitcube');
     assert.equal((await m.calibrate('cancel', {})).cancelled, true, 'Stop is never held up');
-    g.release({ ok: true }); await p;
+    g.release({ ok: true, rebuilt: true, saved: true }); await p;
+    file = body.file; await m.pollProbe();               // a switch or rebuild holds until TouchDesigner answers on its file
     assert.equal((await m.calibrate('start', {})).started, true);
   }
   // and while a calibration is starting, what a run blocks waits for it
@@ -281,9 +288,10 @@ test('a successful rebuild is recorded, kept in the state folder across a restar
   assert.deepEqual(m.rebuilt(), { at: AT_2104 + 60_000, map: 'pixelmap-2026-10-25.json', file: YEAR, run: null }, 'no finished run with this map: no run named');
   assert.deepEqual(new Mission({ stateDir: dir }).rebuilt(), { at: AT_2104 + 60_000, map: 'pixelmap-2026-10-25.json', file: YEAR, run: null }, 'kept across a restart');
   // without the map in the answer: the finished calibration's map
-  const lights = fakeLights({ start: { ok: true, started: true, calibration: { running: false, ok: true, stage: 'done', started: T0 - 300, updated: T0, result: { map: 'pixelmap-2026-10-24.json' } } } });
-  const m2 = new Mission({ lights, probe: async () => ({ ok: true, rebuilt: true, saved: true, td: {} }) });
-  await m2.calibrate('start', {});
+  const lights = fakeLights();
+  lights.status = { running: false, ok: true, stage: 'done', started: T0 - 300, updated: T0, result: { map: 'pixelmap-2026-10-24.json' } };
+  const m2 = new Mission({ lights, probe: async () => ({ ok: true, rebuilt: true, saved: true, td: {} }), later: () => {} });
+  await m2.calibrationStatus();
   await m2.control('rebuild', { file: YEAR });
   assert.equal(m2.rebuilt().map, 'pixelmap-2026-10-24.json');
   assert.equal(m2.rebuilt().run, T0 - 300, 'the run baked in, by its own started stamp (bitcube\'s clock)');
@@ -316,4 +324,189 @@ test('code review: a "no job" answer ends a kept run once the start is past (no 
   t += 60_000; await m.calibrationStatus();
   assert.notEqual(m.calibration()?.running, true, 'a minute on, "no job" means the run is gone');
   assert.equal((await m.control('ropes', { dark: false })).ok, true);
+});
+
+// ---- round 6 -------------------------------------------------------------------------------------------------------------
+/** A Mission whose clock, follow-up timers and full check the test drives: probe(args) answers an action; `reading` the check. */
+function driven({ action = async () => ({ ok: true }), lights = null } = {}) {
+  const ctx = { t: AT_2104, timers: [], reading: { ok: true, td: { ok: true, file: YEAR, fps: 60 } } };
+  ctx.m = new Mission({ now: () => ctx.t, lights, later: (fn, ms) => ctx.timers.push({ fn, ms }),
+                        probe: async (_h, args) => (args ? action(args) : ctx.reading) });
+  ctx.fire = async () => { const due = ctx.timers.splice(0); for (const x of due) await x.fn(); return due.map((x) => x.ms); };
+  return ctx;
+}
+
+test('round 6 #26: a switch that answered stays in status.applying as "confirming" until the full check shows TouchDesigner on the file, and keeps blocking a second switch', async () => {
+  const restarting = { ok: false, error: `restarting on ${LIVE}` };
+  const c = driven({ action: async (args) => (/switch/.test(args) ? { ok: true, switched_to: LIVE, td: restarting } : { ok: true, td: { ok: true, file: LIVE } }), lights: fakeLights() });
+  await c.m.pollProbe();
+  // a full check already on its way when the switch answers can't confirm it (it was asked before)
+  let releaseOld; const old = new Promise((r) => { releaseOld = r; });
+  const before = new Mission({ now: () => c.t, later: () => {}, probe: async (_h, args) => (args ? { ok: true, td: restarting } : old) });
+  const early = before.pollProbe();
+  c.t += 1000;
+  assert.equal((await before.control('switch', { file: LIVE })).ok, true);
+  releaseOld({ ok: true, td: { ok: true, file: LIVE } }); await early;
+  assert.deepEqual(before.snapshot().applying.map((e) => e.phase), ['confirming'], 'a check asked before the answer knows nothing of it');
+
+  c.t += 5000;
+  const r = await c.m.control('switch', { file: LIVE });
+  assert.equal(r.ok, true);
+  const [e] = c.m.snapshot().applying;
+  assert.deepEqual([e.action, e.phase, e.file, e.label, e.source, e.started_at, e.answered_at, e.maybe], ['switch', 'confirming', LIVE, 'the switch to the live river', 'mission control', c.t, c.t, undefined]);
+  // the next full check comes sooner than its 60 s timer: at 15 s and 45 s
+  assert.deepEqual(c.timers.map((x) => x.ms), [15_000, 45_000]);
+  for (const [action, body] of [['switch', { file: YEAR }], ['rebuild', { file: YEAR }], ['ropes', { dark: true }], ['mode', { mode: 'manual' }], ['calibrate', null]]) {
+    const p = action === 'calibrate' ? c.m.calibrate('start', {}) : c.m.control(action, body);
+    await assert.rejects(p, (err) => err.status === 409 && /^wait: the switch to the live river is being applied \(started 21:04\)$/.test(err.message), action);
+  }
+  // TouchDesigner not up yet, then still loading (no answer from its bridge): still confirming
+  c.t += 15_000; c.reading = { ok: true, td: { ok: false, error: 'TouchDesigner is not running' } };
+  await c.timers.shift().fn();
+  c.t += 10_000; c.reading = { ok: true, td: { ok: false, error: 'no answer from the TD bridge' } };
+  await c.m.pollProbe();
+  assert.deepEqual(c.m.snapshot().applying.map((x) => x.phase), ['confirming']);
+  // answering on another file is not this switch done
+  c.reading = { ok: true, td: { ok: true, file: YEAR, fps: 60 } }; await c.m.pollProbe();
+  assert.equal(c.m.snapshot().applying.length, 1);
+  // answering on the file: done, and the controls are free
+  c.t += 20_000; c.reading = { ok: true, td: { ok: true, file: LIVE, fps: null } };
+  await c.timers.shift().fn();
+  assert.deepEqual(c.m.snapshot().applying, []);
+  assert.equal((await c.m.control('ropes', { dark: false })).ok, true);
+});
+
+test('round 6 #26: a rebuild that went all the way confirms the same way; one that never shows is dropped at its confirm limit (3 x usual, at least 2 min)', async () => {
+  const c = driven({ action: async (args) => (/rebuild/.test(args) ? { ok: true, rebuilt: true, saved: true, switched: true, td: { ok: false, error: `restarting on ${YEAR}` } } : { ok: true, td: { ok: true, file: YEAR } }) });
+  await c.m.pollProbe();
+  await c.m.control('rebuild', { file: YEAR });
+  assert.deepEqual(c.m.snapshot().applying.map((e) => [e.action, e.phase, e.file]), [['rebuild', 'confirming', YEAR]]);
+  c.t += 30_000; await c.m.pollProbe();
+  assert.deepEqual(c.m.snapshot().applying, [], 'TouchDesigner answers on the river\'s year: the rebuild is real');
+  // a switch whose file never shows: unconfirmed after max(3 x 60, 120) = 180 s from its start; the lock goes with it
+  c.reading = { ok: true, td: { ok: false, error: 'no answer from the TD bridge' } };
+  await c.m.control('switch', { file: YEAR });
+  c.t += 179_000;
+  await assert.rejects(c.m.control('switch', { file: YEAR }), (e) => e.status === 409);
+  c.t += 2_000;
+  assert.deepEqual(c.m.snapshot().applying, []);
+  assert.equal((await c.m.control('switch', { file: YEAR })).ok, true);
+  // a refused switch or a rebuild that stopped short (nothing restarted) ends at once, as before
+  const f = driven({ action: async () => ({ ok: false, error: 'rebuilt, but the save failed: not restarting', rebuilt: true, saved: false }) });
+  await f.m.control('rebuild', { file: YEAR });
+  assert.deepEqual([f.m.snapshot().applying, f.timers], [[], []]);
+});
+
+test('round 6 #32: a call killed for time, or one that ended without a word, is "maybe" (it may have happened); one that never connected is not', async () => {
+  const { sshProbe } = await import('../lib/mission.mjs');
+  const { sshJson } = await import('../lib/lights.mjs');
+  const exec = (err, stdout = '') => (_c, _a, _o, cb) => cb(err, stdout);
+  const killed = Object.assign(new Error('killed'), { killed: true, code: null });
+  assert.deepEqual(await sshProbe('h', '-Action switch', 1000, { exec: exec(killed) }), { ok: false, maybe: true, error: 'bitcube took too long to answer' });
+  assert.deepEqual(await sshProbe('h', '', 1000, { exec: exec(null, 'garbage\n') }), { ok: false, maybe: true, error: 'no answer from the probe' });
+  assert.deepEqual(await sshProbe('h', '', 1000, { exec: exec(Object.assign(new Error('x'), { code: 255 })) }), { ok: false, error: "can't reach bitcube over SSH" });
+  assert.deepEqual(await sshProbe('h', '', 1000, { exec: exec(Object.assign(new Error('x'), { code: 1 })) }), { ok: false, error: 'probe failed (exit 1)' });
+  assert.deepEqual(await sshJson('h', 'calibrate.ps1', '-Action start', { exec: exec(killed) }), { ok: false, maybe: true, error: 'bitcube took too long to answer' });
+  assert.deepEqual(await sshJson('h', 'calibrate.ps1', '', { exec: exec(Object.assign(new Error('x'), { code: 255 })) }), { ok: false, error: "can't reach bitcube over SSH" });
+});
+
+test('round 6 #32: a maybe answer keeps its lock until the confirm limit (bitcube may still be at it); a switch that timed out confirms when TouchDesigner shows the file', async () => {
+  const c = driven({ action: async () => ({ ok: false, maybe: true, error: 'bitcube took too long to answer' }) });
+  await c.m.pollProbe();
+  const r = await c.m.control('ropes', { dark: true });
+  assert.deepEqual(r, { ok: false, maybe: true, error: 'bitcube took too long to answer' });
+  assert.deepEqual(c.m.snapshot().applying.map((e) => [e.action, e.phase, e.maybe]), [['ropes', 'confirming', true]]);
+  await assert.rejects(c.m.control('ropes', { dark: false }), (e) => e.status === 409 && /^wait: a ropes change is being applied/.test(e.message));
+  await assert.rejects(c.m.control('switch', { file: LIVE }), (e) => e.status === 409, 'a switch would restart TouchDesigner under it');
+  c.t += 121_000;
+  assert.deepEqual(c.m.snapshot().applying, [], 'max(3 x 15, 120) s from its start');
+  // a switch that timed out: done as soon as TouchDesigner answers on its file
+  await c.m.control('switch', { file: LIVE });
+  assert.deepEqual(c.m.snapshot().applying.map((e) => [e.action, e.phase, e.maybe]), [['switch', 'confirming', true]]);
+  c.t += 20_000; c.reading = { ok: true, td: { ok: true, file: LIVE } }; await c.m.pollProbe();
+  assert.deepEqual(c.m.snapshot().applying, []);
+  // the river's year page: no answer in time is maybe; a page that answered no, or no page at all, is a plain failure
+  const slow = createServer(() => {});              // takes the request, never answers
+  await new Promise((ok) => slow.listen(0, '127.0.0.1', ok));
+  const m = new Mission({ seasonsUrl: `http://127.0.0.1:${slow.address().port}`, seasonsTimeoutMs: 150, later: () => {} });
+  assert.deepEqual(await m.control('mode', { mode: 'manual' }), { ok: false, maybe: true, error: "the river's year page took too long to answer" });
+  assert.deepEqual(m.snapshot().applying.map((e) => [e.action, e.phase, e.maybe]), [['mode', 'confirming', true]]);
+  slow.closeAllConnections(); slow.close();
+  const none = new Mission({ seasonsUrl: 'http://127.0.0.1:9', later: () => {} });
+  await assert.rejects(none.control('mode', { mode: 'manual' }));
+  assert.deepEqual(none.snapshot().applying, []);
+});
+
+test('round 6 #39: a calibration start that launched but has not reported holds a "starting" lock, read every 5 s, until the run shows up', async () => {
+  const lights = fakeLights({ start: { ok: false, maybe: true, started: true, pid: 4242, requested: T0, error: "the calibration was launched but hasn't reported yet" } });
+  lights.status = { running: false, ok: true, stage: 'done', started: T0 - 3000, updated: T0 - 2700 };      // the run before
+  const c = driven({ lights });
+  await c.m.pollProbe();
+  await c.m.calibrationStatus();
+  const r = await c.m.calibrate('start', {});
+  assert.equal(r.maybe, true);
+  assert.deepEqual(c.m.snapshot().applying.map((e) => [e.action, e.phase, e.label]), [['calibrate', 'confirming', 'the start of a calibration']]);
+  for (const [action, body] of [['ropes', { dark: true }], ['switch', { file: LIVE }], ['rebuild', { file: YEAR }]]) {
+    await assert.rejects(c.m.control(action, body), (e) => e.status === 409 && /^wait: the start of a calibration is being applied/.test(e.message), action);
+  }
+  // the first reads still find the old run's file: the lock stays
+  c.t += 5000; assert.deepEqual(await c.fire(), [5000]);
+  assert.equal(c.m.snapshot().applying.length, 1);
+  // the run's own first write: the run holds the lock from now on, and the start's own entry ends
+  lights.status = { running: true, alive: true, stage: 'ropes-capture', started: T0 + 2, updated: T0 + 8 };
+  c.t += 5000; await c.fire();
+  assert.deepEqual(c.m.snapshot().applying, []);
+  assert.equal(c.m.snapshot().probe.value.calibration.running, true);
+  await assert.rejects(c.m.control('ropes', { dark: true }), (e) => e.status === 409 && /calibration is running/.test(e.message));
+  assert.equal(c.timers.length, 0, 'no more reads');
+});
+
+test('round 6 #39: a clear refusal holds nothing; a start that never shows up frees the controls after about a minute', async () => {
+  const refused = driven({ lights: fakeLights({ start: { ok: false, started: false, error: 'TouchDesigner is not running' } }) });
+  await refused.m.calibrate('start', {});
+  assert.deepEqual([refused.m.snapshot().applying, refused.timers], [[], []]);
+  // an older calibrate.ps1's refusal (no started, no pid) is clear too
+  const older = driven({ lights: fakeLights({ start: { ok: false, error: 'a calibration is already running' } }) });
+  await older.m.calibrate('start', {});
+  assert.deepEqual(older.m.snapshot().applying, []);
+  // the call itself timed out: maybe; no file ever comes
+  const lights = fakeLights({ start: { ok: false, maybe: true, error: 'bitcube took too long to answer' } });
+  const c = driven({ lights });
+  await c.m.calibrate('start', {});
+  let reads = 0;
+  while (c.timers.length && reads < 20) { c.t += 5000; await c.fire(); reads++; }
+  assert.equal(reads, 12, 'twelve reads, 5 s apart');
+  assert.deepEqual(c.m.snapshot().applying, []);
+  assert.equal((await c.m.control('ropes', { dark: true })).ok, true);
+});
+
+test('round 6 #40: only the checked fields of a request reach status.applying and bitcube', async () => {
+  const c = driven({ lights: fakeLights(), action: async () => ({ ok: true, td: { ok: true, file: YEAR } }) });
+  await c.m.pollProbe();
+  const junk = '<img src=x onerror=alert(1)>'.repeat(100);
+  const g = gated();
+  c.m.lights.calibrate = async (action, body) => { c.sent = body; return g.gate; };
+  const p = c.m.calibrate('start', { file: junk, note: 'rtsp://admin:NOT-A-REAL-PW@x/y', dry_run: true, cam: 'gallery' });
+  const [e] = c.m.snapshot().applying;
+  assert.equal(e.file, undefined, 'a calibration has no file');
+  assert.doesNotMatch(JSON.stringify(c.m.snapshot().applying), /img|NOT-A-REAL-PW/);
+  assert.deepEqual(c.sent, { action: 'start', dry_run: true, cam: 'gallery' });
+  g.release({ ok: true, started: true, calibration: { running: true, started: T0 + 5, updated: T0 + 5 } }); await p;
+  const { checkedControl } = await import('../lib/mission.mjs');
+  const { checkedCalibrate } = await import('../lib/lights.mjs');
+  assert.deepEqual(checkedControl('switch', { file: LIVE, extra: junk }), { file: LIVE });
+  assert.deepEqual(checkedControl('ropes', { dark: 'true', x: 1 }), { dark: false });
+  assert.deepEqual(checkedControl('target', { season: 'summer', intensity: '0.7', why: junk }), { season: 'summer', intensity: 0.7 });
+  assert.deepEqual(checkedControl('rules', { rules: { cycle_seconds: '240' }, x: 1 }), { rules: { cycle_seconds: 240 } });
+  assert.deepEqual(checkedControl('hub75', { brightness: '0.5', y: 2 }), { brightness: 0.5 });
+  assert.deepEqual(checkedControl('rules-reset', { anything: junk }), {});
+  assert.deepEqual(checkedCalibrate('cancel', { dry_run: true, x: 1 }), { action: 'cancel' });
+  assert.deepEqual(checkedCalibrate('start', { dry_run: 'yes', decode_only: 'pixelmap-20261018-154155', task: true }), { action: 'start', decode_only: 'pixelmap-20261018-154155', task: true });
+  assert.throws(() => checkedControl('mode', { mode: 'chaos' }), (err) => err.status === 400);
+  // a control's entry names its show file only for a switch, rebuild or boot-file change, and only a known one
+  const g2 = gated();
+  const m = new Mission({ later: () => {}, probe: async (_h, args) => (args ? g2.gate : { ok: true, td: { ok: true, file: YEAR } }) });
+  const rp = m.control('ropes', { dark: true, file: junk });
+  assert.equal(m.snapshot().applying[0].file, undefined);
+  g2.release({ ok: true, td: { ok: true } }); await rp;
 });

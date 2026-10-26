@@ -100,7 +100,29 @@ export function readLocalPixelmap(dir) { return readLocalJson(dir, MAP_FILE, 'pi
 export function readLocalScreens(dir) { return readLocalJson(dir, SCREENS_FILE, 'screens'); }
 /** The fields of a calibrate request (planCalibrate reads these and nothing else). */
 export const CALIBRATE_FIELDS = ['dry_run', 'decode_only', 'cam', 'task'];
+/** A calibrate request as planCalibrate reads it, and nothing else: { action, dry_run?, decode_only?, cam?, task? } (a flag only
+ *  when it is a real true). What the history keeps and status.applying shows; a 400 for a bad request, as planCalibrate. */
+export function checkedCalibrate(action, body = {}) {
+  planCalibrate(action, body);
+  const out = { action };
+  if (action !== 'start') return out;
+  if (body.dry_run === true) out.dry_run = true;
+  if (typeof body.decode_only === 'string' && body.decode_only) out.decode_only = body.decode_only;
+  if (body.cam !== undefined) out.cam = body.cam;
+  if (body.task === true) out.task = true;
+  return out;
+}
 const CAPTURE_DIR = /^(pixelmap|hub75)-\d{8}-\d{6}$/;
+
+/** Why a call to bitcube gave no JSON, and whether what it asked for may still have happened (maybe: true): a call killed for
+ *  time, or one that ran to its end without a word, may have done it (bitcube can still be at it: the ssh kill doesn't stop the
+ *  script); one that never connected (255) or whose script failed (its exit code) did not. Shared with sshProbe (mission.mjs). */
+export function noAnswer(err, script, name = script) {
+  if (!err) return { ok: false, maybe: true, error: `no answer from ${name}` };
+  if (err.killed) return { ok: false, maybe: true, error: 'bitcube took too long to answer' };
+  if (err.code === 255) return { ok: false, error: "can't reach bitcube over SSH" };
+  return { ok: false, error: `${script} failed (exit ${err.code})` };
+}
 
 /** Run one tools/mission script on bitcube and parse its JSON line (sshProbe's pattern). Never rejects. */
 export function sshJson(sshHost, script, args = '', { timeout = 45_000, maxBuffer = 1 << 20, exec = execFile } = {}) {
@@ -109,11 +131,7 @@ export function sshJson(sshHost, script, args = '', { timeout = 45_000, maxBuffe
       { timeout, maxBuffer }, (err, stdout) => {
         const line = String(stdout ?? '').split('\n').map((l) => l.trim()).filter((l) => l.startsWith('{')).pop();
         if (line) { try { return resolve(JSON.parse(line)); } catch { /* fall through */ } }
-        const why = !err ? `no answer from ${script}`
-          : err.killed ? 'bitcube took too long to answer'
-          : err.code === 255 ? "can't reach bitcube over SSH"
-          : `${script} failed (exit ${err.code})`;
-        resolve({ ok: false, error: why });
+        resolve(noAnswer(err, script));
       });
   });
 }

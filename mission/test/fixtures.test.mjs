@@ -341,7 +341,13 @@ test('fixture mode records every change in flight, holds a switch, rebuild or bo
   assert.deepEqual(m.snapshot('td-low-fps').applying, []);
   release();
   assert.equal((await sw).ok, true);
-  const after = m.snapshot('all-good');
+  // as live: TouchDesigner restarts on the file (what the switch's own answer says) and the switch stays, confirming, meanwhile
+  let after = m.snapshot('all-good');
+  assert.deepEqual([after.applying.map((x) => [x.action, x.phase]), after.probe.value.td, after.probe.value.boot_file],
+                   [[['switch', 'confirming']], { ok: false, error: 'restarting on river-online-oct-23.toe' }, 'river-online-oct-23.toe']);
+  await assert.rejects(m.control('switch', { file: 'river-local-oct-22-seasons.toe' }, 'all-good'), (err) => err.status === 409, 'no second switch while it opens the file');
+  t += 6_001;
+  after = m.snapshot('all-good');
   assert.deepEqual([after.applying, after.probe.value.td.file, after.probe.value.boot_file], [[], 'river-online-oct-23.toe', 'river-online-oct-23.toe'], 'TouchDesigner now reports the new file; a switch sets the boot file too');
   assert.equal(m.snapshot('td-low-fps').probe.value.td.file, 'river-local-oct-22-seasons.toe', 'only in that scenario');
   // a boot-file change
@@ -353,6 +359,7 @@ test('fixture mode records every change in flight, holds a switch, rebuild or bo
   // a rebuild holds twice as long, then the map it baked in is the map in use
   holds.length = 0;
   m.control('switch', { file: 'river-local-oct-22-seasons.toe' }, 'all-good'); await Promise.resolve(); release(); await new Promise((r) => setImmediate(r));
+  t += 6_001;
   const rb = m.control('rebuild', { file: 'river-local-oct-22-seasons.toe' }, 'all-good');
   await Promise.resolve();
   assert.deepEqual(holds, [6000, 12000]);
@@ -361,12 +368,15 @@ test('fixture mode records every change in flight, holds a switch, rebuild or bo
   release(); await rb;
   assert.deepEqual(m.rebuilt('all-good'), { at: t, map: 'pixelmap-2026-10-23.json', file: 'river-local-oct-22-seasons.toe' });
   assert.equal(m.rebuilt('td-low-fps'), null);
+  const rebuiltAt = t;
   // a rebuild is refused, as probe.ps1 refuses it, unless TouchDesigner answers on that very file
+  t += 6_001;
   m.control('switch', { file: 'river-online-oct-23.toe' }, 'all-good'); await Promise.resolve(); release(); await new Promise((r) => setImmediate(r));
+  t += 6_001;
   const refused = await m.control('rebuild', { file: 'river-local-oct-22-seasons.toe' }, 'all-good');
   assert.deepEqual([refused.ok, refused.error], [false, 'TouchDesigner is running river-online-oct-23.toe, not river-local-oct-22-seasons.toe: rebuild refused']);
   assert.equal((await m.control('rebuild', { file: 'river-local-oct-22-seasons.toe' }, 'td-frozen')).error, 'TouchDesigner did not answer: rebuild refused');
-  assert.equal(m.rebuilt('all-good').at, t, 'a refused rebuild changes nothing');
+  assert.equal(m.rebuilt('all-good').at, rebuiltAt, 'a refused rebuild changes nothing');
   // ropes, mode and the rest answer at once (their own answer is bitcube's reading) and lock only themselves meanwhile
   holds.length = 0;
   assert.equal((await m.control('mode', { mode: 'manual' }, 'all-good')).ok, true);
