@@ -9,6 +9,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 export const N_ROPES = 20;
 export const DRIFT_FINE_PX = 30;          // calibrate.py's default --max-drift
 export const CAL_QUIET_S = 30;            // a run not heard from for this long greys its progress
+export const CAL_NONE_GRACE_S = 30;       // lib/mission.mjs CAL_NONE_GRACE_MS: a "no job" this soon after a run was read is a failed read
 export const NO_CONTACT = "this page hasn't heard from mission control yet";
 
 // ---- the checklist and why Start and Dry run can't run ------------------------------------------------------------
@@ -116,11 +117,14 @@ export function runNote({ heardS, failing }) {
 }
 
 /** One read of GET /api/calibration: { good: true, p, rebuilt } (p null for "no job"; rebuilt undefined when the answer has
- *  none), or { good: false, error }. A good read is mission control's progress answer, which always carries a boolean
+ *  none), or { good: false, error }. last: { running (the last good read showed a run), heardS (seconds since it) }. A good read is mission control's progress answer, which always carries a boolean
  *  `running`; anything else (a 2xx that isn't JSON, a cut-off body, a proxy's page, a refusal) is a failed read, so the last
  *  good progress and Stop stay (R6 #29). */
-export function calRead({ ok, status, body }) {
+export function calRead({ ok, status, body }, { running = false, heardS = null } = {}) {
   const j = body && typeof body === 'object' && !Array.isArray(body) ? body : null;
+  // "no job" while the last good read showed a run, within the server's own grace: calibrate.ps1 couldn't read the progress file (a
+  // reader can hold it on Windows), never the run's end: the run view and Stop stay (R9 #32)
+  if (ok && j && j.none === true && running && typeof heardS === 'number' && heardS < CAL_NONE_GRACE_S) return { good: false, status, error: "the progress file couldn't be read" };
   if (ok && j && typeof j.running === 'boolean') return { good: true, p: j.none ? null : j, rebuilt: 'rebuilt' in j ? j.rebuilt ?? null : undefined };
   const said = j && typeof j.error === 'string' && j.error.trim() ? j.error.trim().replace(/^Can't read the calibration:\s*/i, '') : '';
   return { good: false, status, error: said || (!ok ? "mission control didn't answer" : "mission control's answer couldn't be read") };

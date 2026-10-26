@@ -241,3 +241,17 @@ test('R9 #34: a switch or rebuild while TouchDesigner is starting or restarting 
   await assert.rejects(fx.control('switch', { file: YEAR }, 'just-booted'), (e) => e.status === 409 && /^TouchDesigner is still starting/.test(e.message));
   assert.equal(typeof (await fx.control('switch', { file: YEAR }, 'all-good')).applying_id, 'string');
 });
+
+// ---- #32: one "no job" read during a run never swaps the run view away ------------------------------------------------------------
+
+test('R9 #32: a "no job" progress answer while the last good read showed a run, within the server\'s grace, is a failed read; after it, the end', async () => {
+  const { calRead, CAL_NONE_GRACE_S } = await import('../public/lights-words.js');
+  const none = { ok: true, status: 200, body: { running: false, none: true } };
+  assert.equal(CAL_NONE_GRACE_S, 30, 'the server\'s CAL_NONE_GRACE_MS');
+  const r = calRead(none, { running: true, heardS: 5 });
+  assert.equal(r.good, false, 'the run and Stop stay');
+  assert.equal(calRead(none, { running: true, heardS: 31 }).good, true, 'past the grace: the run is gone');
+  assert.equal(calRead(none, { running: true, heardS: 31 }).p, null);
+  assert.equal(calRead(none).good, true, 'with no run on: there is none');
+  assert.match(page('lights.js'), /calRead\(\{ ok: r\.ok, status: r\.status, body \}, \{ running: S\.cal\.p\?\.running === true, heardS: heardS\(\) \}\)/);
+});

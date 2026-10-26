@@ -693,7 +693,7 @@ async function pollCal() {
     const { r, body } = await fetchTimed('/api/calibration');
     // only mission control's progress answer is a read: a 2xx that isn't it (a cut-off body, a proxy's page) is a failed
     // one, like a 503 or no answer: the last good progress, Stop and when bitcube was last heard all stay
-    const read = calRead({ ok: r.ok, status: r.status, body });
+    const read = calRead({ ok: r.ok, status: r.status, body }, { running: S.cal.p?.running === true, heardS: heardS() });
     if (!read.good) throw new Error(read.error);
     const j = body;
     const wasRunning = S.cal.p?.running === true;
