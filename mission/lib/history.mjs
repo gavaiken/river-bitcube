@@ -23,8 +23,8 @@
 // Events (all carry t, ms epoch on the server's clock; `from` is null the first time something is seen):
 //   { kind: 'overall', t, level, cause, headline, stale, lost, from: { level, cause, stale, lost } | null, back? }
 //       the verdict changed: level, cause, or contact. stale: a source the verdict needs has gone quiet and `lost`
-//       names it ('bitcube', "the river's year page", "Dave's agent"). back: the verdict TouchDesigner restarting
-//       interrupted, the same after it: it keeps its since from before the restart ("After the restart, as before: …", R8 #5).
+//       names it ('bitcube', "the river's year page", "Dave's agent"). back: the fault TouchDesigner restarting interrupted
+//       (never OK: CR8 #8), the same after it: it keeps its since from before the restart ("After the restart, as before: …", R8 #5).
 //   { kind: 'item', t, id, from, to, summary, stale?, gap?, still? }   a piece of equipment changed level (levels: ok warning
 //                                                          down); stale: its source was already quiet at the time; gap: it
 //                                                          was not seen just before (since is "at least"); still: the same
