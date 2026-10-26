@@ -143,7 +143,7 @@ export function calLeft({ cal, dry }) {
 export function stateWords(m) {
   const r = m?.show?.ropes, p = m?.show?.panels;
   if (!r || !p) return '';
-  if (r.state === 'restarting' && p.state === 'restarting') return `The ropes and the panels are dark while TouchDesigner ${/\bstarts$/.test(r.words) && !/restarts$/.test(r.words) ? 'starts' : 'restarts'}.`;
+  if (r.state === 'restarting' && p.state === 'restarting') return `The ropes and the panels are dark while TouchDesigner ${/\bstarts$/.test(r.words) ? 'starts' : 'restarts'}.`;
   return `${cap(r.words)} · ${p.words}.`;
 }
 /** The changes that alter what the ropes or the panels show: a switch or a rebuild restarts TouchDesigner (the lights go dark),
