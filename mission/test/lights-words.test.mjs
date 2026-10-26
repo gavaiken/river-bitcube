@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { derive } from '../public/model.js';
 import { calChecklist, startWhy, dryWhy, calView, lostWhy, rebuiltFor, runNote, nextLine, driftWords, resultWords, captureWhen,
-  mapMissing, placeLabels, ROOM_CHECK, CAL_QUIET_S } from '../public/lights-words.js';
+  mapMissing, placeLabels, ROOM_CHECK, CAL_QUIET_S, calRead, untimed, stateLive, calLeft, changeSince, stateLevel, applyingNow, CAL_COPY,
+  runFine, resultHead, CAL_CTL } from '../public/lights-words.js';
 
 const load = (name) => JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8'));
 const model = (name, edit = (s) => s, later = 2000) => { const f = load(name); const s = edit({ ...f.status, now: f._scenario.now }); return derive(s, s.now + later); };
@@ -188,4 +189,113 @@ test('code review: "map in use" never compares two machines\' clocks when the se
   const rebuilt = { at: (1_800_000_400 - 600) * 1000, map: 'pixelmap-2026-10-25.json', run: 1_800_000_000 };
   assert.equal(rebuiltFor(run, rebuilt), rebuilt.at);
   assert.equal(rebuiltFor({ ...run, started: 1_800_009_000 }, rebuilt), null, 'another run on the same day with the same map name is not it');
+});
+
+// ---- round 6 ----------------------------------------------------------------------------------------------------
+const CAL = (elapsed = 230) => (s) => { s.probe.value.calibration = { running: true, mode: 'full', stage: 'ropes-capture', expected_s: 170, elapsed_s: elapsed }; return s; };
+
+test('R6 #29: a progress read that is a 2xx but not mission control\'s JSON is a failed read, never "no run"', () => {
+  // non-JSON (a cut-off body, a proxy's page): fetchTimed gives body null
+  assert.equal(calRead({ ok: true, status: 200, body: null }).good, false);
+  // JSON, but not a progress answer: no boolean `running`
+  for (const body of [{}, [], 'x', 3, { ok: true }, { running: 'yes' }, { ok: false, error: "Can't read the calibration" }]) {
+    const r = calRead({ ok: true, status: 200, body });
+    assert.equal(r.good, false, JSON.stringify(body));
+    assert.ok(r.error && !/null|undefined|JSON|HTTP/.test(r.error), r.error);
+  }
+  assert.equal(calRead({ ok: false, status: 503, body: { ok: false, error: "Can't read the calibration: bitcube didn't answer" } }).good, false);
+  assert.equal(calRead({ ok: false, status: 502, body: null }).good, false);
+  // a good read: a run, a finished (or failed) run, or "no job"
+  assert.deepEqual(calRead({ ok: true, status: 200, body: { ...RUN, rebuilt: null } }), { good: true, p: { ...RUN, rebuilt: null }, rebuilt: null });
+  const failedRun = { running: false, ok: false, started: 1, error: 'x' };
+  assert.equal(calRead({ ok: true, status: 200, body: failedRun }).p, failedRun);
+  assert.deepEqual(calRead({ ok: true, status: 200, body: { running: false, none: true } }), { good: true, p: null, rebuilt: undefined });
+  // a failed read leaves the run on screen: calView of the last good progress is still the run
+  assert.equal(calView({ p: RUN, m: model('all-good') }).view, 'run');
+});
+
+test('R6 #8: the state line\'s hidden live region never carries a ticking time', () => {
+  assert.equal(untimed('The ropes are in calibration patterns for about 40 s more · the panels show the river at 100 %.'),
+    'The ropes are in calibration patterns · the panels show the river at 100 %.');
+  assert.equal(untimed('The ropes are in calibration patterns for about 4 min more · the panels are in calibration patterns for about 4 min more.'),
+    'The ropes are in calibration patterns · the panels are in calibration patterns.');
+  assert.equal(untimed("bitcube restarted 6 min ago and is still coming up"), 'bitcube restarted and is still coming up');
+  assert.equal(untimed("Mission control hasn't heard from bitcube for 3 min."), "Mission control hasn't heard from bitcube.");
+  assert.equal(untimed('The ropes show the river · the panels show the river at 100 %.'), 'The ropes show the river · the panels show the river at 100 %.');
+  // the same live words at every poll of a run: said once, not every 5 s
+  const at = (elapsed) => { const m = model('all-good', CAL(elapsed)); return [m.show.ropes.words, stateLive({ words: `${m.show.ropes.words} · ${m.show.panels.words}.` })]; };
+  const [w1, said1] = at(180), [w2, said2] = at(185);
+  assert.notEqual(w1, w2);              // the words tick ("about 55 s more", then "about 50 s more")
+  assert.equal(said1, said2);           // what is said doesn't
+  assert.doesNotMatch(said1, /\d+ (s|min)\b/);
+  // a change in flight is said once, by its name, without its m:ss
+  const live = stateLive({ words: 'The ropes show the river.', applying: [{ label: "the restart on the river's year", line: "Applying: the restart on the river's year · 0:05 · usually about 1 min" }] });
+  assert.equal(live, "The ropes show the river. Applying: the restart on the river's year.");
+  assert.equal(stateLive({ words: 'The ropes show the river.', lost: true }), 'No contact with mission control. The ropes show the river.');
+  assert.equal(stateLive({ words: 'The ropes show the river.', stale: true }), 'Last seen: The ropes show the river.');
+});
+
+test('R6 #13: the Calibrate card\'s time left is the model\'s, the same number as the state line, the Status tile and the band', () => {
+  for (const [elapsed, later] of [[100, 2000], [190, 9000], [230, 20_000]]) {
+    const m = model('all-good', CAL(elapsed), later);
+    const t = calLeft({ cal: m.show.calibration, dry: false });
+    const n = /about (\d+\s(?:s|min|h)) more/.exec(m.show.ropes.words)?.[1];
+    if (n) { assert.equal(t, `About ${n} left`); assert.match(m.overall.headline, new RegExp(`about ${n} more`)); }
+    else { assert.match(m.show.ropes.words, /nearly done/); assert.equal(t, 'Nearly done'); }
+  }
+  assert.equal(calLeft({ cal: null, dry: false }), '');            // the model doesn't know the run (yet): no second guess
+  assert.equal(calLeft({ cal: { left_s: 40 }, dry: true }), 'A dry run takes about a minute.');
+  // the model's own words when it gives them (the last 45 s are "nearly done" on every page)
+  assert.equal(calLeft({ cal: { left_s: 20, left_words: 'nearly done' }, dry: false }), 'Nearly done');
+  assert.equal(calLeft({ cal: { left_s: 200, left_words: 'about 3 min more' }, dry: false }), 'About 3 min left');
+});
+
+test('R6 #3: while a change that alters the lights is in flight, a reading from before it is never shown green', () => {
+  const sw = (startedAgoMs, action = 'switch', label = "the restart on the river's year", expect_s = 60) => (s) => {
+    s.applying = [{ id: 'a1', action, label, file: 'river-local-oct-22-seasons.toe', started_at: s.now - startedAgoMs, expect_s, blocks: ['ropes'] }]; return s; };
+  const m = model('all-good', sw(5000));
+  const age = m.overall.checked.probe_age_s;   // the reading is older than the switch
+  assert.ok(age > 7);
+  const ch = changeSince(m, age);
+  assert.equal(ch?.label, "the restart on the river's year");
+  assert.equal(stateLevel({ levels: ['ok', 'ok'], change: ch }), 'unknown');
+  assert.equal(stateLevel({ levels: ['ok', 'ok'], change: null }), 'ok');
+  assert.equal(stateLevel({ levels: ['warning', 'ok'], change: ch }), 'warning');   // the model knows better than "not known"
+  assert.equal(stateLevel({ levels: ['ok', 'down'] }), 'down');
+  assert.equal(stateLevel({ levels: ['ok', 'ok'], stale: true }), 'unknown');
+  // a reading taken after the change began speaks for itself; a mode change doesn't alter what the lights show
+  assert.equal(changeSince(m, 3), null);
+  assert.equal(changeSince(model('all-good', sw(5000, 'mode', 'a mode change')), age), null);
+  for (const a of ['rebuild', 'ropes', 'hub75', 'lightsroute', 'calibrate']) assert.ok(changeSince(model('all-good', sw(5000, a, 'x')), age), a);
+  // the band's quiet line, under the state line: every change in flight but this page's own (its control says it)
+  const lines = applyingNow(m);
+  assert.equal(lines.length, 1);
+  assert.match(lines[0].line, /^Applying: the restart on the river's year · 0:0\d · usually about 1\smin$/);
+  assert.equal(lines[0].said, "Applying: the restart on the river's year.");
+  assert.deepEqual(applyingNow(m, ['switch']), []);
+  const short = applyingNow(model('all-good', sw(1000, 'ropes', 'a ropes change', 15)));
+  assert.match(short[0].line, /^Applying: a ropes change(…| · 0:0\d · usually a few seconds)$/);
+});
+
+test('R6 #22, #24: Calibrate says the ropes go back to what they showed before, never "back to the river"; no fragments', () => {
+  const all = [CAL_COPY.stopBefore, CAL_COPY.stopped, CAL_COPY.restored, runFine({ started: '21:14', cam: 'gallery', dry: false })];
+  for (const t of all) { assert.doesNotMatch(t, /back (to|on) the river/, t); assert.match(t, /what they showed before/, t); }
+  assert.equal(runFine({ started: '21:14', cam: 'gallery', dry: false }),
+    'Started 21:14, using the gallery camera. When it ends, the ropes go back to what they showed before, by themselves.');
+  assert.equal(runFine({ started: '21:14', cam: null, dry: false }), 'Started 21:14. When it ends, the ropes go back to what they showed before, by themselves.');
+  // a dry run touches no lights and no camera
+  assert.equal(runFine({ started: '21:14', cam: 'gallery', dry: true }), 'Started 21:14. The lights stay as they are.');
+  // the result's heading isn't the first words of its own line ("Map made" over "Map made 23 Oct …")
+  assert.equal(resultHead(false), 'New LED map');
+  assert.doesNotMatch(resultWords(DONE.result), new RegExp(`^${resultHead(false)}`));
+  assert.equal(resultHead(true), 'Dry run finished');
+});
+
+test('R6: Lights\' controls take ui.js\'s words for applying ("Applying: <what>…"), never their own', () => {
+  for (const [k, c] of Object.entries(CAL_CTL)) {
+    assert.equal(c.pending, undefined, k);
+    assert.match(c.what, /^(the|a) [a-z]/, k);
+  }
+  assert.equal(CAL_CTL.start.what, 'the start of a calibration');   // lib/applying.mjs's label: one name on every phone
+  assert.equal(CAL_CTL.rebuild.what, "a rebuild of the river's year");
 });
