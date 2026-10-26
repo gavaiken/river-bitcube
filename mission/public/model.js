@@ -1044,36 +1044,86 @@ export const ENDED_SAID_S = 30;
 /** A change ended confirmed or expired that waited for the server's verdict (a switch, a rebuild, a boot-file change, a lighting
  *  port change, a calibration's start, or one bitcube didn't answer in time): the ones a band showed as applying. */
 const endedAwaited = (e) => e.maybe || Object.hasOwn(AWAITED, e.action);   // an entry is a calibration's start (AWAITED)
-/** How another phone's (or the studio chat's) change ended, for a live region, for ENDED_SAID_S after it did: "Done: the change of
- *  the boot file to the live river, from the studio chat." or "The change of the boot file to the live river: bitcube didn't show
- *  it in time."
- *  (R8 #9). own: { ownIds } (ownEntries): this phone's own change is said on its control. nowMs: the server's clock. */
-export function endedSaid(m, { ownIds = [] } = {}, nowMs = null) {
+/** How another phone's (or the studio chat's) change ended, within ENDED_SAID_S after it did: [{ id, label, at, said }], said "Done:
+ *  the change of the boot file to the live river, from the studio chat." or "The change of the boot file to the live river: bitcube
+ *  didn't show it in time." (R8 #9). own: { ownIds } (ownEntries): this phone's own change is said on its control. nowMs: the
+ *  server's clock. A page says each once, by its id (endedOnce, R9 #5). */
+export function endedEntries(m, { ownIds = [] } = {}, nowMs = null) {
   const now = num(nowMs);
   if (!m?.show || now == null) return [];
   const recent = (list, verdict) => (list ?? []).filter((e) => e.id && !ownIds.includes(e.id) && endedAwaited(e) && num(e.at) != null && now - e.at >= 0 && now - e.at <= ENDED_SAID_S * 1000)
-    .map((e) => ({ at: e.at, said: verdict === 'confirmed' ? `Done: ${e.label}${e.source === 'studio chat' ? ', from the studio chat' : ''}.`
+    .map((e) => ({ id: e.id, label: e.label, at: e.at, said: verdict === 'confirmed' ? `Done: ${e.label}${e.source === 'studio chat' ? ', from the studio chat' : ''}.`
       : `${cap(e.label)}${e.source === 'studio chat' ? ', from the studio chat' : ''}: bitcube didn't show it in time.` }));
-  return [...recent(m.show.confirmed, 'confirmed'), ...recent(m.show.expired, 'expired')].sort((a, b) => a.at - b.at).map((x) => x.said);
+  return [...recent(m.show.confirmed, 'confirmed'), ...recent(m.show.expired, 'expired')].sort((a, b) => a.at - b.at);
 }
-/** What Status's hidden band region says: the level and the headline without their times (R7 #13), then each change in flight
- *  but this phone's own (ownEntries: ownIds, its entries; ownActions, a request without an id yet) by name and source (R7 #12),
- *  then how another phone's change ended, for ENDED_SAID_S after it did (R8 #9; nowMs: the server's clock). */
-export function bandSaid(m, { ownIds = [], ownActions = [] } = {}, nowMs = null) {
-  if (!m) return '';
-  const head = `${{ ok: 'OK', warning: 'Attention', down: 'Down', unknown: 'Unknown' }[m.overall.level] ?? 'Unknown'}. ${untimed(m.overall.headline.replace(/\s*\(no answer for [^()]*\)$/, ''))}.`;
-  if (m.overall.cause === 'page') return head;
+/** The words of endedEntries. */
+export function endedSaid(m, own = {}, nowMs = null) { return endedEntries(m, own, nowMs).map((x) => x.said); }
+/** A page's memory of the ended changes it has said (R9 #5, #17, #30): each by its id, once, never as part of a region's standing
+ *  words, so an old "Done: …" never rides along with a later change and a second change with the same name is still said when it
+ *  ends. Nothing on the page's first answer (what ended before it opened is no news), and never one that has the same name as a
+ *  change in flight now (the newer change is what is happening). Returns say(m, own, nowMs) → the lines to say now. */
+export function endedOnce() {
+  let said = new Set(), seeded = false;
+  return (m, own = {}, nowMs = null) => {
+    if (!m?.show || num(nowMs) == null) return [];
+    const list = endedEntries(m, own, nowMs);
+    // ids that left both lists are never seen again: forgotten, so the memory stays small
+    const listed = new Set([...(m.show.confirmed ?? []), ...(m.show.expired ?? [])].map((e) => e.id));
+    said = new Set([...said].filter((id) => listed.has(id)));
+    if (!seeded) { seeded = true; for (const e of list) said.add(e.id); return []; }
+    const flying = new Set((m.show.applying ?? []).map((a) => a.label));
+    const out = [];
+    for (const e of list) { if (said.has(e.id)) continue; said.add(e.id); if (!flying.has(e.label)) out.push(e.said); }
+    return out;
+  };
+}
+/** What Status's hidden band region stands for: head, the level and the headline without their times (R7 #13), said when either
+ *  changes; lines, each change in flight but this phone's own (ownEntries: ownIds, its entries; ownActions, a request without an
+ *  id yet) by name and source (R7 #12), each said when it is new (ui.js setLive, R9 #5). How another phone's change ended is said
+ *  once beside it (endedOnce), never part of these words. */
+export function bandParts(m, { ownIds = [], ownActions = [] } = {}) {
+  if (!m) return { head: '', lines: [] };
+  const head = `${{ ok: 'OK', warning: 'Attention', down: 'Down', unknown: 'Unknown' }[m.overall.level] ?? 'Unknown'}. ${untimed(m.overall.headline.replace(/\s*\(no answer for [^()]*\)$/, ''))}.`.replace(/\.\.$/, '.');
+  if (m.overall.cause === 'page') return { head, lines: [] };
   const others = (m.show.applying ?? []).filter((a) => !(a.id && ownIds.includes(a.id)) && !ownActions.includes(a.action));
-  return [head.replace(/\.\.$/, '.'), ...others.map(entrySaid), ...endedSaid(m, { ownIds }, nowMs)].join(' ');
+  return { head, lines: others.map(entrySaid) };
+}
+/** What a hidden region says when its words change from prev to now ({ head, lines } each; ui.js setLive): the head (the level
+ *  and the headline) only when it changed, and each line that wasn't there before; never the unchanged head beside a new line, and
+ *  nothing when a part only went (R9 #5). */
+export function liveNews(prev, now) {
+  const head = String(now?.head ?? '').trim(), lines = (now?.lines ?? []).map((x) => String(x ?? '').trim()).filter(Boolean);
+  const was = prev?.lines ?? [];
+  return [...(head && head !== prev?.head ? [head] : []), ...lines.filter((l, i) => !was.includes(l) && lines.indexOf(l) === i)];
+}
+/** bandParts as one text: the head, then each change in flight. */
+export function bandSaid(m, own = {}) { const p = bandParts(m, own); return [p.head, ...p.lines].filter(Boolean).join(' '); }
+/** The ids of this phone's own entries that it remembers beyond its controls' current ones (R9 #6, #31): mine.ids, every entry an
+ *  answer named, and every entry (in flight, confirmed or expired) that carries a request id it sent (mine.requestIds). */
+function mineIds(m, mine = {}) {
+  const ids = (mine?.ids ?? []).filter((x) => typeof x === 'string' && x !== '');
+  const reqs = new Set((mine?.requestIds ?? []).filter((x) => typeof x === 'string' && x !== ''));
+  if (reqs.size) for (const list of [m?.show?.applying, m?.show?.confirmed, m?.show?.expired, m?.show?.verdicts]) {
+    for (const e of list ?? []) if (typeof e?.id === 'string' && e.request_id && reqs.has(e.request_id) && !ids.includes(e.id)) ids.push(e.id);
+  }
+  return ids;
+}
+/** A page's memory of its own changes (R9 #6, #31): the entries its answers named and the request ids it sent, the newest `max` of
+ *  each, kept across its controls' presses (a new press never makes the last one "another phone's"). */
+export function ownMemory(max = 20) {
+  const mine = { ids: [], requestIds: [] };
+  const add = (list, x) => { if (typeof x === 'string' && x !== '' && !list.includes(x)) { list.push(x); if (list.length > max) list.shift(); } };
+  return { mine, id: (x) => add(mine.ids, x), request: (x) => add(mine.requestIds, x) };
 }
 /** This phone's own changes among status.applying (derive()'s show.applying), from its controls: [{ action, state, entryId, at }]
  *  (at: when the control entered its state, this phone's clock, ms). ownIds: its entries by id, and, for a control unconfirmed
  *  without an id (its answer never came), an entry of its action begun before it gave up (one begun later is another phone's
- *  change of the same thing); ownActions: a request in flight or confirming without an id, by its action (CR7 #10). What
- *  bandSaid, Status's band and Lights' state line leave out: this phone's own change is said on its control only. */
-export function ownEntries(m, controls, nowMs = Date.now()) {
+ *  change of the same thing); ownActions: a request in flight or confirming without an id, by its action (CR7 #10). mine: what the
+ *  page remembers of its earlier changes (ownMemory: their ids and request ids, R9 #6, #31). What bandSaid, Status's band, Lights'
+ *  state line and how a change ended leave out: this phone's own change is said on its control only. */
+export function ownEntries(m, controls, nowMs = Date.now(), mine = {}) {
   const list = (Array.isArray(controls) ? controls : []).filter((c) => c && typeof c.action === 'string');
-  const ownIds = list.map((c) => c.entryId).filter((x) => typeof x === 'string' && x !== '');
+  const ownIds = [...new Set([...list.map((c) => c.entryId).filter((x) => typeof x === 'string' && x !== ''), ...mineIds(m, mine)])];
   const ownActions = [...new Set(list.filter((c) => !c.entryId && (c.state === 'applying' || c.state === 'confirming')).map((c) => c.action))];
   for (const a of m?.show?.applying ?? []) {
     if (!a.id || ownIds.includes(a.id)) continue;

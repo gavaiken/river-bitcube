@@ -12,8 +12,8 @@ import { mountShell, poll, tick, watchContact, focusKey, refocus, park, focusSho
 import { rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows, bootWords, controlLine, failText, notSentText, applyingLine,
   ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash, lastDoneParts, lastDoneWhat, fromWords } from '/status-words.js';
 
-const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, changeLabel, bandSaid,
-  newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS } = M;
+const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, changeLabel, bandParts,
+  newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS, endedOnce, ownMemory } = M;
 const $ = (sel, root = document) => root.querySelector(sel);
 const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
 // One name per thing (the copy rules); descriptors live on the card, never in the name.
@@ -41,6 +41,11 @@ const openRows = new Set();   // expanded rows, kept across re-renders
 // Rules and its reset share the form.
 const ctl = {};
 const SHARE = { rules: ['rules-reset'], 'rules-reset': ['rules'] };
+// this phone's own changes, remembered across its controls' presses: a new press never makes its last change "another phone's"
+// on the band or in how a change ended (R9 #6, #31: model.js ownMemory, as Lights keeps its own)
+const mine = ownMemory();
+// how another phone's change ended, said once by its id (R9 #5, #17, #30)
+const endedNews = endedOnce();
 const stillTried = { gallery: 0, river: 0 }, stillBusy = { gallery: false, river: false };   // Date.now() of the last try; one at a time
 const stillNet = { gallery: false, river: false };   // the last try failed for want of a network (not "no picture"): try again on contact
 const stills = { gallery: { url: null, age_s: null, fetchedAt: null, missing: null }, river: { url: null, age_s: null, fetchedAt: null, missing: null } };
@@ -304,9 +309,11 @@ function renderNow() {
   // screen readers hear the level and the headline when they change, never a time (R6 #8; not even the first time, R7 #13), and
   // each change in flight from another phone or the studio chat by name and source (R7 #12): this phone's own is said on its control
   const own = ownChanges();
-  // and, once, how another phone's change ended (R8 #9)
-  const said = m ? bandSaid(m, own, serverNow()) : (performance.now() - p.startedAt > LOST_MS ? "This page can't reach mission control." : '');
-  setLive($('#band-live'), said);   // through the page's one queue: never in the same moment as the page's region (R8 #11)
+  // only what is new: the level and headline when they change, each change in flight as it begins or moves on (R9 #5); and, once
+  // by its id, how another phone's change ended (R8 #9, R9 #5), never while contact is lost
+  const said = m ? bandParts(m, own) : (performance.now() - p.startedAt > LOST_MS ? "This page can't reach mission control." : '');
+  const once = m && !lostContact(m) ? endedNews(m, own, serverNow()) : [];
+  setLive($('#band-live'), said, { once });   // through the page's one queue: never in the same moment as the page's region (R8 #11)
   $('.card.now').hidden = !m;
   setHTML($('#now-head'), m ? nowHTML(m) : '');
   setHTML($('#now-steer'), m ? steerHTML(m) : '');
@@ -361,7 +368,7 @@ function bandHTML(m) {
  *  holds it), and, without an id, by its action while its control is applying, confirming or unconfirmed (an entry begun before it
  *  gave up): model.js ownEntries (R7 #15, CR7 #10). A control's name is its action. */
 function ownChanges() {
-  return M.ownEntries(model, Object.entries(ctl).map(([action, c]) => ({ action, state: c.s.state, entryId: c.entryId ?? null, at: c.s.at })), Date.now());
+  return M.ownEntries(model, Object.entries(ctl).map(([action, c]) => ({ action, state: c.s.state, entryId: c.entryId ?? null, at: c.s.at })), Date.now(), mine.mine);
 }
 /** The changes in flight the band says (another phone's, the studio chat's): never this phone's own, which its control says, and none
  *  while contact is lost. */
@@ -780,7 +787,7 @@ function settleControls() {
     // done once a reading taken after the send shows it (c.sent, CR7 #4); a restart or a rebuild only by its own limit
     const own = model ? ownVerdict(model, { state: c.s.state, entryId: c.entryId, requestId: c.requestId, sent: c.sent, serverConfirms: !!c.o?.serverConfirms, held: c.held, saidExpired: c.saidExpired }) : null;
     if (own?.unlockAt != null) c.text = heldWords(c.o?.what, sclock(own.unlockAt));
-    if (fresh) c.entryId = own.entryId;
+    if (fresh) { c.entryId = own.entryId; mine.id(c.entryId); }
     if (fresh && own.judged) {
       c.judgedWall = p.receivedWall;
       if (own.step === 'done') { c.s = ctlStep(c.s, { type: 'model', confirmed: true, now }); finish(name); ended.push(name); }
@@ -872,6 +879,7 @@ async function runControl(name, path, body, o) {
   try { sent = typeof o.sent === 'function' ? { ...o.sent(model), sentAt: serverClock() } : null; } catch { sent = null; }
   // the page's own id for this press, sent with it: a page whose answer is lost still finds its entry and verdict by it (R8 #2)
   const requestId = name === 'check' ? null : newRequestId();
+  mine.request(requestId);
   Object.assign(c, { s: next, text: '', o: { holds: o.confirmed, ...o }, result: null, refreshAt: null, judgedWall: null, entryId: null, requestId, saidExpired: false, held: false, sent,
     sentServer: serverNow(), expectS: EXPECT_S[name] ?? null, usual: name === 'bootfile' ? BOOT_USUAL : null, applyText: o.pending ?? M.applyingText(o.what) });
   for (const other of SHARE[name] ?? []) if (ctl[other] && !busy(other)) ctl[other] = { s: ctlInit(), text: '' };
@@ -889,6 +897,7 @@ async function runControl(name, path, body, o) {
   try { r = await api(path, requestId ? { ...body, request_id: requestId } : body); }
   catch (e) {
     c.entryId = typeof e?.applyingId === 'string' ? e.applyingId : null;   // a maybe answer still names its entry
+    mine.id(c.entryId);
     const maybe = !!(e?.maybe || (e?.noAnswer && e?.posted));
     c.s = ctlStep(c.s, { type: 'error', maybe, now: Date.now() });
     // bitcube didn't answer a change whose lock holds (the server keeps its entry to its limit): one state on the control, when
@@ -906,6 +915,7 @@ async function runControl(name, path, body, o) {
   if (name === 'check') shell.setChecking(false);
   c.result = r;
   c.entryId = typeof r?.applying_id === 'string' ? r.applying_id : null;
+  mine.id(c.entryId);
   c.s = ctlStep(c.s, { type: 'ok', confirmed: typeof o.confirmed === 'function' || o.serverConfirms ? false : null, now: Date.now() });
   if (c.s.state === 'done') finish(name);
   else if (c.s.state === 'confirming') announce(CONFIRMING_SAID);   // said once, never with its time (R6 #9)

@@ -3,7 +3,7 @@
 // their request by id, and keeps the pinned status bar and the composer. Server API unchanged: history, events, send, stop.
 import { mountShell, tick, art, fmt, control, confirm, api, esc, md, chip, mark, plainError, noAnswerText, WARN_MS, LOST_MS, poll, announce, setLive,
   serverNow, serverClock, sclock, noteServerTime } from '/ui.js';
-import { TZ, applyingWords, derive, entryWords, entrySaid, entriesAt, endedSaid } from '/model.js';
+import { TZ, applyingWords, derive, entryWords, entrySaid, entriesAt, endedOnce } from '/model.js';
 import { stateOf as judge, stepWords, stepsToggle, excerpt } from '/chat-words.js';
 
 const $ = (id) => document.getElementById(id);
@@ -197,10 +197,10 @@ function renderPinned() {
   if (pinText.innerHTML !== html) pinText.innerHTML = html;
   // screen readers hear the bar's state word when it changes, never its ticking m:ss (chat.html #pin-live)
   const said = lost ? 'Reconnecting to mission control' : !st ? (performance.now() - pageStart > LOST_MS ? "This page can't reach mission control" : '') : st.running ? `Working on: ${excerpt(st.current?.text, 60)}` : st.queue?.length ? `${st.queue.length} waiting` : 'Ready';
-  // and each change being applied, by name and source, said when it begins or moves on, never with its time (R7 #5)
-  // and, once, how another phone's change ended (R8 #9)
-  const sayAll = [said, ...(lost ? [] : applyingNow().map(entrySaid)), ...(lost ? [] : endedNow())].filter(Boolean).join('. ').replace(/\.\./g, '.');
-  setLive($('pin-live'), sayAll);   // through the page's one queue (R8 #11)
+  // and each change being applied, by name and source, said when it begins or moves on, never with its time (R7 #5); only what is
+  // new (R9 #5); and, once by its id, how a change ended (R8 #9), each one, a second with the same name too (R9 #5)
+  const sayAll = { head: said, lines: lost ? [] : applyingNow().map(entrySaid) };
+  setLive($('pin-live'), sayAll, { once: lost ? [] : endedNow() });   // through the page's one queue (R8 #11)
   const q = st?.queue?.length ?? 0;
   const label = q ? 'Stop, and clear the queue' : 'Stop';
   const busy = !!(st?.running || q);
@@ -316,13 +316,15 @@ function memoApplying(at) {
   try { m = derive(p.last, at); } catch { m = null; }
   applyingMemo = { at: p.receivedAt, list: m?.show.applying ?? [], m };
 }
-/** How a change from a phone ended, said once by the bar's region (the chat has no change of its own here: every one is another's). */
+/** How a change from a phone ended, said once by the bar's region, by its id (the chat has no change of its own here: every one is
+ *  another's); nothing for what ended before the page's first answer (R9 #5, #30). */
+const endedNews = endedOnce();
 function endedNow() {
   const p = applyingPoll;
   if (!p.last || p.elapsed() > LOST_MS) return [];
   const at = serverClock();
   memoApplying(at);
-  return applyingMemo.m ? endedSaid(applyingMemo.m, {}, at) : [];
+  return endedNews(applyingMemo.m, {}, at);
 }
 function paintApplying() {
   const host = $('chat-applying'), list = applyingNow();

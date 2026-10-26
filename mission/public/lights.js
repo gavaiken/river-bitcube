@@ -7,10 +7,10 @@
 import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark, plainError, DOC_LINKS, splitHeadline, announce, unannounce, setLive, goto, bringIntoView,
   WARN_MS, LOST_MS, POLL_TIMEOUT_MS, serverNow, serverClock } from '/ui.js';
 import { fetchTimed } from '/app.js';
-import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, EXPECT_S, ownEntries, endedSaid, START_USUAL } from '/model.js';
+import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, EXPECT_S, ownEntries, endedOnce, START_USUAL } from '/model.js';
 import { uprightsFromAtlas } from '/screens.js';
 import { calChecklist, ROOM_CHECK, startWhy, dryWhy, calView, rebuiltFor, runNote, nextLine, captureWhen, driftWords, resultWords,
-  mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT, calRead, calLeft, changeSince, stateLevel, applyingNow, stateLive, CAL_COPY, runFine,
+  mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT, calRead, calLeft, changeSince, stateLevel, applyingNow, stateParts, CAL_COPY, runFine,
   resultHead, CAL_CTL, calNewer, stateWords } from '/lights-words.js';
 
 const N_ROPES = 20, LEDS = 400;
@@ -47,7 +47,10 @@ const S = {
   chips: [],                                 // each rope chip's last inner HTML (the buttons stay; only what changed is painted)
   rebuildingElsewhere: false,                // a rebuild in status.applying: when it ends, /api/calibration says which map is in use
   ownIds: [],                                // the server's entries for this page's own changes (applying_id): never "another phone's"
+  ownRequestIds: [],                         // the request ids this page sent (R8 #2): an entry whose answer was lost is its own too (R9 #6)
 };
+// how another phone's change ended, said once by its id, never on the page's first answer (R9 #5, #17, #30)
+const endedNews = endedOnce();
 
 const shell = mountShell({ page: 'lights', title: 'Lights' });
 const status = poll('/api/status', { every: 5000,
@@ -64,7 +67,9 @@ function judgeControls() {
 }
 /** A change this page sent got its entry's id (the answer, or a maybe answer): remember it, so the state line never shows this
  *  page's own change as another phone's, whatever its control shows now (R7 #14). */
-function own(id) { if (typeof id === 'string' && !S.ownIds.includes(id)) S.ownIds = [...S.ownIds.slice(-9), id]; }
+function own(id) { if (typeof id === 'string' && !S.ownIds.includes(id)) S.ownIds = [...S.ownIds.slice(-19), id]; }
+/** A press's own request id, remembered the same way (R9 #6). */
+function ownRequest(rid) { if (typeof rid === 'string' && rid && !S.ownRequestIds.includes(rid)) S.ownRequestIds = [...S.ownRequestIds.slice(-19), rid]; }
 // the shared rule (ui.js): greyed and bannered from the time since the last answer, so a hung request counts too
 const contact = watchContact(status, shell, () => { S.m = model(); render(); });
 const pageDown = () => contact.lost;
@@ -120,21 +125,21 @@ function renderStateLine() {
   // the band's quiet line for a change in flight from another phone or the chat (this page's own is said on its control)
   const own = ownChanges(), lines = lost ? [] : applyingNow(m, own);
   paintApplying(lines);
-  // and, once, how another phone's change ended (R8 #9)
-  const ended = lost || !status.last ? [] : endedSaid(m, { ownIds: own.ids }, serverClock());
-  sayState(stateLive({ words, lost, stale, applying: lines, ended }));
+  // and, once by its id, how another phone's change ended (R8 #9, R9 #5)
+  const ended = lost || !status.last ? [] : endedNews(m, { ownIds: own.ids }, serverClock());
+  sayState(stateParts({ words, lost, stale, applying: lines }), ended);
 }
 /** Screen readers hear the state line's words when they change, never a ticking time (lights.html #state-live; lights-words
- *  stateLive drops "for about 40 s more" and the changes' m:ss). */
-function sayState(t) { setLive($('#state-live'), t); }   // through the page's one queue (R8 #11)
+ *  stateParts drops "for about 40 s more" and the changes' m:ss); only what is new (R9 #5), and how a change ended once. */
+function sayState(t, once = []) { setLive($('#state-live'), t, { once }); }   // through the page's one queue (R8 #11)
 /** This page's own changes: their controls say them, so the state line doesn't. Its entries by id (R7 #14), and, without an id,
  *  by its action while its control is applying, confirming or unconfirmed (an entry begun before it gave up): model.js
  *  ownEntries (CR7 #10). */
 const ownChanges = () => {
   const ctls = [['calibrate', S.calCtl.start], ['calibrate', S.calCtl.dry], ['rebuild', S.calCtl.rebuild]].filter(([, c]) => c)
     .map(([action, c]) => ({ action, state: c.state, entryId: c.entryId ?? null, at: c.at }));
-  const o = ownEntries(S.m, ctls, Date.now());
-  return { ids: [...new Set([...S.ownIds, ...o.ownIds])], actions: o.ownActions };
+  const o = ownEntries(S.m, ctls, Date.now(), { ids: S.ownIds, requestIds: S.ownRequestIds });
+  return { ids: o.ownIds, actions: o.ownActions };
 };
 /** "Applying: the restart on the river's year · 0:05 · usually about 1 min" under the state line, one line per change; the
  *  m:ss is painted in place each second, so the spinner never restarts. */
@@ -872,7 +877,7 @@ function paintCal(view, p) {
 function setWhy(c, why, by = null) {
   if (!c?.button.isConnected) return;
   // a sibling's own change on this page (Start's, under Dry run) is said by that control, never as a Wait line here too
-  const own = !!by && S.ownIds.includes(by);
+  const own = !!by && ownChanges().ids.includes(by);
   if (c._why !== why || c._by !== (by ?? null) || c._own !== own) { c._why = why; c._by = by ?? null; c._own = own; c.update({ why, whyBy: by ?? null, whyOwn: own }); }
 }
 /** Leaving a view: a confirm its controls still hold open (Start, Dry run, Rebuild) is withdrawn, so a press on it can't send
@@ -925,6 +930,7 @@ function tickCalibrate() {
  *  didn't answer in time", never "No answer in a while" after an answer that came at once: R7 #2). */
 function startRun(dry_run, requestId = null) {
   S.cal.pending = true;
+  ownRequest(requestId);
   return api('/api/control/calibrate', { action: 'start', dry_run: !!dry_run, ...(requestId ? { request_id: requestId } : {}) }).catch((e) => {
     const reason = String(e.message || e).replace(/:\s*calibration can't start$/i, '');
     const out = new Error(/^[A-Z][a-z]/.test(reason) && !/^TouchDesigner/.test(reason) ? reason[0].toLowerCase() + reason.slice(1) : reason);
@@ -981,7 +987,7 @@ function mountRebuild(p) {
   const c = control($('#cal-rebuild'), { label: "Use this map: rebuild the river's year", kind: 'primary', why: S.m ? S.m.controls.rebuild.why : NO_CONTACT, siblings: keep,
     before: `Bakes the new LED map (${esc(captureWhen(p.result?.capture, p.result?.map).words)}) into the river's year and restarts TouchDesigner on it: about a minute dark. Asks first.`,
     confirm: { title: "Rebuild the river's year with this map?", body: "Bakes the new LED map into the river's year and restarts TouchDesigner on it: about a minute dark.", ok: 'Rebuild', cancel: 'Not now', destructive: true },
-    ...CAL_CTL.rebuild, expectS: EXPECT_S.rebuild, run: ({ requestId } = {}) => api('/api/control/rebuild', { file: YEAR_FILE, ...(requestId ? { request_id: requestId } : {}) }), serverConfirms: true,
+    ...CAL_CTL.rebuild, expectS: EXPECT_S.rebuild, run: ({ requestId } = {}) => { ownRequest(requestId); return api('/api/control/rebuild', { file: YEAR_FILE, ...(requestId ? { request_id: requestId } : {}) }); }, serverConfirms: true,
     done: "The river's year uses the new map", fail: "The river's year is unchanged",
     noAnswer: 'this card says "Map in use" if it did',
     unconfirmed: "mission control hasn't confirmed which map the river's year uses; call Gavin",

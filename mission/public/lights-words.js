@@ -189,14 +189,16 @@ export function calNewer(status, p) {
 /** A text without its ticking times ("for about 40 s more", "for 3 min", "6 min ago"): what a live region may say (model.js,
  *  shared with Status's band region). */
 export { untimed };
-/** What the state line's hidden polite region says: its words without a ticking time, and each change in flight by name, so
- *  a screen reader hears it again only when the state changes, never at every poll of a calibration (R6 #8); then, once, how
- *  another phone's change ended (ended: model.js endedSaid, R8 #9). */
-export function stateLive({ words, lost = false, stale = false, applying = [], ended = [] }) {
+/** What the state line's hidden polite region stands for (ui.js setLive): head, its words without a ticking time, said when they
+ *  change, never at every poll of a calibration (R6 #8); lines, each change in flight by name, each said when it is new (R9 #5).
+ *  How another phone's change ended is said once beside it (model.js endedOnce), never part of these words. */
+export function stateParts({ words, lost = false, stale = false, applying = [] }) {
   const w = untimed(words);
   const head = lost ? `No contact with mission control. ${w}` : stale ? `Last seen: ${w}` : w;
-  return [head, ...(lost ? [] : applying.map((a) => a.said ?? `Applying: ${a.label}.`)), ...(lost ? [] : ended)].join(' ');
+  return { head, lines: lost ? [] : applying.map((a) => a.said ?? `Applying: ${a.label}.`) };
 }
+/** stateParts as one text. */
+export function stateLive(o) { const p = stateParts(o); return [p.head, ...p.lines].join(' '); }
 
 // ---- the Calibrate block's own words ------------------------------------------------------------------------------
 /** calibrate.py puts back what capture.py found (Active, Source, Brightness): the ropes return to what they showed before the

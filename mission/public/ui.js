@@ -37,7 +37,7 @@
 // poll at once; after a theme change, 'mc:theme' (detail: 'auto' | 'light' | 'dark').
 import { api as rawApi, esc, md, plainError, noAnswerText, POLL_TIMEOUT_MS } from '/app.js';
 import { dur as modelDur, CONTACTS, TZ, ctlInit, ctlStep, ctlView, applyingWords, applyingText, confirmingWords, CONFIRMING_SAID, unconfirmedWords,
-  notSentWords, failWords, EXPECT_S, newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS } from '/model.js';
+  notSentWords, failWords, EXPECT_S, newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS, liveNews } from '/model.js';
 
 export { esc, md, plainError, noAnswerText };
 
@@ -466,8 +466,8 @@ export function confirm({ title, body = '', ok = 'OK', cancel = 'Not now', destr
 // two regions is written to the page's one region. While a sheet is open (a modal <dialog>: everything outside it is out of the
 // accessibility tree) every message goes to the sheet's own region instead, so nothing said meanwhile is lost (R8 #8).
 const SAY_PAUSE_MS = 60, SAY_GAP_MS = 1000;
-const speech = { queue: [], timer: null, lastAt: -Infinity };   // queue: [{ text, region }] (region null: the page's one region)
-const liveWords = new WeakMap();                                 // a hidden region -> the words it stands for now (setLive)
+const speech = { queue: [], timer: null, lastAt: -Infinity };   // queue: [{ text, region, parts? }] (region null: the page's one region)
+const liveWords = new WeakMap();                                 // a hidden region -> { head, lines }: the words it stands for now (setLive)
 /** announce(text, key): says it once through the page's one polite region: a control's applying, done, unconfirmed and failed, a
  *  stepper's new value. Never a ticking time. key: what it is the newest word on (a stepper's value): a newer one with the same key
  *  replaces it while it waits, so three presses of + say "70 %" once, never "50 %. 60 %. 70 %." */
@@ -475,30 +475,45 @@ export function announce(text, key = null) {
   if (key) speech.queue = speech.queue.filter((x) => x.key !== key);
   say(text, null, key);
 }
-/** setLive(region, words): a hidden region's words (the band's, the state line's): said through the queue when they say something
- *  new, never again when a part only went (another phone's change that ended dropping out of the band's words). */
-export function setLive(region, words) {
+/** setLive(region, words, { once }): a hidden region's words (the band's, the state line's, the chat bar's). words: { head, lines }
+ *  (a plain text is a head). Only what is new is said (R9 #5): the head (the level and the headline) when it changed, each line
+ *  (a change in flight) that wasn't there before; never again when a part only went, never the unchanged headline beside a new
+ *  line. once: lines said this time only, never part of the standing words (how another phone's change ended: model.js endedOnce),
+ *  so they never ride along with a later change, and the same words are said again for a second change. */
+export function setLive(region, words, { once = [] } = {}) {
   if (!(region instanceof Element)) return;
-  const t = String(words ?? '').trim(), prev = liveWords.get(region);
-  if (prev === t) return;
-  liveWords.set(region, t);
+  const w = typeof words === 'string' || words == null ? { head: words ?? '', lines: [] } : words;
+  const head = String(w.head ?? '').trim(), lines = (Array.isArray(w.lines) ? w.lines : []).map((x) => String(x ?? '').trim()).filter(Boolean);
+  const extra = (Array.isArray(once) ? once : []).map((x) => String(x ?? '').trim()).filter(Boolean);
+  const prev = liveWords.get(region);
+  liveWords.set(region, { head, lines });
   const queued = speech.queue.find((x) => x.region === region);
-  if (!t) { speech.queue = speech.queue.filter((x) => x !== queued); if (region.textContent) region.textContent = ''; return; }   // emptied silently
-  if (queued) { queued.text = t; return; }                           // not said yet: its newest words are said instead
-  const said = new Set(sentences(prev ?? ''));
-  if (sentences(t).some((x) => !said.has(x))) say(t, region);
+  if (!head && !lines.length && !extra.length) { speech.queue = speech.queue.filter((x) => x !== queued); if (region.textContent) region.textContent = ''; return; }   // emptied silently
+  const news = liveNews(prev, { head, lines });
+  if (queued) {
+    // not said yet: what of it still stands (and what it says once), then what is new
+    const parts = (queued.parts ?? []).filter((p) => p.once || p.text === head || lines.includes(p.text));
+    for (const t of news) if (!parts.some((p) => p.text === t)) parts.push({ text: t });
+    for (const t of extra) parts.push({ text: t, once: true });
+    if (!parts.length) { speech.queue = speech.queue.filter((x) => x !== queued); return; }
+    queued.parts = parts; queued.text = joinSaid(parts.map((p) => p.text));
+    return;
+  }
+  const parts = [...news.map((text) => ({ text })), ...extra.map((text) => ({ text, once: true }))];
+  if (parts.length) say(joinSaid(parts.map((p) => p.text)), region, null, parts);
 }
-const sentences = (x) => String(x).split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+/** Sentences said together: each ends with its own stop ("Ready" becomes "Ready."). */
+const joinSaid = (list) => list.map((x) => (/[.!?:;]$/.test(x) ? x : `${x}.`)).join(' ');
 /** unannounce(text): what was queued but not said yet goes (a control's done whose block the next view replaces: the new view
  *  says it, R8 #12). */
 export function unannounce(text) {
   const t = String(text ?? '').trim();
   speech.queue = speech.queue.filter((x) => x.text !== t);
 }
-function say(text, region = null, key = null) {
+function say(text, region = null, key = null, parts = null) {
   const t = String(text ?? '').trim();
   if (!t || typeof document === 'undefined') return;
-  if (speech.queue.at(-1)?.text !== t) speech.queue.push({ text: t, region, key });
+  if (speech.queue.at(-1)?.text !== t) speech.queue.push({ text: t, region, key, ...(parts ? { parts } : {}) });
   clearTimeout(speech.timer);
   speech.timer = setTimeout(flushSpeech, Math.max(SAY_PAUSE_MS, speech.lastAt + SAY_GAP_MS - performance.now()));
 }

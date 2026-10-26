@@ -149,14 +149,14 @@ test('R8 #26: during a restart the map\'s arrows say "restarting" and "dark, res
 
 test('R8 #8, #11: every hidden region speaks through ui.js\'s one queue; a sheet has its own region, kept across the sheets it shows', () => {
   const ui = page('ui.js');
-  assert.match(ui, /export function setLive\(region, words\)/);
+  assert.match(ui, /export function setLive\(region, words, \{ once = \[\] \} = \{\}\)/);
   assert.match(ui, /SAY_GAP_MS = 1000/, 'a message never follows the one before within the same moment');
   assert.match(page('status.js'), /announce\(`\$\{hubDraft\} %`, 'hub-step'\)/, 'a stepper\'s newest value replaces the one waiting, never a pile of them');
   assert.match(ui, /const l = sheetUp \? sheetRegion\(sheetUp\)/, 'with a sheet up, its region speaks');
   assert.match(ui, /if \(!\(n instanceof Element && n\.hasAttribute\('data-sheet-live'\)\)\) n\.remove\(\)/, 'a new sheet keeps the region');
-  assert.match(page('status.js'), /setLive\(\$\('#band-live'\), said\)/);
-  assert.match(page('lights.js'), /setLive\(\$\('#state-live'\), t\)/);
-  assert.match(page('chat.js'), /setLive\(\$\('pin-live'\), sayAll\)/);
+  assert.match(page('status.js'), /setLive\(\$\('#band-live'\), said, \{ once \}\)/);
+  assert.match(page('lights.js'), /setLive\(\$\('#state-live'\), t, \{ once \}\)/);
+  assert.match(page('chat.js'), /setLive\(\$\('pin-live'\), sayAll, \{ once: /);
   assert.match(page('map.js'), /setLive\(\$\('#map-live'\), said\)/);
   for (const f of ['status.js', 'lights.js', 'chat.js', 'map.js']) assert.ok(!/\b(live|l)\.textContent = (said|sayAll|t)\b/.test(page(f)), `${f}: no region written around the queue`);
 });

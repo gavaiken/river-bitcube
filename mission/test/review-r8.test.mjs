@@ -222,10 +222,11 @@ test('R8 #9: another phone\'s change that ended is said once by the band\'s regi
                                     expired: [{ id: 'ax.3', action: 'switch', label: 'the switch to the live river', source: 'mission control', at: t - 2000 }] } });
   const m = derive(st, t);
   assert.deepEqual(endedSaid(m, {}, t), ['Done: the change of the boot file to the live river, from the studio chat.', "The switch to the live river: bitcube didn't show it in time."]);
-  assert.match(bandSaid(m, {}, t), /^\w+\. [^.]+\. Done: the change of the boot file to the live river, from the studio chat\. The switch to the live river: bitcube didn't show it in time\.$/);
+  // R9 #5: how a change ended is said once beside the band's words (model.js endedOnce), never part of them
+  assert.doesNotMatch(bandSaid(m, {}), /Done:|didn't show it in time/);
   assert.deepEqual(endedSaid(m, { ownIds: ['ax.3'] }, t), ['Done: the change of the boot file to the live river, from the studio chat.'], 'this phone\'s own is said on its control');
   assert.deepEqual(endedSaid(m, {}, t + ENDED_SAID_S * 1000 + 5000), [], 'said once, then gone');
-  assert.equal(bandSaid(m, {}), bandSaid(m, {}, null), 'without the server\'s clock: nothing extra');
+  assert.deepEqual(endedSaid(m, {}, null), [], 'without the server\'s clock: nothing');
 });
 
 
@@ -245,7 +246,7 @@ test('R8 #2: every page sends its own request id with a control and finds a lost
   const lights = readFileSync(new URL('../public/lights.js', import.meta.url), 'utf8');
   assert.match(st, /api\(path, requestId \? \{ \.\.\.body, request_id: requestId \} : body\)/);
   assert.match(st, /ownVerdict\(model, \{ state: c\.s\.state, entryId: c\.entryId, requestId: c\.requestId,/);   // CR8 #10: one rule
-  assert.match(st, /if \(fresh\) c\.entryId = own\.entryId/);
+  assert.match(st, /if \(fresh\) \{ c\.entryId = own\.entryId; mine\.id\(c\.entryId\); \}/);
   assert.match(ui, /o\.run\?\.\(\{ requestId \}\)/);
   assert.match(ui, /ownVerdict\(n\.model, \{ state: s\.state, entryId, requestId,/);
   assert.match(ui, /if \(own\) entryId = own\.entryId/);
