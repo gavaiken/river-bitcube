@@ -837,8 +837,8 @@ function tickControls() {
   }
   if (changed) render();
 }
-/** Unconfirmed: it names what was sent, "The boot file change to the live river was sent at 21:13, but bitcube doesn't show it yet:
- *  …" (R6 #16), said once. */
+/** Unconfirmed: it names what was sent, "The change of the boot file to the live river was sent at 21:13, but bitcube doesn't show
+ *  it yet: …" (R6 #16), said once. */
 function unconfirm(name) {
   const c = ctl[name];
   c.text = unconfirmedWords(c.o?.what, sclock(c.sentServer ?? serverNow()), c.o?.unconfirmed ?? 'look at the Now line, or call Gavin');

@@ -1035,8 +1035,9 @@ export const ENDED_SAID_S = 30;
 /** A change ended confirmed or expired that waited for the server's verdict (a switch, a rebuild, a boot-file change, a lighting
  *  port change, a calibration's start, or one bitcube didn't answer in time): the ones a band showed as applying. */
 const endedAwaited = (e) => e.maybe || ['switch', 'rebuild', 'bootfile', 'lightsroute', 'calibrate'].includes(e.action);
-/** How another phone's (or the studio chat's) change ended, for a live region, for ENDED_SAID_S after it did: "Done: the boot file
- *  change to the live river, from the studio chat." or "The boot file change to the live river: bitcube didn't show it in time."
+/** How another phone's (or the studio chat's) change ended, for a live region, for ENDED_SAID_S after it did: "Done: the change of
+ *  the boot file to the live river, from the studio chat." or "The change of the boot file to the live river: bitcube didn't show
+ *  it in time."
  *  (R8 #9). own: { ownIds } (ownEntries): this phone's own change is said on its control. nowMs: the server's clock. */
 export function endedSaid(m, { ownIds = [] } = {}, nowMs = null) {
   const now = num(nowMs);
