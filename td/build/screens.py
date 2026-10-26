@@ -71,9 +71,10 @@ SC.par.Screentest = SC.par.Screencorners = False
 SC.par.Screensolo = 0
 SC.par.Screenquarter = 0
 
-# Where each screen hangs in the camera frame (newest screens-*.json), if located.
+# Where each screen hangs in the camera frame, if located: the caller's pinned file (global PINNED_SCREENS, a path),
+# else the newest screens-*.json.
 _files = sorted(glob.glob(REPO + '/tools/pixelmap/screens-????-??-??.json'))
-SCREEN_FILE = _files[-1].replace('\\', '/') if _files else None
+SCREEN_FILE = globals().get('PINNED_SCREENS') or (_files[-1].replace('\\', '/') if _files else None)
 LOCATED = {}
 if SCREEN_FILE:
     with open(SCREEN_FILE, encoding='utf-8') as f:
