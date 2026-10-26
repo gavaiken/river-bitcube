@@ -533,7 +533,9 @@ test("the ropes' connection held by another program (10048) says so and calls Ga
   const m = run(fx);
   assert.equal(m.overall.cause, 'sender-taken');
   assert.match(m.overall.headline, /^Another program on bitcube is using the ropes' connection/);
-  assert.match(m.overall.action, /^Ask the studio chat or Gavin to stop the other lights program \(Will's rope lights\) on bitcube/);
+  assert.equal(m.overall.action, "Call Gavin to stop the other lights program (Will's rope lights) on bitcube; the sender picks up by itself once it has stopped.");
+  // R6 #21: the studio chat has to refuse this (CLAUDE.md: only with Gavin's OK), so it is never offered
+  for (const s of [m.overall.action, m.items.find((x) => x.id === 'ropes').action]) assert.doesNotMatch(s, /studio chat/i, s);
   assert.equal(contactFor(m.overall.cause).name, 'Gavin');
   const r = m.items.find((x) => x.id === 'ropes');
   assert.match(r.summary, /another program/i);
@@ -694,4 +696,30 @@ test("a calibration's time left is on show.calibration, so a tile can say it wit
 test("the usual time of each change is the server's own (lib/applying.mjs EXPECT_S): a page shows 'usually about 1 min' from it", async () => {
   const { EXPECT_S: server } = await import('../lib/applying.mjs');
   assert.deepEqual(EXPECT_S, server);
+});
+
+test('R6 #33: one time left for a calibration, aged by its own copy\'s read time and the seconds since the answer, never by the full check\'s age', () => {
+  // Lights' newer copy, read 2 s ago, inside a full check 50 s old: 20 s into a 255 s run, 233 s left, not 48 s fewer
+  const fx = calib(clone(byName['all-good']), { stage: 'ropes-capture', expected_s: 170, elapsed_s: 20, read_age_s: 2 });
+  fx.status.probe.age_s = 50; fx.status.probe.at = fx._scenario.now - 50_000;
+  const at = (later) => derive({ ...fx.status, now: fx._scenario.now }, fx._scenario.now + later).show.calibration;
+  assert.equal(at(0).left_s, 233);
+  assert.equal(at(5000).left_s, 228, 'it counts down between answers, as the Lights card does');
+  // read_at on the served clock does the same
+  delete fx.status.probe.value.calibration.read_age_s; fx.status.probe.value.calibration.read_at = fx._scenario.now - 2000;
+  assert.equal(at(0).left_s, 233);
+  // without a read time of its own, the copy is as old as the full check that carried it
+  delete fx.status.probe.value.calibration.read_at;
+  assert.equal(at(0).left_s, 255 - 20 - 50);
+  // the last 45 s are "nearly done" on every page (the Lights card's own words), never a floor of "about 30 s more" for a minute
+  calib(fx, { stage: 'hub75-locate', expected_s: 10, elapsed_s: 240, read_age_s: 0 });
+  const c = at(0);
+  assert.equal(c.left_s, 15);
+  assert.equal(c.left_words, 'nearly done');
+  const m = derive({ ...fx.status, now: fx._scenario.now }, fx._scenario.now);
+  assert.match(m.overall.headline, /nearly done$/);
+  assert.equal(m.show.ropes.words, 'the ropes are in calibration patterns, nearly done');
+  calib(fx, { stage: 'ropes-capture', expected_s: 170, elapsed_s: 20, read_age_s: 0 });
+  assert.equal(at(0).left_words, 'about 4 min more');
+  assert.equal(at(500_000).left_s, 0, 'never below nothing');
 });

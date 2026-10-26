@@ -3,7 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { derive, ctlInit, ctlStep, ctlView, confirmLimitS, elapsedClock, applyingWords, confirmingWords, APPLY_BLOCKS, LONG_CHANGE_S } from '../public/model.js';
+import { derive, ctlInit, ctlStep, ctlView, confirmLimitS, elapsedClock, applyingWords, confirmingWords, APPLY_BLOCKS, LONG_CHANGE_S,
+  usualWords, applyingText, entryWords, unconfirmedWords, notSentWords, failWords, CONFIRMING_SAID } from '../public/model.js';
 
 const load = (name) => JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8'));
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -165,12 +166,12 @@ test('failed and unconfirmed: a refusal fails; no answer, or an answer that coul
   assert.equal(step(ctlInit(), 'error').state, 'ready');
 });
 
-test('elapsed m:ss and "usually about" for long changes only; ticking times are for the screen, never the live region', () => {
+test('elapsed m:ss and "usually about" for long changes (short ones once past their usual time); ticking times are for the screen, never the live region', () => {
   assert.deepEqual([0, 9, 34, 60, 65, 754].map(elapsedClock), ['0:00', '0:09', '0:34', '1:00', '1:05', '12:34']);
   assert.equal(LONG_CHANGE_S, 20);
-  assert.equal(applyingWords('Applying: the switch…', 34, 60), 'Applying: the switch · 0:34 · usually about 1 min');
-  assert.equal(applyingWords('Applying: a ropes change…', 3, 10), 'Applying: a ropes change…', 'a short change shows no clock');
-  assert.equal(applyingWords('Rebuilding…', 75, 400), 'Rebuilding · 1:15 · usually about 7 min');
+  assert.equal(applyingWords('Applying: the switch…', 34, 60), 'Applying: the switch · 0:34 · usually about 1\u00a0min');
+  assert.equal(applyingWords('Applying: a ropes change…', 3, 10), 'Applying: a ropes change…', 'a short change shows no clock within its usual time');
+  assert.equal(applyingWords('Rebuilding…', 75, 400), 'Rebuilding · 1:15 · usually about 6.5\u00a0min');
   assert.equal(applyingWords('Sending…', 5, null), 'Sending…');
   assert.equal(confirmingWords(34), 'Sent · waiting for bitcube to show it · 0:34');
 });
@@ -192,4 +193,113 @@ test('code review: the boot file reads "(by default)" from the probe\'s own boot
   assert.equal(at(false).default, true, 'no boot-file.txt: the seasons file by default');
   assert.equal(at(true).default, false);
   assert.equal(at(undefined).default, false, 'an older probe without the flag');
+});
+
+// ---- round 6 -------------------------------------------------------------------------------------------------------------
+const YEAR = 'river-local-oct-22-seasons.toe';
+const TO_YEAR = { ...SWITCH, label: "the switch to the river's year", file: YEAR };
+/** all-good with TouchDesigner as the full check reads it in the minute after a switch, and the switch's entry still kept. */
+const afterSwitch = (td, entries, later = 2000) => { const s = status(entries); s.probe.value.td = td; return derive(s, s.now + later); };
+const SAID = (m) => [m.overall.headline, m.overall.detail, m.overall.action, ...m.items.flatMap((x) => [x.summary, x.detail, x.action])].filter(Boolean);
+
+test('R6 #26: a switch or rebuild still in status.applying reads TouchDesigner not running, not answering or frozen as restarting on its file, never Down or "press Switch"', () => {
+  const tds = [{ ok: false, error: 'not running' }, { ok: false, error: 'no answer from the TD bridge' }, { ok: false, error: 'TD bridge timed out after 15 s' }];
+  for (const td of tds) for (const phase of [undefined, 'applying', 'confirming']) {
+    const m = afterSwitch(td, [{ ...TO_YEAR, phase }]);
+    const at = `${td.error} / ${phase}`;
+    assert.equal(m.overall.cause, 'td-restarting', at);
+    assert.equal(m.overall.level, 'warning', at);
+    assert.equal(m.overall.headline, "TouchDesigner is restarting on the river's year", at);
+    const tdItem = m.items.find((x) => x.id === 'touchdesigner');
+    assert.deepEqual([tdItem.level, tdItem.summary], ['warning', "Restarting on the river's year"], at);
+    for (const id of ['touchdesigner', 'seasons', 'ropes', 'hub75 panels']) assert.notEqual(m.items.find((x) => x.id === id).level, 'down', `${at} ${id}`);
+    for (const s of SAID(m)) assert.doesNotMatch(s, /press (Switch|Restart)|Start it with|frozen|not running/i, `${at}: ${s}`);
+    assert.match(m.controls.switch.why, /^wait: the switch to the river's year/, 'Switch stays blocked by the entry');
+    assert.equal(m.show.panels.state, 'restarting');
+  }
+  // a rebuild ends in a switch to the river's year: the same, on the river's year
+  const r = afterSwitch({ ok: false, error: 'not running' }, [{ id: 'b', action: 'rebuild', label: "a rebuild of the river's year", file: YEAR, started_at: NOW - 90_000, expect_s: 150 }]);
+  assert.equal(r.overall.headline, "TouchDesigner is restarting on the river's year");
+  // the live river: its own label
+  const live = afterSwitch({ ok: false, error: 'not running' }, [SWITCH]);
+  assert.equal(live.overall.headline, 'TouchDesigner is restarting on the live river');
+  // without the entry, or with one past its limit, or with an entry that restarts nothing, the same reading is the fault it is
+  assert.equal(afterSwitch({ ok: false, error: 'not running' }, []).overall.cause, 'td-off');
+  assert.equal(afterSwitch({ ok: false, error: 'no answer from the TD bridge' }, []).overall.cause, 'td-frozen');
+  assert.equal(afterSwitch({ ok: false, error: 'not running' }, [{ ...TO_YEAR, started_at: NOW - 200_000 }]).overall.cause, 'td-off', 'an entry older than 3 min no longer covers it');
+  assert.equal(afterSwitch({ ok: false, error: 'not running' }, [{ id: 'r', action: 'ropes', label: 'a ropes change', started_at: NOW - 1000, expect_s: 15 }]).overall.cause, 'td-off');
+  // TouchDesigner still answering on the old file (the check before the restart): as it is, with the switch's lock
+  const before = afterSwitch(clone(AG.status.probe.value.td), [TO_YEAR]);
+  assert.equal(before.overall.level, 'ok');
+  assert.match(before.controls.switch.why, /^wait: /);
+});
+
+test('R6 #0: confirming turns unconfirmed only once a reading taken after the limit was judged; a reading that shows it turns unconfirmed into done', () => {
+  const c = step(step(ctlInit(), 'press'), 'ok', { confirmed: false });
+  const tick = (now, readAt) => ctlStep(c, { type: 'tick', expectS: 60, now, readAt }).state;
+  assert.equal(tick(T + 3_600_000, null), 'confirming', 'a phone that slept an hour: no reading judged since it woke');
+  assert.equal(tick(T + 3_600_000, T + 30_000), 'confirming', 'the last reading judged is from before the limit');
+  assert.equal(tick(T + 3_600_000, T + 3_599_000), 'unconfirmed', 'a reading after the limit was judged and did not show it');
+  assert.equal(tick(T + 181_000, undefined), 'unconfirmed', 'a caller that tracks no readings: by the clock alone');
+  const u = ctlStep(c, { type: 'tick', expectS: 60, now: T + 181_000 });
+  const d = ctlStep(u, { type: 'model', confirmed: true, now: T + 200_000 });
+  assert.equal(d.state, 'done', 'a later reading that shows the change');
+  assert.equal(ctlStep(u, { type: 'model', confirmed: false, now: T + 200_000 }).state, 'unconfirmed');
+  // no answer (it may or may not have happened), then a reading that shows it: done
+  assert.equal(ctlStep(step(step(ctlInit(), 'press'), 'error', { maybe: true }), { type: 'model', confirmed: true, now: T + 5000 }).state, 'done');
+  assert.equal(ctlStep(step(step(ctlInit(), 'press'), 'error', { maybe: false }), { type: 'model', confirmed: true, now: T + 5000 }).state, 'failed', 'a refusal stays a refusal');
+});
+
+test('R6 #30: a done line gives way to a newer reading that differs (once the change was seen, or after a minute)', () => {
+  const d = step(step(ctlInit(), 'press'), 'ok');
+  const r = (s, holds, dt, why = null) => ctlStep(s, { type: 'reading', holds, why, now: T + dt });
+  assert.equal(r(d, false, 5000).state, 'done', 'not seen yet: the reading may lag the answer by a few seconds');
+  const seen = r(d, true, 5000);
+  assert.deepEqual([seen.state, seen.seen], ['done', true]);
+  assert.deepEqual([r(seen, false, 8000).state, r(seen, false, 8000).effect], ['ready', 'drop']);
+  assert.equal(r(seen, false, 8000, 'bitcube is offline').state, 'blocked');
+  assert.equal(r(d, false, 61_000).state, 'ready', 'never seen, and a minute on');
+  assert.equal(r(d, undefined, 61_000).state, 'done', 'a control that says nothing about the reading keeps its line');
+  assert.equal(r(step(step(ctlInit(), 'press'), 'error'), false, 61_000).state, 'failed', 'only a done line gives way');
+});
+
+test('R6 #1 #12 #17: one set of words on every page: a short change past its usual time shows m:ss, the waiting line its usual time, numbers kept with their units', () => {
+  const NB = ' ';
+  assert.equal(applyingWords('Applying: ropes dark…', 3, 15), 'Applying: ropes dark…');
+  assert.equal(applyingWords('Applying: ropes dark…', 16, 15), 'Applying: ropes dark · 0:16 · usually a few seconds');
+  assert.equal(applyingWords('Sending…', 5, null), 'Sending…');
+  assert.equal(applyingWords('Sending…', 11, null), 'Sending · 0:11 · usually a few seconds', 'no usual time given: a few seconds');
+  assert.equal(applyingWords('Applying: the switch…', 34, 60), `Applying: the switch · 0:34 · usually about 1${NB}min`);
+  assert.equal(applyingWords('Applying: the rebuild…', 75, 150), `Applying: the rebuild · 1:15 · usually about 2.5${NB}min`, '150 s is 2.5 min, never 3');
+  assert.equal(usualWords(150), `usually about 2.5${NB}min`);
+  assert.equal(usualWords(15), 'usually a few seconds');
+  assert.equal(usualWords(45), `usually about 45${NB}s`);
+  assert.equal(confirmingWords(34, 60), `Sent · waiting for bitcube to show it · 0:34 · usually about 1${NB}min`);
+  assert.equal(confirmingWords(6, "bitcube's full check shows it within a minute"), "Sent · waiting for bitcube to show it · 0:06 · bitcube's full check shows it within a minute");
+  assert.equal(confirmingWords(34), 'Sent · waiting for bitcube to show it · 0:34');
+  assert.equal(CONFIRMING_SAID, 'Sent; waiting for bitcube to show it');
+  assert.equal(applyingText("the rebuild of the river's year"), "Applying: the rebuild of the river's year…");
+  // another phone's change on the band, applying and then confirming
+  assert.equal(entryWords({ label: 'the switch to the live river', expect_s: 60 }, 23), `Applying: the switch to the live river · 0:23 · usually about 1${NB}min`);
+  assert.equal(entryWords({ label: 'a ropes change', expect_s: 15 }, 3), 'Applying: a ropes change · 0:03 · usually a few seconds');
+  assert.equal(entryWords({ label: 'the switch to the live river', expect_s: 60, phase: 'confirming' }, 40), `Waiting for bitcube to show the switch to the live river · 0:40 · usually about 1${NB}min`);
+});
+
+test('R6 #16 #4: an unconfirmed change names what was sent; a withdrawn confirm is said in the past tense', () => {
+  assert.equal(unconfirmedWords('the boot file change to the live river', '21:13', 'look at the Now line, or call Gavin'),
+    "The boot file change to the live river was sent at 21:13, but bitcube doesn't show it yet: look at the Now line, or call Gavin.");
+  assert.equal(unconfirmedWords(null, '21:13', 'look at the Now line, or call Gavin'), "Sent at 21:13, but bitcube doesn't show it yet: look at the Now line, or call Gavin.");
+  assert.equal(notSentWords("wait: the restart on the river's year is being applied", '21:17'), "Not sent at 21:17: the restart on the river's year was being applied. Press again when it is done.");
+  assert.equal(notSentWords('bitcube is offline', '21:04'), 'Not sent at 21:04: bitcube is offline.');
+  assert.equal(notSentWords(null, '21:04'), "Not sent at 21:04: this page can't reach mission control.");
+});
+
+test('R6 #14: a change refused because a calibration is running says to stop it or wait, never "try again" alone', () => {
+  assert.equal(failWords('The ropes are unchanged', 'a calibration is running: stop it on the Lights page first', '21:14'),
+    'The ropes are unchanged: a calibration is running (21:14). Stop it on the Lights page, or try again when it ends.');
+  assert.equal(failWords('The ropes are unchanged', "wait: the switch to the live river is being applied (started 21:04)", '21:05'),
+    'The ropes are unchanged: the switch to the live river is being applied (started 21:04). Try again when it is done.');
+  assert.equal(failWords('The ropes are unchanged', "bitcube didn't answer", '21:04'), "The ropes are unchanged: bitcube didn't answer (21:04). Try again, or see the verdict above.");
+  assert.equal(failWords('The ropes are unchanged', "bitcube didn't answer", '21:04', { tail: 'Try again, or check Status.' }), "The ropes are unchanged: bitcube didn't answer (21:04). Try again, or check Status.");
+  assert.equal(failWords('The rules are unchanged', 'no answer', '21:04', { kept: 'What you typed is kept.' }), 'The rules are unchanged: no answer (21:04). What you typed is kept. Try again, or see the verdict above.');
 });
