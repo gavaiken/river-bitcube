@@ -67,6 +67,7 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync, renameSync } fr
 import { dirname } from 'node:path';
 import { derive, FILES, intensityWord } from '../public/model.js';
 import { scrubCreds } from './scrub.mjs';
+import { REQUEST_ID } from './applying.mjs';
 
 export const KEEP_MS = 48 * 3600e3;
 export const MAX_EVENTS = 5000;
@@ -234,7 +235,7 @@ export class History {
                           // the change's entry in status.applying: while it is still there (confirming), Last done says "Last sent"
                           ...(typeof e.applying_id === 'string' && e.applying_id ? { applying_id: e.applying_id.slice(0, 40) } : {}),
                           // the page's own id for the press (R8 #2): a page whose answer was lost finds its verdict by it
-                          ...(typeof e.request_id === 'string' && /^[A-Za-z0-9._-]{1,40}$/.test(e.request_id) ? { request_id: e.request_id } : {}) });
+                          ...(typeof e.request_id === 'string' && REQUEST_ID.test(e.request_id) ? { request_id: e.request_id } : {}) });
   }
 
   /** When the current level began. `level` is the last KNOWN level: while the page's model says unknown (not checked,
