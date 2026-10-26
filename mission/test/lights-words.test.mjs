@@ -172,6 +172,10 @@ test('rope numbers: no number without a leader line sits nearer another rope\'s 
     const covered = out.filter((b) => anchors.some((a) => Math.abs(a.x - b.x) < b.w / 2 && Math.abs(a.y - b.y) < b.h / 2));
     assert.equal(covered.length, 0, `${W}px: a number covers a plug end`);
   }
+  // one rope picked out: only its number, still never nearer another plug end without a line
+  const lone = placeLabels([{ x: 100, y: 100 }, { x: 100, y: 120 }, { x: 140, y: 100 }], [17, 17, 17], { h: 20, W: 400, H: 400, only: new Set([0]) });
+  assert.equal(lone[1], null); assert.equal(lone[2], null);
+  assert.ok(lone[0].leader || Math.hypot(lone[0].x - 100, lone[0].y - 100) < Math.min(Math.hypot(lone[0].x - 100, lone[0].y - 120), Math.hypot(lone[0].x - 140, lone[0].y - 100)));
   // a label already drawn (a screen's number) is never covered
   const one = placeLabels([{ x: 100, y: 100 }], [24], { h: 20, W: 400, H: 400, taken: [{ x: 100, y: 115, w: 30, h: 20 }] })[0];
   assert.ok(Math.abs(one.y - 115) >= 20 || Math.abs(one.x - 100) >= 27);

@@ -168,14 +168,16 @@ export function mapMissing({ loaded, map, error, waitS }) {
  *  plug end is the nearest one; when no such spot is free, the nearest free spot with a leader line to its plug end. Nothing
  *  is ever nearer another rope's plug end without a line.
  *  anchors: [{ x, y } | null] per rope (canvas px); widths: per rope; h: label height; W, H: the canvas; taken: boxes already
- *  drawn ({ x, y, w, h }, centred: the screens' numbers). Returns [{ x, y, w, h, leader } | null] per rope. */
-export function placeLabels(anchors, widths, { h = 20, W = Infinity, H = Infinity, taken = [], gap = 15 } = {}) {
+ *  drawn ({ x, y, w, h }, centred: the screens' numbers); only: the ropes to number (a Set; default all), the rest still count
+ *  as plug ends a number must not sit nearer to. Returns [{ x, y, w, h, leader } | null] per rope. */
+export function placeLabels(anchors, widths, { h = 20, W = Infinity, H = Infinity, taken = [], gap = 15, only = null } = {}) {
   const placed = taken.map((b) => ({ ...b }));
   const pts = anchors.map((a, i) => (a ? { i, x: a.x, y: a.y } : null)).filter(Boolean);
   const out = anchors.map(() => null);
   const DIRS = [[0, -1], [0, 1], [1, 0], [-1, 0], [0.71, -0.71], [-0.71, -0.71], [0.71, 0.71], [-0.71, 0.71]];
   const RINGS = [1, 1.6, 2.3, 3.1, 4, 5, 6.2, 7.5, 9, 11, 13.5, 16];
   for (const a of pts) {
+    if (only && !only.has(a.i)) continue;
     const w = widths[a.i] ?? 24;
     const fit = (x, y) => [Math.min(W - w / 2 - 1, Math.max(w / 2 + 1, x)), Math.min(H - h / 2 - 1, Math.max(h / 2 + 1, y))];
     const hitsBox = (x, y) => placed.some((b) => Math.abs(b.x - x) < (b.w + w) / 2 + 2 && Math.abs(b.y - y) < (b.h + h) / 2 + 2);

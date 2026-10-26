@@ -98,6 +98,15 @@
 .cal-result.lv-unknown { border-left: 6px solid var(--unk); }
 .cal-result.lv-warning { border-left: 6px solid var(--warn); }
 .cal-fine { font-size: 14px; color: var(--muted); line-height: 1.4; }
+/* a run's progress: greyed (the bar, never faded text) and said so when it hasn't been read for 30 s */
+.cal-run { display: grid; gap: 10px; }
+.cal-run.quiet .prog > i { background: var(--unk); }
+.cal-run.quiet .stages .now, .cal-run.quiet .cal-line { color: var(--muted); }
+.cal-note { font-size: 15px; font-weight: 650; line-height: 1.4; color: var(--unk-text); padding: 8px 12px; border-radius: 10px; background: var(--unk-soft); border-left: 4px solid var(--unk); }
+.cal-note[hidden], .cal-left[hidden] { display: none; }
+/* where focus lands when the Calibrate block changes view: the heading holds it, outlined only for the keyboard */
+#cal-head:focus { outline: none; }
+#cal-head:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
 .cal-dismiss { display: flex; gap: var(--gap); flex-wrap: wrap; }
 
 /* two columns from 1100 px: the state line and the map stay put; the chips, strips, provenance and Calibrate scroll */
