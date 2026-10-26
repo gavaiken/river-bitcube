@@ -112,3 +112,19 @@ test('CR9 #5: prose keeps its "pass"; a pass= in a query or form, --pass, or a J
     [`{"user":"admin","pass":"ab\\"${F}"}`, '{"user":"admin","pass":"***"}'],
   ]) assert.equal(scrubCreds(line), want, line);
 });
+
+// ---- #12: the Wi-Fi key in escaped JSON too ------------------------------------------------------------------------------------
+
+test('CR9 #12: a "key" inside a JSON string (escaped quotes) is masked like the other names, and the JSON stays JSON', async () => {
+  const { scrubCreds, PATTERNS } = await import('../lib/scrub.mjs');
+  const F = 'NOT-A-REAL-PW-cr9';
+  const out = JSON.stringify({ out: JSON.stringify({ ssid: 'gray-river', key: `${F}"x\\`, encryption: 'psk2' }) });
+  const got = scrubCreds(out);
+  assert.doesNotMatch(got, /NOT-A-REAL/);
+  assert.deepEqual(JSON.parse(JSON.parse(got).out), { ssid: 'gray-river', key: '***', encryption: 'psk2' });
+  assert.equal(scrubCreds(`{"out":"{\\"key\\":\\"${F}\\"}"}`), '{"out":"{\\"key\\":\\"***\\"}"}');
+  assert.equal(scrubCreds(`{"ssid":"gray-river","key":"${F}'s"}`), '{"ssid":"gray-river","key":"***"}', "an apostrophe in a double-quoted key");
+  for (const line of ['"keys": ["a"]', '"primary_key":"id"', 'sort key=name', '"key": 5', 'the primary key: id']) assert.equal(scrubCreds(line), line, line);
+  assert.equal(PATTERNS.KEYJSON, undefined, 'one rule: "key" is one of the names, so QUOTED and ESCAPED mask it');
+  assert.doesNotMatch(src('../../tools/mission/probe.ps1'), /CRED_KEY_JSON/);
+});

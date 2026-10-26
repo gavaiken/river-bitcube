@@ -87,7 +87,7 @@ def probe_mask():
     steps = re.findall(r"-replace \$(CRED_\w+), '([^']*)'", body)
     assert [name for name, _ in steps] == ['CRED_URL', 'CRED_QUOTED', 'CRED_ESCAPED', 'CRED_BARE_JSON', 'CRED_BARE',
                                            'CRED_AUTH', 'CRED_BEARER', 'CRED_USER', 'CRED_FLAG', 'CRED_SSHPASS',
-                                           'CRED_MYSQL', 'CRED_UCI', 'CRED_KEY_JSON', 'CRED_SKANT'], steps
+                                           'CRED_MYSQL', 'CRED_UCI', 'CRED_SKANT'], steps
     compiled = [(re.compile(pats[name], re.I), re.sub(r'\$(\d+)', r'\\g<\1>', repl)) for name, repl in steps]
 
     def mask(s):
@@ -147,6 +147,9 @@ PROBE_CASES = CASES + [
     ('First pass: all 20 ropes answer; one pass = 29 patterns', 'First pass: all 20 ropes answer; one pass = 29 patterns'),
     ('{"stage":"ropes-capture","pass":"A"}', '{"stage":"ropes-capture","pass":"A"}'),
     ('{"pass":"hunter2","user":"admin"}', '{"pass":"***","user":"admin"}'),
+    # CR9 #12: a "key" in escaped JSON, an apostrophe in a quoted key
+    ('{"out":"{\\"key\\":\\"hunter2\\"}"}', '{"out":"{\\"key\\":\\"***\\"}"}'),
+    ('{"ssid":"gray-river","key":"hunter2\'s"}', '{"ssid":"gray-river","key":"***"}'),
     # CR9 #14: mysql's port is -P, its password -p: only the lower case is masked (case-sensitive inside -replace)
     ('mysql -h db -P3306 -u root -phunter2 river', 'mysql -h db -P3306 -u root -p*** river'),
     ('mysqldump -P3306 river', 'mysqldump -P3306 river'),

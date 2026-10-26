@@ -471,7 +471,7 @@ test('R9 #37: the masks catch SSHPASS=, pass=, mysql\'s attached -p, a Wi-Fi key
   // probe.ps1 carries the very patterns (tools/tests/test_masks.py runs them)
   const src = readFileSync(new URL('../../tools/mission/probe.ps1', import.meta.url), 'utf8');
   const ps = Object.fromEntries([...src.matchAll(/^\$(CRED_\w+) = '((?:[^']|'')*)'$/gm)].map((m) => [m[1], m[2].replace(/''/g, "'")]));
-  for (const [k, v] of [['CRED_MYSQL', PATTERNS.MYSQL], ['CRED_UCI', PATTERNS.UCI], ['CRED_KEY_JSON', PATTERNS.KEYJSON], ['CRED_SKANT', PATTERNS.SKANT], ['CRED_QUOTED', PATTERNS.QUOTED]]) assert.equal(ps[k], v, k);
+  for (const [k, v] of [['CRED_MYSQL', PATTERNS.MYSQL], ['CRED_UCI', PATTERNS.UCI], ['CRED_SKANT', PATTERNS.SKANT], ['CRED_QUOTED', PATTERNS.QUOTED]]) assert.equal(ps[k], v, k);
 });
 
 // ---- #24: the chat's "Not sent" in the controls' form ----------------------------------------------------------------------------
