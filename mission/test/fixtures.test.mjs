@@ -361,6 +361,12 @@ test('fixture mode records every change in flight, holds a switch, rebuild or bo
   release(); await rb;
   assert.deepEqual(m.rebuilt('all-good'), { at: t, map: 'pixelmap-2026-10-23.json', file: 'river-local-oct-22-seasons.toe' });
   assert.equal(m.rebuilt('td-low-fps'), null);
+  // a rebuild is refused, as probe.ps1 refuses it, unless TouchDesigner answers on that very file
+  m.control('switch', { file: 'river-online-oct-23.toe' }, 'all-good'); await Promise.resolve(); release(); await new Promise((r) => setImmediate(r));
+  const refused = await m.control('rebuild', { file: 'river-local-oct-22-seasons.toe' }, 'all-good');
+  assert.deepEqual([refused.ok, refused.error], [false, 'TouchDesigner is running river-online-oct-23.toe, not river-local-oct-22-seasons.toe: rebuild refused']);
+  assert.equal((await m.control('rebuild', { file: 'river-local-oct-22-seasons.toe' }, 'td-frozen')).error, 'TouchDesigner did not answer: rebuild refused');
+  assert.equal(m.rebuilt('all-good').at, t, 'a refused rebuild changes nothing');
   // ropes, mode and the rest answer at once (their own answer is bitcube's reading) and lock only themselves meanwhile
   holds.length = 0;
   assert.equal((await m.control('mode', { mode: 'manual' }, 'all-good')).ok, true);

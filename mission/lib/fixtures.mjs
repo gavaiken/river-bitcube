@@ -172,10 +172,14 @@ export class FixtureMission {
     const blocked = calBlocked(action, this.calibFor(scenario).status());
     if (blocked) throw blocked;
     const w = this.worldFor(scenario);
-    let running = null;            // the file TouchDesigner runs in this world, so a switch to it reads "the restart on ..."
-    try { running = this.snapshot(scenario).probe?.value?.td?.file ?? null; } catch { /* a half-edited scenario: plain words */ }
+    let td = null;                 // TouchDesigner in this world: a switch to the file it runs reads "the restart on ..."
+    try { td = this.snapshot(scenario).probe?.value?.td ?? null; } catch { /* a half-edited scenario: plain words */ }
+    const running = typeof td?.file === 'string' ? td.file : null;
     return w.applying.run(action, body, async () => {
       this.#log(action, body);
+      // a rebuild is refused as probe.ps1 refuses it: only into the file TouchDesigner has open, and only while it answers
+      if (action === 'rebuild' && (!td || td.ok === false)) return { ok: false, error: 'TouchDesigner did not answer: rebuild refused', rebuilt: false, saved: false, switched: false, fixture: true };
+      if (action === 'rebuild' && running !== body.file) return { ok: false, error: `TouchDesigner is running ${running}, not ${body.file}: rebuild refused`, rebuilt: false, saved: false, switched: false, fixture: true };
       const hold = (HOLD[action] ?? 0) * this.applyS;
       if (hold > 0) await this.sleep(hold * 1000);
       if (action === 'switch' || action === 'rebuild') { w.file = body.file; w.boot_file = body.file; }    // a rebuild ends in the switch path
