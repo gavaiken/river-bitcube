@@ -154,7 +154,7 @@ export function stateWords(m) {
 }
 /** The changes that alter what the ropes or the panels show: a switch or a rebuild restarts TouchDesigner (the lights go dark),
  *  the ropes, the panels, the lighting port, a calibration's start. A mode, target or rules change only steers the river. */
-export const LIGHTS_CHANGES = ['switch', 'rebuild', 'ropes', 'hub75', 'lightsroute', 'calibrate'];
+export const LIGHTS_CHANGES = ['switch', 'rebuild', 'ropes', 'hub75', 'test', 'lightsroute', 'calibrate'];
 /** The first change in flight (show.applying: any phone, or the studio chat) that alters what the lights show and began after
  *  bitcube's reading on the state line (readingAgeS: that reading's age, s), else null: the reading may no longer hold. */
 export function changeSince(m, readingAgeS) {

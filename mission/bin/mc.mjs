@@ -10,7 +10,7 @@
 //                                                           expired and verdicts name the applying_id of each change that
 //                                                           ended (done, or not shown in time: R8 #30)
 //   node mission/bin/mc.mjs <action> ['<json body>']        one control, the body as a page sends it:
-//     ropes '{"dark":true}'   hub75 '{"brightness":0.8}'   switch '{"file":"river-local-oct-22-seasons.toe"}'
+//     ropes '{"dark":true}'   hub75 '{"brightness":0.8}'   test '{"on":true}'   switch '{"file":"river-local-oct-22-seasons.toe"}'
 //     bootfile '{"file":"river-online-oct-23.toe"}'   rebuild '{"file":"river-local-oct-22-seasons.toe"}'
 //     lightsroute '{"route":"router"}'   mode '{"mode":"manual"}'   target '{"season":"summer","intensity":0.7}'
 //     rules '{"rules":{"cycle_seconds":240}}'   rules-reset   check   calibrate '{"action":"start"}'   calibrate '{"action":"cancel"}'
@@ -29,7 +29,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const ACTIONS = ['ropes', 'hub75', 'switch', 'bootfile', 'rebuild', 'lightsroute', 'mode', 'target', 'rules', 'rules-reset', 'check', 'calibrate'];
+export const ACTIONS = ['ropes', 'hub75', 'test', 'switch', 'bootfile', 'rebuild', 'lightsroute', 'mode', 'target', 'rules', 'rules-reset', 'check', 'calibrate'];
 const LIMIT_S = { status: 10, rebuild: 420 };          // a rebuild builds, saves and restarts: minutes; the rest a little past 60 s
 const socketPath = (env) => env.MISSION_CONTROL_SOCKET || join(env.MISSION_STATE_DIR || join(homedir(), 'mission-state'), 'mc.sock');
 

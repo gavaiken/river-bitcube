@@ -41,3 +41,5 @@
 **Mission control**: The team's live web page for the installation: what every part is doing right now (bitcube, the show file, seasons, presence, cameras, the river site, Dave's agent), the controls for steering the piece, and the system map. Behind one shared team password. Not for visitors.
 
 **Studio chat**: One long-running conversation with the team's Claude agent, reachable from mission control. Everyone on the team writes into the same conversation, one request at a time, and the agent can act on the installation, not just talk about it.
+
+**Test pattern**: A mode on mission control's Lights page for checking every LED and screen: the ropes fill red, green, blue, then white, each wiping down from the plug end, and each screen shows four coloured panels (red, green, blue, yellow) with its number in white squares, which also shows which way up it hangs. The river stops until someone presses Stop; then the ropes and panels go back to what they showed.

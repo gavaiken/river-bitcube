@@ -252,7 +252,7 @@ test('R8 #2: every page sends its own request id with a control and finds a lost
   assert.match(ui, /ownVerdict\(n\.model, \{ state: s\.state, entryId, requestId,/);
   assert.match(ui, /if \(own\) entryId = own\.entryId/);
   assert.match(readFileSync(new URL('../public/model.js', import.meta.url), 'utf8'), /\(\(waiting \|\| flying\) && c\?\.requestId \? entryIdOf\(m, c\.requestId\) : null\)/, 'found by its request id while it waits, and while its answer is on the way (R9 #1)');
-  assert.equal((lights.match(/request_id: requestId/g) ?? []).length, 2, 'Lights: a start (or dry run) and a rebuild send theirs');
+  assert.equal((lights.match(/request_id: requestId/g) ?? []).length, 3, 'Lights: a start (or dry run), a rebuild and the test pattern send theirs');
 });
 
 test('R8 #16, #17, #22, #23, #33, #35: Status wires them: the band line\'s maybe and action, the Wait line for a locked jump, the Last line once, past readouts, the server\'s clock', () => {

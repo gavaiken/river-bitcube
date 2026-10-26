@@ -7,7 +7,7 @@
 import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark, plainError, DOC_LINKS, splitHeadline, announce, unannounce, setLive, goto, bringIntoView,
   WARN_MS, LOST_MS, POLL_TIMEOUT_MS, serverNow, serverClock } from '/ui.js';
 import { fetchTimed } from '/app.js';
-import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, CAL_STAGES, EXPECT_S, ownEntries, endedOnce, START_USUAL, calDryRun, calStep, ownMemory } from '/model.js';
+import { derive, changeLabel, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, CAL_STAGES, EXPECT_S, ownEntries, endedOnce, START_USUAL, calDryRun, calStep, ownMemory } from '/model.js';
 import { uprightsFromAtlas } from '/screens.js';
 import { calChecklist, ROOM_CHECK, startWhy, dryWhy, calView, rebuiltFor, runNote, nextLine, captureWhen, driftWords, resultWords,
   mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT, calRead, calLeft, changeSince, stateLevel, applyingNow, stateParts, CAL_COPY, runFine,
@@ -65,6 +65,7 @@ function model() { return status.last ? derive(calNewer(status.last, S.cal.p), s
 function judgeControls() {
   if (!S.m || pageDown()) return;
   for (const c of Object.values(S.calCtl)) if (c?.button.isConnected) c.update({ model: S.m, readAt: status.receivedWall });
+  if (S.testCtl?.button.isConnected) S.testCtl.update({ model: S.m, readAt: status.receivedWall });
 }
 // the shared rule (ui.js): greyed and bannered from the time since the last answer, so a hung request counts too
 const contact = watchContact(status, shell, () => { S.m = model(); render(); });
@@ -76,7 +77,7 @@ function render() {
   art.setSeason(m?.show.weights ?? null);
   // which changes in flight are this page's own: once a render, for the state line and Calibrate's reasons alike (CR9 #17)
   const own = ownChanges();
-  renderStateLine(own); renderMapCard(); renderChips(); renderStrips(); renderProvenance(); renderCalibrate(own); renderFooter();
+  renderStateLine(own); renderMapCard(); renderChips(); renderStrips(); renderProvenance(); renderTest(own); renderCalibrate(own); renderFooter();
 }
 const put = (id, html) => { if (S.html[id] !== html) { S.html[id] = html; const el = document.getElementById(id); if (el) el.innerHTML = html; } };
 
@@ -137,7 +138,7 @@ function sayState(t, once = []) { setLive($('#state-live'), t, { once }); }   //
  *  by its action while its control is applying, confirming or unconfirmed (an entry begun before it gave up): model.js
  *  ownEntries (CR7 #10). */
 const ownChanges = () => {
-  const ctls = [['calibrate', S.calCtl.start], ['calibrate', S.calCtl.dry], ['rebuild', S.calCtl.rebuild]].filter(([, c]) => c)
+  const ctls = [['calibrate', S.calCtl.start], ['calibrate', S.calCtl.dry], ['rebuild', S.calCtl.rebuild], ['test', S.testCtl]].filter(([, c]) => c)
     .map(([action, c]) => ({ action, state: c.state, entryId: c.entryId ?? null, at: c.at }));
   const o = ownEntries(S.m, ctls, Date.now(), mine.mine);
   return { ids: o.ownIds, actions: o.ownActions };
@@ -607,7 +608,9 @@ function renderStrips() {
   let text = '', bad = false;
   if (l.frames) {
     const dark = l.frames.source === 'black' || l.frames.ropes?.source === 'black';
-    text = dark ? 'The ropes are dark on purpose: TouchDesigner sends black. The panels still show the river.' : 'What TouchDesigner sends to each LED and screen, from bitcube.';
+    const testing = l.frames.source === 'test' || l.frames.ropes?.source === 'test' || l.frames.panels?.source === 'test';
+    text = testing ? 'The test pattern, as TouchDesigner sends it: colours wiping down from the plug end, and each screen with its number in white squares.'
+      : dark ? 'The ropes are dark on purpose: TouchDesigner sends black. The panels still show the river.' : 'What TouchDesigner sends to each LED and screen, from bitcube.';
     if (!dark && m?.show.ropes.state === 'not-reaching') {
       // the reason once, in the model's words without its own lead ("Not reaching the lights: sender retrying, both boxes silent"),
       // lower case after the colon unless it starts with a name
@@ -1005,6 +1008,36 @@ function mountRebuild(p) {
   c._why = S.m ? S.m.controls.rebuild.why : NO_CONTACT;
   return c;
 }
+// ---- the test pattern ------------------------------------------------------------------------------------------
+/** Lights → Test pattern: one button that switches the ropes and the panels into the test pattern and back (td/ropes/artnet_out.py
+ *  test_frame, td/panels/panel_test.glsl). It reads Start or Stop from the full check (show.test), and changes only while it isn't
+ *  sending, so the press in flight keeps its words and focus stays on the same button. Blocked by the model's test reason (a
+ *  calibration, TouchDesigner not answering, a change in flight). */
+const TEST_COPY = {
+  off: { label: 'Start the test pattern', kind: 'primary', done: 'Test pattern on', fail: "The test pattern didn't start",
+    before: 'Every rope fills red, green, blue, then white, each wiping down from the plug end, so every LED shows every colour. Each screen shows four coloured panels with its number in white squares in the red one, which also shows which way up it is. The river stops until you press Stop. Asks first.',
+    confirm: { title: 'Start the test pattern?', body: 'The ropes and the panels leave the river for the test pattern until someone presses Stop.', ok: 'Start', cancel: 'Not now', destructive: true } },
+  on: { label: 'Stop the test pattern', kind: 'danger', done: 'Back to the river', fail: 'The test pattern is still on', confirm: null,
+    before: 'The test pattern is on: colours wipe down every rope, and each screen shows its number in white squares. Stop puts back what the ropes and panels showed before.' },
+};
+function renderTest(own = null) {
+  const m = S.m, on = !!m?.show.test?.on;
+  if (!S.testCtl) {
+    S.testCtl = control($('#test-ctl'), { action: 'test', expectS: EXPECT_S.test, noAnswer: 'this card says whether the test pattern is on',
+      run: ({ requestId } = {}) => { const want = S.testWant; mine.request(requestId); return api('/api/control/test', { on: want, ...(requestId ? { request_id: requestId } : {}) }); },
+      onSent: (r) => { mine.id(r?.applying_id); status.refresh(); pollLights(); },
+      onFail: (e) => { mine.id(e?.applyingId); status.refresh(); } });
+    S.testOn = null;
+  }
+  const c = S.testCtl;
+  if (S.testOn !== on && !c.busy && c.state !== 'confirm') {
+    S.testOn = on; S.testWant = !on;
+    const t = TEST_COPY[on ? 'on' : 'off'];
+    c.update({ ...t, what: changeLabel('test', { on: !on }) });
+  }
+  setWhy(c, m ? m.controls.test.why : NO_CONTACT, m?.controls.test.by, (own ?? ownChanges()).ids);
+}
+
 $('#cal-body').addEventListener('click', (e) => {
   const b = e.target.closest('[data-cal]');
   if (!b || b.disabled) return;

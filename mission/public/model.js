@@ -79,11 +79,11 @@ export const calNoLights = (c) => calDryRun(c) || (!!c && typeof c === 'object' 
 // Applying a change (docs/mission-ui.md): what a change in flight blocks, when the server's entry names no blocks of its own.
 // A switch or a rebuild restarts TouchDesigner on the year: everything that touches either waits; a boot-file change only
 // the file controls (and a calibration's start); a lighting port change the lights; the rest only a second copy of itself.
-const TD_TOUCHING = ['ropes', 'hub75', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
+const TD_TOUCHING = ['ropes', 'hub75', 'test', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
 export const APPLY_BLOCKS = {
-  switch: TD_TOUCHING, rebuild: TD_TOUCHING, bootfile: ['switch', 'rebuild', 'bootfile', 'calibrate'], lightsroute: ['ropes', 'hub75', 'lightsroute', 'calibrate'],
-  ropes: ['ropes'], hub75: ['hub75'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
-  calibrate: ['ropes', 'hub75', 'switch', 'lightsroute', 'rebuild', 'calibrate'],   // a calibration's start: what a running one blocks, and a second start
+  switch: TD_TOUCHING, rebuild: TD_TOUCHING, bootfile: ['switch', 'rebuild', 'bootfile', 'calibrate'], lightsroute: ['ropes', 'hub75', 'test', 'lightsroute', 'calibrate'],
+  ropes: ['ropes', 'test'], hub75: ['hub75'], test: ['test', 'ropes', 'calibrate'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
+  calibrate: ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'calibrate'],   // a calibration's start: what a running one blocks, and a second start
 };
 /** The changes that wait for the server's verdict before they are done, and what shows each on bitcube: a full check's reading
  *  (TouchDesigner answering on its file, the boot file, the lighting port: R8 #31, #32) or the run's own progress (a calibration,
@@ -101,7 +101,7 @@ export const dryStart = (action, body) => action === 'calibrate' && !!body && ty
 /** The team's words for a change in flight when the server's entry has no label of its own (an older server). */
 export const APPLY_LABEL = { switch: 'a show-file switch', rebuild: "the rebuild of the river's year", bootfile: 'the change of the boot file', lightsroute: 'the change of the lighting port',
   ropes: 'the change of the ropes', hub75: 'the change of the panels', mode: 'the change of the mode', target: 'the change of the target', rules: 'the change of the rules',
-  'rules-reset': 'the reset of the rules', calibrate: 'the calibration start' };
+  'rules-reset': 'the reset of the rules', calibrate: 'the calibration start', test: 'the test pattern' };
 /** One name per change (R7 #19), made here for the server's entries (lib/applying.mjs), this phone's own applying
  *  line, every other phone's band, Last done and the unconfirmed line: a noun phrase that names what it changes to, and reads in
  *  every frame ("Applying: …", "Wait: … is being applied.", "Waiting for bitcube to show …", "Last done: …", "… was sent at
@@ -118,6 +118,7 @@ export function changeLabel(action, body = {}, { running = null } = {}) {
     case 'bootfile': return f ? `the change of the boot file to ${fl}` : 'the change of the boot file';
     case 'lightsroute': return b.route === 'direct' ? "the change of the lighting port to bitcube's LIGHTS port" : b.route === 'router' ? 'the change of the lighting port to the spare router port' : 'the change of the lighting port';
     case 'ropes': return b.dark === true ? 'the change of the ropes to dark' : 'the change of the ropes to the river';   // as planControl: only a real true goes dark
+    case 'test': return b.on === true ? 'the test pattern start' : 'the test pattern stop';   // as planControl: only a real true starts it
     case 'hub75': return x != null ? `the change of the panels to ${Math.round(Math.min(1, Math.max(0, x)) * 100)} %` : 'the change of the panels';
     case 'mode': return typeof b.mode === 'string' && b.mode ? `the change of the mode to ${cap(b.mode)}` : 'the change of the mode';
     case 'target': {
@@ -135,7 +136,7 @@ export function changeLabel(action, body = {}, { running = null } = {}) {
 }
 /** The usual time of each change, in seconds, until bitcube's reading shows it: the server's own table (lib/applying.mjs EXPECT_S,
  *  kept equal by test/model.test.mjs), so a page can say "usually about 1 min" for its own change before status.applying has it. */
-export const EXPECT_S = { switch: 60, rebuild: 150, bootfile: 15, lightsroute: 20, ropes: 15, hub75: 15, mode: 3, target: 3, rules: 3, 'rules-reset': 3, calibrate: 10,
+export const EXPECT_S = { switch: 60, rebuild: 150, bootfile: 15, lightsroute: 20, ropes: 15, hub75: 15, test: 15, mode: 3, target: 3, rules: 3, 'rules-reset': 3, calibrate: 10,
   check: 30 };   // the full check (an SSH round trip): never a lock (lib/applying.mjs records only what APPLY_BLOCKS names), only its usual time
 /** What the boot file's confirming line says in place of a usual time: its reading comes with bitcube's next full check. */
 export const BOOT_USUAL = "bitcube's full check shows it within a minute";
@@ -148,6 +149,16 @@ export const LONG_CHANGE_S = 20;                // a change usually longer than 
 /** Why the lights can't be changed while a calibration that touches them runs: the server's 409 (lib/mission.mjs calBlocked) and
  *  bitcube's (probe.ps1) in the same words; one sentence per thought (R7 #20). */
 export const CAL_RUNNING = 'a calibration is running. Stop it on the Lights page first';
+/** The test pattern (Lights → Test pattern): what it blocks says this, on the pages and in the server's 409 (lib/mission.mjs
+ *  testBlocked). The ropes button and a calibration would fight it for the ropes, and a calibration would put it back after. */
+export const TEST_ON = 'the test pattern is on. Stop it on the Lights page first';
+/** Whether the full check's reading (probe.ps1's answer) shows the test pattern on the ropes or the panels: one rule for derive()
+ *  and the server's 409. */
+export function testShowing(pr) {
+  const td = obj(obj(pr)?.td);
+  if (!td || td.ok === false) return false;
+  return obj(td.ropes)?.source === 'test' || obj(obj(td.ropes)?.status)?.source === 'test' || obj(td.hub75)?.source === 'test';
+}
 /** How long a change may go unconfirmed (and an entry in status.applying stay a lock): 3 × its usual time, at least 2 min. */
 export function confirmLimitS(expectS) { return Math.max(3 * (num(expectS) ?? 0), CONFIRM_MIN_S); }
 /** Why a control waits for a change in flight: "wait: <label> is being applied", or, for one bitcube didn't answer in time
@@ -445,7 +456,9 @@ export function derive(status, nowMs) {
   const senderOpen = senderKnown && rs.open === true && !senderErr;
   const senderOff = senderKnown && rs.active === false;
   const senderTaken = /10048/.test(senderErr || '');   // the ropes' connection held by another program (Will's rope lights)
-  const ropesDark = tdOk && (ro?.source === 'black' || rs?.source === 'black');
+  // the test pattern (Lights → Test pattern) on the ropes or the panels: on purpose, never a fault, and never "dark"
+  const testOn = tdOk && testShowing(pr);
+  const ropesDark = tdOk && !testOn && (ro?.source === 'black' || rs?.source === 'black');
   const box = { 'rope box 1': dv ? dv.psac10_1 === true : null, 'rope box 2': dv ? dv.psac10_2 === true : null };
   const boxesDown = Object.keys(box).filter((k) => box[k] === false);
   const displays = Array.isArray(pr?.displays) ? pr.displays : null;
@@ -614,6 +627,9 @@ export function derive(status, nowMs) {
     { action: 'Press Ropes → On to show the river again; they follow within a few seconds.', raw: watts ? wattsWords : null });
   else if (boxesDown.length === 2) it('ropes', 'down', 'Both rope boxes are silent: the ropes are dark', 'The sender is open but neither box answers over the lighting network.', { action: 'Check power to the rope boxes and the lighting switch.' });
   else if (boxesDown.length === 1) it('ropes', 'warning', `${cap(boxWords(boxesDown[0]))} silent: those ropes may be dark`, `The sender is open (${wattsWords}) but ${boxWords(boxesDown[0])} does not answer.`, { action: 'Check power to that box and its cable to the lighting switch.' });
+  else if (testOn && (ro?.source === 'test' || rs?.source === 'test')) it('ropes', 'warning', 'Test pattern: colours wipe down every rope',
+    `Someone started the test pattern on the Lights page: red, green, blue, then white run down each rope from the plug end, so every LED shows every colour. Not a fault${watts ? `; ${wattsWords}` : ''}.`,
+    { action: 'Stop the test pattern on the Lights page; the river comes back at once.' })
   else if (slow) it('ropes', 'warning', `Driven at only ${Math.round(fps)} frames a second`, `TouchDesigner is slow, so the river moves in jerks on the ropes. Sender open, ${wattsWords}.`);
   else it('ropes', 'ok', showing, `Sender open, ${wattsWords}${routeKind(pr.lights_route) ? `; lighting network on ${ROUTE_DETAIL[routeKind(pr.lights_route)]}` : ''}.`);
 
@@ -636,6 +652,9 @@ export function derive(status, nowMs) {
   else if (!hub) it('hub75 panels', 'warning', 'Panel sender present; this file has no panel output', 'TouchDesigner reports no panels in this show file.');
   else if (calPanels) it('hub75 panels', 'warning', cap(calWords), `The calibration is ${calStageWords}; the panels go back to what they showed before, by themselves, when it ends.`,
     { action: 'If the room is needed now, stop it on the Lights page: the lights come back at once.' });
+  else if (hub.source === 'test') it('hub75 panels', 'warning', "Test pattern: four coloured panels, the screen's number in white squares",
+    "Someone started the test pattern on the Lights page: each screen shows red, green, blue and yellow panels, with as many white squares in its red panel as its number. Not a fault.",
+    { action: 'Stop the test pattern on the Lights page; the river comes back at once.' });
   else if (hub.output === false) it('hub75 panels', 'warning', 'Panel sender present, but the panel output is off', 'The panels are switched off in the show file.');
   else if (brightness === 0) it('hub75 panels', 'warning', "At 0 %, so they're dark", 'Someone turned the panels down to nothing.', { action: 'Raise the panels brightness below.' });
   else it('hub75 panels', 'ok', `Panel sender present, brightness ${brightness != null ? `${Math.round(brightness * 100)} %` : 'not known'}`, `${ropesDark ? 'Still showing the river while the ropes are dark. ' : ''}bitcube sees the panel sender.`, { raw: realDisplays.length ? `displays: ${realDisplays.join(', ')}` : null });
@@ -771,6 +790,9 @@ export function derive(status, nowMs) {
       else if (calibrating) add('calibrating', 'warning', 61, `Calibrating the lights: the ropes${calPanels ? ' and the panels are' : ' are'} in patterns${calNearly ? ', nearly done' : ` for ${calLeftWords}`}`,
         `The calibration is ${calStageWords}; the ropes${calPanels ? ' and the panels' : ''} go back to what they showed before, by themselves, when it ends.`,
         "Keep people out of the camera's view. If the room is needed now, stop it on the Lights page: the ropes go back at once.", ['ropes', calPanels ? 'hub75 panels' : null]);
+      else if (testOn) add('test-pattern', 'warning', 43, 'The test pattern is on: the ropes and panels are not showing the river',
+        'Someone started it on the Lights page to check every LED and screen: colours wipe down the ropes, and each screen shows four coloured panels with its number in white squares.',
+        "When the check is done, press Stop the test pattern on the Lights page; the river comes back at once. Nothing is broken.", ['ropes', 'hub75 panels']);
       else if (ropesDark) add('ropes-dark', 'warning', 42, 'The ropes are dark on purpose; everything else is up',
         'Someone pressed Ropes → Dark: the sender keeps sending black, so the boxes stay dark instead of playing their own colour cycle. The panels still show the river.',
         'If the ropes should be showing the river, press Ropes → On; they follow within a few seconds. Nothing is broken.', ['ropes']);
@@ -897,8 +919,8 @@ export function derive(status, nowMs) {
   // TouchDesigner frozen or not running: the ropes aren't being driven, never "not getting the river", the words for a cable or a
   // sender fault (R9 #36)
   const ropesState = !pr || online === false || !td ? 'unknown' : tdRestarting || tdOffBooting ? 'restarting' : frozen || tdOff ? 'not-driven'
-    : !tdOk || !senderKnown || senderErr || !rs.open || senderOff || boxesDown.length === 2 ? 'not-reaching' : calRopes ? 'calibrating' : ropesDark ? 'dark' : 'river';
-  const ropesWords = { river: kind === 'live' ? (relay?.fresh ? 'the ropes show the live river' : 'the ropes show the rain fallback') : 'the ropes show the river',
+    : !tdOk || !senderKnown || senderErr || !rs.open || senderOff || boxesDown.length === 2 ? 'not-reaching' : calRopes ? 'calibrating' : testOn && (ro?.source === 'test' || rs?.source === 'test') ? 'test' : ropesDark ? 'dark' : 'river';
+  const ropesWords = { test: 'the ropes run the test pattern', river: kind === 'live' ? (relay?.fresh ? 'the ropes show the live river' : 'the ropes show the rain fallback') : 'the ropes show the river',
                        dark: 'the ropes are dark on purpose', 'not-reaching': 'the ropes are not getting the river', unknown: 'the ropes are not known',
                        'not-driven': `the ropes are not being driven: TouchDesigner is ${tdOff ? 'not running' : 'frozen'}`,
                        restarting: `the ropes are dark while TouchDesigner ${tdRestarting ? 'restarts' : 'starts'}`,
@@ -908,10 +930,10 @@ export function derive(status, nowMs) {
   const riverWords = kind === 'live' ? (relay?.fresh ? 'the live river' : 'the rain fallback') : 'the river';
   const panelsState = !pr || online === false || led == null ? 'unknown' : ledMissing ? 'no-sender' : !td ? 'unknown'
     : tdRestarting || tdOffBooting ? 'restarting' : frozen ? 'frozen' : !tdOk ? 'gone' : !hub ? 'no-output'
-    : calPanels ? 'calibrating' : hub.output === false || brightness === 0 ? 'off' : 'river';
+    : calPanels ? 'calibrating' : hub.source === 'test' ? 'test' : hub.output === false || brightness === 0 ? 'off' : 'river';
   const panelsWords = { unknown: 'the panels are not known', 'no-sender': 'the panels have no sender: dark', restarting: 'the panels are dark while TouchDesigner restarts',
     frozen: 'the panels hold a frozen picture', gone: 'the panels show nothing: TouchDesigner is not running', 'no-output': 'this show file has no panel output',
-    off: 'the panels are switched off', calibrating: `the panels are ${calWords}`, river: `the panels show ${riverWords}${brightness != null ? ` at ${Math.round(brightness * 100)} %` : ''}` }[panelsState];
+    off: 'the panels are switched off', test: 'the panels show the test pattern', calibrating: `the panels are ${calWords}`, river: `the panels show ${riverWords}${brightness != null ? ` at ${Math.round(brightness * 100)} %` : ''}` }[panelsState];
   const manual = yearOk ? obj(year.manual) : null;
   const show = {
     file: tdOk ? { name: td.file, kind, label, words: `TouchDesigner is showing ${label}` } : null,
@@ -937,6 +959,8 @@ export function derive(status, nowMs) {
       .map((h) => ({ t_ms: h.t * 1000, phase: num(h.phase), season: seasonOfPhase(num(h.phase)), intensity: num(h.intensity) })) : [],
     // a calibration run: its time left (on the server's clock), its stage, and whether it is a dry run that touches no lights
     // left_s is the one number every page shows (the band, the tiles, Lights' state line and its card); left_words says it
+    // the test pattern (Lights → Test pattern): on the ropes, the panels, or both
+    test: { on: testOn, ropes: testOn && (ro?.source === 'test' || rs?.source === 'test'), panels: testOn && hub?.source === 'test' },
     calibration: calibrating ? { left_s: calLeftS, left_words: calLeftWords, stage: typeof cal.stage === 'string' ? cal.stage : null, dry: calDry, words: calStageWords } : null,
     uptime_s: upS != null ? Math.round(upS) : null,   // bitcube's uptime as of the server's clock (its restart = now - uptime)
     // TouchDesigner restarting: on which file, and whether someone chose it here (a switch or a rebuild in status.applying): then
@@ -978,7 +1002,10 @@ export function derive(status, nowMs) {
     target: ctl(first('target') ?? cantYear),
     rules: ctl(first('rules') ?? cantYear),
     'rules-reset': ctl(first('rules-reset') ?? cantYear),
-    ropes: ctl(first('ropes') ?? cantTd ?? cantCal),
+    ropes: ctl(first('ropes') ?? cantTd ?? cantCal ?? (testOn ? TEST_ON : null)),
+    // the test pattern: through TouchDesigner, never during a calibration (it photographs the ropes and panels); its Stop the same,
+    // so a test pattern TouchDesigner can't take back off says why
+    test: ctl(first('test') ?? cantTd ?? cantCal ?? (tdOk ? null : "TouchDesigner isn't answering")),
     hub75: ctl(first('hub75') ?? cantTd ?? cantCal),   // the camera is photographing the panels and ropes
     // never while TouchDesigner is restarting (a second switch kills the half-opened file: another minute dark), and never on
     // a full check too old to say what runs now (the buttons' labels come from it)
@@ -991,7 +1018,7 @@ export function derive(status, nowMs) {
     rebuild: ctl(first('rebuild') ?? cantUnknown ?? tdBusy ?? cantOld ?? cantCal ?? (frozen ? "TouchDesigner isn't answering" : null) ?? notYear, { starting: tdBusy }),
     // a calibration's start: TouchDesigner answering on a show file, the gallery camera reachable, nothing running already
     // dry: a dry run's start (no lights, no camera, nothing on TouchDesigner): only contact, bitcube, another start, a run on
-    calibrate: ctl(first('calibrate') ?? calOn ?? cantTd ?? (tdOk ? null : "TouchDesigner isn't answering")
+    calibrate: ctl(first('calibrate') ?? calOn ?? cantTd ?? (tdOk ? null : "TouchDesigner isn't answering") ?? (testOn ? TEST_ON : null)
       ?? (galleryDown ? "the gallery camera isn't reachable" : null), { dry: ctl(cantPage ?? cantBitcube ?? waitStart() ?? calOn) }),
   };
   // by: the id of the entry a control waits for (its why is that entry's "wait: …"), so the page that sent it can leave out a

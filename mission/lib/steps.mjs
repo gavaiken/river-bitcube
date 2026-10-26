@@ -222,7 +222,7 @@ function inlineParts(command, depth = 0) {
 const MC = /\bmc\.mjs\s+([a-z0-9-]+)(?:\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)"))?/g;
 const MC_ONE = new RegExp(MC.source);
 /** What a change made directly on bitcube (probe.ps1 or calibrate.ps1 -Action <x>, not through mission control) changed. */
-const DIRECT_WORDS = { ropes: 'changed the ropes', hub75: 'changed the panels', switch: "switched TouchDesigner's show file", bootfile: 'changed the boot file',
+const DIRECT_WORDS = { ropes: 'changed the ropes', hub75: 'changed the panels', test: 'switched the test pattern', switch: "switched TouchDesigner's show file", bootfile: 'changed the boot file',
   lightsroute: 'moved the lighting port', rebuild: "rebuilt the river's year", mode: "changed the river's year", target: "changed the river's year",
   rules: "changed the river's year", calibrate: 'started a calibration', start: 'started a calibration', cancel: 'stopped the calibration' };
 const directWords = (part) => DIRECT_WORDS[/-Action\s+([a-z0-9]+)/i.exec(part)?.[1]?.toLowerCase()] ?? DIRECT_FIRST.find(([re]) => runs(re, part))?.[1] ?? actingFallback(null, part);

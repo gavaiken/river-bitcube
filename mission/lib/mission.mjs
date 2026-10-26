@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { scrubCreds } from './scrub.mjs';
 import { Applying } from './applying.mjs';
 import { checkedCalibrate, noAnswer } from './lights.mjs';
-import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights } from '../public/model.js';
+import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights, TEST_ON, testShowing } from '../public/model.js';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 const PROBE = PS + 'probe.ps1';
@@ -17,7 +17,7 @@ const SNAP_CACHE_MS = 45_000;
 /** Controls refused while a calibration runs (model.js refuses the same ones on the pages). A rebuild ends in the switch
  *  path (TouchDesigner stopped and restarted), so it spoils a run as surely as a switch. A dry run (or a decode of earlier
  *  photos) touches no lights, camera or TouchDesigner: it refuses none of them (R7 #20). */
-export const CAL_BLOCKED = ['ropes', 'hub75', 'switch', 'lightsroute', 'rebuild'];
+export const CAL_BLOCKED = ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild'];
 /** The 409 a switch or a rebuild gets while TouchDesigner is starting or restarting (model.js tdStartingWhy, the pages' words; shared
  *  with fixture mode), or null. probe: the full check's reading as kept ({ at, value } or { at, error }), judged by itself, never
  *  the whole page model; a reading the rule can't read, or a slip in it, refuses (closed, CR9 #11). */
@@ -26,6 +26,15 @@ export function startingBlocked(action, probe) {
   let why;
   try { const p = probe && typeof probe === 'object' ? probe : null; why = tdStartingWhy(p && !p.error ? p.value ?? null : null); } catch { why = TD_UNREADABLE_WHY; }
   return why ? Object.assign(new Error(why), { status: 409 }) : null;
+}
+/** The 409 the ropes button or a calibration start gets while the test pattern shows (shared with fixture mode), or null: both
+ *  would fight it for the ropes, and a calibration puts back what the ropes showed before, the test pattern. A dry run (or a
+ *  decode of earlier photos) touches no lights: never refused. probe: the full check's reading as kept ({ at, value }). */
+export function testBlocked(action, body, probe) {
+  const start = action === 'calibrate' && body?.action === 'start' && body.dry_run !== true && !body.decode_only;
+  if (action !== 'ropes' && !start) return null;
+  const p = probe && typeof probe === 'object' && !probe.error ? probe.value : null;
+  return testShowing(p) ? Object.assign(new Error(TEST_ON), { status: 409 }) : null;
 }
 /** The 409 a control gets while a calibration runs (shared with fixture mode), or null. */
 export function calBlocked(action, cal) {
@@ -242,6 +251,8 @@ export class Mission {
   async calibrate(action, body = {}, { source = 'mission control', requestId = null } = {}) {
     const checked = checkedCalibrate(action, body);
     if (!this.lights) throw Object.assign(new Error('no calibration here'), { status: 503 });
+    const testing = testBlocked('calibrate', checked, this.data.probe);
+    if (testing) throw testing;
     const before = typeof this.calibration()?.started === 'number' ? this.calibration().started : null;   // bitcube's clock
     let isNew = () => false;
     return this.applying.run('calibrate', checked, async () => {
@@ -316,7 +327,7 @@ export class Mission {
     const checked = checkedControl(action, body);     // only what the whitelist read goes into status.applying
     // a calibration photographs the ropes and the panels: anything that changes them, restarts TouchDesigner or moves the
     // lighting port spoils the run (the pages refuse these too; this covers the studio chat and a stale page)
-    const blocked = calBlocked(action, this.calibration());
+    const blocked = calBlocked(action, this.calibration()) ?? testBlocked(action, checked, this.data.probe);
     if (blocked) throw blocked;
     // never a switch or rebuild while TouchDesigner opens a file by itself (bitcube's own boot, a crash relaunch: no entry holds
     // it): the pages grey both, and a second switch kills the half-opened file (R9 #34)
@@ -407,7 +418,7 @@ export function startPending(r, isNew) {
 /** Ropes and panels act through TouchDesigner: when its own answer says it failed, the action failed, whatever the probe's
  *  top-level ok says (a probe.ps1 from before 24 Oct reported ok: true with td.ok false). */
 export function actionResult(action, r) {
-  if ((action === 'ropes' || action === 'hub75') && r && r.ok !== false && r.td && r.td.ok === false) {
+  if ((action === 'ropes' || action === 'hub75' || action === 'test') && r && r.ok !== false && r.td && r.td.ok === false) {
     return { ...r, ok: false, error: String(r.td.error || 'TouchDesigner did not answer') };
   }
   return r;
@@ -439,6 +450,11 @@ export function planControl(action, body = {}) {
       // a real true or false, nothing else: "true", 1 or a missing dark is refused, never read as "on" (R10 #37)
       if (typeof body.dark !== 'boolean') throw bad('dark is true or false');
       return { kind: 'probe', args: `-Action ropes${body.dark ? ' -Dark' : ''}` };
+    }
+    case 'test': {
+      // the test pattern on (colour wipes down the ropes, numbered colour squares on the panels) or off: a real true or false (R10 #37)
+      if (typeof body.on !== 'boolean') throw bad('on is true or false');
+      return { kind: 'probe', args: `-Action test${body.on ? ' -On' : ''}` };
     }
     case 'hub75': {
       const x = num(body.brightness);
@@ -472,6 +488,7 @@ export function checkedControl(action, body = {}) {
     case 'rules': return { rules: { ...plan.body } };
     case 'ropes': return { dark: body.dark === true };
     case 'hub75': return { brightness: num(body.brightness) };
+    case 'test': return { on: body.on === true };
     case 'bootfile': case 'switch': case 'rebuild': return { file: body.file };
     case 'lightsroute': return { route: body.route };
     default: return {};

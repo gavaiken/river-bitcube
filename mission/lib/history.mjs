@@ -583,7 +583,8 @@ function showWords(ev) {
     case 'ropes': return { river: first ? 'The ropes show the river' : 'The ropes show the river again', dark: first ? 'The ropes are dark on purpose' : 'The ropes went dark on purpose',
                            'not-reaching': first ? 'The ropes are not getting the river' : 'The ropes stopped getting the river',
                            'not-driven': first ? 'The ropes are not being driven' : 'The ropes stopped being driven',   // TouchDesigner frozen or not running (R9 #36)
-                           restarting: 'The ropes are dark while TouchDesigner restarts' }[ev.to] ?? `The ropes are ${ev.to}`;
+                           restarting: 'The ropes are dark while TouchDesigner restarts',
+                           test: 'The ropes run the test pattern' }[ev.to] ?? `The ropes are ${ev.to}`;
     default: return `${cap(String(ev.field))} changed to ${ev.to}`;
   }
 }
@@ -617,6 +618,7 @@ export function actionPhrase(ev) {
     case 'rules-reset': return ['Reset', 'reset', "the year's rules"];
     case 'ropes': return ['Turned', 'turn', b.dark === true ? 'the ropes dark' : 'the ropes on'];   // as planControl: only a real true goes dark
     case 'hub75': return ['Set', 'set', `the panel brightness to ${pct}`];
+    case 'test': return b.on === true ? ['Started', 'start', 'the test pattern on the ropes and panels'] : ['Stopped', 'stop', 'the test pattern'];
     // a switch to the file TouchDesigner was running is the button's "Restart on …" (its label says so, model.js changeLabel)
     case 'switch': return /^the restart on /.test(String(ev.label ?? '')) ? ['Restarted', 'restart', `TouchDesigner on ${fileLabel(b.file)}`]
       : ['Switched', 'switch', `TouchDesigner to ${fileLabel(b.file)}`];

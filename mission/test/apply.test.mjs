@@ -11,7 +11,7 @@ const clone = (x) => JSON.parse(JSON.stringify(x));
 const AG = load('all-good'), NOW = AG._scenario.now;
 const status = (applying, name = 'all-good') => { const f = name === 'all-good' ? AG : load(name); const s = { ...clone(f.status), now: f._scenario.now }; if (applying !== undefined) s.applying = applying; return s; };
 const run = (applying, later = 2000, name) => { const s = status(applying, name); return derive(s, s.now + later); };
-const EVERY = ['ropes', 'hub75', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
+const EVERY = ['ropes', 'hub75', 'test', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
 const SWITCH = { id: 'a1', action: 'switch', label: 'the switch to the live river', file: 'river-online-oct-23.toe', started_at: NOW - 20_000, expect_s: 60, blocks: EVERY };
 
 test('status.applying missing, empty or junk means nothing is being applied', () => {
@@ -55,7 +55,10 @@ test('what blocks what: a ropes change blocks the ropes, and what would block it
   for (const k of ['ropes', 'hub75', 'lightsroute', 'calibrate', 'switch', 'rebuild']) assert.equal(m.controls[k].why, 'wait: the change of the lighting port is being applied', k);
   assert.equal(m.controls.mode.possible, true, 'the year is not touched by the lighting port');
   for (const a of ['switch', 'rebuild']) assert.deepEqual([...APPLY_BLOCKS[a]].sort(), [...EVERY].sort(), a);
-  for (const a of ['ropes', 'hub75', 'mode', 'target']) assert.deepEqual(APPLY_BLOCKS[a], [a], a);
+  for (const a of ['hub75', 'mode', 'target']) assert.deepEqual(APPLY_BLOCKS[a], [a], a);
+  // the ropes button and the test pattern both set the ropes' source: each waits for the other (and a calibration for the test)
+  assert.deepEqual(APPLY_BLOCKS.ropes, ['ropes', 'test']);
+  assert.deepEqual(APPLY_BLOCKS.test, ['test', 'ropes', 'calibrate']);
   // the rules and their reset change the same thing: each waits for the other
   assert.deepEqual(APPLY_BLOCKS.rules, ['rules', 'rules-reset']);
   assert.deepEqual(APPLY_BLOCKS['rules-reset'], ['rules-reset', 'rules']);

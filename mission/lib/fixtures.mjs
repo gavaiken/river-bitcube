@@ -44,7 +44,7 @@
 // only then.
 import { readFileSync, readdirSync, existsSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { CAMERAS, calBlocked, checkedControl, awaitsReading, startingBlocked } from './mission.mjs';
+import { CAMERAS, calBlocked, checkedControl, awaitsReading, startingBlocked, testBlocked } from './mission.mjs';
 import { Applying } from './applying.mjs';
 import { readLocalPixelmap, summarizePixelmap, checkedCalibrate } from './lights.mjs';
 import { atlasFromUprights } from '../public/screens.js';
@@ -86,7 +86,7 @@ export class FixtureMission {
   /** A scenario's own world (by cookie value; the same resolution as active()). */
   worldFor(name) {
     const n = this.active(name) ?? '-';
-    if (!this.worlds.has(n)) this.worlds.set(n, { applying: new Applying({ now: this.now }), file: null, boot_file: null, rebuilt: null, restarting: null });
+    if (!this.worlds.has(n)) this.worlds.set(n, { applying: new Applying({ now: this.now }), file: null, boot_file: null, rebuilt: null, restarting: null, test: false });
     return this.worlds.get(n);
   }
 
@@ -158,6 +158,13 @@ export class FixtureMission {
       if (w.boot_file) v.boot_file = w.boot_file;
       out.probe = { ...out.probe, value: v };
     }
+    // the test pattern this world turned on, as the next full check reports it: the ropes' and the panels' Source
+    if (w.test && out.probe?.value?.td && typeof out.probe.value.td === 'object' && out.probe.value.td.ok !== false) {
+      const td = out.probe.value.td, ro = td.ropes && typeof td.ropes === 'object' ? td.ropes : null;
+      out.probe = { ...out.probe, value: { ...out.probe.value, td: { ...td,
+        ...(ro ? { ropes: { ...ro, source: 'test', ...(ro.status && typeof ro.status === 'object' ? { status: { ...ro.status, source: 'test' } } : {}) } } : {}),
+        ...(td.hub75 && typeof td.hub75 === 'object' ? { hub75: { ...td.hub75, source: 'test' } } : {}) } } };
+    }
     if (out.probe?.value) w.applying.confirm(out.probe.value, this.now());
     out.applying = w.applying.list(clock);
     const ended = w.applying.ended(clock);
@@ -204,6 +211,8 @@ export class FixtureMission {
     let probe; try { probe = this.snapshot(scenario).probe; } catch { probe = { value: 'unreadable' }; }   // a half-edited scenario: closed
     const starting = w.applying.conflict(action, checked) ? null : startingBlocked(action, probe);
     if (starting) throw starting;
+    const testing = testBlocked(action, checked, probe);      // the ropes button or a calibration while the test pattern shows
+    if (testing) throw testing;
     let td = null;                 // TouchDesigner in this world: a switch to the file it runs reads "the restart on ..."
     try { td = this.snapshot(scenario).probe?.value?.td ?? null; } catch { /* a half-edited scenario: plain words */ }
     const running = typeof td?.file === 'string' ? td.file : null;
@@ -220,6 +229,10 @@ export class FixtureMission {
         w.restarting = this.applyS > 0 ? { file: checked.file, until: this.now() + this.applyS * 1000 } : null;
       }
       if (action === 'bootfile') w.boot_file = checked.file;
+      if (action === 'test') {       // as probe.ps1 -Action test: through TouchDesigner, refused when it doesn't answer
+        if (!td || td.ok === false) return { ok: false, error: 'TouchDesigner is not running', fixture: true };
+        w.test = checked.on;
+      }
       if (action === 'rebuild') {
         const done = this.calibFor(scenario).status();
         baked = { map: (done.ok === true && done.result?.map) || (this.pixelmapDir ? readLocalPixelmap(this.pixelmapDir)?.file : null) || null, file: checked.file };
@@ -251,6 +264,9 @@ export class FixtureMission {
     if (action === 'cancel') return calib.cancel();
     if (action === 'status') return calib.status();
     if (action !== 'start') throw Object.assign(new Error('action is start, cancel or status'), { status: 400 });
+    let probe; try { probe = this.snapshot(scenario).probe; } catch { probe = null; }
+    const testing = testBlocked('calibrate', args, probe);
+    if (testing) throw testing;
     // a start waits for a switch, rebuild or boot-file change in flight in this world (409), as live
     return this.worldFor(scenario).applying.run('calibrate', args, async () => this.#startCalibration(scenario, args, outcome),
                                                 { clock: () => this.clock(scenario), source, requestId });
@@ -286,7 +302,8 @@ export class FixtureMission {
     if (!pr) throw no('not checked yet: no frames until the full check of bitcube answers');
     if (!td || td.ok === false || typeof td.file !== 'string') throw no("TouchDesigner isn't answering: no frames");
     const year = st.seasons?.value ?? td.seasons ?? null;
-    const r = renderLights({ at: this.now(), source: td.ropes?.source === 'black' ? 'black' : 'canvas', weights: year?.weights ?? null,
+    const test = this.worldFor(name).test === true;       // the test pattern this world turned on (control 'test')
+    const r = renderLights({ at: this.now(), source: test ? 'test' : td.ropes?.source === 'black' ? 'black' : 'canvas', weights: year?.weights ?? null,
                              intensity: typeof year?.intensity === 'number' ? year.intensity : 0.5, look: td.river_cam?.fresh ? 'live' : 'rain', fps: td.fps ?? null });
     const hub = td.hub75 && typeof td.hub75 === 'object' ? td.hub75 : {};
     const panelBrightness = typeof hub.brightness === 'number' ? hub.brightness : 1;
@@ -294,8 +311,8 @@ export class FixtureMission {
     return { ok: true, action: 'frames', file: td.file, fps: td.fps ?? null, synthetic: true, age_s: 0,
              frames: { at: r.at / 1000, source: r.source, brightness: panelBrightness,
                        ropes: { ...r.ropes, source: r.source, brightness: 0.4, watts },
-                       panels: { ...r.panels, source: 'canvas', brightness: panelBrightness, output: hub.output !== false, atlas: [256, 512] },
-                       screens: r.screens } };
+                       panels: { ...r.panels, source: test ? 'test' : 'canvas', brightness: panelBrightness, output: hub.output !== false, atlas: [256, 512] },
+                       ...(r.screens ? { screens: r.screens } : { screens: { error: 'the panels show a test pattern' } }) } };
   }
 
   #scenario(name) {
@@ -322,6 +339,7 @@ const LOOKS = {
 /** One frame for the lights: slow water flowing along each rope and across the panels, in the season's colours (blended
  *  by weight), brighter and faster with intensity; a slow TouchDesigner (fps under 30) moves in quarter-second steps. */
 export function renderLights({ at, source = 'canvas', weights = null, intensity = 0.5, look = 'rain', fps = null }) {
+  if (source === 'test') return renderTest(at);
   const ws = weights ? Object.entries(weights).filter(([k, v]) => LOOKS[k] && v > 0) : [];
   const total = ws.reduce((s, [, v]) => s + v, 0);
   const pal = total > 0 ? [0, 1, 2].map((i) => [0, 1, 2].map((j) => ws.reduce((s, [k, v]) => s + LOOKS[k][i][j] * v / total, 0))) : LOOKS[look] ?? LOOKS.rain;
@@ -349,6 +367,33 @@ export function renderLights({ at, source = 'canvas', weights = null, intensity 
   const atlas = atlasFromUprights(screens, 128, 64);
   return { at, source, ropes: { w: 20, h: 400, rgb: ropes.toString('base64') }, panels: { w: atlas.w, h: atlas.h, rgb: Buffer.from(atlas.bytes).toString('base64') },
            screens: { w: 128, h: 64, cells: 4, rgb: screens.toString('base64') } };
+}
+
+// The test pattern as TouchDesigner sends it: td/ropes/artnet_out.py test_frame (red, green, blue, white wiping down from the plug
+// end, one every 3 s) and td/panels/panel_test.glsl on each quad of the Gray Area atlas (quads stacked, quad k at rows 128(k-1)),
+// 4x downsampled. No screens part: td_mission.py sends an error for it while the panels show a test pattern.
+const TEST_COLOURS = [[0.6, 0, 0], [0, 0.6, 0], [0, 0, 0.6], [0.2, 0.2, 0.2]];
+const PANEL_TEST = [[1, 0, 0], [0, 1, 0], [0, 0.3, 1], [1, 0.8, 0]];
+export function testRope(t, pixels = 400) {
+  const phase = Math.max(0, t) / 3, k = Math.floor(phase) % 4, edge = Math.floor((phase % 1) * pixels);
+  return (led) => TEST_COLOURS[led < edge ? k : (k + 3) % 4];
+}
+/** panel_test.glsl at one pixel of a 256x128 quad (top-left origin): [r, g, b] 0..1. */
+export function panelTestPixel(quad, x, y) {
+  const cx = Math.floor(x / 128), cy = Math.floor(y / 64), ix = x - cx * 128, iy = y - cy * 64, panel = cx + 2 * cy;
+  if (ix < 1 || iy < 1 || ix > 126 || iy > 62) return [1, 1, 1];
+  if (panel === 0 && iy >= 8 && iy < 18 && ix >= 8) { const i = Math.floor((ix - 8) / 16); if (i < quad && (ix - 8) % 16 < 10) return [1, 1, 1]; }
+  return PANEL_TEST[panel].map((v) => v * 0.35);
+}
+function renderTest(at) {
+  const ropes = Buffer.alloc(20 * 400 * 3), colour = testRope(at / 1000);
+  for (let led = 0; led < 400; led++) { const c = colour(led); for (let r = 0; r < 20; r++) for (let j = 0; j < 3; j++) ropes[(led * 20 + r) * 3 + j] = Math.round(c[j] * 255); }
+  const w = 64, h = 128, panels = Buffer.alloc(w * h * 3);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const c = panelTestPixel(Math.floor(y / 32) + 1, x * 4 + 2, (y % 32) * 4 + 2);
+    for (let j = 0; j < 3; j++) panels[(y * w + x) * 3 + j] = Math.round(c[j] * 255);
+  }
+  return { at, source: 'test', ropes: { w: 20, h: 400, rgb: ropes.toString('base64') }, panels: { w, h, rgb: panels.toString('base64') } };
 }
 
 function svgStill(cam) {
