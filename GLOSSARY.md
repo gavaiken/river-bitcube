@@ -1,10 +1,18 @@
 # Glossary: A River Becoming
 
-**Show file**: A TouchDesigner file that runs the whole piece (ropes and HUB75 panels) on the show machine. Each one has its own page explaining it to visitors and to the team.
+**bitcube**: The show PC, a Windows mini PC that runs TouchDesigner and drives the ropes and panels. Always lowercase, even at the start of a sentence.
 
-**Local-only file**: A show file that runs with no network at all: no internet, no Modal, no live river feed. It draws only on what is on the show machine's disk. Example: `river-local-oct-22-seasons.toe`. Its counterpart is the **online show file** (`river-online-oct-23.toe`), which also uses the live river feed and Dave's Modal agent.
+**Show file**: A TouchDesigner file that runs the whole piece (ropes and HUB75 panels) on bitcube. Each one has its own page explaining it to visitors and to the team. There are two, and the team calls them by these names, never by their file names:
+- **The river's year** (`river-local-oct-22-seasons.toe`): the recorded river through four seasons. A **local-only file**: it runs with no network at all (no internet, no Dave's agent, no live river feed) and draws only on what is on bitcube's disk.
+- **The live river** (`river-online-oct-23.toe`): the **online show file**. The River camera's live picture over the internet, with Dave's agent shaping its colours and movement.
 
-**River library**: The recorded clips of the real river, kept on the show machine and played back when the live river feed is absent. Not the same as the **river memory** (the last few seconds of whatever river image is showing, smeared down the ropes).
+**Old show file**: A retired show file, renamed with `old-` in front so it is obvious: `old-river-online-oct-20.toe` (the old live river, from 20 Oct: one screen, the Agape rope map) and `old-river.toe` (the first show file, from Agape). Never opened at boot and never offered by mission control; kept so it can be opened by hand.
+
+**Boot file**: The show file TouchDesigner opens when bitcube starts: the one chosen in mission control (Status → Installer → Boot file), else the river's year, else the live river.
+
+**Rain fallback**: What the live river shows (on the ropes and the panels) while the River camera sends no frames: rain. The only meaning of "fallback" in the team's words: an old show file is not a fallback, and neither is a network port.
+
+**River library**: The recorded clips of the real river, kept on bitcube and played back when the live river feed is absent. Not the same as the **river memory** (the last few seconds of whatever river image is showing, smeared down the ropes).
 
 **Season**: One of four looks the river passes through: winter (near-still, white and pale blue, ice glints), spring (thaw and rain, greens and teal), summer (torrent, gold and sunlight glints), autumn (slowing, ochre, rust, leaf-red and mud). A season sets both the river's colours and its intensity.
 
@@ -28,6 +36,8 @@
 
 **Rules**: The numbers that shape how the river behaves in every mode (how long the year takes, how fast it warms and cools, what counts as busier or quieter than usual, when summer becomes a full torrent). Changing a rule changes the behaviour from that moment on; it doesn't move the river anywhere.
 
-**Mission control**: The team's live web page for the installation: what every part is doing right now (show machine, show file, seasons, presence, cameras, river site, Modal), the controls for steering the piece, and the system map. Behind one shared team password. Not for visitors.
+**Dave's agent**: Dave's AI, which runs online (on Modal), watches the room and the river through their cameras, and chooses the live river's colours and mood every few minutes. **Clips to Dave** are the short camera clips bitcube sends it.
+
+**Mission control**: The team's live web page for the installation: what every part is doing right now (bitcube, the show file, seasons, presence, cameras, the river site, Dave's agent), the controls for steering the piece, and the system map. Behind one shared team password. Not for visitors.
 
 **Studio chat**: One long-running conversation with the team's Claude agent, reachable from mission control. Everyone on the team writes into the same conversation, one request at a time, and the agent can act on the installation, not just talk about it.

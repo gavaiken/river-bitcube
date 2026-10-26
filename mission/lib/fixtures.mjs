@@ -31,9 +31,17 @@
 // failure, 'decode' in a decode failure. Each scenario has its own job (a run started on all-good is not seen from td-frozen:
 // every scenario is its own world, like its history); while one exists (24 h, like probe.ps1) that scenario's probe carries it
 // as `calibration`, so the Status band can say "Calibrating the lights".
+//
+// Applying a change (docs/mission-ui.md "Applying a change") works as live, per scenario: every control in flight is in the
+// snapshot's `applying` (started_at on the scenario's clock), a conflicting one answers 409 "wait: ...", and a calibration
+// can't start under a switch, rebuild or boot-file change. So a page can be tested through applying and confirming, a switch,
+// a rebuild or a boot-file change holds for applyS seconds (MISSION_FIXTURE_APPLY_S, 6; a rebuild twice that) before it
+// answers; then, in that scenario's world only and in memory, a switch makes TouchDesigner report the new file (and sets the
+// boot file, as probe.ps1's switch does), a boot-file change its boot_file, and a rebuild records the map in use (rebuilt()).
 import { readFileSync, readdirSync, existsSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { CAMERAS, planControl, calBlocked } from './mission.mjs';
+import { Applying } from './applying.mjs';
 import { readLocalPixelmap, summarizePixelmap, planCalibrate } from './lights.mjs';
 import { atlasFromUprights } from '../public/screens.js';
 
@@ -58,12 +66,27 @@ export function fixtureClock(fixtureNow, now) {
   return c;
 }
 
+/** How long a fixture change holds before it answers, in units of applyS (the rest answer at once, as their own answer is the
+ *  reading live). */
+const HOLD = { switch: 1, bootfile: 1, rebuild: 2 };
+
 export class FixtureMission {
-  constructor({ dir, stateDir, now = () => Date.now(), pixelmapDir = null, calibrateS = 60 }) {
+  constructor({ dir, stateDir, now = () => Date.now(), pixelmapDir = null, calibrateS = 60, applyS = 6, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
     if (!dir || !existsSync(dir)) throw new Error(`MISSION_FIXTURES: ${dir} is not a folder`);
-    Object.assign(this, { dir, stateDir, now, pixelmapDir, calibrateS });
+    Object.assign(this, { dir, stateDir, now, pixelmapDir, calibrateS, applyS: Number.isFinite(applyS) && applyS > 0 ? applyS : 0, sleep });
     this.calibs = new Map();     // scenario name -> FixtureCalibration: each scenario is its own world, so its own job on its own bitcube
+    this.worlds = new Map();     // scenario name -> { applying, file, boot_file, rebuilt }: its changes in flight and what they changed
   }
+
+  /** A scenario's own world (by cookie value; the same resolution as active()). */
+  worldFor(name) {
+    const n = this.active(name) ?? '-';
+    if (!this.worlds.has(n)) this.worlds.set(n, { applying: new Applying({ now: this.now }), file: null, boot_file: null, rebuilt: null });
+    return this.worlds.get(n);
+  }
+
+  /** The last rebuild in a scenario's world, { at, map, file }, or null (Mission.rebuilt's shape). */
+  rebuilt(name) { const r = this.worldFor(name).rebuilt; return r ? { ...r } : null; }
 
   start() {}      // nothing to poll
   stop() { for (const c of this.calibs.values()) c.stop(); }
@@ -114,6 +137,15 @@ export class FixtureMission {
     // The calibration job, as probe.ps1 reports it: the progress file while a run is on or recent (only behind a full check).
     const cal = this.calibFor(n).probeView();
     if (cal && out.probe && typeof out.probe === 'object' && out.probe.value && typeof out.probe.value === 'object') out.probe = { ...out.probe, value: { ...out.probe.value, calibration: cal } };
+    // What a switch or a boot-file change did in this world (in memory), as the next full check would report it.
+    const w = this.worldFor(n);
+    if ((w.file || w.boot_file) && out.probe?.value && typeof out.probe.value === 'object') {
+      const v = { ...out.probe.value };
+      if (w.file && v.td && typeof v.td === 'object') v.td = { ...v.td, file: w.file };
+      if (w.boot_file) v.boot_file = w.boot_file;
+      out.probe = { ...out.probe, value: v };
+    }
+    out.applying = w.applying.list(clock);
     out.fixture = n;
     out.now = clock;
     return out;
@@ -132,14 +164,34 @@ export class FixtureMission {
     return { jpeg: Buffer.from(svgStill(cam)), type: 'image/svg+xml', at };
   }
 
-  /** Same whitelist and argument checks as Mission.control; then the request is logged instead of acted on. */
+  /** Same whitelist and argument checks as Mission.control, the same locks (a calibration, a change in flight); then the
+   *  request is logged instead of acted on, and a switch, rebuild or boot-file change holds and changes this world (header). */
   async control(action, body = {}, scenario = null) {
     planControl(action, body);
     // the scenario's own scripted run blocks what the live server blocks (Mission.control)
     const blocked = calBlocked(action, this.calibFor(scenario).status());
     if (blocked) throw blocked;
-    this.#log(action, body);
-    return { ok: true, fixture: true, action, body, note: 'fixture mode: nothing was changed' };
+    const w = this.worldFor(scenario);
+    let td = null;                 // TouchDesigner in this world: a switch to the file it runs reads "the restart on ..."
+    try { td = this.snapshot(scenario).probe?.value?.td ?? null; } catch { /* a half-edited scenario: plain words */ }
+    const running = typeof td?.file === 'string' ? td.file : null;
+    return w.applying.run(action, body, async () => {
+      this.#log(action, body);
+      // a rebuild is refused as probe.ps1 refuses it: only into the file TouchDesigner has open, and only while it answers
+      if (action === 'rebuild' && (!td || td.ok === false)) return { ok: false, error: 'TouchDesigner did not answer: rebuild refused', rebuilt: false, saved: false, switched: false, fixture: true };
+      if (action === 'rebuild' && running !== body.file) return { ok: false, error: `TouchDesigner is running ${running}, not ${body.file}: rebuild refused`, rebuilt: false, saved: false, switched: false, fixture: true };
+      const hold = (HOLD[action] ?? 0) * this.applyS;
+      if (hold > 0) await this.sleep(hold * 1000);
+      if (action === 'switch' || action === 'rebuild') { w.file = body.file; w.boot_file = body.file; }    // a rebuild ends in the switch path
+      if (action === 'bootfile') w.boot_file = body.file;
+      if (action === 'rebuild') {
+        const done = this.calibFor(scenario).status();
+        const map = (done.ok === true && done.result?.map) || (this.pixelmapDir ? readLocalPixelmap(this.pixelmapDir)?.file : null) || null;
+        w.rebuilt = { at: this.now(), map, file: body.file };
+      }
+      const changed = HOLD[action] ? "fixture mode: nothing on bitcube was changed; only this scenario's world (in memory)" : 'fixture mode: nothing was changed';
+      return { ok: true, fixture: true, action, body, note: changed };
+    }, { clock: () => this.clock(scenario), running });
   }
 
   /** POST /api/control/check in fixture mode: nothing to poll, so only the log line. */
@@ -161,6 +213,13 @@ export class FixtureMission {
     if (action === 'cancel') return calib.cancel();
     if (action === 'status') return calib.status();
     if (action !== 'start') throw Object.assign(new Error('action is start, cancel or status'), { status: 400 });
+    // a start waits for a switch, rebuild or boot-file change in flight in this world (409), as live
+    return this.worldFor(scenario).applying.run('calibrate', { ...args, action }, async () => this.#startCalibration(scenario, args, outcome),
+                                                { clock: () => this.clock(scenario) });
+  }
+
+  #startCalibration(scenario, args, outcome) {
+    const calib = this.calibFor(scenario);
     const [, f] = this.#scenario(scenario);
     const st = f.status ?? {}, pr = st.probe?.value, td = pr?.td;
     const refuse = (error) => ({ ok: false, error, calibration: calib.status() });

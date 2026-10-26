@@ -26,8 +26,13 @@ FFMPEG = [r'C:\Program Files\WinGet\Links\ffmpeg.exe', 'ffmpeg']
 RTSP_TIMEOUT_US = 15_000_000
 
 
+# A camera's login, up to the authority's LAST @ (as calibrate.py and mission/lib/scrub.mjs): ffmpeg takes the last @ too, so
+# an @ or a quote in the password is all login.
+_CREDS = re.compile(r'([a-z][a-z0-9+.-]*://)[^\s/?#"<>]*@', re.I)
+
+
 def mask(text):
-    return re.sub(r'(rtsp://)[^@/\s]*@', r'\1***@', text)
+    return _CREDS.sub(r'\1***@', str(text))
 
 
 def ffmpeg():

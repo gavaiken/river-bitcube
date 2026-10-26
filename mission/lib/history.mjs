@@ -19,8 +19,10 @@
 //   { kind: 'overall', t, level, cause, headline, stale, lost, from: { level, cause, stale, lost } | null }
 //       the verdict changed: level, cause, or contact. stale: a source the verdict needs has gone quiet and `lost`
 //       names it ('bitcube', "the river's year page", "Dave's agent").
-//   { kind: 'item', t, id, from, to, summary, stale? }     a piece of equipment changed level (levels: ok warning down);
-//                                                          stale: true when its source was already quiet at the time
+//   { kind: 'item', t, id, from, to, summary, stale?, gap?, still? }   a piece of equipment changed level (levels: ok warning
+//                                                          down); stale: its source was already quiet at the time; gap: it
+//                                                          was not seen just before (since is "at least"); still: the same
+//                                                          state seen again after a long unseen stretch (since restarts)
 //   { kind: 'show', t, field, from, to }                   file (the .toe name) | mode | season | ropes (the state word)
 //   { kind: 'calibration', t, running, stage, ok, cancelled, mode, error, stale, from: { running, stage } | null }
 //   { kind: 'action', t, action, body, ok, note, source }  source: 'mission control' | 'studio chat' (never a person: MD4);
@@ -32,6 +34,11 @@
 //   overall verdict says "bitcube went offline" once instead of fifteen "can't be checked" lines at every restart.
 //   The exception is a STALE unknown: a source going quiet is "lost contact", worth a line, so overall events carry
 //   the stale flag; but it does not reset since('overall'), because the show did not change, only our view of it.
+// - Seen again after a long unseen stretch (over UNSEEN_GAP_MS: bitcube offline, contact lost, a full check stuck), the same
+//   level and reason is a first sighting again: the piece may have changed and changed back meanwhile, so its since restarts
+//   at the reappearance with at_least ("for over 1 min"), never the whole stretch nobody saw. A piece read only from a last
+//   answer (its source quiet) is not seen. The overall does the same after a stretch of lost contact. The rule needs a
+//   sighting in this process: after a restart the file's since stands (a fault three days old still says so).
 // - since() answers from the last transition into the current level. The last transition per key is kept past
 //   keepMs and max (a fault three days old must still say "since Monday" after a restart); recent() hides those
 //   old markers by defaulting its window to keepMs. at_least: true means the state began at or before `since`
@@ -47,6 +54,7 @@ import { scrubCreds } from './scrub.mjs';
 export const KEEP_MS = 48 * 3600e3;
 export const MAX_EVENTS = 5000;
 export const BODY_MAX = 300;                 // an action's body, as JSON: a feed line, not a document
+export const UNSEEN_GAP_MS = 5 * 60e3;        // unseen for longer than this, a state seen again is a first sighting again
 export const SOURCES = ['mission control', 'studio chat'];
 const SHOW_FIELDS = ['file', 'mode', 'season', 'ropes'];
 const BLIND = ['page', 'bitcube-offline', 'bitcube-unchecked', 'probe-stale', 'not-checked', 'check-failed'];   // causes that hide what is behind them
@@ -97,12 +105,18 @@ export class History {
       // was not known in the previous observation changed at some moment of the gap: its since is "at least".
       for (const it of m.items) {
         if (it.level === 'unknown' || it.muted) continue;
-        const p = this.state.items[it.id];
-        const gap = !!p && (this.knownAt[it.id] == null || (this.prevObs != null && this.knownAt[it.id] < this.prevObs));
-        this.knownAt[it.id] = t;
+        const p = this.state.items[it.id], seen = this.knownAt[it.id];
+        const gap = !!p && (seen == null || (this.prevObs != null && seen < this.prevObs));
+        if (!it.stale) this.knownAt[it.id] = t;          // a last answer from a quiet source is not a sighting
         // a new reason at the same level is news too ("Attention for 2 h" must never carry over from running slowly to dark
         // on purpose); not for OK, whose words change with every answer and whose since is never shown
-        if (p && p.level === it.level && (it.level === 'ok' || p.reason === reasonOf(it.summary))) continue;
+        if (p && p.level === it.level && (it.level === 'ok' || p.reason === reasonOf(it.summary))) {
+          // the same state seen again after a long unseen stretch: a first sighting again (see the rules above)
+          if (it.level !== 'ok' && !it.stale && gap && seen != null && t - seen > UNSEEN_GAP_MS) {
+            rec({ kind: 'item', id: it.id, from: p.level, to: it.level, summary: it.summary, gap: true, still: true });
+          }
+          continue;
+        }
         rec({ kind: 'item', id: it.id, from: p?.level ?? null, to: it.level, summary: it.summary, ...(it.stale ? { stale: true } : {}), ...(gap ? { gap: true } : {}) });
       }
       this.prevObs = t;
@@ -171,10 +185,16 @@ export class History {
     const S = this.state;
     switch (ev.kind) {
       case 'overall': {
-        // A stale unknown is lost contact, not a new state of the show: level, cause and since carry on through it.
+        // A stale unknown is lost contact, not a new state of the show: level, cause and since carry on through it. But the
+        // same verdict seen again after a long blind stretch is a first sighting again (the rules above): since restarts.
         const p = S.overall, known = ev.level !== 'unknown' || !p, same = p && p.level === ev.level && p.cause === (ev.cause ?? null);
-        const base = known && !same ? { level: ev.level, cause: ev.cause ?? null, t: ev.t, at_least: ev.from == null || ev.gap === true } : { level: p.level, cause: p.cause, t: p.t, at_least: p.at_least };
-        S.overall = { ...base, stale: !!ev.stale, lost: ev.lost ?? null, last: { level: ev.level, cause: ev.cause ?? null, stale: !!ev.stale, lost: ev.lost ?? null } };
+        const blindNow = !!ev.stale || BLIND.includes(ev.cause);
+        const longGap = !!p && ev.gap === true && typeof p.blind_since === 'number' && ev.t - p.blind_since > UNSEEN_GAP_MS;
+        const base = known && !same ? { level: ev.level, cause: ev.cause ?? null, t: ev.t, at_least: ev.from == null || ev.gap === true }
+          : known && longGap ? { level: p.level, cause: p.cause, t: ev.t, at_least: true }
+          : { level: p.level, cause: p.cause, t: p.t, at_least: p.at_least };
+        S.overall = { ...base, stale: !!ev.stale, lost: ev.lost ?? null, last: { level: ev.level, cause: ev.cause ?? null, stale: !!ev.stale, lost: ev.lost ?? null },
+                      blind_since: blindNow ? (typeof p?.blind_since === 'number' ? p.blind_since : ev.t) : null };
         break;
       }
       case 'item': if (typeof ev.id === 'string') S.items[ev.id] = { level: ev.to, reason: reasonOf(ev.summary), t: ev.t, at_least: ev.from == null || ev.gap === true }; break;
@@ -314,6 +334,8 @@ function timeless(s) {
 function itemWords(ev) {
   const [name, plural] = WHO[ev.id] ?? [cap(String(ev.id ?? 'something'))];
   const s = timeless(String(ev.summary ?? '').trim());
+  if (ev.still && ev.to !== 'ok') return ev.to === 'down' ? `${name} ${plural ? 'are' : 'is'} still down${s ? `: ${lc(s)}` : ''}`
+    : `${name} still ${plural ? 'need' : 'needs'} attention${s ? `: ${lc(s)}` : ''}`;
   if (ev.to === 'ok') return `${name} ${plural ? 'are' : 'is'} ${ev.from == null ? 'fine' : ev.from === 'down' ? 'back' : 'OK again'}${s ? `: ${lc(s)}` : ''}`;
   const said = SAID.find(([re]) => re.test(s));
   if (said) { const r = s.replace(said[0], said[1]); return r.startsWith('=') ? r.slice(1) : `${name} ${r}`; }

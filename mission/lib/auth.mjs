@@ -108,11 +108,18 @@ export function clientOf(xff, socketAddr) {
   return parts.length ? parts[parts.length - 1] : String(socketAddr || '?');
 }
 
+/** Cookies are shared by every app on the host name (any port, any path), so one we never set may hold a stray % ("50%"):
+ *  a value that doesn't decode is kept as it is, never a 500 that locks the browser out until the cookie is cleared. */
 export function parseCookies(header) {
   const out = {};
   for (const part of String(header ?? '').split(';')) {
     const i = part.indexOf('=');
-    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+    if (i <= 0) continue;
+    const name = part.slice(0, i).trim(), raw = part.slice(i + 1).trim();
+    if (!name) continue;
+    let value = raw;
+    try { value = decodeURIComponent(raw); } catch { /* not ours, or not encoded: as it is */ }
+    out[name] = value;
   }
   return out;
 }

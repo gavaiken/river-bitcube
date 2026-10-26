@@ -14,6 +14,9 @@ $ErrorActionPreference = 'Continue'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $river = Split-Path $repo -Parent
 $out = [ordered]@{ ok = $true; time = (Get-Date).ToString('s') }
+# A camera's login never leaves bitcube: masked up to the authority's LAST @ (as mission/lib/scrub.mjs; ffmpeg takes the last
+# @ too), and masked BEFORE a line is cut, or a cut between two @ leaves a tail nobody can recognise as a login.
+function Mask-Creds([string]$s) { if ($null -eq $s) { return $null }; return ($s -replace '([a-z][a-z0-9+.-]*://)[^\s/?#"<>]*@', '$1***@') }
 
 $BOOT_FILES = @('river-local-oct-22-seasons.toe', 'river-online-oct-23.toe')   # retired show files start with old- (D27): never offered
 $REBUILD_FILES = @('river-local-oct-22-seasons.toe')     # the only file build_seasons_local.py rebuilds (its own guard agrees)
@@ -85,9 +88,20 @@ $out.td = $td
 # ropes / hub75 act through TouchDesigner: if it didn't carry the action out, the action failed (the page must not say done)
 if ($Action -in 'ropes', 'hub75' -and $td -and $td.ok -eq $false) { $out.ok = $false; $out.error = "$($td.error)" }
 
-# Boot file
+# Boot file: the show file Start-River.cmd opens at the next start, worked out as it does: boot-file.txt's file when that file
+# exists (mission control sets it; the last such line wins), else the river's year, else the live river. boot_file_chosen says
+# whether boot-file.txt chose it; boot_file is null when there is no show file at all (TouchDesigner would open empty).
 $bf = Join-Path $river 'boot-file.txt'
-$out.boot_file = $(if (Test-Path $bf) { (Get-Content $bf -TotalCount 1).Trim() } else { 'Start-River.cmd default' })
+$boot = $null; $chosen = $false
+if (Test-Path -LiteralPath $bf) {
+    foreach ($line in @(Get-Content -LiteralPath $bf -ErrorAction SilentlyContinue)) {
+        $name = "$line".Trim()
+        if ($name -and -not $name.StartsWith(';') -and (Test-Path -LiteralPath (Join-Path $repo $name))) { $boot = $name; $chosen = $true }
+    }
+}
+if (-not $boot) { $boot = @('river-local-oct-22-seasons.toe', 'river-online-oct-23.toe') | Where-Object { Test-Path -LiteralPath (Join-Path $repo $_) } | Select-Object -First 1 }
+$out.boot_file = $boot
+$out.boot_file_chosen = $chosen
 
 # Modal link: processes and the newest clip per camera
 $procs = @(Get-CimInstance Win32_Process -Filter "Name like 'python%'" | Where-Object { $_.CommandLine -like '*modal_link.py*' -and $_.CommandLine -notlike '*status*' })
@@ -96,7 +110,7 @@ foreach ($cam in 'gallery', 'river', 'sync') {
     $log = Join-Path $river "logs\modal-$cam.log"
     if (Test-Path $log) {
         $last = Get-Content $log -Tail 200 | Where-Object { $_ -match 'INFO' } | Select-Object -Last 1
-        $link[$cam] = @{ last = $(if ($last) { $last.Substring(0, [Math]::Min(120, $last.Length)) } else { $null }); log_age_s = [int]((Get-Date) - (Get-Item $log).LastWriteTime).TotalSeconds }
+        $link[$cam] = @{ last = $(if ($last) { $m = Mask-Creds $last; $m.Substring(0, [Math]::Min(120, $m.Length)) } else { $null }); log_age_s = [int]((Get-Date) - (Get-Item $log).LastWriteTime).TotalSeconds }
     }
 }
 $out.modal_link = $link
@@ -105,7 +119,7 @@ $out.modal_link = $link
 $rlog = Join-Path $river 'recordings\river\record.log'
 $out.recorder = [ordered]@{
     clips = @(Get-ChildItem (Join-Path $river 'recordings\river') -Filter '*.mp4' -ErrorAction SilentlyContinue).Count
-    last = $(if (Test-Path $rlog) { $l = Get-Content $rlog -Tail 1; $l.Substring(0, [Math]::Min(120, $l.Length)) } else { $null })
+    last = $(if (Test-Path $rlog) { $l = Mask-Creds (Get-Content $rlog -Tail 1); if ($l) { $l.Substring(0, [Math]::Min(120, $l.Length)) } else { $null } } else { $null })
 }
 # Calibration job (tools/mission/calibrate.py, started by calibrate.ps1): its progress file when it is from the last 24 h,
 # with alive (is its process still there) and stale (running is still true but the process is gone). Shape: mission/lib/lights.mjs.

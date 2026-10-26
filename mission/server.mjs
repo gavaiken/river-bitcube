@@ -13,19 +13,26 @@
 //   MISSION_FIXTURES=<dir>  fixture mode (lib/fixtures.mjs): status, stills, lights and controls come from <dir>/<scenario>.json and
 //                           nothing talks to bitcube, Modal or the seasons page. For designing the pages; never for the live site.
 //   MISSION_FIXTURE_CALIBRATE_S   fixture mode: how long the scripted calibration run takes (60)
+//   MISSION_FIXTURE_APPLY_S       fixture mode: how long a switch or a boot-file change holds before it answers (6; a rebuild
+//                                 twice that), so a page can be seen applying and then confirming the change (lib/fixtures.mjs)
 //
 // Routes (all JSON unless said; everything but /login, /healthz, /version and the assets sits behind the login cookie):
 //   GET  /status /lights /chat /map /login      the v2 pages (public/*.html, docs/mission-ui.md); /, /mission and /status.html
 //                                              (the v1 addresses) redirect to /status; /map/ is the engineers' diagram with live dots
-//   GET  /api/status                           lib/mission.mjs snapshot + studio + now (the server's clock) + since + last_action
+//   GET  /api/status                           lib/mission.mjs snapshot + studio + now (the server's clock) + since + last_action;
+//                                              applying: every control in flight (lib/applying.mjs; docs/mission-ui.md "Applying
+//                                              a change"), and probe.value.calibration the newest copy of the calibration job
 //   GET  /api/lights                           what TouchDesigner sends the lights now (lib/lights.mjs CONTRACT); 503 in plain words
 //   GET  /api/pixelmap                         { map, screens, still }: the newest LED map and screens file (lib/lights.mjs)
-//   GET  /api/calibration                      the calibration job's progress file, or { running: false, none: true }
+//   GET  /api/calibration                      the calibration job's progress file, or { running: false, none: true }; plus
+//                                              rebuilt: { at, map, file } | null, the last rebuild that went all the way (the map in use)
 //   GET  /api/history?limit=&kinds=&since=     { now, events (with words), since, last_action, count } (lib/history.mjs)
 //   GET  /api/contacts                         { contacts: [{ key, name, owns, tel }] }
 //   GET  /api/camera/<gallery|river>.jpg       the newest still (x-taken, x-age-s headers)
 //   POST /api/control/<action>                 the whitelist in lib/mission.mjs planControl, plus calibrate (lib/lights.mjs
-//                                              planCalibrate), check (the full check now, at most once per 20 s) and rebuild
+//                                              planCalibrate), check (the full check now, at most once per 20 s) and rebuild.
+//                                              A refusal is { ok: false, error }: 400 bad request, 409 "wait: <label> is being
+//                                              applied (started 21:04)" or "a calibration is running: ...", 429 checked too recently
 //   GET  /api/chat/history  /api/chat/events (SSE)   POST /api/chat/send  /api/chat/stop { clear? } (clear drops the waiting requests too)
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
@@ -39,6 +46,7 @@ import { Mission } from './lib/mission.mjs';
 import { FixtureMission, CALIBRATION_OUTCOMES } from './lib/fixtures.mjs';
 import { Lights, readLocalPixelmap, readLocalScreens } from './lib/lights.mjs';
 import { History, describeEvent } from './lib/history.mjs';
+import { describeTool } from './lib/steps.mjs';
 import { CONTACTS } from './public/model.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -84,15 +92,18 @@ async function makeRunner() {
     const delay = Number(env.MISSION_FAKE_AGENT_DELAY_MS ?? 700);
     return async function* ({ text, resume, signal }) {
       yield { kind: 'session', sessionId: resume ?? 'fake-session' };
-      for (const step of ['read CLAUDE.md', 'ran: Check bitcube is online', 'edited docs/sessions/U.md']) {
+      // the same step lines the real agent's tools give (lib/steps.mjs): plain words, the raw input apart
+      for (const tool of [{ name: 'Read', input: { file_path: 'CLAUDE.md' } },
+                          { name: 'Bash', input: { description: 'Check bitcube is online', command: 'ssh bitcube hostname' } },
+                          { name: 'Edit', input: { file_path: 'docs/sessions/U.md' } }]) {
         await new Promise((r) => setTimeout(r, delay));
         if (signal.aborted) return;
-        yield { kind: 'activity', text: step };
+        yield { kind: 'activity', ...describeTool(tool) };
       }
       // A message with the word "fail" shows what a broken run looks like; anything else gets a markdown reply.
       const failed = /\bfail\b/i.test(text);
       if (failed) yield { kind: 'error', text: '(pretend) ssh: connect to host bitcube port 22: Operation timed out' };
-      else yield { kind: 'text', text: `(pretend agent) You said: ${text}\n\nWhat I found:\n- bitcube answers on port 22\n- TouchDesigner is running \`river-local-oct-22-seasons.toe\` at 60 fps\n- the river camera is **offline**, so the panels show the gallery\n\nNothing needed changing.` };
+      else yield { kind: 'text', text: `(pretend agent) You said: ${text}\n\nWhat I found:\n- bitcube is online\n- TouchDesigner is running **the river's year** at 60 frames a second\n- the River camera is **offline**, so the panels show the gallery\n\nNothing needed changing.` };
       yield { kind: 'result', ok: !failed, text: failed ? 'bitcube did not answer' : '', cost: 0, turns: 4 };
     };
   }
@@ -109,9 +120,10 @@ async function makeRunner() {
 }
 
 const studio = new Studio({ runner: await makeRunner(), dir: STATE });
-const mission = FIXTURES ? new FixtureMission({ dir: FIXTURES, stateDir: STATE, pixelmapDir: PIXELMAP_DIR, calibrateS: Number(env.MISSION_FIXTURE_CALIBRATE_S || 60) })
-                         : new Mission();   // fixtures: nothing is polled or run
-const lights = FIXTURES ? null : new Lights({ sshHost: mission.sshHost });
+const lights = FIXTURES ? null : new Lights({ sshHost: 'bitcube' });
+const mission = FIXTURES ? new FixtureMission({ dir: FIXTURES, stateDir: STATE, pixelmapDir: PIXELMAP_DIR, calibrateS: Number(env.MISSION_FIXTURE_CALIBRATE_S || 60),
+                                                applyS: Number(env.MISSION_FIXTURE_APPLY_S ?? 6) })
+                         : new Mission({ sshHost: 'bitcube', lights, stateDir: STATE });   // fixtures: nothing is polled or run
 mission.start();
 studio.on('status', (st) => { if (restartPending && !st.running && !st.queue.length) { console.log('restarting for new code'); process.exit(0); } });
 setInterval(async () => {
@@ -188,6 +200,10 @@ async function body(req, limit = 64_000) {
   try { return JSON.parse(b); } catch { throw Object.assign(new Error('bad JSON'), { status: 400 }); }
 }
 
+/** A request body is a JSON object (or form fields); null, a list, a number or a string is refused before anything reads it. */
+const isObject = (b) => !!b && typeof b === 'object' && !Array.isArray(b);
+const NOT_OBJECT = "mission control didn't accept it: the request must be a JSON object";
+
 function sameOrigin(req) {
   // State-changing requests must come from our own pages (cookie is SameSite=Lax; this is belt and braces).
   const o = req.headers.origin;
@@ -253,6 +269,7 @@ const server = createServer(async (req, res) => {
     if (path === '/login' && req.method === 'POST') {
       if (!sameOrigin(req)) return send(res, 403, { error: 'cross-origin' });
       const b = await body(req);
+      if (!isObject(b)) return send(res, 400, { error: NOT_OBJECT });
       const r = auth.login(client(req), b.password);
       if (!r.ok) {
         await new Promise((ok) => setTimeout(ok, 400));           // every wrong answer costs time
@@ -315,10 +332,15 @@ const server = createServer(async (req, res) => {
     if (req.method === 'POST' && !sameOrigin(req)) return send(res, 403, { error: 'cross-origin' });
     if (path === '/api/chat/send' && req.method === 'POST') {
       const b = await body(req);
+      if (!isObject(b)) return send(res, 400, { error: NOT_OBJECT });
       try { return send(res, 200, { id: studio.send(b.text), status: studio.status() }); }
       catch (e) { return send(res, 400, { error: e.message }); }
     }
-    if (path === '/api/chat/stop' && req.method === 'POST') { const b = await body(req); return send(res, 200, studio.stop({ clear: b.clear === true })); }
+    if (path === '/api/chat/stop' && req.method === 'POST') {
+      const b = await body(req);
+      if (!isObject(b)) return send(res, 400, { error: NOT_OBJECT });
+      return send(res, 200, studio.stop({ clear: b.clear === true }));
+    }
 
     // mission control
     if (path === '/api/status') {
@@ -348,10 +370,12 @@ const server = createServer(async (req, res) => {
     }
     if (path === '/api/pixelmap') return send(res, 200, await pixelmapPayload(scenario));
     if (path === '/api/calibration') {
-      if (FIXTURES) return send(res, 200, mission.calibration(scenario));
-      const r = await lights.calibration();
-      if (!r || (r.ok === false && !('running' in r))) return send(res, 503, { ok: false, error: `Can't read the calibration: ${plainLightsError(r?.error).error.replace(/: no frames$/, '')}`, raw: r?.error ?? null });
-      return send(res, 200, r);
+      // rebuilt: the last rebuild that went all the way, so every phone knows which map the river's year uses
+      const rebuilt = mission.rebuilt(scenario);
+      if (FIXTURES) return send(res, 200, { ...mission.calibration(scenario), rebuilt });
+      const r = await mission.calibrationStatus();           // kept as the newest copy: the lock follows the run at once
+      if (!r || (r.ok === false && !('running' in r))) return send(res, 503, { ok: false, error: `Can't read the calibration: ${plainLightsError(r?.error).error.replace(/: no frames$/, '')}`, raw: r?.error ?? null, rebuilt });
+      return send(res, 200, { ...r, rebuilt });
     }
     const cam = path.match(/^\/api\/camera\/([a-z]+)\.jpg$/);
     if (cam) {
@@ -365,19 +389,20 @@ const server = createServer(async (req, res) => {
       const action = m[1];
       const b = await body(req);
       // a control's body is a JSON object; anything else (null, a list, a number) is refused before it is run or recorded
-      if (!b || typeof b !== 'object' || Array.isArray(b)) return send(res, 400, { error: "mission control didn't accept it: the request must be a JSON object" });
+      if (!isObject(b)) return send(res, 400, { error: NOT_OBJECT });
       try {
         let r;
         if (action === 'calibrate') {
           const outcome = CALIBRATION_OUTCOMES.includes(url.searchParams.get('calib')) ? url.searchParams.get('calib') : CALIBRATION_OUTCOMES.includes(cookies.calib) ? cookies.calib : 'ok';
-          r = FIXTURES ? await mission.calibrate(b.action, b, { scenario, outcome }) : await lights.calibrate(b.action, b);
+          // through the mission, which records a start as a change in flight and keeps the job's answer as its newest state
+          r = await mission.calibrate(b.action, b, { scenario, outcome });
         } else if (action === 'check') r = await checkNow(scenario);
         else r = await mission.control(action, b, scenario);   // fixture mode: that scenario's own world (a scripted calibration blocks as live)
         recordAction(scenario, action, b, r);
         return send(res, 200, r);
       } catch (e) {
-        if (!e.status || e.status >= 500) recordAction(scenario, action, b, null, e);      // a refused request (400, 429) never happened
-        return send(res, e.status || 502, { error: e.message });
+        if (!e.status || e.status >= 500) recordAction(scenario, action, b, null, e);      // a refused request (400, 409, 429) never happened
+        return send(res, e.status || 502, { ok: false, error: e.message });
       }
     }
     return send(res, 404, { error: 'not found' });
