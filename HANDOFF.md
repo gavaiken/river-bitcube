@@ -3,8 +3,8 @@
 The baton. **Read this first, every session; rewrite it before you stop** (rules: [`AGENTS.md`](AGENTS.md) "Start here"). Keep it to one screen: the current state, not a history. History goes in `docs/sessions/<name>.md`.
 
 - **Holder:** Gavin (coordinator session on the Mac mini, with two helper agents)
-- **Where:** repo + bitcube (a helper is building the baseline template on bitcube)
-- **Updated:** 2026-10-26 14:01 PT
+- **Where:** repo only (bitcube is free; the boot file is running)
+- **Updated:** 2026-10-26 14:08 PT
 - **Next holder:** Will, once the "Ready for Will" list below is all ✅
 
 ## The show right now
@@ -21,7 +21,7 @@ The baton. **Read this first, every session; rewrite it before you stop** (rules
 | ⏳ | Calibration pinned per show, never "newest map wins" | helper (repo) |
 | ⏳ | `tools/check` + GitHub Actions (tests, registry, metadata freshness) | helper (repo) |
 | ⏳ | Mission control: a card describing a show before you switch to it, and "Back to boot file" | helper (repo) |
-| ⏳ | Baseline template `river-baseline-template.toe`: river cam (recorded clip as fallback) + gallery cam in, river on the screens and down the ropes | helper (bitcube) |
+| ✅ | Baseline template `river-baseline-template.toe`: river cam (recorded clip as fallback) + gallery cam in, river on the screens and down the ropes. Verified on the lights 14:05–14:07; [page](docs/files/river-baseline-template.md). Waits for its `shows.json` entry to be selectable | helper (bitcube) |
 | ⬜ | Gavin switches to the template on his phone, reads its card, switches back; `tools/check` green → kickoff prompt to Will | Gavin |
 
 ## Ready for Will when
