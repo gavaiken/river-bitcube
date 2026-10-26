@@ -113,10 +113,41 @@ const CHANGE_WORDS = [
 ];
 /** A direct change whose own words are known whatever else the command holds (the state files above, then CHANGE_WORDS). */
 const DIRECT_FIRST = [...STATE_RE, ...CHANGE_WORDS];
+// ---- a name is a run only where it is run: never an argument to a command that only reads (CR9 #1) ----
+/** The commands that only read or print what they are given: a script's or a cmdlet's name after one is an argument (grep -n Route
+ *  lights_route.ps1, type …\Start-River.cmd, grep -rn Stop-ScheduledTask tools/, git log -- …), never a run of it. sed only with -n
+ *  and never -i. */
+const READER = /^(?:\S*[\\/])?(?:grep|egrep|fgrep|zgrep|rg|cat|bat|type|less|more|head|tail|nl|wc|findstr|Get-Content|gc|Select-String|sls)(?:\.exe)?(?![\w-])|^(?:\S*[\\/])?sed(?![\w-])(?![^;&|\n]*\s-[A-Za-z]*i)(?=[^;&|\n]*\s-[A-Za-z]*n)|^(?:\S*[\\/])?git(?:\s+-C\s+\S+)?\s+(?:show|log|diff|blame|grep)(?![\w-])/i;
+/** What only carries a command to where it runs, taken off the front of one before its first word is judged: a quote that opens an
+ *  inner command, ssh [options] host, powershell's flags up to -Command (never -File: that runs a script), cmd /c. */
+const CARRIERS = [
+  /^["'`\\]+/,
+  /^(?:\S*[\\/])?ssh(?:\.exe)?(?:\s+-[46AaCfGgKkMNnqsTtVvXxYy]+|\s+-[BbcDEeFIiJLlmOoPpQRSWw]\s*\S+)*\s+[^\s"'-]\S*\s+/i,
+  /^(?:\S*[\\/])?(?:powershell|pwsh)(?:\.exe)?(?:\s+-(?:NoProfile|NonInteractive|NoLogo|Sta|Mta)(?![\w-])|\s+-(?:ExecutionPolicy|WindowStyle|OutputFormat|InputFormat)\s+\S+)*(?:\s+-(?:Command|c)(?![\w-]))?\s+/i,
+  /^(?:\S*[\\/])?cmd(?:\.exe)?\s+\/[cCkK]\s+/,
+];
+/** The command a place in a command line belongs to: from the last ;, &, | or new line before it (inside quotes too: ssh bitcube
+ *  "type x; y" is two; never an escaped one, grep's "a\|b"), without what carries it. */
+function commandAt(text, i) {
+  let from = i;
+  while (from > 0 && !(/[;&|\n]/.test(text[from - 1]) && text[from - 2] !== '\\')) from--;
+  let s = text.slice(from).trimStart();
+  for (let again = true; again;) {
+    again = false;
+    for (const re of CARRIERS) { const m = re.exec(s); if (m && m[0]) { s = s.slice(m[0].length).trimStart(); again = true; } }
+  }
+  return s;
+}
+/** Whether a pattern of a change matches where something is run or invoked: at least one match not under a reader (CR9 #1). */
+function runs(re, text) {
+  const t = String(text ?? ''), g = new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`);
+  for (const m of t.matchAll(g)) if (!READER.test(commandAt(t, m.index))) return true;
+  return false;
+}
 /** An acting line that can't be shown as it is: what it did to what ("stopped a scheduled task on bitcube", "changed the ropes"). */
 function actingFallback(verb, ...texts) {
   const t = texts.map((x) => String(x ?? '')).join(' ');
-  if (!verb) { const first = DIRECT_FIRST.find(([re]) => re.test(t)); if (first) return first[1]; }
+  if (!verb) { const first = DIRECT_FIRST.find(([re]) => runs(re, t)); if (first) return first[1]; }
   const thing = THINGS.find(([re]) => re.test(t))?.[1] ?? 'something on bitcube';
   return `${FALLBACK_VERB[verb] ?? 'changed'} ${thing}`;
 }
@@ -129,8 +160,9 @@ function actingFallback(verb, ...texts) {
 const CHANGE_CMD = new RegExp(String.raw`-Action\s+(ropes|hub75|switch|bootfile|lightsroute|rebuild|calibrate|mode|target|rules)\b|\/api\/control\/|Restart-Computer|Stop-Process|Start-Process|taskkill|\bkill\b|schtasks\s+\/(run|end|change)|ptz\.py\s+\w+\s+(?!presets)|td_save|calibrate\.ps1\s+-Action\s+(start|cancel)`
   + String.raw`|td\.ps1\b[\s\S]*?(?:\.par\.\w+(?:\.\w+)?\s*=(?!=)|\.(?:val|expr|mode|bindExpr|bypass|allowCooking|lock|display|render)\s*=(?!=)|\bsetattr\s*\(|\.(?:cook|store|unstore|destroy|copy|create)\s*\(|\bset_\w+\s*\(|\s-File\b)`, 'i');
 /** A command part that changes the installation: a control, a process, the bridge, a write to its state (also by code, or copied in
- *  with scp), or one of the direct changes that read like checks (R9 #38). */
-const changes = (part) => CHANGE_CMD.test(part) || writesState(part) || STATE_CODE.test(part) || CHANGE_WORDS.some(([re]) => re.test(part));
+ *  with scp), or one of the direct changes that read like checks (R9 #38); a control, a process or a direct change only where it is
+ *  run, never its name given to a reader (grep, cat, type, Get-Content, git log: CR9 #1). */
+const changes = (part) => runs(CHANGE_CMD, part) || writesState(part) || STATE_CODE.test(part) || CHANGE_WORDS.some(([re]) => runs(re, part));
 /** A shell, by name or path (bash, sh, zsh, dash). */
 const SHELL = String.raw`(?:\S*[\\/])?(?:bash|sh|zsh|dash)`;
 /** An inline shell command: bash -c "…", bash -lc '…', sh -e -c …, any flags holding c (CR8 #4). What it runs is its own command,
@@ -157,7 +189,7 @@ const MC_ONE = new RegExp(MC.source);
 const DIRECT_WORDS = { ropes: 'changed the ropes', hub75: 'changed the panels', switch: "switched TouchDesigner's show file", bootfile: 'changed the boot file',
   lightsroute: 'moved the lighting port', rebuild: "rebuilt the river's year", mode: "changed the river's year", target: "changed the river's year",
   rules: "changed the river's year", calibrate: 'started a calibration', start: 'started a calibration', cancel: 'stopped the calibration' };
-const directWords = (part) => DIRECT_WORDS[/-Action\s+([a-z0-9]+)/i.exec(part)?.[1]?.toLowerCase()] ?? DIRECT_FIRST.find(([re]) => re.test(part))?.[1] ?? actingFallback(null, part);
+const directWords = (part) => DIRECT_WORDS[/-Action\s+([a-z0-9]+)/i.exec(part)?.[1]?.toLowerCase()] ?? DIRECT_FIRST.find(([re]) => runs(re, part))?.[1] ?? actingFallback(null, part);
 /** "<what it changed> on bitcube directly": "on bitcube" once, also when the words already end with it ("changed something on
  *  bitcube", "stopped a scheduled task on bitcube": CR8 #3). */
 const directly = (words) => `${words}${/\bbitcube\b|\brouter\b/.test(words) ? '' : ' on bitcube'} directly, not through mission control`;
