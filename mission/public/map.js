@@ -4,7 +4,7 @@
 // /model.js (never the worst of a bundle); every link pill is that link's item in a word or two; a tap opens the
 // item's sheet with "Addresses and links (for Will)". Below it, the engineers' full diagram (/map/) in a frame.
 // Plain ES module, no build, no framework, no external scripts.
-import { mountShell, poll, tick, watchContact, art, fmt, sheet, esc, mark, chip, WORD, MARK, DOC_LINKS, sinceAgrees, NAMES_FROM_BITCUBE, WARN_MS } from '/ui.js';
+import { mountShell, poll, tick, watchContact, art, fmt, sheet, esc, mark, chip, WORD, MARK, DOC_LINKS, sinceAgrees, NAMES_FROM_BITCUBE, WARN_MS, setLive } from '/ui.js';
 import { derive, dur } from '/model.js';
 import { shownLevel, notYet, rowWord, sinceWords, mapAction, pointsAtStatus, contactNotice, linkWord, linkWordNow } from '/map-words.js';
 
@@ -159,7 +159,7 @@ function renderAges() {
   // the banner ticks every second, so it is not a live region: #map-live says "No contact" once, and "Contact with mission
   // control is back." once when it returns, then clears (map-words.js contactNotice)
   const said = notice(isLost, performance.now());
-  if ($('#map-live').textContent !== said) $('#map-live').textContent = said;
+  setLive($('#map-live'), said);   // through the page's one queue (R8 #11)
   if (isLost) {
     // before the first answer, from when the page started asking (as the header and Status count), never from the first abort
     const f = p.receivedAt != null ? p.elapsed() / 1000 : (performance.now() - p.startedAt) / 1000;

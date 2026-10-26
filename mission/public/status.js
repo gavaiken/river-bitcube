@@ -7,7 +7,7 @@
 // status-words.js, where node's tests check them.
 import * as M from '/model.js';
 import { mountShell, poll, tick, watchContact, focusKey, refocus, park, focusShown, drawn, art, fmt, confirm, sheet, api, plainError, noAnswerText, esc, goto, mark, chip, WORD, MARK,
-  NAMES_FROM_BITCUBE, sinceAgrees as sinceAgreesWith, splitHeadline, WARN_MS, LOST_MS, announce, whyText, POLL_TIMEOUT_MS, onScreen, keepInView, closedAround } from '/ui.js';
+  NAMES_FROM_BITCUBE, sinceAgrees as sinceAgreesWith, splitHeadline, WARN_MS, LOST_MS, announce, setLive, whyText, POLL_TIMEOUT_MS, onScreen, keepInView, closedAround } from '/ui.js';
 import { rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows, bootWords, controlLine, failText, notSentText, applyingLine,
   ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash, lastDoneParts, lastDoneWhat, fromWords } from '/status-words.js';
 
@@ -300,8 +300,7 @@ function renderNow() {
   const own = ownChanges();
   // and, once, how another phone's change ended (R8 #9)
   const said = m ? bandSaid(m, own, serverNow()) : (performance.now() - p.startedAt > LOST_MS ? "This page can't reach mission control." : '');
-  const live = $('#band-live');
-  if (live && live.textContent !== said) live.textContent = said;
+  setLive($('#band-live'), said);   // through the page's one queue: never in the same moment as the page's region (R8 #11)
   $('.card.now').hidden = !m;
   setHTML($('#now-head'), m ? nowHTML(m) : '');
   setHTML($('#now-steer'), m ? steerHTML(m) : '');

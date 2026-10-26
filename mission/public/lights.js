@@ -4,7 +4,7 @@
 // TouchDesigner is sending (GET /api/lights), and runs the Calibrate block from GET /api/calibration. Its controls (Calibrate,
 // Dry run, Stop, Use this map) follow the contract in "Applying a change" through ui.js control(). Every fetch has a time
 // limit, and what couldn't be read is asked for again by itself. Plain ES module, no build step, no framework.
-import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark, plainError, DOC_LINKS, splitHeadline, announce, goto,
+import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark, plainError, DOC_LINKS, splitHeadline, announce, setLive, goto,
   WARN_MS, LOST_MS, POLL_TIMEOUT_MS } from '/ui.js';
 import { fetchTimed } from '/app.js';
 import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, EXPECT_S, ownEntries, endedSaid, START_USUAL } from '/model.js';
@@ -128,7 +128,7 @@ function renderStateLine() {
 }
 /** Screen readers hear the state line's words when they change, never a ticking time (lights.html #state-live; lights-words
  *  stateLive drops "for about 40 s more" and the changes' m:ss). */
-function sayState(t) { const l = $('#state-live'); if (l && l.textContent !== t) l.textContent = t; }
+function sayState(t) { setLive($('#state-live'), t); }   // through the page's one queue (R8 #11)
 /** This page's own changes: their controls say them, so the state line doesn't. Its entries by id (R7 #14), and, without an id,
  *  by its action while its control is applying, confirming or unconfirmed (an entry begun before it gave up): model.js
  *  ownEntries (CR7 #10). */

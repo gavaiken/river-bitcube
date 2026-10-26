@@ -304,7 +304,7 @@ export const art = {
 // ---- sheets --------------------------------------------------------------------------------------------------
 function dialog() {
   let d = $('dialog.sheet#mc-sheet');
-  if (!d) { d = el('<dialog id="mc-sheet" class="sheet" aria-labelledby="mc-sheet-title"></dialog>'); document.body.append(d); }
+  if (!d) { d = el('<dialog id="mc-sheet" class="sheet" aria-labelledby="mc-sheet-title"></dialog>'); document.body.append(d); sheetRegion(d); }
   return d;
 }
 // ---- focus that survives a re-render ------------------------------------------------------------------------------
@@ -380,7 +380,9 @@ export function sheet({ title, body = '', actions = null, onClose = null, focus 
   const opener = d.open ? d._mcOpener : document.activeElement;
   const openerKey = d.open ? d._mcOpenerKey : focusKey(document.activeElement);
   d._mcReplaced?.();            // the sheet this one replaces: its promise (a confirm) resolves false; the dialog stays open
-  d.innerHTML = '';
+  // what it showed goes; its own polite region stays, so what is said while it is up is heard (R8 #8)
+  for (const n of [...d.childNodes]) if (!(n instanceof Element && n.hasAttribute('data-sheet-live'))) n.remove();
+  sheetRegion(d);
   const inner = el('<div class="sheet-in" role="document"></div>');
   if (title) inner.append(el(`<h3 id="mc-sheet-title" tabindex="-1">${esc(title)}</h3>`));
   if (body instanceof Node) inner.append(body); else if (body) inner.insertAdjacentHTML('beforeend', body);
@@ -437,28 +439,71 @@ export function confirm({ title, body = '', ok = 'OK', cancel = 'Not now', destr
   return pr;
 }
 
-// ---- one page-level live region ---------------------------------------------------------------------------------
-/** announce(text): says it once through the page's one polite live region (status.html's #ctl-live, else #mc-live, made by
- *  mountShell): a control's applying, done, unconfirmed and failed, a stepper's new value. Never a ticking time. Two said within
- *  the region's short pause are said together, in order, never the first dropped ("Not sent at 22:58: …" and the Calibrate
- *  block's new view, R7 #10). */
+// ---- speech: every live region on the page speaks through one queue -------------------------------------------------
+// A page has its one polite region (status.html's #ctl-live, else #mc-live, made by mountShell) and the hidden regions that
+// carry a verdict's words (Status's band, Lights' state line, the chat's bar, the map's contact line). Two polite regions that
+// change within the same moment can cut each other off on iOS VoiceOver, so they all speak through one queue (R8 #11): what is
+// said within its short pause is joined into one message, in order, never the first dropped (R7 #10); a message never follows the
+// one before by less than SAY_GAP_MS (the second waits, and joins anything else said meanwhile); a message that joins words of
+// two regions is written to the page's one region. While a sheet is open (a modal <dialog>: everything outside it is out of the
+// accessibility tree) every message goes to the sheet's own region instead, so nothing said meanwhile is lost (R8 #8).
+const SAY_PAUSE_MS = 60, SAY_GAP_MS = 1000;
+const speech = { queue: [], timer: null, lastAt: -Infinity };   // queue: [{ text, region }] (region null: the page's one region)
+const liveWords = new WeakMap();                                 // a hidden region -> the words it stands for now (setLive)
+/** announce(text): says it once through the page's one polite region: a control's applying, done, unconfirmed and failed, a
+ *  stepper's new value. Never a ticking time. */
 export function announce(text) { say(text); }
-let sayQueue = [], sayTimer = null;
-function say(text) {
-  const l = liveRegion(), t = String(text ?? '').trim();
-  if (!l || !t) return;
-  if (sayQueue.at(-1) !== t) sayQueue.push(t);
-  clearTimeout(sayTimer);
-  l.textContent = '';                                   // the same words twice are read twice
-  sayTimer = setTimeout(() => {
-    l.textContent = sayQueue.length === 1 ? sayQueue[0] : sayQueue.map((x) => (/[.!?:;]$/.test(x) ? x : `${x}.`)).join(' ');
-    sayQueue = []; sayTimer = null;
-  }, 60);
+/** setLive(region, words): a hidden region's words (the band's, the state line's): said through the queue when they say something
+ *  new, never again when a part only went (another phone's change that ended dropping out of the band's words). */
+export function setLive(region, words) {
+  if (!(region instanceof Element)) return;
+  const t = String(words ?? '').trim(), prev = liveWords.get(region);
+  if (prev === t) return;
+  liveWords.set(region, t);
+  const queued = speech.queue.find((x) => x.region === region);
+  if (!t) { speech.queue = speech.queue.filter((x) => x !== queued); if (region.textContent) region.textContent = ''; return; }   // emptied silently
+  if (queued) { queued.text = t; return; }                           // not said yet: its newest words are said instead
+  const said = new Set(sentences(prev ?? ''));
+  if (sentences(t).some((x) => !said.has(x))) say(t, region);
+}
+const sentences = (x) => String(x).split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+/** unannounce(text): what was queued but not said yet goes (a control's done whose block the next view replaces: the new view
+ *  says it, R8 #12). */
+export function unannounce(text) {
+  const t = String(text ?? '').trim();
+  speech.queue = speech.queue.filter((x) => x.text !== t);
+}
+function say(text, region = null) {
+  const t = String(text ?? '').trim();
+  if (!t || typeof document === 'undefined') return;
+  if (speech.queue.at(-1)?.text !== t) speech.queue.push({ text: t, region });
+  clearTimeout(speech.timer);
+  speech.timer = setTimeout(flushSpeech, Math.max(SAY_PAUSE_MS, speech.lastAt + SAY_GAP_MS - performance.now()));
+}
+function flushSpeech() {
+  speech.timer = null;
+  const q = speech.queue;
+  speech.queue = [];
+  if (!q.length) return;
+  const regions = new Set(q.map((x) => x.region));
+  const sheetUp = document.querySelector('dialog[open]');
+  const l = sheetUp ? sheetRegion(sheetUp) : regions.size === 1 && q[0].region?.isConnected ? q[0].region : liveRegion();
+  if (!l) return;
+  const msg = q.length === 1 ? q[0].text : q.map((x) => (/[.!?:;]$/.test(x.text) ? x.text : `${x.text}.`)).join(' ');
+  speech.lastAt = performance.now();
+  // the same words twice are read twice: emptied first, then written a moment later
+  if (l.textContent === msg) { l.textContent = ''; setTimeout(() => { l.textContent = msg; }, 50); } else l.textContent = msg;
 }
 function liveRegion() {
   if (typeof document === 'undefined' || !document.body) return null;
   let l = document.getElementById('ctl-live') ?? document.getElementById('mc-live');
   if (!l) { l = el('<div id="mc-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>'); document.body.append(l); }
+  return l;
+}
+/** The open sheet's own polite region (made with the dialog, kept across the sheets it shows). */
+function sheetRegion(d) {
+  let l = d.querySelector(':scope > [data-sheet-live]');
+  if (!l) { l = el('<div class="sr-only" data-sheet-live role="status" aria-live="polite" aria-atomic="true"></div>'); d.append(l); }
   return l;
 }
 /** The line above a greyed control: "Not possible now: bitcube is offline." or, for a change in flight elsewhere (the model's

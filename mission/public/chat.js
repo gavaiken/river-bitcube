@@ -1,7 +1,7 @@
 // Studio chat v2 (docs/mission-ui.md, "Studio chat"). The shell (header, tab bar, menu, art) comes from ui.js; this file
 // turns the chat's events (GET /api/chat/history, the SSE /api/chat/events) into one card per request, pairs replies with
 // their request by id, and keeps the pinned status bar and the composer. Server API unchanged: history, events, send, stop.
-import { mountShell, tick, art, fmt, control, confirm, api, esc, md, chip, mark, plainError, noAnswerText, WARN_MS, LOST_MS, poll } from '/ui.js';
+import { mountShell, tick, art, fmt, control, confirm, api, esc, md, chip, mark, plainError, noAnswerText, WARN_MS, LOST_MS, poll, announce, setLive } from '/ui.js';
 import { TZ, applyingWords, derive, entryWords, entrySaid, entriesAt, endedSaid } from '/model.js';
 import { stateOf as judge, stepWords, stepsToggle, excerpt } from '/chat-words.js';
 
@@ -201,8 +201,7 @@ function renderPinned() {
   // and each change being applied, by name and source, said when it begins or moves on, never with its time (R7 #5)
   // and, once, how another phone's change ended (R8 #9)
   const sayAll = [said, ...(lost ? [] : applyingNow().map(entrySaid)), ...(lost ? [] : endedNow())].filter(Boolean).join('. ').replace(/\.\./g, '.');
-  const live = $('pin-live');
-  if (live && live.textContent !== sayAll) live.textContent = sayAll;
+  setLive($('pin-live'), sayAll);   // through the page's one queue (R8 #11)
   const q = st?.queue?.length ?? 0;
   const label = q ? 'Stop, and clear the queue' : 'Stop';
   const busy = !!(st?.running || q);
@@ -236,9 +235,11 @@ function sendShow(state, msg = '') {
   sendStatus.className = `ctl-status ${state === 'before' ? '' : state}`;
   sendStatus.innerHTML = state === 'before' ? '' : `${state === 'pending' ? '<span class="spin" aria-hidden="true"></span>' : ''}<span class="t">${esc(msg)}</span>`;
   sendBtn.disabled = state === 'pending' || !text.value.trim();
+  // the line is not a live region (chat.html): its words are said once each through the page's one region, never its ticking
+  // time (R8 #7)
+  if (state !== 'before' && msg) announce(msg.replace(/…$/, ''));
   if (state === 'pending' && msg === 'Sending…') {
-    // the same words as every change in flight (model.js): "Sending · 0:12 · usually a few seconds" once it runs long; the line
-    // is not live, so its ticking time is never read out
+    // the same words as every change in flight (model.js): "Sending · 0:12 · usually a few seconds" once it runs long
     const c = { at: performance.now(), wall: Date.now() };
     c.untick = tick(() => { const t = sendStatus.querySelector('.t'), w = applyingWords(msg, runS(c), SEND_USUAL_S); if (t && t.textContent !== w) t.textContent = w; });
     sendClock = c;
