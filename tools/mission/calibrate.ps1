@@ -3,7 +3,12 @@
 #       -Action start [-DryRun] [-DecodeOnly pixelmap-YYYYMMDD-HHMMSS] [-Task]    launch the job detached; returns at once
 #       -Action status                                                            calibration.json, or {"running": false, "none": true}
 #       -Action cancel                                                            stop the job; the ropes are put back
-# start: {ok, started, pid, log, calibration} or {ok: false, error, calibration?}. cancel: {ok, cancelled, forced, calibration}.
+# start: {ok, started: true, running, pid, requested, log, calibration} once the job is launched and has written its first
+# state (started is true whenever the job was launched; requested is this script's clock as it launched it, bitcube's, so the
+# run's own progress file has started >= requested - 1). A refusal before anything was launched: {ok: false, started: false,
+# error}. Launched, but no first write within 6 s (a cold Python, the -Task path): {ok: false, maybe: true, started: true, pid,
+# requested, error} and no calibration (the file there is the run before): mission control keeps its lock and reads the
+# progress until the run shows up. cancel: {ok, cancelled, forced, calibration}.
 # The job runs with the repo's venv python, hidden, with its own console, so it outlives this SSH session (Start-Process).
 # -Task launches it through a one-off interactive scheduled task instead (as probe.ps1 -Action switch does), the fallback
 # if a detached process turns out to die with the SSH session.
@@ -43,10 +48,11 @@ if ($Action -eq 'status') {
 }
 
 if ($Action -eq 'start') {
-    if ($s -and $s.running -and $s.alive) { Out-Json @{ ok = $false; error = 'a calibration is already running'; calibration = $s }; exit 0 }
-    if ($DecodeOnly -and $DecodeOnly -notmatch '^(pixelmap|hub75)-\d{8}-\d{6}$') { Out-Json @{ ok = $false; error = 'DecodeOnly is a frames folder name like pixelmap-20261018-154155' }; exit 0 }
-    if (-not $DryRun -and -not $DecodeOnly -and -not (Get-Process TouchDesigner -ErrorAction SilentlyContinue)) { Out-Json @{ ok = $false; error = 'TouchDesigner is not running' }; exit 0 }
-    if (-not (Test-Path $py)) { Out-Json @{ ok = $false; error = "no venv python at $py" }; exit 0 }
+    # refusals: nothing was launched (started false), so mission control holds no lock for them
+    if ($s -and $s.running -and $s.alive) { Out-Json @{ ok = $false; started = $false; error = 'a calibration is already running'; calibration = $s }; exit 0 }
+    if ($DecodeOnly -and $DecodeOnly -notmatch '^(pixelmap|hub75)-\d{8}-\d{6}$') { Out-Json @{ ok = $false; started = $false; error = 'DecodeOnly is a frames folder name like pixelmap-20261018-154155' }; exit 0 }
+    if (-not $DryRun -and -not $DecodeOnly -and -not (Get-Process TouchDesigner -ErrorAction SilentlyContinue)) { Out-Json @{ ok = $false; started = $false; error = 'TouchDesigner is not running' }; exit 0 }
+    if (-not (Test-Path $py)) { Out-Json @{ ok = $false; started = $false; error = "no venv python at $py" }; exit 0 }
     Remove-Item $cancelFile -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force (Join-Path $river 'logs') | Out-Null
     $log = Join-Path $river ('logs\calibrate-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
@@ -55,14 +61,19 @@ if ($Action -eq 'start') {
     if ($DecodeOnly) { $jobArgs += " --decode-only $DecodeOnly" }
     $t0 = Epoch
     $procId = $null
-    if ($Task) {
-        $act = New-ScheduledTaskAction -Execute $py -Argument $jobArgs -WorkingDirectory $repo
-        $prin = New-ScheduledTaskPrincipal -UserId "$env:COMPUTERNAME\$env:USERNAME" -LogonType Interactive
-        Register-ScheduledTask -TaskName 'MissionCalibrate' -Action $act -Principal $prin -Force | Out-Null
-        Start-ScheduledTask -TaskName 'MissionCalibrate'
-    } else {
-        $p = Start-Process -FilePath $py -ArgumentList $jobArgs -WorkingDirectory $repo -WindowStyle Hidden -PassThru
-        $procId = $p.Id
+    try {
+        if ($Task) {
+            $act = New-ScheduledTaskAction -Execute $py -Argument $jobArgs -WorkingDirectory $repo
+            $prin = New-ScheduledTaskPrincipal -UserId "$env:COMPUTERNAME\$env:USERNAME" -LogonType Interactive
+            Register-ScheduledTask -TaskName 'MissionCalibrate' -Action $act -Principal $prin -Force -ErrorAction Stop | Out-Null
+            Start-ScheduledTask -TaskName 'MissionCalibrate' -ErrorAction Stop
+        } else {
+            $p = Start-Process -FilePath $py -ArgumentList $jobArgs -WorkingDirectory $repo -WindowStyle Hidden -PassThru -ErrorAction Stop
+            $procId = $p.Id
+        }
+    } catch {
+        # the job could not be launched at all: a clear refusal, nothing runs
+        Out-Json ([ordered]@{ ok = $false; started = $false; error = "the calibration job could not be launched: $($_.Exception.Message)" }); exit 0
     }
     # Wait (briefly) for the job's first progress write, so the answer carries its initial state.
     $deadline = (Get-Date).AddSeconds(6)
@@ -70,10 +81,13 @@ if ($Action -eq 'start') {
     if ($Task) { Unregister-ScheduledTask -TaskName 'MissionCalibrate' -Confirm:$false -ErrorAction SilentlyContinue }
     if ($n -and $n.started -ge ($t0 - 1)) {
         if (-not $procId) { $procId = $n.pid }
-        Out-Json ([ordered]@{ ok = [bool]$n.running -or [bool]$n.ok; started = [bool]$n.running; pid = $procId; log = $log; calibration = $n; error = $(if ($n.reason) { $n.reason } else { $n.error }); raw = $n.error })
+        Out-Json ([ordered]@{ ok = [bool]$n.running -or [bool]$n.ok; started = $true; running = [bool]$n.running; pid = $procId; requested = $t0; log = $log; calibration = $n; error = $(if ($n.reason) { $n.reason } else { $n.error }); raw = $n.error })
     } else {
+        # Launched, but no first write yet (a cold venv loading numpy and OpenCV, or the -Task path): it may well be running.
+        # Not a refusal but a maybe: the page says "it may or may not have happened", and mission control keeps the lock and
+        # reads the progress until the run shows up. No calibration here: the file there now is the run before.
         $tail = @(if (Test-Path $log) { Get-Content $log -Tail 5 })
-        Out-Json ([ordered]@{ ok = $false; error = 'the job did not report within 6 s'; pid = $procId; log = $log; log_tail = $tail; calibration = $n })
+        Out-Json ([ordered]@{ ok = $false; maybe = $true; started = $true; pid = $procId; requested = $t0; error = "the calibration was launched but hasn't reported yet"; log = $log; log_tail = $tail })
     }
     exit 0
 }
