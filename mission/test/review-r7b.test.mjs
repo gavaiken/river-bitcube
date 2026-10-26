@@ -134,7 +134,7 @@ test('R7 #18: while a chosen switch, restart or rebuild restarts TouchDesigner, 
   assert.equal(m2.show.ropes.state, 'restarting');
   assert.deepEqual(m2.show.restart, { on: 'the live river', chosen: false });
   // a frozen TouchDesigner is still a fault: the ropes aren't being driven
-  assert.equal(derive(payload({ t, td: { ok: false, error: 'not answering' } }), t).show.ropes.state, 'not-reaching');
+  assert.equal(derive(payload({ t, td: { ok: false, error: 'not answering' } }), t).show.ropes.state, 'not-driven');   // R9 #36: never the cable words
   assert.equal(derive(payload({ t }), t).show.restart, null);
 });
 

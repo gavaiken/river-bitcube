@@ -180,6 +180,14 @@ const DAVE_LATE_ACTION = "Tell Dave his agent has stopped updating. Nothing to d
 // Only Gavin stops Will's rope lights (CLAUDE.md), so the studio chat would have to refuse: it is never offered (R6 #21).
 const TAKEN_ACTION = "Call Gavin to stop the other lights program (Will's rope lights) on bitcube; the sender picks up by itself once it has stopped.";
 const ROPE_BOX = { 'rope box 1': ['2.0.0.10', '1–10'], 'rope box 2': ['2.0.0.11', '11–20'] };
+/** The lighting port probe.ps1 reports (lights_route), as a kind: 'direct' (bitcube's LIGHTS port), 'router' (the spare router
+ *  port), 'both' (the lighting address on both: 'BOTH'), 'none' (on neither), 'other' (a value mission control doesn't know), or
+ *  null (not reported). Its words: one name for the spare port everywhere (R9 #25), and plain words for both and neither (R9 #35). */
+const routeKind = (raw) => { const r = typeof raw === 'string' ? raw.trim() : ''; return !r ? null : r === 'direct' || r === 'router' ? r : /^both$/i.test(r) ? 'both' : /^none$/i.test(r) ? 'none' : 'other'; };
+const ROUTE_WORDS = { direct: "bitcube's LIGHTS port", router: 'the spare router port', both: 'both ports', none: 'neither port', other: 'another port' };
+const ROUTE_NOTE = { both: 'the lighting address should be on one; press the port the lighting switch is plugged into',
+  none: "the ropes can't be reached; press the port the lighting switch is plugged into" };
+const ROUTE_DETAIL = { ...ROUTE_WORDS, both: 'both ports: move the address to one', none: "neither port: the ropes can't be reached" };
 // name, where it is checked from, address for the details drawer
 const NAMES = {
   'mission control': ['Mission control (the Mac mini)', 'mini', 'gav-m1-mini.tailddc624.ts.net'],
@@ -579,7 +587,7 @@ export function derive(status, nowMs) {
   else if (boxesDown.length === 2) it('ropes', 'down', 'Both rope boxes are silent: the ropes are dark', 'The sender is open but neither box answers over the lighting network.', { action: 'Check power to the rope boxes and the lighting switch.' });
   else if (boxesDown.length === 1) it('ropes', 'warning', `${cap(boxWords(boxesDown[0]))} silent: those ropes may be dark`, `The sender is open (${wattsWords}) but ${boxWords(boxesDown[0])} does not answer.`, { action: 'Check power to that box and its cable to the lighting switch.' });
   else if (slow) it('ropes', 'warning', `Driven at only ${Math.round(fps)} frames a second`, `TouchDesigner is slow, so the river moves in jerks on the ropes. Sender open, ${wattsWords}.`);
-  else it('ropes', 'ok', showing, `Sender open, ${wattsWords}${pr.lights_route ? `; lighting network on ${pr.lights_route === 'direct' ? "bitcube's LIGHTS port" : pr.lights_route === 'router' ? 'the router port' : pr.lights_route}` : ''}.`);
+  else it('ropes', 'ok', showing, `Sender open, ${wattsWords}${routeKind(pr.lights_route) ? `; lighting network on ${ROUTE_DETAIL[routeKind(pr.lights_route)]}` : ''}.`);
 
   for (const k of Object.keys(ROPE_BOX)) {
     const [addr] = ROPE_BOX[k];
@@ -835,10 +843,13 @@ export function derive(status, nowMs) {
   // ---- show: what the piece is doing -----------------------------------------------------------------------------
   // a restart (a switch, a rebuild, TouchDesigner opening a file at boot) has the ropes dark for a minute: never "not getting the
   // river", the words for a cable or sender fault (R7 #18)
-  const ropesState = !pr || online === false || !td ? 'unknown' : tdRestarting || tdOffBooting ? 'restarting'
+  // TouchDesigner frozen or not running: the ropes aren't being driven, never "not getting the river", the words for a cable or a
+  // sender fault (R9 #36)
+  const ropesState = !pr || online === false || !td ? 'unknown' : tdRestarting || tdOffBooting ? 'restarting' : frozen || tdOff ? 'not-driven'
     : !tdOk || !senderKnown || senderErr || !rs.open || senderOff || boxesDown.length === 2 ? 'not-reaching' : calRopes ? 'calibrating' : ropesDark ? 'dark' : 'river';
   const ropesWords = { river: kind === 'live' ? (relay?.fresh ? 'the ropes show the live river' : 'the ropes show the rain fallback') : 'the ropes show the river',
                        dark: 'the ropes are dark on purpose', 'not-reaching': 'the ropes are not getting the river', unknown: 'the ropes are not known',
+                       'not-driven': `the ropes are not being driven: TouchDesigner is ${tdOff ? 'not running' : 'frozen'}`,
                        restarting: `the ropes are dark while TouchDesigner ${tdRestarting ? 'restarts' : 'starts'}`,
                        calibrating: `the ropes are ${calWords}` }[ropesState];
   const ropesItem = items.find((x) => x.id === 'ropes');
@@ -861,7 +872,8 @@ export function derive(status, nowMs) {
     target: yearOk && year.mode === 'manual' ? { season: year.target ?? manual?.season ?? null, intensity: num(manual?.intensity) } : null,
     presence: presence ? { available: presence.available === true, now: num(presence.now), usual: num(presence.usual), relative: num(presence.relative),
       words: presence.available ? `${presence.now} people (usual ${presence.usual})` : 'people counter not available' } : null,
-    ropes: { state: ropesState, words: ropesWords, summary: ropesItem?.summary ?? 'not known', source: rs?.source ?? ro?.source ?? null, open: senderKnown ? rs.open : null, watts, cap: capW, route: pr?.lights_route ?? null },
+    ropes: { state: ropesState, words: ropesWords, summary: ropesItem?.summary ?? 'not known', source: rs?.source ?? ro?.source ?? null, open: senderKnown ? rs.open : null, watts, cap: capW, route: pr?.lights_route ?? null,
+             route_words: ROUTE_WORDS[routeKind(pr?.lights_route)] ?? null, route_note: ROUTE_NOTE[routeKind(pr?.lights_route)] ?? null },
     panels: { present: led, brightness, output: hub ? hub.output !== false : null, state: panelsState, words: panelsWords,
               summary: items.find((x) => x.id === 'hub75 panels')?.summary ?? 'not known' },
     river: relay ? { live: relay.fresh === true, last_frame_age_s: relayAge, night: relay.night ?? null, words: relay.fresh ? 'live frames from the river' : `no live frames for ${dur(relayAgeNow)}: the rain fallback` }

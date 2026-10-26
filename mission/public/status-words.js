@@ -171,7 +171,7 @@ export function lastDoneParts(a, st) {
 export const applyingLine = (a, elapsedS) => entryWords(a, elapsedS);
 
 // ---- the tiles ---------------------------------------------------------------------------------------------------------
-export const ROPES_STATE = { river: 'Showing the river', dark: 'Dark on purpose', 'not-reaching': 'Not getting the river', restarting: 'Dark while restarting',
+export const ROPES_STATE = { river: 'Showing the river', dark: 'Dark on purpose', 'not-reaching': 'Not getting the river', 'not-driven': 'Not being driven', restarting: 'Dark while restarting',
   calibrating: 'In calibration patterns', unknown: 'Not known' };
 export const PANELS_STATE = { unknown: 'Not known', 'no-sender': 'No panel sender', restarting: 'Dark while restarting', frozen: 'Picture frozen',
   gone: 'Nothing drawn', 'no-output': 'No panel output', off: 'Switched off', calibrating: 'In calibration patterns', river: 'Showing the river' };

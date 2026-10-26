@@ -545,6 +545,7 @@ function showWords(ev) {
     case 'season': return first ? `The season is ${ev.to}` : `The season turned to ${ev.to}`;
     case 'ropes': return { river: first ? 'The ropes show the river' : 'The ropes show the river again', dark: first ? 'The ropes are dark on purpose' : 'The ropes went dark on purpose',
                            'not-reaching': first ? 'The ropes are not getting the river' : 'The ropes stopped getting the river',
+                           'not-driven': first ? 'The ropes are not being driven' : 'The ropes stopped being driven',   // TouchDesigner frozen or not running (R9 #36)
                            restarting: 'The ropes are dark while TouchDesigner restarts' }[ev.to] ?? `The ropes are ${ev.to}`;
     default: return `${cap(String(ev.field))} changed to ${ev.to}`;
   }

@@ -316,7 +316,7 @@ function renderMapCard() {
   let noteHtml = '';
   // what TouchDesigner sends is not what the room shows when the lights aren't connected: said over the map, and dimmed
   const ropesSt = S.m?.show.ropes.state, panelsSt = S.m?.show.panels.state;
-  const notGetting = [ropesSt === 'not-reaching' ? "the ropes aren't getting it" : ropesSt === 'restarting' ? 'the ropes are dark while TouchDesigner restarts' : '',
+  const notGetting = [ropesSt === 'not-reaching' ? "the ropes aren't getting it" : ropesSt === 'not-driven' ? "the ropes aren't being driven" : ropesSt === 'restarting' ? 'the ropes are dark while TouchDesigner restarts' : '',
     panelsSt === 'no-sender' ? 'the panels have no sender' : ''].filter(Boolean);
   const unsent = live && !!S.lights.frames && !pageDown() && !frameOld() && notGetting.length > 0;
   const miss = hasMap ? null : missing();
@@ -613,7 +613,8 @@ function renderStrips() {
       const s = m.show.ropes.summary.replace(/\.$/, ''), w = s.includes(': ') ? s.slice(s.indexOf(': ') + 2) : s;
       const why = /^(TouchDesigner|bitcube|Rope box|Will)/.test(w) ? w : w.charAt(0).toLowerCase() + w.slice(1);
       text += ` The ropes aren't getting it: ${why}.`;
-    } else if (!dark && m?.show.ropes.state === 'restarting') text += ` ${cap(m.show.ropes.words)}: they come back with it, in about a minute.`;   // R7 #18
+    } else if (!dark && m?.show.ropes.state === 'not-driven') text += ` ${cap(m.show.ropes.words)}.`;   // never the cable words (R9 #36)
+    else if (!dark && m?.show.ropes.state === 'restarting') text += ` ${cap(m.show.ropes.words)}: they come back with it, in about a minute.`;   // R7 #18
     if (frameOld()) { text = `No new frame for ${fmt.nb(dur(frameAgeS()))}${l.error ? `: ${l.error}` : ''}. This is the last one received.`; bad = true; }
   } else {
     text = l.error && /:/.test(l.error) ? `Can't show the lights. ${cap(l.error)}.` : `Can't show the lights: ${l.error ?? 'no frames yet'}.`;

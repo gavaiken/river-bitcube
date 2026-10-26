@@ -155,14 +155,15 @@ export function sinceAgrees(s, texts, behindBitcube, uptime_s) {
 }
 
 // ---- headlines --------------------------------------------------------------------------------------------------
-/** "cause: consequence" -> [cause, consequence], splitting at the first top-level ":" or ";" (never inside parentheses),
- *  or at a trailing parenthesis. Status's band and Lights' state line share it. */
+/** "cause: consequence" -> [cause, consequence], splitting at the first top-level ":" or ";" (never inside parentheses, never a
+ *  clock time's colon: "since 01:02", R9 #4), or at a trailing parenthesis. Status's band and Lights' state line share it. */
 export function splitHeadline(h) {
   h = String(h ?? '');
   let depth = 0;
   for (let i = 0; i < h.length; i++) {
     const c = h[i];
     if (c === '(') depth++; else if (c === ')') depth--;
+    else if (c === ':' && /\d/.test(h[i - 1] ?? '') && /\d/.test(h[i + 1] ?? '')) continue;
     else if (depth === 0 && (c === ':' || c === ';') && i >= 12) return [h.slice(0, i), h.slice(i + 1).trim()];
   }
   const q = h.indexOf(' (');

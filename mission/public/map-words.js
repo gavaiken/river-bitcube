@@ -38,6 +38,7 @@ export function linkWordNow(link, it, m) {
       if (st === 'calibrating') return 'calibrating';
       if (st === 'dark') return 'sending black';
       if (st === 'restarting') return 'dark, restarting';
+      if (st === 'not-driven') return 'not driven';   // TouchDesigner frozen or not running (R9 #36)
       if (st === 'not-reaching') return /frozen|not running|not being driven/i.test(s) ? 'not driven' : /restart|starts/i.test(s) ? 'dark, restarting' : 'not reaching';
       if (L === 'warning') return /slowly|frames a second/i.test(s) ? 'driven slowly' : 'see details';
       return L === 'ok' ? 'sender open' : 'see details';

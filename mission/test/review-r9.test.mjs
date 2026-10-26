@@ -255,3 +255,58 @@ test('R9 #32: a "no job" progress answer while the last good read showed a run, 
   assert.equal(calRead(none).good, true, 'with no run on: there is none');
   assert.match(page('lights.js'), /calRead\(\{ ok: r\.ok, status: r\.status, body \}, \{ running: S\.cal\.p\?\.running === true, heardS: heardS\(\) \}\)/);
 });
+
+// ---- #35, #25: the lighting port in plain words; #36: a frozen TouchDesigner never reads as a cable fault ---------------------------
+
+test('R9 #35, #25: the lighting address on both ports or on neither has words of its own; one name for the spare port', async () => {
+  const t = T0;
+  const at = (lr) => derive(payload({ t, probe: { lights_route: lr } }), t);
+  const det = (lr) => at(lr).items.find((x) => x.id === 'ropes').detail;
+  assert.match(det('router'), /; lighting network on the spare router port\.$/);
+  assert.match(det('direct'), /; lighting network on bitcube's LIGHTS port\.$/);
+  assert.match(det('BOTH'), /; lighting network on both ports: move the address to one\.$/);
+  assert.match(det('none'), /; lighting network on neither port: the ropes can't be reached\.$/);
+  assert.match(det('Ethernet 3'), /; lighting network on another port\.$/);
+  assert.equal(at('BOTH').show.ropes.route_words, 'both ports');
+  assert.equal(at('none').show.ropes.route_words, 'neither port');
+  assert.equal(at('router').show.ropes.route_words, 'the spare router port');
+  assert.equal(at(undefined).show.ropes.route_words, null);
+  const st = page('status.js');
+  assert.match(st, /s\.ropes\.route_words \?\? 'not known'/, 'the Installer reads them, never "not known" for a reading it has');
+  assert.doesNotMatch(page('model.js'), /'the router port'/);
+});
+
+test('R9 #36: TouchDesigner frozen or not running: the ropes are "not being driven", never the cable or sender words', async () => {
+  const { ROPES_STATE, ropesTile } = await import('../public/status-words.js');
+  const { stateWords } = await import('../public/lights-words.js');
+  const t = T0;
+  const fz = derive(payload({ t, td: { ok: false, error: 'not answering' } }), t);
+  assert.equal(fz.show.ropes.state, 'not-driven');
+  assert.equal(fz.show.ropes.words, 'the ropes are not being driven: TouchDesigner is frozen');
+  assert.equal(stateWords(fz), 'The ropes are not being driven: TouchDesigner is frozen · the panels hold a frozen picture.');
+  assert.deepEqual(ropesTile(fz, fz.items.find((x) => x.id === 'ropes'), false), { state: 'Not being driven', words: 'TouchDesigner is frozen' });
+  const off = derive(payload({ t, td: { ok: false, error: 'TouchDesigner is not running' } }), t);
+  assert.equal(off.show.ropes.words, 'the ropes are not being driven: TouchDesigner is not running');
+  assert.equal(ROPES_STATE['not-driven'], 'Not being driven');
+  const { describeEvent } = await import('../lib/history.mjs');
+  assert.equal(describeEvent({ kind: 'show', field: 'ropes', from: 'river', to: 'not-driven', t }), 'The ropes stopped being driven');
+  assert.match(page('map-words.js'), /st === 'not-driven'\) return 'not driven'/);
+  assert.match(page('lights.js'), /ropesSt === 'not-driven'/);
+});
+
+// ---- #26: the Installer's summary; #4: a headline's clock time is never cut ------------------------------------------------------
+
+test('R9 #26: the Installer says it asks first, never "confirms" (which means the server\'s verdict)', () => {
+  assert.match(page('status.js'), /changes cabling and boot settings · asks first</);
+  assert.doesNotMatch(page('status.js'), /confirms every change/);
+});
+
+test('R9 #4: a headline is never split at a clock time\'s colon', async () => {
+  // ui.js needs a DOM: the rule is tested on its source and on a copy of the function
+  const src = page('ui.js');
+  const body = /export function splitHeadline\(h\) \{[\s\S]*?\n\}/.exec(src)[0].replace('export function', 'function');
+  const splitHeadline = new Function(`${body}; return splitHeadline;`)();
+  assert.deepEqual(splitHeadline("Clips from the river camera aren't reaching Dave's agent, since 01:02"), ["Clips from the river camera aren't reaching Dave's agent, since 01:02", '']);
+  assert.deepEqual(splitHeadline('TouchDesigner is frozen: the lights are not being driven'), ['TouchDesigner is frozen', 'the lights are not being driven']);
+  assert.deepEqual(splitHeadline('Clips failing since 01:02: the link is down'), ['Clips failing since 01:02', 'the link is down']);
+});
