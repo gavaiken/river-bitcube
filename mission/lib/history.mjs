@@ -60,6 +60,7 @@ export const KEEP_MS = 48 * 3600e3;
 export const MAX_EVENTS = 5000;
 export const BODY_MAX = 300;                 // an action's body, as JSON: a feed line, not a document
 export const UNSEEN_GAP_MS = 5 * 60e3;        // unseen for longer than this, a state seen again is a first sighting again
+export const RESTART_MARK_MS = 10 * 60e3;     // a piece last seen dark while TouchDesigner restarted, unseen since for longer: its mark lapses
 export const SOURCES = ['mission control', 'studio chat'];
 const SHOW_FIELDS = ['file', 'mode', 'season', 'ropes'];
 const BLIND = ['page', 'bitcube-offline', 'bitcube-unchecked', 'probe-stale', 'not-checked', 'check-failed'];   // causes that hide what is behind them
@@ -85,7 +86,8 @@ export class History {
     this.state = { overall: null, items: {}, show: {}, calibration: null, last_action: null };   // last known, each with its t
     this.knownAt = {};           // item id -> the observation it was last known in (in memory: after a restart, a gap)
     this.prevObs = null;         // the observation before this one
-    this.restarted = new Set();  // pieces seen dark while TouchDesigner restarted (no lines of their own), until seen after it
+    this.restarted = new Map();  // piece id -> when it was last seen dark while TouchDesigner restarted (no lines of their own), until
+                                 // seen fresh after it, or RESTART_MARK_MS without (CR7 #8)
     this.#load();
   }
 
@@ -109,6 +111,9 @@ export class History {
       }
       // Each piece: unknown and muted (nothing to show) carry no knowledge, so they keep the last known level. A piece that
       // was not known in the previous observation changed at some moment of the gap: its since is "at least".
+      // A restart's mark lapses when the piece hasn't been seen for RESTART_MARK_MS since: then it is a first sighting again
+      // (the unseen-stretch rule below), never "still … for 1 min" as if it had been watched all along (CR7 #8)
+      for (const [id, at] of this.restarted) if (t - at > RESTART_MARK_MS) this.restarted.delete(id);
       for (const it of m.items) {
         if (it.level === 'unknown' || it.muted) continue;
         // the ropes and panels in calibration patterns are the calibration's own line below, not news of their own: the
@@ -116,11 +121,12 @@ export class History {
         // a five-minute run is never an "unseen stretch" that restarts their since.
         // The same for a restart (a switch, a rebuild, TouchDesigner restarting on a file): the overall line says it once, so
         // TouchDesigner, the ropes, the panels and the year's page dark meanwhile are not lines of their own (R7 #23)
-        if (it.cause === 'calibrating' || it.cause === 'td-restarting') { if (!it.stale) this.knownAt[it.id] = t; if (it.cause === 'td-restarting') this.restarted.add(it.id); continue; }
+        if (it.cause === 'calibrating' || it.cause === 'td-restarting') { if (!it.stale) this.knownAt[it.id] = t; if (it.cause === 'td-restarting') this.restarted.set(it.id, t); continue; }
         const p = this.state.items[it.id], seen = this.knownAt[it.id];
         // after a restart, a piece still not OK in the same way is a new instance of it: "still needs attention", and its since
-        // starts again there, as the band's does (never "for 12 min" beside a band that says 6)
-        const afterRestart = this.restarted.delete(it.id);
+        // starts again there, as the band's does (never "for 12 min" beside a band that says 6). Only a fresh sighting uses the
+        // mark: a last answer from a quiet source is not one, so the mark waits for the next (CR7 #8)
+        const afterRestart = !it.stale && this.restarted.delete(it.id);
         if (afterRestart && !it.stale && p && p.level === it.level && it.level !== 'ok' && p.reason === reasonOf(it.summary)) {
           this.knownAt[it.id] = t;
           rec({ kind: 'item', id: it.id, from: p.level, to: it.level, summary: it.summary, still: true });
@@ -447,10 +453,11 @@ function plainNote(note) {
  *  moment (the verdict and the piece that caused it can say the same thing: "TouchDesigner is restarting on the river's year"
  *  once, R7 #23). Any order; the first of two equal lines is kept. */
 export function feed(events) {
-  const out = [];
+  const out = [], said = new Set();     // t|words: one look per event, never a scan of what is already out (CR7 #14)
   for (const ev of Array.isArray(events) ? events : []) {
-    const words = describeEvent(ev);
-    if (out.some((o) => o.words === words && o.t === ev?.t)) continue;
+    const words = describeEvent(ev), k = `${ev?.t}|${words}`;
+    if (said.has(k)) continue;
+    said.add(k);
     out.push({ ...ev, words });
   }
   return out;

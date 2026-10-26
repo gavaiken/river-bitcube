@@ -136,3 +136,60 @@ test('CR7 #7: a dry or decode-only start waits only for another calibration star
     release({ ok: true, calibration: { running: true } }); await p;
   }
 });
+
+// ---- the history ---------------------------------------------------------------------------------------------------------
+const YEAR = 'river-local-oct-22-seasons.toe', LIVE = 'river-online-oct-23.toe';
+function payload({ t, td, applying = [], probeAt = t, online = true } = {}) {
+  return { now: t, bitcube: { ok: true, at: t, value: { online } }, seasons: { ok: true, at: t, value: { season: 'winter', mode: 'automatic', intensity: 0.2, presence: { available: false } } },
+    modal: { ok: true, at: t, value: { ok: true, tick: 1, next_tick_epoch: t / 1000 + 200, finished_at: new Date(t - 60_000).toISOString() } },
+    probe: { ok: true, at: probeAt, value: { ok: true, uptime_h: 30, time: '2026-10-25T02:59:00', boot_file: YEAR, show_files: [YEAR, LIVE], displays: ['M14', 'LED 1920X1080'],
+      devices: { psac10_1: true, psac10_2: true, gallery_cam: true, river_cam: true, router: true, internet: true },
+      td: td ?? { ok: true, file: YEAR, fps: 60, errors: 0, ropes: { source: 'canvas', status: { open: true, active: true, watts: [100, 100] } }, hub75: { brightness: 1, output: true } } } },
+    applying };
+}
+const SWITCH = (t) => [{ id: 'a.1', action: 'switch', label: "the switch to the river's year", file: YEAR, phase: 'confirming', started_at: t - 3000, answered_at: t - 1000, expect_s: 60, blocks: ['ropes', 'hub75', 'switch'] }];
+const SLOW = { ok: true, file: YEAR, fps: 4, errors: 0, ropes: { source: 'canvas', status: { open: true, active: true, watts: [100, 100] } }, hub75: { brightness: 1, output: true } };
+/** Slow for 10 min, then a restart seen twice; returns the history and the clock. */
+async function restarted() {
+  const { History } = await import('../lib/history.mjs');
+  const c = { t: T0 };
+  const h = new History({ file: null, now: () => c.t });
+  h.observe(payload({ t: c.t, td: SLOW })); c.t += 10 * 60_000; h.observe(payload({ t: c.t, td: SLOW })); c.t += 5000;
+  for (const td of [{ ok: false, error: 'not running' }, { ok: false, error: 'not answering' }]) { h.observe(payload({ t: c.t, td, applying: SWITCH(c.t) })); c.t += 5000; }
+  return { h, c };
+}
+
+test('CR7 #8: the restart mark is used up only by a fresh sighting: a stale one in between leaves it for the next', async () => {
+  const { feed } = await import('../lib/history.mjs');
+  const { h, c } = await restarted();
+  // the full check goes quiet once right after the restart: TouchDesigner is read from its last answer (stale), not seen
+  h.observe(payload({ t: c.t, td: SLOW, probeAt: c.t - 200_000 })); c.t += 5000;
+  const n = h.events.length;
+  h.observe(payload({ t: c.t, td: SLOW })); c.t += 60_000;
+  assert.equal(h.since('touchdesigner', c.t).for_s, 60, 'slow again since the first fresh sighting after the restart');
+  assert.equal(h.since('touchdesigner', c.t).at_least, false);
+  assert.ok(feed(h.events.slice(n)).some((e) => /^TouchDesigner still needs attention: running slowly/.test(e.words)));
+});
+
+test('CR7 #8: the restart mark lapses after about 10 min; a piece unseen that long is a first sighting again, never "for 1 min"', async () => {
+  const { RESTART_MARK_MS } = await import('../lib/history.mjs');
+  assert.ok(RESTART_MARK_MS >= 9 * 60_000 && RESTART_MARK_MS <= 11 * 60_000, String(RESTART_MARK_MS));
+  const { h, c } = await restarted();
+  // bitcube goes offline for 11 min right after the restart: nothing behind it is seen
+  for (let i = 0; i < 12; i++) { h.observe(payload({ t: c.t, td: SLOW, online: false })); c.t += 60_000; }
+  h.observe(payload({ t: c.t, td: SLOW })); c.t += 60_000;
+  const s = h.since('touchdesigner', c.t);
+  assert.deepEqual([s.for_s, s.at_least], [60, true], 'seen again after a long blind stretch: "for over 1 min"');
+  assert.equal(h.restarted.size, 0, 'no mark is kept past its time');
+});
+
+test('CR7 #14: the feed drops a line said twice at one moment with a set, keeping the first, and stays fast on many events', async () => {
+  const { feed } = await import('../lib/history.mjs');
+  const ev = (t, kind = 'show', to = 'dark') => ({ kind, t, field: 'ropes', from: 'river', to });
+  const out = feed([ev(1), ev(1), ev(2), { ...ev(1), extra: 1 }, ev(1, 'show', 'river')]);
+  assert.deepEqual(out.map((e) => [e.t, e.words, e.extra]), [[1, 'The ropes went dark on purpose', undefined], [2, 'The ropes went dark on purpose', undefined], [1, 'The ropes show the river again', undefined]]);
+  const many = Array.from({ length: 50_000 }, (_, i) => ev(i));
+  const t0 = performance.now();
+  assert.equal(feed(many).length, 50_000);
+  assert.ok(performance.now() - t0 < 1000, `${Math.round(performance.now() - t0)} ms`);
+});
