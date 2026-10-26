@@ -213,3 +213,31 @@ test('R9 #15: a lighting port change waiting for a full check gives the full che
   assert.equal(entryWords(e, 25), `Waiting for bitcube to show the change of the lighting port to the spare router port · 0:25 · ${BOOT_USUAL}`);
   assert.match(page('status.js'), /usual: name === 'bootfile' \|\| name === 'lightsroute' \? BOOT_USUAL : null/);
 });
+
+// ---- #34: the server refuses a switch or rebuild while TouchDesigner starts by itself, as the pages do ------------------------------
+
+test('R9 #34: a switch or rebuild while TouchDesigner is starting or restarting with no entry is refused (409) in the pages\' words', async () => {
+  const { Mission } = await import('../lib/mission.mjs');
+  const { tdStarting } = await import('../public/model.js');
+  let t = T0, reading = null;
+  const m = new Mission({ now: () => t, later: () => {}, probe: async (_h, args) => (args ? { ok: true, td: { ok: true, file: YEAR } } : reading) });
+  reading = { ok: true, uptime_h: 0.05, td: { ok: false, error: 'TouchDesigner is not running' } };   // bitcube's own boot
+  await m.pollProbe();
+  await assert.rejects(m.control('switch', { file: YEAR }), (e) => e.status === 409 && e.message === 'TouchDesigner is still starting: wait a minute');
+  await assert.rejects(m.control('rebuild', { file: YEAR }), (e) => e.status === 409 && e.message === 'TouchDesigner is still starting: wait a minute');
+  t += 5000; reading = { ok: true, uptime_h: 30, td: { ok: false, error: `restarting on ${YEAR}` } };   // a crash relaunch, no entry
+  await m.pollProbe();
+  await assert.rejects(m.control('switch', { file: LIVE }), (e) => e.status === 409 && e.message === 'TouchDesigner is restarting: wait a minute');
+  t += 5000; reading = { ok: true, uptime_h: 30, td: { ok: true, file: YEAR, fps: 60 } };
+  await m.pollProbe();
+  const r = await m.control('switch', { file: LIVE });
+  assert.equal(typeof r.applying_id, 'string', 'answering: it runs');
+  assert.equal(tdStarting({ now: t, probe: { at: t, value: { ok: true, uptime_h: 30, td: { ok: true, file: YEAR, fps: 60 } } } }, t), null);
+  // the fixture world the same (just-booted)
+  const { FixtureMission } = await import('../lib/fixtures.mjs');
+  const { mkdtempSync } = await import('node:fs'); const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const dir = new URL('./fixtures/', import.meta.url).pathname;
+  const fx = new FixtureMission({ dir, stateDir: mkdtempSync(join(tmpdir(), 'r9-')), applyS: 0 });
+  await assert.rejects(fx.control('switch', { file: YEAR }, 'just-booted'), (e) => e.status === 409 && /^TouchDesigner is still starting/.test(e.message));
+  assert.equal(typeof (await fx.control('switch', { file: YEAR }, 'all-good')).applying_id, 'string');
+});

@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { scrubCreds } from './scrub.mjs';
 import { Applying } from './applying.mjs';
 import { checkedCalibrate, noAnswer } from './lights.mjs';
-import { CAL_RUNNING, changeLabel } from '../public/model.js';
+import { CAL_RUNNING, changeLabel, tdStarting } from '../public/model.js';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 const PROBE = PS + 'probe.ps1';
@@ -19,6 +19,14 @@ const SNAP_CACHE_MS = 45_000;
  *  photos) touches no lights, camera or TouchDesigner: it refuses none of them (R7 #20). */
 export const CAL_BLOCKED = ['ropes', 'hub75', 'switch', 'lightsroute', 'rebuild'];
 const calDry = (cal) => cal?.dry_run === true || cal?.mode === 'dry-run' || cal?.mode === 'decode-only' || !!cal?.decode_only;
+/** The 409 a switch or a rebuild gets while TouchDesigner is starting or restarting (model.js tdStarting, the pages' words; shared
+ *  with fixture mode), or null. snap: () => the status the pages are served. */
+export function startingBlocked(action, snap, nowMs) {
+  if (action !== 'switch' && action !== 'rebuild') return null;
+  let why = null;
+  try { why = tdStarting(snap(), nowMs); } catch { why = null; }
+  return why ? Object.assign(new Error(why), { status: 409 }) : null;
+}
 /** The 409 a control gets while a calibration runs (shared with fixture mode), or null. */
 export function calBlocked(action, cal) {
   if (!CAL_BLOCKED.includes(action) || cal?.running !== true || cal.stale === true || calDry(cal)) return null;
@@ -309,6 +317,11 @@ export class Mission {
     // lighting port spoils the run (the pages refuse these too; this covers the studio chat and a stale page)
     const blocked = calBlocked(action, this.calibration());
     if (blocked) throw blocked;
+    // never a switch or rebuild while TouchDesigner opens a file by itself (bitcube's own boot, a crash relaunch: no entry holds
+    // it): the pages grey both, and a second switch kills the half-opened file (R9 #34)
+    // (a change in flight that holds it answers first, with its own "wait: …")
+    const starting = this.applying.conflict(action, checked) ? null : startingBlocked(action, () => ({ ...this.snapshot(), now: this.now() }), this.now());
+    if (starting) throw starting;
     // every change in flight is recorded, and one that conflicts with it waits (409): two phones pressing Rebuild must not run
     // two builds and two restarts, and nothing may touch TouchDesigner while a switch restarts it
     // A switch or rebuild that answered OK stays in status.applying ('confirming', still blocking what it blocks: a second switch

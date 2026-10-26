@@ -917,11 +917,13 @@ export function derive(status, nowMs) {
     hub75: ctl(first('hub75') ?? cantTd ?? cantCal),   // the camera is photographing the panels and ropes
     // never while TouchDesigner is restarting (a second switch kills the half-opened file: another minute dark), and never on
     // a full check too old to say what runs now (the buttons' labels come from it)
-    switch: ctl(first('switch') ?? cantUnknown ?? tdBusy ?? cantOld ?? cantCal),
+    // starting: TouchDesigner opening a file by itself (bitcube's own boot, a crash relaunch: no entry holds it), which the server
+    // refuses too (tdStarting, R9 #34)
+    switch: ctl(first('switch') ?? cantUnknown ?? tdBusy ?? cantOld ?? cantCal, { starting: tdBusy }),
     bootfile: ctl(first('bootfile') ?? cantUnknown),
     lightsroute: ctl(first('lightsroute') ?? cantUnknown ?? cantOld ?? cantCal),
     // a rebuild bakes the LED map into the river's year and ends in a switch: the switch's reasons, and only on the river's year
-    rebuild: ctl(first('rebuild') ?? cantUnknown ?? tdBusy ?? cantOld ?? cantCal ?? (frozen ? "TouchDesigner isn't answering" : null) ?? notYear),
+    rebuild: ctl(first('rebuild') ?? cantUnknown ?? tdBusy ?? cantOld ?? cantCal ?? (frozen ? "TouchDesigner isn't answering" : null) ?? notYear, { starting: tdBusy }),
     // a calibration's start: TouchDesigner answering on a show file, the gallery camera reachable, nothing running already
     // dry: a dry run's start (no lights, no camera, nothing on TouchDesigner): only contact, bitcube, another start, a run on
     calibrate: ctl(first('calibrate') ?? calOn ?? cantTd ?? (tdOk ? null : "TouchDesigner isn't answering")
@@ -936,6 +938,14 @@ export function derive(status, nowMs) {
   // at: when that source's reading was taken, on the server's clock (ms): a page judges its own change only by a reading after it
   for (const k of Object.keys(S)) sources[k] = { present: S[k].present, ok: S[k].ok, error: S[k].error, at: S[k].at, age_s: S[k].age_s, failing_s: S[k].failing_s, stale: S[k].stale };
   return { overall, problems: P.map(({ pri, fromProbe: _f, waits: _w, chosen: _c, ...p }) => p), show, items, controls, sources };
+}
+
+/** Why a switch or a rebuild must wait while TouchDesigner is starting or restarting (a second one kills the half-opened file:
+ *  another minute dark), in the pages' words ("TouchDesigner is still starting: wait a minute"), or null: the server refuses one with
+ *  them (409), also when no entry holds the lock (bitcube's own boot, a crash relaunch), as every page greys it (R9 #34). status: a
+ *  GET /api/status payload; nowMs: the server's clock. */
+export function tdStarting(status, nowMs) {
+  try { return derive(status, nowMs).controls.switch.starting ?? null; } catch { return null; }
 }
 
 // ---- one control's state (docs/mission-ui.md "Applying a change") -----------------------------------------------------

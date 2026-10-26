@@ -44,7 +44,7 @@
 // only then.
 import { readFileSync, readdirSync, existsSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { CAMERAS, calBlocked, checkedControl, awaitsReading } from './mission.mjs';
+import { CAMERAS, calBlocked, checkedControl, awaitsReading, startingBlocked } from './mission.mjs';
 import { Applying } from './applying.mjs';
 import { readLocalPixelmap, summarizePixelmap, checkedCalibrate } from './lights.mjs';
 import { atlasFromUprights } from '../public/screens.js';
@@ -198,7 +198,10 @@ export class FixtureMission {
     // the scenario's own scripted run blocks what the live server blocks (Mission.control)
     const blocked = calBlocked(action, this.calibFor(scenario).status());
     if (blocked) throw blocked;
+    // and TouchDesigner opening a file by itself, as the live server refuses it (R9 #34)
     const w = this.worldFor(scenario);
+    const starting = w.applying.conflict(action, checked) ? null : startingBlocked(action, () => ({ ...this.snapshot(scenario), now: this.clock(scenario) }), this.clock(scenario));
+    if (starting) throw starting;
     let td = null;                 // TouchDesigner in this world: a switch to the file it runs reads "the restart on ..."
     try { td = this.snapshot(scenario).probe?.value?.td ?? null; } catch { /* a half-edited scenario: plain words */ }
     const running = typeof td?.file === 'string' ? td.file : null;
