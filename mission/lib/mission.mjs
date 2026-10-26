@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { scrubCreds } from './scrub.mjs';
 import { Applying } from './applying.mjs';
 import { checkedCalibrate, noAnswer } from './lights.mjs';
-import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights, TEST_ON, testShowing } from '../public/model.js';
+import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights, TEST_ON, testShowing, FILES } from '../public/model.js';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 const PROBE = PS + 'probe.ps1';
@@ -41,11 +41,12 @@ export function calBlocked(action, cal) {
   if (!CAL_BLOCKED.includes(action) || cal?.running !== true || cal.stale === true || calNoLights(cal)) return null;   // model.js: one rule
   return Object.assign(new Error(CAL_RUNNING), { status: 409 });
 }
-// Show files mission control may open: the river's year and the live river. Retired files start with old- (D27) and
-// are never offered, for the boot file or a switch.
-export const BOOT_FILES = ['river-local-oct-22-seasons.toe', 'river-online-oct-23.toe'];
-// The only show file a rebuild may bake the LED map into: the river's year (build_seasons_local.py refuses any other).
-export const REBUILD_FILES = ['river-local-oct-22-seasons.toe'];
+// Show files, from the show registry (shows.json, docs/shows.md, read by model.js): a switch may open any offered show; only an
+// offered show with can_boot may be the boot file (a switch never changes the boot file). Retired files (old-…, D27) aren't listed.
+export const SWITCH_FILES = Object.keys(FILES).filter((f) => FILES[f].offered);
+export const BOOT_FILES = Object.keys(FILES).filter((f) => FILES[f].can_boot);
+// The only show file a rebuild may bake its pinned LED map into: the river's year (shows.json role year; its build script refuses any other).
+export const REBUILD_FILES = SWITCH_FILES.filter((f) => FILES[f].kind === 'year');
 export const MODES = ['automatic', 'dynamic', 'manual'];
 export const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
 
@@ -285,7 +286,8 @@ export class Mission {
    *  the file, and the run whose map it is. Recorded as the map in use only once the rebuild is confirmed (R7 #26). */
   #rebuildOf(file, r) {
     const cal = this.calibration();
-    const map = (typeof r?.pixelmap?.file === 'string' && r.pixelmap.file) || cal?.result?.map || this.data.probe?.value?.pixelmap?.file || null;
+    // probe.ps1's rebuilt_map: the map the show pins in shows.json (what the build baked), not the newest one on bitcube
+    const map = (typeof r?.rebuilt_map === 'string' && r.rebuilt_map) || (typeof r?.pixelmap?.file === 'string' && r.pixelmap.file) || cal?.result?.map || this.data.probe?.value?.pixelmap?.file || null;
     // the run whose map this is, by its own started stamp (bitcube's clock): a page matches it exactly, never across two clocks
     const run = cal && cal.ok === true && cal.result?.map === map && typeof cal.started === 'number' ? cal.started : null;
     return { map, file, run };
@@ -462,11 +464,14 @@ export function planControl(action, body = {}) {
       return { kind: 'probe', args: `-Action hub75 -Brightness ${x.toFixed(2)}` };
     }
     case 'bootfile': case 'switch': {
-      if (!BOOT_FILES.includes(body.file)) throw bad('unknown show file');
+      if (!SWITCH_FILES.includes(body.file)) throw bad('unknown show file');
+      if (action === 'bootfile' && !BOOT_FILES.includes(body.file)) throw bad(`${FILES[body.file].label} can't be the boot file (shows.json: can_boot is false)`);
+      // a registry name is checked above; the pattern keeps anything odd off probe.ps1's command line all the same
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.toe$/.test(body.file)) throw bad('unknown show file');
       return { kind: 'probe', args: `-Action ${action} -BootFile ${body.file}` };
     }
     case 'rebuild': {
-      // Bake the newest LED map into the river's year (probe.ps1 -Action rebuild: build, save, then the switch path; minutes).
+      // Rebuild the river's year with the LED map it pins in shows.json (probe.ps1 -Action rebuild: build, save, then the switch path; minutes).
       if (!REBUILD_FILES.includes(body.file)) throw bad("rebuild is only for the river's year");
       return { kind: 'probe', args: `-Action rebuild -BootFile ${body.file}`, timeout: 400_000 };
     }

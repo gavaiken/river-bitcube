@@ -296,7 +296,11 @@ test('words: durations, intensity, and a page with no jargon anywhere it speaks'
 });
 
 test('model.js runs in the browser: plain ESM with no imports, no Node globals', () => {
-  const src = readFileSync(new URL('../public/model.js', import.meta.url), 'utf8');
+  const full = readFileSync(new URL('../public/model.js', import.meta.url), 'utf8');
+  // the one exception: loadRegistry reads shows.json from disk under node (guarded), and fetches /shows.json in a page
+  const loader = /^async function loadRegistry\(\) \{[\s\S]*?^\}$/m.exec(full);
+  assert.ok(loader && /typeof window === 'undefined'/.test(loader[0]) && /fetch\('\/shows\.json'/.test(loader[0]));
+  const src = full.replace(loader[0], '');
   assert.doesNotMatch(src, /^\s*import\b|require\(|\bprocess\.|node:|\bBuffer\b|\b__dirname\b/m);
   assert.match(src, /^export function derive\(/m);
 });
@@ -627,9 +631,7 @@ test("the boot file Start-River.cmd's default reads as the file it opens, and un
   fx.status.probe.value.boot_file = 'Start-River.cmd default';
   let m = run(fx);
   assert.deepEqual([m.show.boot_file.name, m.show.boot_file.kind, m.show.boot_file.label, m.show.boot_file.default], ['river-local-oct-22-seasons.toe', 'year', "the river's year", true]);
-  fx.status.probe.value.show_files = ['river-online-oct-23.toe'];
-  m = run(fx);
-  assert.equal(m.show.boot_file.kind, 'live', "without the seasons file Start-River.cmd opens the live river");
+  // (an older probe's "Start-River.cmd default" is shows.json's boot_default; probe.ps1 now reports the file itself)
   // an old file running is Attention with the way back (810b48e), for each of the retired names
   for (const f of ['old-river.toe', 'river-local-oct-18.toe', 'river.toe', 'old-river-online-oct-20.toe']) {
     const o = clone(byName['all-good']); o.status.probe.value.td.file = f; o.status.seasons = { at: o._scenario.now - 2000, error: 'fetch failed' };

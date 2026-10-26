@@ -1,6 +1,7 @@
 // Mission control's status model: derive(status, nowMs) turns one GET /api/status payload into everything the
 // pages say, so every verdict on screen comes from one place that the fixtures test (test/model.test.mjs).
-// Pure ES module, no imports: it runs in the browser and under node --test. Long version of the shape and the
+// Pure ES module, no static imports: it runs in the browser and under node --test. The one outside input is the show
+// registry (shows.json at the repo root, docs/shows.md), read once at load: from disk under node, from GET /shows.json in a page. Long version of the shape and the
 // rules: ~/claude/local/ui-shots/design/model.md.
 //
 // derive(status, nowMs) -> {
@@ -36,22 +37,51 @@ export const MODAL_REST = { from: 23 * 60 + 55, to: 7 * 60 };   // it rests 23:5
 export const CLIP_LATE_S = 5 * 60;              // the Modal link posts a clip every 20-70 s; none for 5 min = failing
 export const DISK_LOW_GB = 20;
 export const TZ = 'America/Los_Angeles';        // bitcube, the mini and the team keep Pacific time
-export const FILES = {                          // GLOSSARY.md: the local-only file is "the river's year", the online one "the live river"
-  'river-local-oct-22-seasons.toe': { kind: 'year', label: "the river's year" },
-  'river-online-oct-23.toe': { kind: 'live', label: 'the live river' },
-  // Retired show files (execution plan D27): renamed old-… on 24 Oct, never offered for the boot file or a switch. Their
-  // earlier names stay here so a bitcube that hasn't pulled the rename still reads right.
-  'old-river-online-oct-20.toe': { kind: 'other', label: 'an old show file' },
-  'old-river.toe': { kind: 'other', label: 'an old show file' },
-  'river-online-oct-20.toe': { kind: 'other', label: 'an old show file' },
-  'river-local-oct-18.toe': { kind: 'other', label: 'an old show file' },
-  'river.toe': { kind: 'other', label: 'an old show file' },
-};
-const OFFERED = ['year', 'live'];               // the kinds the boot file and the show-file switch offer
+// ---- the show registry (shows.json, docs/shows.md) ------------------------------------------------------------------
+/** shows.json as read at load ({ boot_default, shows: [...] }), or null when it couldn't be read (nothing is then offered). */
+export const REGISTRY = await loadRegistry();
+async function loadRegistry() {
+  const ok = (r) => (r && typeof r === 'object' && Array.isArray(r.shows) ? r : null);
+  try {
+    if (typeof window === 'undefined' && typeof process !== 'undefined') {
+      const { readFileSync } = await import('node:fs');
+      const path = process.env.MISSION_SHOWS_FILE || new URL('../../shows.json', import.meta.url);
+      return ok(JSON.parse(readFileSync(path, 'utf8')));
+    }
+    const r = await fetch('/shows.json', { cache: 'no-cache' });
+    return r.ok ? ok(await r.json()) : null;
+  } catch { return null; }
+}
+/** Every show file mission control can name: { kind, label, offered, can_boot, show }. kind is the show's role for the page's
+ *  verdicts ('year': the river's year, serves the year page; 'live': the live river and Dave's agent; 'other': anything else, a
+ *  new visualization too); label its words in a sentence ("the river's year"; GLOSSARY.md); show its registry entry (the preview
+ *  card's facts). Retired show files (execution plan D27: old-..., and the names before the rename) are never offered. */
+export const FILES = {};
+for (const sh of REGISTRY?.shows ?? []) {
+  if (!sh || typeof sh.file !== 'string') continue;
+  FILES[sh.file] = { kind: sh.role === 'year' || sh.role === 'live' ? sh.role : 'other', label: String(sh.label || sh.title || sh.file.replace(/\.toe$/i, '')),
+                     offered: sh.offered === true, can_boot: sh.offered === true && sh.can_boot === true, show: sh };
+}
+for (const old of ['old-river-online-oct-20.toe', 'old-river.toe', 'river-online-oct-20.toe', 'river-local-oct-18.toe', 'river.toe']) {
+  FILES[old] ??= { kind: 'other', label: 'an old show file', offered: false, can_boot: false, show: null };
+}
 const UNLISTED = 'an unlisted show file';       // a file mission control doesn't list: its name (a .toe) stays in raw
 // probe.ps1 reports this when boot-file.txt is missing: Start-River.cmd then opens the seasons file, else the online one
 export const BOOT_DEFAULT = 'Start-River.cmd default';
+/** shows.json's boot_default: the file Start-River.cmd opens when boot-file.txt names no can_boot show. */
+export const BOOT_DEFAULT_FILE = typeof REGISTRY?.boot_default === 'string' ? REGISTRY.boot_default : null;
 const YEAR_FILE = Object.keys(FILES).find((k) => FILES[k].kind === 'year'), LIVE_FILE = Object.keys(FILES).find((k) => FILES[k].kind === 'live');
+/** The preview card for a show file, before anyone switches to it (docs/mission-ui.md "Show file"): its registry facts in
+ *  plain fields, or null for a file the registry doesn't list. */
+export function showCard(file) {
+  const f = FILES[file], sh = f?.show;
+  if (!sh) return null;
+  const str = (x) => (typeof x === 'string' && x.trim() ? x.trim() : null);
+  return { file, label: f.label, title: str(sh.title) ?? f.label, kind: str(sh.kind), description: str(sh.description),
+           inputs: Array.isArray(sh.inputs) ? sh.inputs.filter((x) => typeof x === 'string' && x.trim()) : [],
+           created_by: str(sh.created_by), created: str(sh.created), updated_by: str(sh.updated_by), updated: str(sh.updated),
+           last_change: str(sh.last_change), can_boot: f.can_boot, boot_default: file === BOOT_DEFAULT_FILE };
+}
 export const CAL_STAGE_S = { 'ropes-capture': 170, 'ropes-decode': 40, 'hub75-capture': 35, 'hub75-locate': 10 };   // calibrate.py EXPECTED_S
 export const CAL_TOTAL_S = Object.values(CAL_STAGE_S).reduce((a, b) => a + b, 0);
 export const CAL_STAGE_WORDS = { 'ropes-capture': 'photographing the ropes', 'ropes-decode': 'working out where each rope is', 'hub75-capture': 'photographing the panels', 'hub75-locate': 'finding the panels' };
@@ -343,15 +373,14 @@ function source(raw, name, serverNow) {
            stale: age_s != null && age_s > POLL_S[name] * STALE_FACTOR };
 }
 
-/** The boot file probe.ps1 reports, in glossary words: "Start-River.cmd default" (no boot-file.txt) is the file Start-River.cmd
- *  then opens (the river's year, else the live river); a name mission control doesn't list is "an unlisted show file". */
+/** The boot file probe.ps1 reports, in glossary words: "Start-River.cmd default" (an older probe, no boot-file.txt) is the file
+ *  Start-River.cmd then opens (shows.json's boot_default); a name mission control doesn't list is "an unlisted show file". */
 function bootFile(pr) {
   const raw = typeof pr?.boot_file === 'string' ? pr.boot_file.trim() : null;
   if (!raw) return null;
   if (raw === BOOT_DEFAULT) {
-    const have = Array.isArray(pr.show_files) ? pr.show_files : null;
-    const name = !have || have.includes(YEAR_FILE) || !have.includes(LIVE_FILE) ? YEAR_FILE : LIVE_FILE;
-    return { name, kind: FILES[name].kind, label: FILES[name].label, default: true, reported: raw };
+    const name = BOOT_DEFAULT_FILE;
+    return name ? { name, kind: FILES[name]?.kind ?? 'other', label: FILES[name]?.label ?? UNLISTED, default: true, reported: raw } : null;
   }
   return { name: raw, kind: FILES[raw]?.kind ?? 'other', label: FILES[raw]?.label ?? UNLISTED, default: pr.boot_file_chosen === false, reported: raw };
 }
@@ -935,10 +964,18 @@ export function derive(status, nowMs) {
     frozen: 'the panels hold a frozen picture', gone: 'the panels show nothing: TouchDesigner is not running', 'no-output': 'this show file has no panel output',
     off: 'the panels are switched off', test: 'the panels show the test pattern', calibrating: `the panels are ${calWords}`, river: `the panels show ${riverWords}${brightness != null ? ` at ${Math.round(brightness * 100)} %` : ''}` }[panelsState];
   const manual = yearOk ? obj(year.manual) : null;
+  const showFiles = (Array.isArray(pr?.show_files) ? pr.show_files : []).filter((f) => FILES[f]?.offered === true);
+  const bootNow = bootFile(pr);
+  const backToBoot = tdOk && bootNow?.name && bootNow.name !== td.file && showFiles.includes(bootNow.name)
+    ? { file: bootNow.name, label: bootNow.label } : null;
   const show = {
     file: tdOk ? { name: td.file, kind, label, words: `TouchDesigner is showing ${label}` } : null,
-    boot_file: bootFile(pr),
-    show_files: (Array.isArray(pr?.show_files) ? pr.show_files : []).filter((f) => OFFERED.includes(FILES[f]?.kind)),
+    boot_file: bootNow,
+    // the files a switch offers (shows.json offered, and on bitcube), and the ones that may be the boot file (can_boot too)
+    show_files: showFiles,
+    bootable_files: showFiles.filter((f) => FILES[f].can_boot),
+    // one tap back to what opens at boot, when something else is showing (and the boot file is one a switch may open)
+    back_to_boot: backToBoot,
     season: yearOk ? year.season : null, phase: yearOk ? num(year.phase) : null, weights: yearOk ? obj(year.weights) : null,
     intensity: intensity != null ? { value: intensity, word: intensityWord(intensity), words: `${intensityWord(intensity)} (${intensity.toFixed(2)})` } : null,
     mode: yearOk ? { id: year.mode, effective: year.effective_mode ?? year.mode, words: modeWords } : null,

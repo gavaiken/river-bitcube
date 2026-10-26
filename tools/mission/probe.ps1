@@ -1,14 +1,17 @@
 # Mission control's status probe for bitcube (docs/mission-plan.md). Read-only unless -Action is given.
 # Prints ONE line of JSON. Run from the Mac mini as:  ssh bitcube powershell -NoProfile -ExecutionPolicy Bypass
 #   -File C:\Users\user\River\river-bitcube\tools\mission\probe.ps1 [-Action ropes -Dark] [-Action hub75 -Brightness 0.6]
-#   [-Action bootfile -BootFile river-local-oct-22-seasons.toe]   which show file opens at boot
-#   [-Action switch -BootFile river-online-oct-23.toe]            also restart TouchDesigner on it now (~1 min dark)
+#   [-Action bootfile -BootFile river-local-oct-22-seasons.toe]   which show file opens at boot (offered, can_boot shows only:
+#                                                                shows.json; writes River\boot-file.txt)
+#   [-Action switch -BootFile river-online-oct-23.toe]            restart TouchDesigner on any offered show now (~1 min dark);
+#                                                                the boot file stays as it is
 #   [-Action lightsroute -LightsRoute direct|router]             which port carries the lighting network (D25, S31)
-#   [-Action rebuild -BootFile river-local-oct-22-seasons.toe]   bake the newest LED map into the river's year: refuses unless
-#                                                                TouchDesigner has that very file open, then runs
-#                                                                td/build/build_seasons_local.py through tools/td.ps1, saves with
-#                                                                tools/td_save.ps1, then the switch path above (restart on it, ~1 min
-#                                                                dark). Reports rebuilt / saved / switched (booleans) with the status.
+#   [-Action rebuild -BootFile river-local-oct-22-seasons.toe]   rebuild the river's year (shows.json role year) with its pinned
+#                                                                LED map: refuses unless TouchDesigner has that very file open,
+#                                                                then runs its build script (shows.json build) through
+#                                                                tools/td.ps1, saves with tools/td_save.ps1, then the switch path
+#                                                                above (restart on it, ~1 min dark). Reports rebuilt / saved /
+#                                                                switched (booleans) and rebuilt_map with the status.
 #   [-Action test -On]                                           the test pattern on the ropes and panels (without -On: back to
 #                                                                what they showed before; td_mission.py keeps which)
 #   ropes, hub75, test, switch, rebuild and lightsroute are refused while a calibration runs ({ ok: false, error: "a calibration is
@@ -64,9 +67,16 @@ function Mask-Creds([string]$s) {
     return ($s -replace $CRED_TOKEN, '$1***')
 }
 
-$BOOT_FILES = @('river-local-oct-22-seasons.toe', 'river-online-oct-23.toe')   # retired show files start with old- (D27): never offered
-$REBUILD_FILES = @('river-local-oct-22-seasons.toe')     # the only file build_seasons_local.py rebuilds (its own guard agrees)
-$out.show_files = @($BOOT_FILES | Where-Object { Test-Path (Join-Path $repo $_) })
+# The show registry (shows.json, docs/shows.md; tools/shows.ps1): what may be switched to (offered), what may boot (can_boot),
+# and what a rebuild may bake (role year: the river's year, through its own build script). Retired files aren't listed.
+. (Join-Path $repo 'tools\shows.ps1')
+$reg = Get-ShowRegistry
+if (-not $reg) { $out.registry_error = 'shows.json is missing or unreadable' }
+$out.show_files = @(Get-OfferedShows $reg)                       # offered and present: mission control's switch list
+$BOOTABLE = @(Get-BootableShows $reg)                            # offered, can_boot and present: the boot-file choices
+$out.bootable_files = $BOOTABLE
+$REBUILD = @($(if ($reg) { $reg.shows | Where-Object { $_.role -eq 'year' -and $_.build -and ($out.show_files -contains $_.file) } }))
+$REBUILD_FILES = @($REBUILD | ForEach-Object { [string]$_.file })
 $tdPs1 = Join-Path $repo 'tools\td.ps1'
 # A calibration photographs the ropes and the panels: while one runs (calibration.json says running and its job's process is
 # alive), nothing that changes them, restarts TouchDesigner or moves the lighting port may run, whoever asks (a phone, the
@@ -101,7 +111,9 @@ if ($Action -eq 'rebuild') {
         if ($LASTEXITCODE -ne 0 -or -not $open) { $out.ok = $false; $out.error = 'TouchDesigner did not answer: rebuild refused' }
         elseif ($open -ne $BootFile) { $out.ok = $false; $out.error = "TouchDesigner is running $open, not $($BootFile): rebuild refused" }
         else {
-            $null = & powershell -NoProfile -ExecutionPolicy Bypass -File $tdPs1 -File (Join-Path $repo 'td\build\build_seasons_local.py') -Timeout 300 2>&1
+            $build = [string]($REBUILD | Where-Object { $_.file -eq $BootFile } | Select-Object -First 1).build
+            $out.rebuilt_map = [string]($REBUILD | Where-Object { $_.file -eq $BootFile } | Select-Object -First 1).calibration.pixelmap -replace '^.*/', ''
+            $null = & powershell -NoProfile -ExecutionPolicy Bypass -File $tdPs1 -File (Join-Path $repo ($build -replace '/', '\')) -Timeout 300 2>&1
             if ($LASTEXITCODE -ne 0) { $out.ok = $false; $out.error = 'the rebuild failed inside TouchDesigner (see td.ps1); nothing was saved' }
             else {
                 $out.rebuilt = $true
@@ -114,15 +126,17 @@ if ($Action -eq 'rebuild') {
     $Action = $(if ($out.saved) { 'switch' } else { 'status' })     # saved: restart on the file, the existing switch path
 }
 if ($Action -in 'bootfile', 'switch') {
+    # A switch opens the file now and leaves the boot file alone; only bootfile writes boot-file.txt, and only for a can_boot show.
     if ($out.show_files -notcontains $BootFile) { $out.ok = $false; $out.error = "no show file $BootFile on bitcube"; $Action = 'status' }
-    else { Set-Content -Path (Join-Path $river 'boot-file.txt') -Value $BootFile -Encoding ascii }
+    elseif ($Action -eq 'bootfile' -and $BOOTABLE -notcontains $BootFile) { $out.ok = $false; $out.error = "$BootFile can't be the boot file (can_boot is false in shows.json)"; $Action = 'status' }
+    elseif ($Action -eq 'bootfile') { Set-Content -Path (Join-Path $river 'boot-file.txt') -Value $BootFile -Encoding ascii }
 }
 if ($Action -eq 'switch') {
     # Quit TouchDesigner (unsaved changes are lost; its camera relays exit with it) and start the launcher in the
     # desktop session through a one-off interactive task, as at login. Start-River.cmd waits 10 s, then opens it.
     Get-Process TouchDesigner -ErrorAction SilentlyContinue | Stop-Process -Force
     Start-Sleep 3
-    $act = New-ScheduledTaskAction -Execute (Join-Path $repo 'Start-River.cmd') -WorkingDirectory $repo
+    $act = New-ScheduledTaskAction -Execute (Join-Path $repo 'Start-River.cmd') -Argument $BootFile -WorkingDirectory $repo
     $prin = New-ScheduledTaskPrincipal -UserId "$env:COMPUTERNAME\$env:USERNAME" -LogonType Interactive
     Register-ScheduledTask -TaskName 'MissionSwitchShow' -Action $act -Principal $prin -Force | Out-Null
     Start-ScheduledTask -TaskName 'MissionSwitchShow'
@@ -156,18 +170,12 @@ $out.td = $td
 # ropes / hub75 / test act through TouchDesigner: if it didn't carry the action out, the action failed (the page must not say done)
 if ($Action -in 'ropes', 'hub75', 'test' -and $td -and $td.ok -eq $false) { $out.ok = $false; $out.error = "$($td.error)" }
 
-# Boot file: the show file Start-River.cmd opens at the next start, worked out as it does: boot-file.txt's file when that file
-# exists (mission control sets it; the last such line wins), else the river's year, else the live river. boot_file_chosen says
-# whether boot-file.txt chose it; boot_file is null when there is no show file at all (TouchDesigner would open empty).
-$bf = Join-Path $river 'boot-file.txt'
-$boot = $null; $chosen = $false
-if (Test-Path -LiteralPath $bf) {
-    foreach ($line in @(Get-Content -LiteralPath $bf -ErrorAction SilentlyContinue)) {
-        $name = "$line".Trim()
-        if ($name -and -not $name.StartsWith(';') -and (Test-Path -LiteralPath (Join-Path $repo $name))) { $boot = $name; $chosen = $true }
-    }
-}
-if (-not $boot) { $boot = @('river-local-oct-22-seasons.toe', 'river-online-oct-23.toe') | Where-Object { Test-Path -LiteralPath (Join-Path $repo $_) } | Select-Object -First 1 }
+# Boot file: the show file Start-River.cmd opens at the next start, worked out as it does (tools/shows.ps1 Resolve-BootFile):
+# boot-file.txt's file when it names an offered, can_boot show that exists (mission control sets it; the last such line wins),
+# else shows.json's boot_default. boot_file_chosen says whether boot-file.txt chose it; boot_file is null when there is no
+# show file at all (TouchDesigner would open empty).
+$bootPick = Resolve-BootFile $reg
+$boot = $bootPick.file; $chosen = [bool]$bootPick.chosen
 $out.boot_file = $boot
 $out.boot_file_chosen = $chosen
 

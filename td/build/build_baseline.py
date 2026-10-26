@@ -25,34 +25,16 @@ FIELD_W, FIELD_H = 1280, 720
 # Rope power cap, the same as the show files (artnet_out uses min(Brightness, Maxbrightness); Boxwatts limits each box).
 ROPE_BRIGHTNESS, ROPE_MAXBRIGHTNESS, ROPE_BOXWATTS = 0.4, 0.4, 600
 
-# Calibration is PINNED, never "newest file wins": a re-map must not silently change a show file.
-# TODO(registry): use td/build/registry.py calibration_for(TOE) (shows.json) once it is on main; until then the
-# Gray Area map of 23 Oct, as the two show files use.
-PINNED_PIXELMAP = REPO + '/tools/pixelmap/pixelmap-2026-10-23.json'
-PINNED_SCREENS = REPO + '/tools/pixelmap/screens-2026-10-23.json'
-
-
-def calibration():
-    """(pixelmap path, screens path, where from): the registry's pin for this file if there is one, else the constants."""
-    try:
-        if REPO + '/td/build' not in sys.path:
-            sys.path.insert(0, REPO + '/td/build')
-        import registry                                          # noqa: PLC0415 (only on main once shows.json lands)
-        cal = registry.calibration_for(TOE)
-        pm, sc = cal['pixelmap'], cal['screens']
-        pm, sc = (p if os.path.isabs(p) else REPO + '/' + p for p in (pm, sc))
-        if os.path.isfile(pm) and os.path.isfile(sc):
-            return pm.replace('\\', '/'), sc.replace('\\', '/'), 'registry'
-    except Exception:                                            # noqa: BLE001 - fall back to the pinned constants
-        pass
-    return PINNED_PIXELMAP, PINNED_SCREENS, 'pinned constants'
-
-
-if not project.name.startswith('river-baseline-template'):
-    raise RuntimeError(f'build_baseline.py rebuilds the whole project; open {TOE} first (TD has {project.name} open). '
-                       f'A new viz is a copy of the template with its own build script.')
-
-PIXELMAP, SCREENS, CAL_FROM = calibration()
+# Calibration is PINNED, never "newest file wins": a re-map must not silently change a show file. The pin, and which file
+# this script builds, come from the show registry (shows.json, docs/shows.md; td/build/registry.py).
+if REPO + '/td/build' not in sys.path:
+    sys.path.insert(0, REPO + '/td/build')
+import importlib
+import registry
+importlib.reload(registry)
+registry.require_build(project.name, 'td/build/build_baseline.py')    # rebuilds the whole project: never another file
+_cal = registry.calibration_for(TOE)
+PIXELMAP, SCREENS, CAL_FROM = _cal['pixelmap'], _cal['screens'], 'shows.json'
 proj = op('/project1')
 
 # ---- strip everything that isn't the template (the file starts as a Save As of a show file) ------------------------
@@ -229,7 +211,7 @@ note(out_c, "OUTPUTS: DON'T TOUCH (rebuilt by td/build/build_baseline.py).\n"
             "  -> ropes: one sample per LED through the pinned pixel map -> rope_canvas (20x400) -> /project1/ropes\n"
             "  -> screens: the four HUB75 screens (td/build/screens.py) -> /project1/panels\n"
             "screens_preview = what TD sends (ropes + 4 screens), for td.ps1 -Screenshot.\n"
-            f"Calibration: {PIXELMAP.rsplit('/', 1)[-1]}, {SCREENS.rsplit('/', 1)[-1]} ({CAL_FROM}).")
+            f"Calibration: {PIXELMAP.rsplit('/', 1)[-1]}, {(SCREENS or 'no screens file').rsplit('/', 1)[-1]} ({CAL_FROM}).")
 vin = get(selectTOP, 'viz_in', 0, 0)
 vin.par.top = '/project1/viz/viz_out'
 fld = get(fitTOP, 'field', 150, 0)
@@ -317,9 +299,9 @@ Start a new viz (docs/files/river-baseline-template.md):
   2. Add a shows.json entry for river-<name>.toe (with its pinned calibration)
   3. Write td/build/build_<name>.py that only touches /project1/viz and refuses to run in any other file
 Save only with tools/td_save.ps1. Cameras only via river_cam.py (never a Video Stream In TOP).
-Calibration in this file: {PIXELMAP.rsplit('/', 1)[-1]}, {SCREENS.rsplit('/', 1)[-1]} ({CAL_FROM}).
+Calibration in this file: {PIXELMAP.rsplit('/', 1)[-1]}, {(SCREENS or 'no screens file').rsplit('/', 1)[-1]} ({CAL_FROM}).
 """
 
-print('baseline built | calibration', PIXELMAP.rsplit('/', 1)[-1], SCREENS.rsplit('/', 1)[-1], f'({CAL_FROM})', '|',
+print('baseline built | calibration', PIXELMAP.rsplit('/', 1)[-1], (SCREENS or 'no screens file').rsplit('/', 1)[-1], f'({CAL_FROM})', '|',
       _g['SCREEN_INFO'], '| project1:', sorted(c.name for c in proj.children),
       '| errors:', proj.errors(recurse=True) or 'none')

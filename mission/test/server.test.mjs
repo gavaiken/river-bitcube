@@ -353,7 +353,7 @@ test('applying a change over HTTP: status.applying on every phone, 409 "wait: ..
   const second = await post('/api/control/switch', { file: 'river-local-oct-22-seasons.toe' }, on);
   assert.deepEqual([second.status, (await second.json()).error.startsWith('wait: the switch to the live river is being applied')], [409, true]);
   for (let i = 0; i < 150; i++) { st = await status(); if (!st.applying.length) break; await sleep(20); }
-  assert.deepEqual([st.applying, st.probe.value.td.file, st.probe.value.boot_file], [[], 'river-online-oct-23.toe', 'river-online-oct-23.toe']);
+  assert.deepEqual([st.applying, st.probe.value.td.file, st.probe.value.boot_file], [[], 'river-online-oct-23.toe', 'river-local-oct-22-seasons.toe'], 'a switch leaves the boot file alone');
   assert.equal((await status(other)).probe.value.td.file, 'river-local-oct-22-seasons.toe');
   // a refused request is not something that happened: only the switch and the other scenario's ropes are in the history
   const hist = await (await fetch(base + '/api/history?kinds=action', { headers: on })).json();

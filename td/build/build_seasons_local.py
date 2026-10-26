@@ -18,14 +18,20 @@ import sys
 
 REPO = 'C:/Users/user/River/river-bitcube'
 LIB = 'C:/Users/user/River/recordings/river/seasons'
-PIXELMAP = sorted(glob.glob(REPO + '/tools/pixelmap/pixelmap-????-??-??.json'))[-1].replace('\\', '/')
 N_ROPES, N_PX = 20, 400
 FIELD_W, FIELD_H = 1280, 720
 PORT = 9981
 
-if 'seasons' not in project.name:
-    raise RuntimeError(f'build_seasons_local.py rebuilds the whole show; open river-local-oct-22-seasons.toe first '
-                       f'(TD has {project.name} open).')
+# Which show file this script builds comes from the show registry (shows.json, docs/shows.md), not the file's name.
+if REPO + '/td/build' not in sys.path:
+    sys.path.insert(0, REPO + '/td/build')
+import importlib
+import registry
+importlib.reload(registry)
+SHOW = registry.require_build(project.name, 'td/build/build_seasons_local.py')   # rebuilds the whole show: never another file
+# The calibration this show pins in shows.json (never the newest dated file: a re-map reaches it only once its entry pins it).
+_cal = registry.calibration_for(project.name)
+PIXELMAP, PINNED_SCREENS = _cal['pixelmap'], _cal['screens']
 
 proj = op('/project1')
 

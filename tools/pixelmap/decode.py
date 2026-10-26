@@ -214,7 +214,7 @@ def overlay(base_rgb, rope, px, pmap):
 
 
 def latest_pixelmap(folder=Path(__file__).parent):
-    """The newest tools/pixelmap/pixelmap-YYYY-MM-DD.json (the one TD builds from), or None."""
+    """The newest tools/pixelmap/pixelmap-YYYY-MM-DD.json (the latest calibration; a show builds from the map its registry entry pins), or None."""
     maps = sorted(Path(folder).glob('pixelmap-????-??-??.json'))
     return maps[-1] if maps else None
 

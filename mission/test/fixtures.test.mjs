@@ -347,11 +347,11 @@ test('fixture mode records every change in flight, holds a switch, rebuild or bo
   // as live: TouchDesigner restarts on the file (what the switch's own answer says) and the switch stays, confirming, meanwhile
   let after = m.snapshot('all-good');
   assert.deepEqual([after.applying.map((x) => [x.action, x.phase]), after.probe.value.td, after.probe.value.boot_file],
-                   [[['switch', 'confirming']], { ok: false, error: 'restarting on river-online-oct-23.toe' }, 'river-online-oct-23.toe']);
+                   [[['switch', 'confirming']], { ok: false, error: 'restarting on river-online-oct-23.toe' }, 'river-local-oct-22-seasons.toe']);
   await assert.rejects(m.control('switch', { file: 'river-local-oct-22-seasons.toe' }, 'all-good'), (err) => err.status === 409, 'no second switch while it opens the file');
   t += 6_001;
   after = m.snapshot('all-good');
-  assert.deepEqual([after.applying, after.probe.value.td.file, after.probe.value.boot_file], [[], 'river-online-oct-23.toe', 'river-online-oct-23.toe'], 'TouchDesigner now reports the new file; a switch sets the boot file too');
+  assert.deepEqual([after.applying, after.probe.value.td.file, after.probe.value.boot_file], [[], 'river-online-oct-23.toe', 'river-local-oct-22-seasons.toe'], 'TouchDesigner now reports the new file; a switch leaves the boot file alone');
   assert.equal(m.snapshot('td-low-fps').probe.value.td.file, 'river-local-oct-22-seasons.toe', 'only in that scenario');
   // a boot-file change
   const bf = m.control('bootfile', { file: 'river-local-oct-22-seasons.toe' }, 'all-good');

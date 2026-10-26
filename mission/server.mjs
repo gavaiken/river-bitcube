@@ -19,7 +19,7 @@
 //                           the installation (mission/bin/mc.mjs). Mode 0600: only this server's own user (river) can connect;
 //                           removed on exit. The agent gets its path in its environment (lib/agent.mjs).
 //
-// Routes (all JSON unless said; everything but /login, /healthz, /version and the assets sits behind the login cookie):
+// Routes (all JSON unless said; everything but /login, /healthz, /version, /shows.json and the assets sits behind the login cookie):
 //   GET  /status /lights /chat /map /login      the v2 pages (public/*.html, docs/mission-ui.md); /, /mission and /status.html
 //                                              (the v1 addresses) redirect to /status; /map/ is the engineers' diagram with live dots
 //   GET  /api/status                           lib/mission.mjs snapshot + studio + now (the server's clock) + since + last_action;
@@ -104,6 +104,10 @@ if (userInfo().username === 'river') {
 const git = (...args) => { try { return execFileSync('git', ['-C', REPO, ...args], { encoding: 'utf8' }).trim(); } catch { return null; } };
 const missionTree = () => git('rev-parse', 'HEAD:mission');
 const BOOT_TREE = missionTree();
+// The show registry (shows.json at the repo root) is mission control's input too (model.js reads it at load): a change there
+// restarts it as new mission/ code does.
+const codeTree = () => { const t = missionTree(); return t && `${t} ${git('rev-parse', 'HEAD:shows.json') ?? '-'}`; };
+const SHOWS_FILE = env.MISSION_SHOWS_FILE || join(HERE, '..', 'shows.json');
 // GET /version (no login): so a push can be confirmed from outside once the live site restarts on it. Only this leaves the box.
 const COMMIT = git('rev-parse', 'HEAD');
 const VERSION = { commit: COMMIT, short: COMMIT && COMMIT.slice(0, 7), mission_tree: BOOT_TREE, started: new Date().toISOString(),
@@ -152,7 +156,7 @@ function stepContext() {
 }
 
 let mission = null;                // set below; the self-update's quiet() reads it
-const update = new SelfUpdate({ boot: BOOT_TREE, tree: missionTree, exit: () => process.exit(0),
+const update = new SelfUpdate({ boot: codeTree(), tree: codeTree, exit: () => process.exit(0),
                                 quiet: () => { const st = studio.status(); return !st.running && !st.queue.length && !!mission && !mission.busy(); } });
 const studio = new Studio({ runner: await makeRunner(), dir: STATE });
 const lights = FIXTURES ? null : new Lights({ sshHost: 'bitcube' });
@@ -429,6 +433,8 @@ const server = createServer(async (req, res) => {
       return send(res, 200, { ok: true }, 'application/json', { 'set-cookie': cookie });
     }
     if (path === '/healthz') return send(res, 200, { ok: true });
+    // the show registry, for model.js in the pages (public, as in the repo: no data beyond what GitHub shows)
+    if (path === '/shows.json' && req.method === 'GET') return existsSync(SHOWS_FILE) ? sendFile(req, res, SHOWS_FILE, 'application/json') : send(res, 404, { error: 'no shows.json' });
     if (path === '/version') return send(res, 200, VERSION);
 
     const cookies = parseCookies(req.headers.cookie);

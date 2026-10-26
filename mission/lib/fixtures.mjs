@@ -36,8 +36,8 @@
 // snapshot's `applying` (started_at on the scenario's clock), a conflicting one answers 409 "wait: ...", and a calibration
 // can't start under a switch, rebuild or boot-file change. So a page can be tested through applying and confirming, a switch,
 // a rebuild or a boot-file change holds for applyS seconds (MISSION_FIXTURE_APPLY_S, 6; a rebuild twice that) before it
-// answers; then, in that scenario's world only and in memory, a switch makes TouchDesigner report the new file (and sets the
-// boot file, as probe.ps1's switch does), a boot-file change its boot_file. As live, a switch or a rebuild that answered stays
+// answers; then, in that scenario's world only and in memory, a switch makes TouchDesigner report the new file (the boot
+// file stays, as probe.ps1's switch leaves it), a boot-file change its boot_file. As live, a switch or a rebuild that answered stays
 // in status.applying as 'confirming' while TouchDesigner restarts: for another applyS seconds the world's TouchDesigner reports
 // "restarting on <file>" (what the switch's own answer says live, until the next full check), then it answers on the new file
 // and the next snapshot confirms the change (status.confirmed names its entry); a rebuild records the map in use (rebuilt())
@@ -48,7 +48,7 @@ import { CAMERAS, calBlocked, checkedControl, awaitsReading, startingBlocked, te
 import { Applying } from './applying.mjs';
 import { readLocalPixelmap, summarizePixelmap, checkedCalibrate } from './lights.mjs';
 import { atlasFromUprights } from '../public/screens.js';
-import { changeLabel } from '../public/model.js';
+import { changeLabel, FILES } from '../public/model.js';
 
 const NAME = /^[a-z0-9-]+$/;
 const STILL_AGE_S = 20;
@@ -225,7 +225,7 @@ export class FixtureMission {
       const hold = (HOLD[action] ?? 0) * this.applyS;
       if (hold > 0) await this.sleep(hold * 1000);
       if (action === 'switch' || action === 'rebuild') {     // a rebuild ends in the switch path: TouchDesigner restarts on the file
-        w.file = checked.file; w.boot_file = checked.file;
+        w.file = checked.file;          // a switch leaves the boot file alone (probe.ps1: only bootfile writes boot-file.txt)
         w.restarting = this.applyS > 0 ? { file: checked.file, until: this.now() + this.applyS * 1000 } : null;
       }
       if (action === 'bootfile') w.boot_file = checked.file;
@@ -234,12 +234,13 @@ export class FixtureMission {
         w.test = checked.on;
       }
       if (action === 'rebuild') {
-        const done = this.calibFor(scenario).status();
-        baked = { map: (done.ok === true && done.result?.map) || (this.pixelmapDir ? readLocalPixelmap(this.pixelmapDir)?.file : null) || null, file: checked.file };
+        // as probe.ps1's rebuilt_map: the map the show pins in shows.json, never the newest calibration
+        const pinned = FILES[checked.file]?.show?.calibration?.pixelmap;
+        baked = { map: typeof pinned === 'string' ? pinned.replace(/^.*\//, '') : null, file: checked.file };
       }
       const changed = HOLD[action] ? "fixture mode: nothing on bitcube was changed; only this scenario's world (in memory)" : 'fixture mode: nothing was changed';
       // a switch's or boot-file change's answer carries the boot file as probe.ps1's reading does (it reads boot-file.txt back)
-      return { ok: true, fixture: true, action, body: checked, note: changed, ...(action === 'rebuild' ? { rebuilt: true, saved: true, switched: true } : {}),
+      return { ok: true, fixture: true, action, body: checked, note: changed, ...(action === 'rebuild' ? { rebuilt: true, saved: true, switched: true, rebuilt_map: baked.map } : {}),
                ...(action === 'bootfile' || action === 'switch' ? { boot_file: w.boot_file } : {}) };
     }, { clock: () => this.clock(scenario), running, source, requestId, awaits: (r) => awaitsReading(action, r, checked),
          onConfirmed: () => { if (baked) w.rebuilt = { at: this.now(), ...baked }; } });

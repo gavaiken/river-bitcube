@@ -63,17 +63,15 @@ def test_probe_masks_log_lines_before_it_cuts_them():
 
 
 def test_probe_reports_the_boot_file_start_river_would_open():
-    """boot_file is the show file Start-River.cmd opens, never 'Start-River.cmd default' (review round 5, finding 19):
-    boot-file.txt's file when it exists, else the same files in the same order as the launcher's fallbacks."""
+    """boot_file is the show file Start-River.cmd opens, never 'Start-River.cmd default' (review round 5, finding 19): both work it
+    out with the same code, tools/shows.ps1 (boot-file.txt's offered, can_boot show, else shows.json's boot_default)."""
     src = PROBE.read_text(encoding='utf-8')
     cmd = (TOOLS.parent / 'Start-River.cmd').read_text(encoding='utf-8')
+    shows = (TOOLS / 'shows.ps1').read_text(encoding='utf-8')
     assert 'Start-River.cmd default' not in src
-    default = re.search(r'^set "TOE=%~dp0([\w.-]+\.toe)"', cmd, re.M).group(1)
-    overrides = re.findall(r'^if exist "%~dp0([\w.-]+\.toe)" set "TOE=%~dp0\1"', cmd, re.M)
-    launcher = list(reversed(overrides)) + [default]          # a later line overrides an earlier one: the last that exists wins
-    probe = re.search(r"if \(-not \$boot\) \{ \$boot = @\(([^)]*)\)", src).group(1)
-    assert re.findall(r"'([\w.-]+\.toe)'", probe) == launcher, (probe, launcher)
-    assert 'boot-file.txt' in cmd and re.search(r"Join-Path \$river 'boot-file.txt'", src), 'both read River\\boot-file.txt'
+    assert r'tools\shows.ps1' in cmd and r". (Join-Path $repo 'tools\shows.ps1')" in src
+    assert '$bootPick = Resolve-BootFile $reg' in src and '(Resolve-BootFile $reg).file' in shows
+    assert "Join-Path $ShowsRiver 'boot-file.txt'" in shows and '$reg.boot_default' in shows
     assert '$out.boot_file_chosen' in src
 
 

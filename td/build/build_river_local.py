@@ -1,7 +1,7 @@
 # Build (or update) /project1/river_local: a rain/river field in camera space, sampled onto the ropes
 # (via the camera pixel map) and HUB75 quad 1 (via its camera-space corners). Built-in TOPs only, no GLSL.
 # Idempotent; run with  .\tools\td.ps1 -File .\td\build\build_river_local.py
-# Pixel map: tools/pixelmap/pixelmap-2026-10-18.json (tools/pixelmap/capture.py + decode.py + hub75.py).
+# Pixel map: the one this show pins in shows.json (tools/pixelmap/capture.py + decode.py + hub75.py make them).
 # The UVs are copied into a Table DAT inside the .toe, so the show file needs no outside input.
 #
 #   field (1280x720, camera frame) = river (noise -> level -> colour ramp) + rain (feedback streaks)
@@ -9,19 +9,24 @@
 #   -> /project1/ropes Canvas;  field -> Corner Pin (quad 1 corners) -> 256x128 -> /project1/panels Quad1
 #
 # Only for the checkpoint file: it rewires the shared ropes and panels COMPs and switches Andi's Web Render
-# off, so it refuses to run in anything but a river-local-*/river-online-* file (never the seasons file or an old-… file).
-import glob
+# off, so it refuses to run in any file whose shows.json entry doesn't name this script as its build.
 import json
 import sys
 
 REPO = 'C:/Users/user/River/river-bitcube'
-PIXELMAP = sorted(glob.glob(REPO + '/tools/pixelmap/pixelmap-????-??-??.json'))[-1].replace('\\', '/')   # newest
 N_ROPES, N_PX = 20, 400
 FIELD_W, FIELD_H = 1280, 720
 
-if not project.name.startswith(('river-local', 'river-online')) or 'seasons' in project.name:
-    raise RuntimeError(f'build_river_local.py rewires ropes/panels; open river-online-*.toe first '
-                       f'(TD has {project.name} open). Use  td_save.ps1 -Target river-local-....toe  to make one.')
+# Which show file this script builds comes from the show registry (shows.json, docs/shows.md), not the file's name.
+if REPO + '/td/build' not in sys.path:
+    sys.path.insert(0, REPO + '/td/build')
+import importlib
+import registry
+importlib.reload(registry)
+SHOW = registry.require_build(project.name, 'td/build/build_river_local.py')   # rewires ropes/panels: never another file
+# The calibration this show pins in shows.json (never the newest dated file: a re-map reaches it only once its entry pins it).
+_cal = registry.calibration_for(project.name)
+PIXELMAP, PINNED_SCREENS = _cal['pixelmap'], _cal['screens']
 
 proj = op('/project1')
 rl = proj.op('river_local') or proj.create(baseCOMP, 'river_local')

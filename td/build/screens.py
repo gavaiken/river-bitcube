@@ -20,8 +20,8 @@
 # (0,384); found by lighting bands of the picture and watching the camera, 23 Oct.
 # `screens_preview` shows the ropes and the four screens upright side by side (672x256): what TD sends, for the
 # live page (VNC shows TD's panels window as black).
-import glob
 import json
+import sys
 
 SC = SCREENS_COMP
 P = globals().get('SCREEN_PREFIX', 'quad')
@@ -71,10 +71,16 @@ SC.par.Screentest = SC.par.Screencorners = False
 SC.par.Screensolo = 0
 SC.par.Screenquarter = 0
 
-# Where each screen hangs in the camera frame, if located: the caller's pinned file (global PINNED_SCREENS, a path),
-# else the newest screens-*.json.
-_files = sorted(glob.glob(REPO + '/tools/pixelmap/screens-????-??-??.json'))
-SCREEN_FILE = globals().get('PINNED_SCREENS') or (_files[-1].replace('\\', '/') if _files else None)
+# Where each screen hangs in the camera frame, if located: the caller's pinned file (global PINNED_SCREENS, a path, or None
+# for none), else the pin in the show registry for the open file (shows.json calibration.screens; td/build/registry.py).
+# Never the newest screens-*.json: a new calibration reaches a show only once its entry pins it.
+if 'PINNED_SCREENS' in globals():
+    SCREEN_FILE = PINNED_SCREENS
+else:
+    if REPO + '/td/build' not in sys.path:
+        sys.path.insert(0, REPO + '/td/build')
+    import registry
+    SCREEN_FILE = registry.calibration_for(project.name)['screens']
 LOCATED = {}
 if SCREEN_FILE:
     with open(SCREEN_FILE, encoding='utf-8') as f:
