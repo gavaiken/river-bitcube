@@ -726,9 +726,13 @@ export function derive(status, nowMs) {
   const waitFor = (action) => { const a = applying.find((x) => x.blocks.includes(action) || (APPLY_BLOCKS[action] ?? []).includes(x.action)); return a ? `wait: ${a.label} is being applied` : null; };
 
   // ---- show: what the piece is doing -----------------------------------------------------------------------------
-  const ropesState = !pr || online === false || !td ? 'unknown' : !tdOk || !senderKnown || senderErr || !rs.open || senderOff || boxesDown.length === 2 ? 'not-reaching' : calRopes ? 'calibrating' : ropesDark ? 'dark' : 'river';
+  // a restart (a switch, a rebuild, TouchDesigner opening a file at boot) has the ropes dark for a minute: never "not getting the
+  // river", the words for a cable or sender fault (R7 #18)
+  const ropesState = !pr || online === false || !td ? 'unknown' : tdRestarting || tdOffBooting ? 'restarting'
+    : !tdOk || !senderKnown || senderErr || !rs.open || senderOff || boxesDown.length === 2 ? 'not-reaching' : calRopes ? 'calibrating' : ropesDark ? 'dark' : 'river';
   const ropesWords = { river: kind === 'live' ? (relay?.fresh ? 'the ropes show the live river' : 'the ropes show the rain fallback') : 'the ropes show the river',
                        dark: 'the ropes are dark on purpose', 'not-reaching': 'the ropes are not getting the river', unknown: 'the ropes are not known',
+                       restarting: `the ropes are dark while TouchDesigner ${tdRestarting ? 'restarts' : 'starts'}`,
                        calibrating: `the ropes are ${calWords}` }[ropesState];
   const ropesItem = items.find((x) => x.id === 'ropes');
   // The panels, the same way: a state word for the page and plain words, beside the item's summary.
@@ -765,6 +769,9 @@ export function derive(status, nowMs) {
     // left_s is the one number every page shows (the band, the tiles, Lights' state line and its card); left_words says it
     calibration: calibrating ? { left_s: calLeftS, left_words: calLeftWords, stage: typeof cal.stage === 'string' ? cal.stage : null, dry: calDry, words: calStageWords } : null,
     uptime_s: upS != null ? Math.round(upS) : null,   // bitcube's uptime as of the server's clock (its restart = now - uptime)
+    // TouchDesigner restarting: on which file, and whether someone chose it here (a switch or a rebuild in status.applying): then
+    // it was started on purpose, and the Show file readout says "Restarting on …", never "What is showing isn't known" (R7 #18)
+    restart: tdRestarting ? { on: restartingOn, chosen: !!restartBy } : null,
     applying,   // [{ id, action, label, file, started_at (ms), expect_s, elapsed_s, blocks, phase, words }]: changes in flight, from any phone
     confirmed: confirmedList,   // [{ id, action, file, at }]: changes the server confirmed in the last 10 min (entryVerdict)
     expired: expiredList,       // the same, for changes it gave up on (no reading showed them within their limit)

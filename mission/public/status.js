@@ -346,9 +346,10 @@ function jumpButtons(o, m) {
     : `<button type="button" class="btn primary" data-act="${act}" data-target="${esc(t)}">${esc(l)}</button>`).join('')}</div>`;
 }
 /** "Call Lilian (the lights and the rigging)", a tel: link when the number is known; Colin asks; nobody yet waits. */
-function callLine(cause) {
+function callLine(cause, m = model) {
   const c = contactFor(cause);
-  if (cause === 'calibrating') return '<span class="call">Nothing to call about: this was started on purpose</span>';
+  // a calibration, or a switch, restart or rebuild someone chose here (status.applying holds it): started on purpose (R7 #18)
+  if (cause === 'calibrating' || (cause === 'td-restarting' && m?.show.restart?.chosen)) return '<span class="call">Nothing to call about: this was started on purpose</span>';
   if (!c) return '<span class="call">Nobody to call yet: wait and look again</span>';
   const key = Object.keys(CONTACTS).find((k) => CONTACTS[k] === c) ?? c.name.toLowerCase();
   const owns = cause === 'page' ? 'mission control and the Mac mini' : OWNS[key] ?? c.owns;
@@ -548,7 +549,9 @@ function rowHTML(x, m) {
     addrHTML(x, m),
   ].join('');
   // from a last answer the since already ends "when last seen": the tag isn't said twice (R5 #25)
-  const since = x.level !== 'ok' ? sinceSpan(x.id, x.level, [x.summary, x.detail], x) : '';
+  // a piece dark while TouchDesigner restarts keeps its level before the restart in the history (Recent says the restart once),
+  // so its since would be the old state's ("Attention for 3 min" on a restart seconds old): none, the band's chip says it (R7 #4)
+  const since = x.level !== 'ok' && x.cause !== 'td-restarting' ? sinceSpan(x.id, x.level, [x.summary, x.detail], x) : '';
   return `<details class="row lv-${x.level}${x.stale ? ' stale' : ''}" data-id="${esc(x.id)}" id="${rid(x.id)}"${op(x.id)}><summary>
       ${mark(x.level)}<div><div class="name">${esc(NAME[x.id] ?? x.name)} <span class="state">· ${WORD[x.level]}</span></div>
       <div class="sum">${esc(nb(x.summary))}</div><div class="from">from ${FROM[x.checked_from]} · ${ageSpan(x.age_s)}${x.stale && !since ? ' · last seen' : ''}${since}</div></div><span class="chev" aria-hidden="true">›</span></summary>
@@ -652,7 +655,7 @@ function showfileCtlHTML(m, onlyKind = null, where = onlyKind ? 'year' : 'td') {
   const running = s.file?.name, o = off('switch'), host = `ctl-switch-${where}`;
   const btns = files.map((f) => `<button type="button" id="${host}-${FILES[f]?.kind ?? 'other'}" class="btn ${f === running ? '' : 'primary'}" data-act="switch" data-file="${esc(f)}" ${o ? 'disabled' : ''}>${f === running ? `Restart on ${esc(fileLabel(f))}` : `Switch to ${esc(fileLabel(f))}`}</button>`).join('');
   return `<div class="ctl ${whyOf('switch') && !busy('switch') ? 'off' : ''}" id="${host}" data-ctl="switch"${busy('switch') ? ' aria-busy="true"' : ''}><div class="ctl-h">Show file</div>${whyLine('switch', host)}
-    <div class="readout">${s.file ? `Now showing <b>${esc(s.file.label)}</b>` : "What is showing <b>isn't known</b>"}${s.boot_file ? ` · opens at boot: ${esc(bootWords(s.boot_file))}` : ''}</div>
+    <div class="readout">${s.file ? `Now showing <b>${esc(s.file.label)}</b>` : s.restart ? `Restarting on <b>${esc(s.restart.on)}</b>` : "What is showing <b>isn't known</b>"}${s.boot_file ? ` · opens at boot: ${esc(bootWords(s.boot_file))}` : ''}</div>
     <div class="row-btns">${btns}</div>
     <div class="effect">Switching restarts TouchDesigner on that file: the lights go dark for about a minute and unsaved changes in TouchDesigner are lost. That file then also opens at boot. It asks first.</div>
     ${statusLine(host, ['switch'])}</div>`;

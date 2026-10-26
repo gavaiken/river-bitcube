@@ -94,6 +94,7 @@ function linkWord(link, it, m) {
       const st = m.show.ropes.state;
       if (st === 'calibrating') return 'calibrating';
       if (st === 'dark') return 'sending black';
+      if (st === 'restarting') return 'dark, restarting';
       if (st === 'not-reaching') return /frozen|not running|not being driven/i.test(s) ? 'not driven' : /restart|starts/i.test(s) ? 'dark, restarting' : 'not reaching';
       if (L === 'warning') return /slowly|frames a second/i.test(s) ? 'driven slowly' : 'see details';
       return L === 'ok' ? 'sender open' : 'see details';
@@ -123,7 +124,8 @@ function fromLine(it) {
 function sinceLine(it) {
   const s = p.last?.since?.items?.[it.id];
   // as Status: never for an OK item, and never when it would contradict the words beside it (ui.js sinceAgrees)
-  if (!s || s.for_s == null || s.level !== it.level || it.level === 'ok' || !sinceAgrees(s, [it.summary, it.detail], NAMES_FROM_BITCUBE.has(it.id), S.m?.show.uptime_s)) return '';
+  // nor for a piece dark while TouchDesigner restarts: its history keeps the state before the restart (R7 #4)
+  if (!s || s.for_s == null || s.level !== it.level || it.level === 'ok' || it.cause === 'td-restarting' || !sinceAgrees(s, [it.summary, it.detail], NAMES_FROM_BITCUBE.has(it.id), S.m?.show.uptime_s)) return '';
   // from a last answer it stops where the item was last seen ("Down for over 22 min when last seen"), never ticking on
   const w = sinceWords(s, it, elapsedS());
   return w ? `<div class="since">${esc(fmt.nb(w))}</div>` : '';

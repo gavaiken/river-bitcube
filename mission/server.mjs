@@ -62,7 +62,7 @@ import { Studio } from './lib/studio.mjs';
 import { Mission, checkedControl } from './lib/mission.mjs';
 import { FixtureMission, CALIBRATION_OUTCOMES } from './lib/fixtures.mjs';
 import { Lights, readLocalPixelmap, readLocalScreens, checkedCalibrate } from './lib/lights.mjs';
-import { History, describeEvent } from './lib/history.mjs';
+import { History, describeEvent, feed } from './lib/history.mjs';
 import { describeTool } from './lib/steps.mjs';
 import { SelfUpdate } from './lib/update.mjs';
 import { CONTACTS, derive } from './public/model.js';
@@ -420,7 +420,7 @@ const server = createServer(async (req, res) => {
       const events = h.recent({ limit: Math.min(500, Number(url.searchParams.get('limit')) || 50), kinds: kinds ? kinds.split(',').map((k) => k.trim()).filter(Boolean) : undefined,
                                 sinceT: Number.isFinite(sinceT) && sinceT > 0 ? sinceT : undefined });
       const summary = h.summary();
-      return send(res, 200, { now: Date.now(), events: events.map((e) => ({ ...e, words: describeEvent(e) })), since: summary.since, last_action: withWords(summary.last_action), count: summary.count });
+      return send(res, 200, { now: Date.now(), events: feed(events), since: summary.since, last_action: withWords(summary.last_action), count: summary.count });
     }
     if (path === '/api/contacts') return send(res, 200, contacts());
     // What TouchDesigner is sending to the lights right now (the contract at the top of lib/lights.mjs; one shape in both modes).

@@ -113,7 +113,9 @@ export class History {
         // the ropes and panels in calibration patterns are the calibration's own line below, not news of their own: the
         // piece keeps its last level, so the run ending with everything back is no event either. They are still seen, so
         // a five-minute run is never an "unseen stretch" that restarts their since.
-        if (it.cause === 'calibrating') { if (!it.stale) this.knownAt[it.id] = t; continue; }
+        // The same for a restart (a switch, a rebuild, TouchDesigner restarting on a file): the overall line says it once, so
+        // TouchDesigner, the ropes, the panels and the year's page dark meanwhile are not lines of their own (R7 #23)
+        if (it.cause === 'calibrating' || it.cause === 'td-restarting') { if (!it.stale) this.knownAt[it.id] = t; continue; }
         const p = this.state.items[it.id], seen = this.knownAt[it.id];
         const gap = !!p && (seen == null || (this.prevObs != null && seen < this.prevObs));
         if (!it.stale) this.knownAt[it.id] = t;          // a last answer from a quiet source is not a sighting
@@ -133,7 +135,8 @@ export class History {
       const show = { file: m.show.file?.name, mode: m.show.mode?.id, season: m.show.season, ropes: m.show.ropes?.state === 'unknown' ? null : m.show.ropes?.state };
       for (const field of SHOW_FIELDS) {
         const to = str(show[field], 80), p = this.state.show[field];
-        if (to == null || to === 'calibrating' || (p && p.value === to)) continue;
+        // the ropes in calibration patterns or dark while TouchDesigner restarts: the calibration's or the restart's own line
+        if (to == null || to === 'calibrating' || to === 'restarting' || (p && p.value === to)) continue;
         rec({ kind: 'show', field, from: p?.value ?? null, to });
       }
       // The calibration job (lib/lights.mjs: the full check carries its progress file while one ran in the last 24 h).
@@ -377,7 +380,8 @@ function showWords(ev) {
     case 'mode': return `${first ? 'The year runs in' : "The year's mode changed to"} ${ev.to}${first ? ' mode' : ''}${MODE_WHY[ev.to] ? `: ${MODE_WHY[ev.to]}` : ''}`;
     case 'season': return first ? `The season is ${ev.to}` : `The season turned to ${ev.to}`;
     case 'ropes': return { river: first ? 'The ropes show the river' : 'The ropes show the river again', dark: first ? 'The ropes are dark on purpose' : 'The ropes went dark on purpose',
-                           'not-reaching': first ? 'The ropes are not getting the river' : 'The ropes stopped getting the river' }[ev.to] ?? `The ropes are ${ev.to}`;
+                           'not-reaching': first ? 'The ropes are not getting the river' : 'The ropes stopped getting the river',
+                           restarting: 'The ropes are dark while TouchDesigner restarts' }[ev.to] ?? `The ropes are ${ev.to}`;
     default: return `${cap(String(ev.field))} changed to ${ev.to}`;
   }
 }
@@ -427,6 +431,19 @@ function plainNote(note) {
   if (/timeout|too long|aborted/i.test(n)) return 'it took too long';
   if (/fetch failed|ECONN|HTTP \d/i.test(n)) return 'the page did not answer';
   return /\b(fps|tcp|vnc|rtsp|psac10|oserror|art-?net|wmi|json|undefined|null|NaN|epoch|toe)\b/i.test(n) ? null : lc(n);
+}
+
+/** Events as a feed shows them (GET /api/history, the menu's Recent): each with its words, and never the same words twice at one
+ *  moment (the verdict and the piece that caused it can say the same thing: "TouchDesigner is restarting on the river's year"
+ *  once, R7 #23). Any order; the first of two equal lines is kept. */
+export function feed(events) {
+  const out = [];
+  for (const ev of Array.isArray(events) ? events : []) {
+    const words = describeEvent(ev);
+    if (out.some((o) => o.words === words && o.t === ev?.t)) continue;
+    out.push({ ...ev, words });
+  }
+  return out;
 }
 
 /** One plain sentence for a feed; never throws. */

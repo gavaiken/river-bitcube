@@ -157,7 +157,8 @@ export function lastDoneParts(a, st) {
 export const applyingLine = (a, elapsedS) => entryWords(a, elapsedS);
 
 // ---- the tiles ---------------------------------------------------------------------------------------------------------
-export const ROPES_STATE = { river: 'Showing the river', dark: 'Dark on purpose', 'not-reaching': 'Not getting the river', calibrating: 'In calibration patterns', unknown: 'Not known' };
+export const ROPES_STATE = { river: 'Showing the river', dark: 'Dark on purpose', 'not-reaching': 'Not getting the river', restarting: 'Dark while restarting',
+  calibrating: 'In calibration patterns', unknown: 'Not known' };
 export const PANELS_STATE = { unknown: 'Not known', 'no-sender': 'No panel sender', restarting: 'Dark while restarting', frozen: 'Picture frozen',
   gone: 'Nothing drawn', 'no-output': 'No panel output', off: 'Switched off', calibrating: 'In calibration patterns', river: 'Showing the river' };
 /** A calibration's second line: "about 4 min more · stop it on the Lights page" ("nearly done" in its last 45 s): the model's one
@@ -177,6 +178,7 @@ export function ropesTile(m, x, bothDown) {
   // the power is a measurement: it stays in the row's Power line (copy rules: a number in a summary only when it is the reason)
   const words = r.state === 'calibrating' ? calLine(m)
     : r.state === 'dark' ? 'Someone pressed Dark; nothing is broken'
+    : r.state === 'restarting' ? 'Back in about a minute'
     : r.state === 'river' && x.level === 'ok' ? (live && !m.show.river.live ? 'No live frames; sender open' : 'Sender open')
     : adds(state, x.summary);
   return { state, words };

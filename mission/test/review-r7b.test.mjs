@@ -79,3 +79,61 @@ test('R7 #32: fixture mode serves a calibration copy as read now, so its time le
   const real = derive({ ...snap, probe: { ...snap.probe, value: { ...snap.probe.value, calibration: { ...snap.probe.value.calibration, read_age_s: undefined } } } }, snap.now).show.calibration.left_s;
   assert.ok(left > real || snap.probe.age_s === 0, 'without it the copy would be aged by the full check');
 });
+
+test('R7 #23: a restart is a few lines in Recent: never the same words twice, never the ropes "stopped getting the river"', async () => {
+  const { History, describeEvent, feed } = await import('../lib/history.mjs');
+  let t = 1_792_749_540_000;
+  const h = new History({ file: null, now: () => t });
+  const probe = (td) => ({ ok: true, at: t, value: { ok: true, uptime_h: 30, time: '2026-10-25T02:59:00', boot_file: YEAR, show_files: [YEAR, LIVE], displays: ['M14', 'LED 1920X1080'],
+    devices: { psac10_1: true, psac10_2: true, gallery_cam: true, river_cam: true, router: true, internet: true },
+    td: td ?? { ok: true, file: YEAR, fps: 60, errors: 0, ropes: { source: 'canvas', status: { open: true, active: true, watts: [100, 100] } }, hub75: { brightness: 1, output: true } } } });
+  const status = (td, applying = []) => ({ now: t, bitcube: { ok: true, at: t, value: { online: true } }, probe: probe(td), seasons: { ok: true, at: t, value: { season: 'winter', mode: 'automatic', intensity: 0.2, presence: { available: false } } },
+    modal: { ok: true, at: t, value: { ok: true, tick: 1, next_tick_epoch: t / 1000 + 200, finished_at: new Date(t - 60_000).toISOString() } }, applying });
+  h.observe(status()); t += 5000;
+  const n0 = h.events.length;
+  h.action({ action: 'switch', body: { file: YEAR }, ok: true, source: 'mission control', label: "the restart on the river's year" });
+  const entry = [{ id: 'a.1', action: 'switch', label: "the restart on the river's year", file: YEAR, phase: 'confirming', started_at: t - 3000, answered_at: t - 1000, expect_s: 60, blocks: ['ropes'] }];
+  for (const td of [{ ok: false, error: 'not running' }, { ok: false, error: 'not answering' }, { ok: false, error: 'not answering' }]) { h.observe(status(td, entry)); t += 5000; }
+  h.observe(status()); t += 5000;
+  const since = feed(h.events.slice(n0)).map((e) => e.words);
+  assert.ok(since.length <= 4, `a restart is a few lines: ${JSON.stringify(since)}`);
+  assert.ok(since.some((w) => /^TouchDesigner is restarting on the river's year/.test(w)), JSON.stringify(since));
+  assert.ok(!since.some((w) => /stopped getting the river|ropes are dark while|ropes are OK again|show the river again/i.test(w)), JSON.stringify(since));
+  for (let i = 1; i < since.length; i++) assert.notEqual(since[i], since[i - 1], 'never the same line twice in a row');
+  // the same words at the same moment are one line, whatever made them
+  const twice = feed([{ kind: 'overall', t: 5, level: 'warning', headline: 'TouchDesigner is restarting on the river\'s year' }, { kind: 'item', t: 5, id: 'touchdesigner', from: 'ok', to: 'warning', summary: "Restarting on the river's year" }]);
+  assert.equal(twice.length, 1);
+  assert.equal(describeEvent({ kind: 'show', field: 'ropes', from: 'river', to: 'restarting' }) !== '', true);
+});
+
+/** A /api/status payload at t, TouchDesigner as given, with what is in flight. */
+function payload({ t = 1_792_749_540_000, td, applying = [], calibration = null } = {}) {
+  return { now: t, bitcube: { ok: true, at: t, value: { online: true } }, seasons: { ok: true, at: t, value: { season: 'winter', mode: 'automatic', intensity: 0.2, presence: { available: false } } },
+    modal: { ok: true, at: t, value: { ok: true, tick: 1, next_tick_epoch: t / 1000 + 200, finished_at: new Date(t - 60_000).toISOString() } },
+    probe: { ok: true, at: t, value: { ok: true, uptime_h: 30, time: '2026-10-25T02:59:00', boot_file: YEAR, show_files: [YEAR, LIVE], displays: ['M14', 'LED 1920X1080'],
+      devices: { psac10_1: true, psac10_2: true, gallery_cam: true, river_cam: true, router: true, internet: true },
+      ...(calibration ? { calibration } : {}),
+      td: td ?? { ok: true, file: YEAR, fps: 60, errors: 0, ropes: { source: 'canvas', status: { open: true, active: true, watts: [100, 100] } }, hub75: { brightness: 1, output: true } } } },
+    applying };
+}
+const SWITCH_ENTRY = (t) => [{ id: 'a.1', action: 'switch', label: "the switch to the river's year", file: YEAR, phase: 'confirming', started_at: t - 3000, answered_at: t - 1000, expect_s: 60, blocks: ['ropes', 'hub75', 'switch'] }];
+
+test('R7 #18: while a chosen switch, restart or rebuild restarts TouchDesigner, the ropes are dark while it restarts, not a fault', async () => {
+  const { derive } = await import('../public/model.js');
+  const { ropesTile } = await import('../public/status-words.js');
+  const t = 1_792_749_540_000;
+  const m = derive(payload({ t, td: { ok: false, error: 'not running' }, applying: SWITCH_ENTRY(t) }), t);
+  assert.equal(m.overall.cause, 'td-restarting');
+  assert.equal(m.show.ropes.state, 'restarting');
+  assert.equal(m.show.ropes.words, 'the ropes are dark while TouchDesigner restarts');
+  assert.deepEqual(m.show.restart, { on: "the river's year", chosen: true });
+  const ropes = m.items.find((x) => x.id === 'ropes');
+  assert.deepEqual(ropesTile(m, ropes, false), { state: 'Dark while restarting', words: 'Back in about a minute' });
+  // bitcube says it is restarting, but nobody here chose it (no entry): who to call stays "wait and look again"
+  const m2 = derive(payload({ t, td: { ok: false, error: `restarting on ${LIVE}` } }), t);
+  assert.equal(m2.show.ropes.state, 'restarting');
+  assert.deepEqual(m2.show.restart, { on: 'the live river', chosen: false });
+  // a frozen TouchDesigner is still a fault: the ropes aren't being driven
+  assert.equal(derive(payload({ t, td: { ok: false, error: 'not answering' } }), t).show.ropes.state, 'not-reaching');
+  assert.equal(derive(payload({ t }), t).show.restart, null);
+});

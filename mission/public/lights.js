@@ -322,7 +322,8 @@ function renderMapCard() {
   let noteHtml = '';
   // what TouchDesigner sends is not what the room shows when the lights aren't connected: said over the map, and dimmed
   const ropesSt = S.m?.show.ropes.state, panelsSt = S.m?.show.panels.state;
-  const notGetting = [ropesSt === 'not-reaching' ? "the ropes aren't getting it" : '', panelsSt === 'no-sender' ? 'the panels have no sender' : ''].filter(Boolean);
+  const notGetting = [ropesSt === 'not-reaching' ? "the ropes aren't getting it" : ropesSt === 'restarting' ? 'the ropes are dark while TouchDesigner restarts' : '',
+    panelsSt === 'no-sender' ? 'the panels have no sender' : ''].filter(Boolean);
   const unsent = live && !!S.lights.frames && !pageDown() && !frameOld() && notGetting.length > 0;
   const miss = hasMap ? null : missing();
   if (miss) noteHtml = `${mark('unknown')}<span>${esc(fmt.nb(miss.note))}</span>`;
@@ -613,10 +614,12 @@ function renderStrips() {
     const dark = l.frames.source === 'black' || l.frames.ropes?.source === 'black';
     text = dark ? 'The ropes are dark on purpose: TouchDesigner sends black. The panels still show the river.' : 'What TouchDesigner sends to each LED and screen, from bitcube.';
     if (!dark && m?.show.ropes.state === 'not-reaching') {
-      // the reason once, in the model's words without its own lead ("Not reaching the lights: sender retrying, both boxes silent")
-      const s = m.show.ropes.summary.replace(/\.$/, ''), why = s.includes(': ') ? s.slice(s.indexOf(': ') + 2) : s;
+      // the reason once, in the model's words without its own lead ("Not reaching the lights: sender retrying, both boxes silent"),
+      // lower case after the colon unless it starts with a name
+      const s = m.show.ropes.summary.replace(/\.$/, ''), w = s.includes(': ') ? s.slice(s.indexOf(': ') + 2) : s;
+      const why = /^(TouchDesigner|bitcube|Rope box|Will)/.test(w) ? w : w.charAt(0).toLowerCase() + w.slice(1);
       text += ` The ropes aren't getting it: ${why}.`;
-    }
+    } else if (!dark && m?.show.ropes.state === 'restarting') text += ` ${cap(m.show.ropes.words)}: they come back with it, in about a minute.`;   // R7 #18
     if (frameOld()) { text = `No new frame for ${fmt.nb(dur(frameAgeS()))}${l.error ? `: ${l.error}` : ''}. This is the last one received.`; bad = true; }
   } else {
     text = l.error && /:/.test(l.error) ? `Can't show the lights. ${cap(l.error)}.` : `Can't show the lights: ${l.error ?? 'no frames yet'}.`;
