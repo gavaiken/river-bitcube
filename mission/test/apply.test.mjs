@@ -43,16 +43,16 @@ test('an entry blocks every action in its blocks on every phone, "wait: <label> 
   assert.equal(run([SWITCH], 12_000).show.applying[0].elapsed_s, 32);
 });
 
-test('what blocks what: a ropes change blocks the ropes only; without blocks, the contract table', () => {
+test('what blocks what: a ropes change blocks the ropes, and what would block it waits for it; without blocks, the contract table', () => {
   let m = run([{ id: 'r', action: 'ropes', label: 'a ropes change', started_at: NOW - 1000, expect_s: 10, blocks: ['ropes'] }]);
-  assert.equal(m.controls.ropes.why, 'wait: a ropes change is being applied');
-  for (const k of ['hub75', 'mode', 'switch', 'calibrate', 'rebuild']) assert.equal(m.controls[k].possible, true, k);
+  for (const k of ['ropes', 'switch', 'calibrate', 'rebuild']) assert.equal(m.controls[k].why, 'wait: a ropes change is being applied', k);
+  for (const k of ['hub75', 'mode']) assert.equal(m.controls[k].possible, true, k);
   m = run([{ id: 'b', action: 'bootfile', label: 'the boot file change', started_at: NOW - 1000, expect_s: 30 }]);
   for (const k of ['switch', 'rebuild', 'bootfile', 'calibrate']) assert.equal(m.controls[k].why, 'wait: the boot file change is being applied', k);
   for (const k of ['ropes', 'hub75', 'mode', 'rules']) assert.equal(m.controls[k].possible, true, k);
   m = run([{ id: 'l', action: 'lightsroute', started_at: NOW - 1000, expect_s: 30 }]);
-  for (const k of ['ropes', 'hub75', 'lightsroute', 'calibrate']) assert.equal(m.controls[k].why, 'wait: a lighting port change is being applied', k);
-  assert.equal(m.controls.switch.possible, true);
+  for (const k of ['ropes', 'hub75', 'lightsroute', 'calibrate', 'switch', 'rebuild']) assert.equal(m.controls[k].why, 'wait: a lighting port change is being applied', k);
+  assert.equal(m.controls.mode.possible, true, 'the year is not touched by the lighting port');
   for (const a of ['switch', 'rebuild']) assert.deepEqual([...APPLY_BLOCKS[a]].sort(), [...EVERY].sort(), a);
   for (const a of ['ropes', 'hub75', 'mode', 'target', 'rules', 'rules-reset']) assert.deepEqual(APPLY_BLOCKS[a], [a], a);
 });
@@ -173,4 +173,23 @@ test('elapsed m:ss and "usually about" for long changes only; ticking times are 
   assert.equal(applyingWords('Rebuilding…', 75, 400), 'Rebuilding · 1:15 · usually about 7 min');
   assert.equal(applyingWords('Sending…', 5, null), 'Sending…');
   assert.equal(confirmingWords(34), 'Sent · waiting for bitcube to show it · 0:34');
+});
+
+test('code review: the pages lock both ways too, from one table shared with the server', async () => {
+  const { BLOCKS } = await import('../lib/applying.mjs');
+  assert.equal(BLOCKS, APPLY_BLOCKS, 'one table: lib/applying.mjs takes model.js APPLY_BLOCKS');
+  const f = JSON.parse(readFileSync(new URL('./fixtures/all-good.json', import.meta.url), 'utf8'));
+  const st = { ...f.status, now: f._scenario.now, applying: [{ id: 'a1', action: 'ropes', label: 'a ropes change', started_at: f._scenario.now, expect_s: 15, blocks: ['ropes'] }] };
+  const m = derive(st, st.now + 1000);
+  assert.match(m.controls.switch.why ?? '', /^wait: a ropes change is being applied/, 'a switch would restart TouchDesigner under the ropes change');
+  assert.match(m.controls.ropes.why ?? '', /^wait: a ropes change/);
+  assert.equal(m.controls.mode.why, null, 'a ropes change does not touch the mode');
+});
+
+test('code review: the boot file reads "(by default)" from the probe\'s own boot_file_chosen flag', () => {
+  const f = JSON.parse(readFileSync(new URL('./fixtures/all-good.json', import.meta.url), 'utf8'));
+  const at = (chosen) => { const st = { ...f.status, now: f._scenario.now }; st.probe = { ...st.probe, value: { ...st.probe.value, boot_file: 'river-local-oct-22-seasons.toe', boot_file_chosen: chosen } }; return derive(st, st.now + 1000).show.boot_file; };
+  assert.equal(at(false).default, true, 'no boot-file.txt: the seasons file by default');
+  assert.equal(at(true).default, false);
+  assert.equal(at(undefined).default, false, 'an older probe without the flag');
 });

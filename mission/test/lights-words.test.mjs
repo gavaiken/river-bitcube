@@ -181,3 +181,11 @@ test('rope numbers: no number without a leader line sits nearer another rope\'s 
   const one = placeLabels([{ x: 100, y: 100 }], [24], { h: 20, W: 400, H: 400, taken: [{ x: 100, y: 115, w: 30, h: 20 }] })[0];
   assert.ok(Math.abs(one.y - 115) >= 20 || Math.abs(one.x - 100) >= 27);
 });
+
+test('code review: "map in use" never compares two machines\' clocks when the server names the run it rebuilt', () => {
+  const run = { running: false, ok: true, started: 1_800_000_000, updated: 1_800_000_400, result: { map: 'pixelmap-2026-10-25.json' } };
+  // bitcube's clock 10 min ahead of the mini's: the rebuild's own time is "before" the run ended
+  const rebuilt = { at: (1_800_000_400 - 600) * 1000, map: 'pixelmap-2026-10-25.json', run: 1_800_000_000 };
+  assert.equal(rebuiltFor(run, rebuilt), rebuilt.at);
+  assert.equal(rebuiltFor({ ...run, started: 1_800_009_000 }, rebuilt), null, 'another run on the same day with the same map name is not it');
+});

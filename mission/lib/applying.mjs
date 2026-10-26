@@ -5,26 +5,16 @@
 //   list(clockMs = now()) -> [entry]           status.applying: { id, action, label, file?, started_at, expect_s, blocks }
 //                                              started_at is on the clock the snapshot is served on (fixture mode: the
 //                                              scenario's moment, which stands still; started_at moves back as time passes)
-//   conflict(action) -> entry | null           the first entry whose blocks hold this action
+//   conflict(action) -> entry | null           the first entry that blocks this action, or that it would block
 //   run(action, body, fn, { clock, running })  409 "wait: <label> is being applied (started 21:04)" on a conflict; else
 //                                              records the entry, awaits fn(), and removes the entry when it ends, either way
 // Only the actions in BLOCKS are recorded or checked (a calibration only for its start: Stop must always get through).
-import { FILES, TZ, EXPECT_S } from '../public/model.js';
+import { FILES, TZ, EXPECT_S, APPLY_BLOCKS as BLOCKS } from '../public/model.js';
 
-/** Everything that touches TouchDesigner or the year: a switch or a rebuild restarts TouchDesigner, so nothing else may run. */
-export const TOUCHES_TD = ['ropes', 'hub75', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
-/** What an action in flight blocks (mission-ui.md "What blocks what"). A boot-file change also keeps a calibration from starting
- *  (the table's last row: "a calibration can't start while a switch, rebuild or boot-file change is in flight"), so the pages
- *  grey Calibrate exactly when the server would answer 409. A calibration's start blocks what a running calibration blocks
- *  (CAL_BLOCKED in mission.mjs) and a second start. */
-export const BLOCKS = {
-  switch: TOUCHES_TD,
-  rebuild: TOUCHES_TD,
-  bootfile: ['switch', 'rebuild', 'bootfile', 'calibrate'],
-  lightsroute: ['ropes', 'hub75', 'lightsroute', 'calibrate'],
-  ropes: ['ropes'], hub75: ['hub75'], mode: ['mode'], target: ['target'], rules: ['rules'], 'rules-reset': ['rules-reset'],
-  calibrate: ['ropes', 'hub75', 'switch', 'lightsroute', 'rebuild', 'calibrate'],
-};
+/** What an action in flight blocks (mission-ui.md "What blocks what"): one table for the server and the pages, model.js
+ *  APPLY_BLOCKS. A boot-file change also keeps a calibration from starting, so the pages grey Calibrate exactly when the server
+ *  would answer 409; a calibration's start blocks what a running calibration blocks (CAL_BLOCKED in mission.mjs) and a second start. */
+export { BLOCKS };
 /** The usual time of each change, in seconds, until bitcube's reading shows it (a page shows "usually about 1 min" from it, and
  *  gives up on confirming at 3 x this, at least 2 min). A switch: about 10 s to stop TouchDesigner and start the launcher, which
  *  waits 10 s and opens the file (about 40 s). A rebuild: the build and the save, then the switch. A calibration's entry is
@@ -72,8 +62,11 @@ export class Applying {
     return [...this.entries.values()].map(({ t0, ...e }) => ({ ...e, started_at: t0 + off, blocks: [...e.blocks] }));
   }
 
+  /** Both ways: an entry blocks what it names, and an action waits for an entry it would block (a switch restarts
+   *  TouchDesigner, so it waits for a ropes change in flight; a boot-file change for a calibration's start). */
   conflict(action) {
-    for (const e of this.entries.values()) if (e.blocks.includes(action)) return e;
+    const mine = BLOCKS[action] ?? [];
+    for (const e of this.entries.values()) if (e.blocks.includes(action) || mine.includes(e.action)) return e;
     return null;
   }
 

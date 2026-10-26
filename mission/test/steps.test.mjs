@@ -75,3 +75,13 @@ test('plainWords: the copy rules applied to free text', () => {
   assert.equal(plainWords('Check the PSAC10 boxes'), 'Check the rope boxes');
   assert.equal(plainWords('Look at docs/plan.md'), 'Look at the plan');
 });
+
+test('code review: slash words are not paths, a repo step is not acting, and "ssh into" reads the same in any case', () => {
+  assert.match(describeTool({ name: 'Bash', input: { description: 'Turn ropes on/off to test box 2', command: 'x' } }).text, /on\/off/);
+  assert.equal(describeTool({ name: 'Bash', input: { description: 'Save the session notes', command: 'x' } }).acting, false);
+  assert.equal(describeTool({ name: 'Bash', input: { description: 'Set up a scratch folder', command: 'x' } }).acting, false);
+  assert.equal(describeTool({ name: 'Bash', input: { description: 'Set the ropes dark', command: 'x' } }).acting, true);
+  const a = describeTool({ name: 'Bash', input: { description: 'ssh into bitcube and check the ropes', command: 'ssh bitcube x' } }).text;
+  const b = describeTool({ name: 'Bash', input: { description: 'SSH into bitcube and check the ropes', command: 'ssh bitcube x' } }).text;
+  assert.equal(a, b);
+});

@@ -61,7 +61,8 @@ export const CAL_STAGE_WORDS = { 'ropes-capture': 'photographing the ropes', 'ro
 const TD_TOUCHING = ['ropes', 'hub75', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
 export const APPLY_BLOCKS = {
   switch: TD_TOUCHING, rebuild: TD_TOUCHING, bootfile: ['switch', 'rebuild', 'bootfile', 'calibrate'], lightsroute: ['ropes', 'hub75', 'lightsroute', 'calibrate'],
-  ropes: ['ropes'], hub75: ['hub75'], mode: ['mode'], target: ['target'], rules: ['rules'], 'rules-reset': ['rules-reset'], calibrate: ['calibrate'],
+  ropes: ['ropes'], hub75: ['hub75'], mode: ['mode'], target: ['target'], rules: ['rules'], 'rules-reset': ['rules-reset'],
+  calibrate: ['ropes', 'hub75', 'switch', 'lightsroute', 'rebuild', 'calibrate'],   // a calibration's start: what a running one blocks, and a second start
 };
 /** The team's words for a change in flight when the server's entry has no label of its own. */
 export const APPLY_LABEL = { switch: 'a show-file switch', rebuild: "a rebuild of the river's year", bootfile: 'the boot file change', lightsroute: 'a lighting port change',
@@ -243,7 +244,7 @@ function bootFile(pr) {
     const name = !have || have.includes(YEAR_FILE) || !have.includes(LIVE_FILE) ? YEAR_FILE : LIVE_FILE;
     return { name, kind: FILES[name].kind, label: FILES[name].label, default: true, reported: raw };
   }
-  return { name: raw, kind: FILES[raw]?.kind ?? 'other', label: FILES[raw]?.label ?? UNLISTED, default: false, reported: raw };
+  return { name: raw, kind: FILES[raw]?.kind ?? 'other', label: FILES[raw]?.label ?? UNLISTED, default: pr.boot_file_chosen === false, reported: raw };
 }
 
 // ---- the model ----------------------------------------------------------------------------------------------
@@ -689,7 +690,9 @@ export function derive(status, nowMs) {
     return { id: a.id ?? null, action: a.action, label, file: typeof a.file === 'string' ? a.file : null, started_at: started, expect_s, elapsed_s: Math.round(elapsed), blocks,
              words: `${cap(label)} is being applied${started != null ? ` (started ${clock(started)})` : ''}`, old: started != null && elapsed > confirmLimitS(expect_s) };
   }).filter((a) => !a.old).map(({ old: _o, ...a }) => a);
-  const waitFor = (action) => { const a = applying.find((x) => x.blocks.includes(action)); return a ? `wait: ${a.label} is being applied` : null; };
+  // both ways: a change in flight blocks what it names, and an action that would block it waits for it (a switch restarts
+  // TouchDesigner, so it waits for a ropes change still in flight), as the server's Applying.conflict does
+  const waitFor = (action) => { const a = applying.find((x) => x.blocks.includes(action) || (APPLY_BLOCKS[action] ?? []).includes(x.action)); return a ? `wait: ${a.label} is being applied` : null; };
 
   // ---- show: what the piece is doing -----------------------------------------------------------------------------
   const ropesState = !pr || online === false || !td ? 'unknown' : !tdOk || !senderKnown || senderErr || !rs.open || senderOff || boxesDown.length === 2 ? 'not-reaching' : calRopes ? 'calibrating' : ropesDark ? 'dark' : 'river';

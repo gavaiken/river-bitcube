@@ -87,6 +87,9 @@ export function calView({ p, m, dismissed = () => false, old = false, rebuiltAt 
 export function rebuiltFor(p, rebuilt) {
   const map = p?.result?.map, end = typeof p?.updated === 'number' ? p.updated * 1000 : null;
   if (!map || p.running || p.ok !== true || p.result.dry_run || !rebuilt || typeof rebuilt.at !== 'number') return null;
+  // the server names the run it rebuilt (its started stamp, bitcube's clock): match that exactly, never the mini's clock
+  // against bitcube's; an older record without it falls back to the map and the times
+  if (typeof rebuilt.run === 'number') return rebuilt.map === map && rebuilt.run === p.started ? rebuilt.at : null;
   return rebuilt.map === map && (end == null || rebuilt.at > end) ? rebuilt.at : null;
 }
 

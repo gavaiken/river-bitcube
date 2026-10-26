@@ -73,6 +73,7 @@ async function getJson(url, timeout = 5000, init = {}) {
 }
 
 const obj = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : null);
+const CAL_NONE_GRACE_MS = 30_000;              // a "no job" answer this soon after the kept copy may be a start racing its file
 const CAL_KEEP_S = 24 * 3600;                 // probe.ps1 reports a progress file from the last 24 h, and so does the newest-copy rule
 export const CAL_POLL_MS = 5_000;             // while a run is on, the server reads its progress itself this often
 
@@ -146,10 +147,13 @@ export class Mission {
   // ropes, the panels, a switch, a rebuild and the lighting port holds from the first second of a run and ends with it.
 
   /** Keep a progress file Lights answered with, when it is at least as new as the one kept. A failed read ({ ok: false,
-   *  error }) or "no job" ({ running: false, none: true }) changes nothing; a copy without its updated stamp counts as now. */
+   *  error }) changes nothing; a copy without its updated stamp counts as now. "No job" ({ running: false, none: true }) means the
+   *  progress file is gone: it ends a kept run, but only once the start is CAL_NONE_GRACE_MS behind (just after a start the file
+   *  may not be written yet), so a run whose file vanished never locks the controls for the rest of the day. */
   noteCalibration(cal) {
     const c = obj(cal);
-    if (!c || typeof c.running !== 'boolean' || c.none === true) return;
+    if (c?.none === true) { if (this.calNote && this.now() - this.calNote.at > CAL_NONE_GRACE_MS) this.calNote = null; return; }
+    if (!c || typeof c.running !== 'boolean') return;
     const u = typeof c.updated === 'number' && Number.isFinite(c.updated) ? c.updated : this.now() / 1000;
     if (this.calNote && u < this.calNote.u) return;
     this.calNote = { at: this.now(), u, value: scrubCreds(c) };
@@ -197,8 +201,11 @@ export class Mission {
   rebuilt() { return this.lastRebuild ? { ...this.lastRebuild } : null; }
 
   #recordRebuilt(file, r) {
-    const map = (typeof r?.pixelmap?.file === 'string' && r.pixelmap.file) || this.calibration()?.result?.map || this.data.probe?.value?.pixelmap?.file || null;
-    this.lastRebuild = { at: this.now(), map, file };
+    const cal = this.calibration();
+    const map = (typeof r?.pixelmap?.file === 'string' && r.pixelmap.file) || cal?.result?.map || this.data.probe?.value?.pixelmap?.file || null;
+    // the run whose map this is, by its own started stamp (bitcube's clock): a page matches it exactly, never across two clocks
+    const run = cal && cal.ok === true && cal.result?.map === map && typeof cal.started === 'number' ? cal.started : null;
+    this.lastRebuild = { at: this.now(), map, file, run };
     if (!this.stateDir) return;
     try {
       mkdirSync(this.stateDir, { recursive: true });
@@ -212,7 +219,8 @@ export class Mission {
     if (!this.stateDir) return null;
     try {
       const j = JSON.parse(readFileSync(join(this.stateDir, 'rebuilt.json'), 'utf8'));
-      return obj(j) && typeof j.at === 'number' ? { at: j.at, map: typeof j.map === 'string' ? j.map : null, file: typeof j.file === 'string' ? j.file : null } : null;
+      return obj(j) && typeof j.at === 'number' ? { at: j.at, map: typeof j.map === 'string' ? j.map : null, file: typeof j.file === 'string' ? j.file : null,
+                                                    run: typeof j.run === 'number' ? j.run : null } : null;
     } catch { return null; }
   }
 

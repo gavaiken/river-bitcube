@@ -56,7 +56,7 @@ const PAST = { check: 'checked', run: 'ran', restart: 'restarted', set: 'set', s
   connect: 'connected', reboot: 'rebooted', reset: 'reset', apply: 'applied', change: 'changed', move: 'moved', aim: 'aimed', watch: 'watched',
   calibrate: 'calibrated', load: 'loaded', reload: 'reloaded', see: 'saw', try: 'tried', retry: 'retried', copy: 'copied', note: 'noted' };
 // the things that make up the installation: a change to one of these is "acting" (highlighted); looking at them is not
-const ACTS = /\b(bitcube|touchdesigner|td|td\.ps1|td_save|show file|river's year|live river|ropes?|rope box(es)?|psac-?10s?|panels?|hub75|brightness|lights?|camera|cam|router|season|mode|target|rules|artnet|art-net|sender|boot file|calibration|led map|recorder|ffmpeg|people counter|ptz|start-river|scheduled task|source|black|dark)\b/i;
+export const ACTS = /\b(bitcube|touchdesigner|td|td\.ps1|td_save|show file|river's year|live river|ropes?|rope box(es)?|psac-?10s?|panels?|hub75|brightness|lights?|camera|cam|router|season|mode|target|rules|artnet|art-net|sender|boot file|calibration|led map|recorder|ffmpeg|people counter|ptz|start-river|scheduled task|source|black|dark)\b/i;
 // a change: the line leads with one of these, or says it ran something "to" do one ("Run td.ps1 to set Source=black")
 const CHANGE = 'set|switch(?:ed)?|restart(?:ed)?|reboot(?:ed)?|turn(?:ed)?|start(?:ed)?|stop(?:ped)?|change[d]?|rebuil[dt]|raise[d]?|lower(?:ed)?|dim(?:med)?|kill(?:ed)?|send|sent|appl(?:y|ied)|calibrate[d]?|reset|power(?:ed)?|enable[d]?|disable[d]?|save[d]?|move[d]?|aim(?:ed)?|pan(?:ned)?|tilt(?:ed)?';
 const LEAD_CHANGE = new RegExp(`^(?:${CHANGE})\\b`, 'i'), TO_CHANGE = new RegExp(`\\bto (?:${CHANGE})\\b`, 'i');

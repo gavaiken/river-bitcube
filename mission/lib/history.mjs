@@ -106,8 +106,9 @@ export class History {
       for (const it of m.items) {
         if (it.level === 'unknown' || it.muted) continue;
         // the ropes and panels in calibration patterns are the calibration's own line below, not news of their own: the
-        // piece keeps its last level, so the run ending with everything back is no event either
-        if (it.cause === 'calibrating') continue;
+        // piece keeps its last level, so the run ending with everything back is no event either. They are still seen, so
+        // a five-minute run is never an "unseen stretch" that restarts their since.
+        if (it.cause === 'calibrating') { if (!it.stale) this.knownAt[it.id] = t; continue; }
         const p = this.state.items[it.id], seen = this.knownAt[it.id];
         const gap = !!p && (seen == null || (this.prevObs != null && seen < this.prevObs));
         if (!it.stale) this.knownAt[it.id] = t;          // a last answer from a quiet source is not a sighting

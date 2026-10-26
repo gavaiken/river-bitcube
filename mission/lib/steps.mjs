@@ -12,6 +12,7 @@
 // No SDK import here: the fake agent (MISSION_FAKE_AGENT) uses it too.
 import { scrubCreds } from './scrub.mjs';
 import { FILES } from '../public/model.js';
+import { ACTS } from '../public/chat-words.js';   // the things that make up the installation: one list for the server and the page
 
 export const TEXT_MAX = 100;
 export const RAW_MAX = 300;
@@ -33,7 +34,8 @@ const CHANGE = new Set(['set', 'switch', 'restart', 'turn', 'start', 'stop', 'ki
   'reboot', 'change', 'reset', 'apply', 'light', 'enable', 'disable', 'put', 'reload', 'cancel', 'calibrate', 'send', 'save']);
 /** Words that are as often things as actions after "and" ("the ropes and light"), so only a first word is taken as a verb. */
 const NOUNISH = new Set(['light', 'note', 'view', 'report', 'count', 'call', 'watch', 'test', 'copy', 'record', 'build', 'search']);
-const RAW_CMD = /[|;&`$<>{}]|^\s*(ssh|scp|powershell|pwsh|python3?|node|git|curl|ffmpeg|ls|dir|cat|type|grep|tail|head|cd|npm|pytest|tasklist|Get-[A-Z]\w+)\b/;
+// a raw command, in any case ("SSH bitcube …" as "ssh bitcube …"); "ssh into bitcube and check …" is a description, not one
+const RAW_CMD = /[|;&`$<>{}]|^\s*(ssh|scp|powershell|pwsh|python3?|node|git|curl|ffmpeg|ls|dir|cat|type|grep|tail|head|cd|npm|pytest|tasklist|Get-[A-Z]\w+)\b(?! (?:into|to|onto|on)\b)/i;
 
 const clip = (s, n) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 /** Scrub, then clip: a cut made first could leave half a login the scrubber no longer recognises. */
@@ -96,7 +98,8 @@ export function plainWords(s) {
   let out = String(s ?? '').replace(/\b(run|ran) (?:the )?(?:[\w.~-]*[\\/])*probe(?:\.ps1)?\b(?: on bitcube)?/gi, '$1 the full check of bitcube');
   for (const name of Object.keys(FILES)) out = out.split(name).join(FILES[name].label);
   out = out.replace(/\b[\w-]+\.toe\b/g, 'a show file');
-  out = out.replace(PATH, (m) => plainFile(m.replace(/^the /i, '')));
+  // "on/off", "and/or", "24/7": one slash between two plain words is not a path
+  out = out.replace(PATH, (m) => (/^(?:the )?[A-Za-z0-9]+\/[A-Za-z0-9]+$/i.test(m) ? m : plainFile(m.replace(/^the /i, ''))));
   for (const [re, to] of WORDS) out = out.replace(re, to);
   // "Check the panels brightness" reads as the copy wants; tidy what the rules left
   return out.replace(/\s{2,}/g, ' ').replace(/\s+([,.;:])/g, '$1').trim();
@@ -123,7 +126,8 @@ function bashLine(description, command) {
   const past = (m, j, w) => (PAST[w] && !NOUNISH.has(w) ? (verbs.push(w), `${j}${PAST[w]}`) : m);
   const line = first.replace(/\b((?:and|then) )([a-z]+)\b/g, past).replace(/(, )([a-z]+)\b/g, past);
   if (!line || BANNED.test(line)) return fallback;
-  return { text: clip(line, TEXT_MAX), acting: verbs.some((v) => CHANGE.has(v)) };
+  // acting: a change verb on something that makes up the installation ("set the ropes dark"), never on a repo file or a folder
+  return { text: clip(line, TEXT_MAX), acting: verbs.some((v) => CHANGE.has(v)) && ACTS.test(line) };
 }
 
 /** One step line for a tool the agent used (see the header). Never throws. */

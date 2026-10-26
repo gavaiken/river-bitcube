@@ -278,12 +278,42 @@ test('a successful rebuild is recorded, kept in the state folder across a restar
   answer = { ok: true, rebuilt: true, saved: true, switched: true, td: { ok: false, error: `restarting on ${YEAR}` }, pixelmap: { file: 'pixelmap-2026-10-25.json' } };
   t += 60_000;
   await m.control('rebuild', { file: YEAR });
-  assert.deepEqual(m.rebuilt(), { at: AT_2104 + 60_000, map: 'pixelmap-2026-10-25.json', file: YEAR });
-  assert.deepEqual(new Mission({ stateDir: dir }).rebuilt(), { at: AT_2104 + 60_000, map: 'pixelmap-2026-10-25.json', file: YEAR }, 'kept across a restart');
+  assert.deepEqual(m.rebuilt(), { at: AT_2104 + 60_000, map: 'pixelmap-2026-10-25.json', file: YEAR, run: null }, 'no finished run with this map: no run named');
+  assert.deepEqual(new Mission({ stateDir: dir }).rebuilt(), { at: AT_2104 + 60_000, map: 'pixelmap-2026-10-25.json', file: YEAR, run: null }, 'kept across a restart');
   // without the map in the answer: the finished calibration's map
-  const lights = fakeLights({ start: { ok: true, started: true, calibration: { running: false, ok: true, stage: 'done', updated: T0, result: { map: 'pixelmap-2026-10-24.json' } } } });
+  const lights = fakeLights({ start: { ok: true, started: true, calibration: { running: false, ok: true, stage: 'done', started: T0 - 300, updated: T0, result: { map: 'pixelmap-2026-10-24.json' } } } });
   const m2 = new Mission({ lights, probe: async () => ({ ok: true, rebuilt: true, saved: true, td: {} }) });
   await m2.calibrate('start', {});
   await m2.control('rebuild', { file: YEAR });
   assert.equal(m2.rebuilt().map, 'pixelmap-2026-10-24.json');
+  assert.equal(m2.rebuilt().run, T0 - 300, 'the run baked in, by its own started stamp (bitcube\'s clock)');
+});
+
+test('code review: the lock holds both ways (a switch waits for a ropes change in flight; a boot-file change for a calibration start)', async () => {
+  const g = gated();
+  const m = new Mission({ probe: async (_h, args) => (/-Action ropes/.test(args ?? '') ? g.gate : { ok: true, td: { ok: true, file: YEAR } }) });
+  await m.pollProbe();
+  const ropes = m.control('ropes', { dark: true });
+  await assert.rejects(m.control('switch', { file: LIVE }), (e) => e.status === 409 && /^wait: a ropes change is being applied/.test(e.message));
+  g.release({ ok: true, td: { ok: true, file: YEAR } }); await ropes;
+  const g2 = gated();
+  const lights = fakeLights(); lights.calibrate = async () => g2.gate;
+  const m2 = new Mission({ lights, probe: async () => ({ ok: true, td: { ok: true, file: YEAR } }) });
+  await m2.pollProbe();
+  const start = m2.calibrate('start', {});
+  await assert.rejects(m2.control('bootfile', { file: LIVE }), (e) => e.status === 409 && /^wait: the start of a calibration/.test(e.message));
+  g2.release({ ok: true, started: true, calibration: { running: true, stage: null, updated: T0, started: T0 } }); await start;
+});
+
+test('code review: a "no job" answer ends a kept run once the start is past (no 24 h lock from a progress file that is gone)', async () => {
+  let t = T0 * 1000;
+  const lights = fakeLights();
+  const m = new Mission({ lights, now: () => t, probe: async () => ({ ok: true, td: { ok: true, file: YEAR } }) });
+  await m.pollProbe();
+  await m.calibrate('start', {});
+  t += 5_000; lights.status = { running: false, none: true }; await m.calibrationStatus();
+  assert.equal(m.calibration()?.running, true, 'just after a start the file may not be written yet: the lock stays');
+  t += 60_000; await m.calibrationStatus();
+  assert.notEqual(m.calibration()?.running, true, 'a minute on, "no job" means the run is gone');
+  assert.equal((await m.control('ropes', { dark: false })).ok, true);
 });
