@@ -13,7 +13,7 @@ The repo is **github.com/gavaiken/river-bitcube**. It runs the installation on *
 
 ## What you must not break
 Everything else is open: iterate freely.
-- **The boot file** (`shows.json` `boot_default`, and `River\boot-file.txt` on bitcube): the show visitors see. Never edit it in place to try an idea. Make your own show file; changing which file boots is a separate, deliberate step that Gavin OKs.
+- **The default show** (the boot file: `River\boot-file.txt` on bitcube, else `shows.json` `boot_default`): what opens when bitcube restarts. Never edit a show file in place to try an idea; make your own. Switching shows never changes the default; any show can be made the default with mission control's **Set as default**, a separate, deliberate action (an agent does it only when its person asks).
 - **The show's calibration and mapping:** the LED map and screen positions each show pins in `shows.json` (`tools/pixelmap/*.json`), the rope addressing in Will's `RopeLights\config.local.json`, the screens module. A new calibration is a new dated file pinned only by your own show; never re-pin someone else's show.
 - **Mission control** (`mission/`): it updates itself from `main` within about 5 minutes, so a broken push reaches the team's phones fast. `tools/check` must pass first.
 - **Secrets:** this repo is public. See Rules.
