@@ -74,8 +74,9 @@ export function agentRunner({ cwd, appendPrompt, token, model, executable, onSyn
       } else if (m.type === 'assistant') {
         for (const b of m.message?.content ?? []) {
           if (b.type === 'text' && b.text.trim()) yield { kind: 'text', text: b.text };
-          // context: what TouchDesigner runs and whether a dry run is going, so a step names the change as the band does (R9 #22)
-          else if (b.type === 'tool_use') { let ctx = {}; try { ctx = context?.() ?? {}; } catch { ctx = {}; } yield { kind: 'activity', ...describeTool(b, ctx) }; }
+          // context: what TouchDesigner runs and whether a dry run is going, so a step names the change as the band does (R9 #22);
+          // handed over as the function, so the snapshot behind it is made only for a step that needs it (lib/steps.mjs, CR9 #18)
+          else if (b.type === 'tool_use') yield { kind: 'activity', ...describeTool(b, context) };
         }
       } else if (m.type === 'result') {
         if (m.session_id) yield { kind: 'session', sessionId: m.session_id };

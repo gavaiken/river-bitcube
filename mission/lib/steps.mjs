@@ -4,7 +4,8 @@
 // jargon can't be put into words. The raw line (the command, the path, the address) is kept apart, scrubbed of logins, for the
 // step's tooltip, never on the line itself.
 //
-// describeTool(block, ctx) -> { text, raw, acting }   ctx: { running, calDry } (the live agent's: what TouchDesigner runs, a dry run going)
+// describeTool(block, ctx) -> { text, raw, acting }   ctx: { running, calDry } (the live agent's: what TouchDesigner runs, a dry run going),
+//                                                     or a function that returns it, asked only by a step that needs it (CR9 #18)
 //   text    the line the page shows ("checked TouchDesigner's frame rate and errors")
 //   raw     what the tool was given (a command, a path, a URL, a pattern), logins scrubbed, at most RAW_MAX characters
 //   acting  true only when the step changes something on the installation (set, switched, restarted, turned, …); reading,
@@ -88,11 +89,25 @@ const writeTargets = (part) => [...part.matchAll(WRITE_ARGS)].map((m) => m[1]).c
 const inState = (t) => STATE_RE.some(([re]) => re.test(t)) || [...t.matchAll(RIVER_DIR)].some((m) => !REPO_DIRS.includes(m[1].toLowerCase()));
 /** A command part that writes the installation's state (R8 #37; the repo is not it, CR8 #2). */
 const writesState = (part) => writeTargets(part).some(inState);
-/** Code that writes a state file (a python or node one-liner: open(…'w'), write_text, WriteAllText, writeFileSync): a change too (R9 #38). */
+/** Code that writes a state file (a python or node one-liner): a change too (R9 #38). The mode is the open() call's own (CR9 #3): its
+ *  first argument names the file (or a variable that was given its name) and its second is 'w', 'a' or 'x' (mode= too); a Path of it
+ *  opened to write, or written (write_text, write_bytes); a writer given it (WriteAllText, writeFileSync, appendFile…). Never a read
+ *  of it beside a mode-like word elsewhere: print(open('boot-file.txt').read(), 'a') is a look. */
 const STATE_NAMES = String.raw`(?:boot-file\.txt|calibration\.cancel|presence\.json)`;
-const STATE_CODE = new RegExp(String.raw`${STATE_NAMES}[\s\S]*?(?:,\s*['"][wax]\+?b?['"]|\.write_text\s*\(|\.write_bytes\s*\()|(?:write_text|WriteAllText|writeFileSync|writeFile)\s*\([^)]*${STATE_NAMES}`, 'i');
-/** A POST to the river's year's own page (:9981): around mission control's mode, target and rules lock (R9 #38). */
-const POST_YEAR = /\bcurl\b[^;&|\n]*(?:-X\s*POST|--request\s+POST|\s-d\b|\s--data(?:-\w+)?\b|\s-F\b)[^;&|\n]*:9981\b|\bcurl\b[^;&|\n]*:9981\b[^;&|\n]*(?:-X\s*POST|--request\s+POST|\s-d\b|\s--data(?:-\w+)?\b|\s-F\b)|Invoke-(?:RestMethod|WebRequest)\b[^;&|\n]*-Method\s+['"]?Post\b[^;&|\n]*9981|Invoke-(?:RestMethod|WebRequest)\b[^;&|\n]*9981[^;&|\n]*-Method\s+['"]?Post\b/i;
+const OPEN_MODE = String.raw`\s*,\s*(?:mode\s*=\s*)?[rbu]?['"][wax]\+?[bt]?['"]`;
+const STATE_CODE = new RegExp([
+  String.raw`\bopen\s*\(\s*(?=[^)]*${STATE_NAMES})(?:[^,()]|\([^()]*\))*${OPEN_MODE}`,                            // open(<the file>, 'w')
+  String.raw`\b(\w+)\s*=\s*[rRbBuU]{0,2}['"][^'"\n]*${STATE_NAMES}['"][\s\S]*?\bopen\s*\(\s*\1${OPEN_MODE}`,         // p = '…boot-file.txt'; open(p, 'w')
+  String.raw`${STATE_NAMES}['"]\s*\)\s*\.(?:open\s*\(\s*(?:mode\s*=\s*)?['"][wax]|write_(?:text|bytes)\s*\()`,        // Path('…').open('w'), .write_text(
+  String.raw`\b(?:WriteAllText|WriteAllLines|WriteAllBytes|AppendAllText|writeFileSync|writeFile|appendFileSync|appendFile)\s*\([^)]*${STATE_NAMES}`,
+].join('|'), 'i');
+/** A POST to the river's year's own page (:9981): around mission control's mode, target and rules lock (R9 #38). curl's flags by
+ *  their case (CR9 #2): -d, --data…, -F, --form, --json, -X POST (alone or in a cluster: -sd, -XPOST) send a body; -f (fail) and
+ *  -D (dump headers) do not, and -G or --get sends -d as a query (a GET). PowerShell's -Method Post in any case. */
+const CURL_POSTS = String.raw`(?-i:\s(?:-[A-Za-z]*(?:[dF]|X\s*POST\b)|--request(?:\s+|=)POST\b|--data(?:-[a-z]+)?\b|--form(?:-string)?\b|--json\b))`;
+const CURL_GET = String.raw`(?-i:\s(?:-[A-Za-z]*G|--get\b))`;
+const POST_YEAR = new RegExp(String.raw`\bcurl(?:\.exe)?\b(?![^;&|\n]*${CURL_GET})(?=[^;&|\n]*:9981\b)(?=[^;&|\n]*${CURL_POSTS})`
+  + String.raw`|Invoke-(?:RestMethod|WebRequest)\b(?=[^;&|\n]*-Method\s+['"]?Post\b)(?=[^;&|\n]*:9981\b)`, 'i');
 /** Direct changes that read like checks, each with its words (R9 #38): the lighting port's own script, Will's rope lights and any
  *  scheduled task, TouchDesigner's launcher, bitcube's restart or shutdown and its network adapters, a POST to the year's page, the
  *  router's settings and its services, and a bridge call into the year's own setters. */
@@ -113,10 +128,41 @@ const CHANGE_WORDS = [
 ];
 /** A direct change whose own words are known whatever else the command holds (the state files above, then CHANGE_WORDS). */
 const DIRECT_FIRST = [...STATE_RE, ...CHANGE_WORDS];
+// ---- a name is a run only where it is run: never an argument to a command that only reads (CR9 #1) ----
+/** The commands that only read or print what they are given: a script's or a cmdlet's name after one is an argument (grep -n Route
+ *  lights_route.ps1, type …\Start-River.cmd, grep -rn Stop-ScheduledTask tools/, git log -- …), never a run of it. sed only with -n
+ *  and never -i. */
+const READER = /^(?:\S*[\\/])?(?:grep|egrep|fgrep|zgrep|rg|cat|bat|type|less|more|head|tail|nl|wc|findstr|Get-Content|gc|Select-String|sls)(?:\.exe)?(?![\w-])|^(?:\S*[\\/])?sed(?![\w-])(?![^;&|\n]*\s-[A-Za-z]*i)(?=[^;&|\n]*\s-[A-Za-z]*n)|^(?:\S*[\\/])?git(?:\s+-C\s+\S+)?\s+(?:show|log|diff|blame|grep)(?![\w-])/i;
+/** What only carries a command to where it runs, taken off the front of one before its first word is judged: a quote that opens an
+ *  inner command, ssh [options] host, powershell's flags up to -Command (never -File: that runs a script), cmd /c. */
+const CARRIERS = [
+  /^["'`\\]+/,
+  /^(?:\S*[\\/])?ssh(?:\.exe)?(?:\s+-[46AaCfGgKkMNnqsTtVvXxYy]+|\s+-[BbcDEeFIiJLlmOoPpQRSWw]\s*\S+)*\s+[^\s"'-]\S*\s+/i,
+  /^(?:\S*[\\/])?(?:powershell|pwsh)(?:\.exe)?(?:\s+-(?:NoProfile|NonInteractive|NoLogo|Sta|Mta)(?![\w-])|\s+-(?:ExecutionPolicy|WindowStyle|OutputFormat|InputFormat)\s+\S+)*(?:\s+-(?:Command|c)(?![\w-]))?\s+/i,
+  /^(?:\S*[\\/])?cmd(?:\.exe)?\s+\/[cCkK]\s+/,
+];
+/** The command a place in a command line belongs to: from the last ;, &, | or new line before it (inside quotes too: ssh bitcube
+ *  "type x; y" is two; never an escaped one, grep's "a\|b"), without what carries it. */
+function commandAt(text, i) {
+  let from = i;
+  while (from > 0 && !(/[;&|\n]/.test(text[from - 1]) && text[from - 2] !== '\\')) from--;
+  let s = text.slice(from).trimStart();
+  for (let again = true; again;) {
+    again = false;
+    for (const re of CARRIERS) { const m = re.exec(s); if (m && m[0]) { s = s.slice(m[0].length).trimStart(); again = true; } }
+  }
+  return s;
+}
+/** Whether a pattern of a change matches where something is run or invoked: at least one match not under a reader (CR9 #1). */
+function runs(re, text) {
+  const t = String(text ?? ''), g = new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`);
+  for (const m of t.matchAll(g)) if (!READER.test(commandAt(t, m.index))) return true;
+  return false;
+}
 /** An acting line that can't be shown as it is: what it did to what ("stopped a scheduled task on bitcube", "changed the ropes"). */
 function actingFallback(verb, ...texts) {
   const t = texts.map((x) => String(x ?? '')).join(' ');
-  if (!verb) { const first = DIRECT_FIRST.find(([re]) => re.test(t)); if (first) return first[1]; }
+  if (!verb) { const first = DIRECT_FIRST.find(([re]) => runs(re, t)); if (first) return first[1]; }
   const thing = THINGS.find(([re]) => re.test(t))?.[1] ?? 'something on bitcube';
   return `${FALLBACK_VERB[verb] ?? 'changed'} ${thing}`;
 }
@@ -129,8 +175,9 @@ function actingFallback(verb, ...texts) {
 const CHANGE_CMD = new RegExp(String.raw`-Action\s+(ropes|hub75|switch|bootfile|lightsroute|rebuild|calibrate|mode|target|rules)\b|\/api\/control\/|Restart-Computer|Stop-Process|Start-Process|taskkill|\bkill\b|schtasks\s+\/(run|end|change)|ptz\.py\s+\w+\s+(?!presets)|td_save|calibrate\.ps1\s+-Action\s+(start|cancel)`
   + String.raw`|td\.ps1\b[\s\S]*?(?:\.par\.\w+(?:\.\w+)?\s*=(?!=)|\.(?:val|expr|mode|bindExpr|bypass|allowCooking|lock|display|render)\s*=(?!=)|\bsetattr\s*\(|\.(?:cook|store|unstore|destroy|copy|create)\s*\(|\bset_\w+\s*\(|\s-File\b)`, 'i');
 /** A command part that changes the installation: a control, a process, the bridge, a write to its state (also by code, or copied in
- *  with scp), or one of the direct changes that read like checks (R9 #38). */
-const changes = (part) => CHANGE_CMD.test(part) || writesState(part) || STATE_CODE.test(part) || CHANGE_WORDS.some(([re]) => re.test(part));
+ *  with scp), or one of the direct changes that read like checks (R9 #38); a control, a process or a direct change only where it is
+ *  run, never its name given to a reader (grep, cat, type, Get-Content, git log: CR9 #1). */
+const changes = (part) => runs(CHANGE_CMD, part) || writesState(part) || STATE_CODE.test(part) || CHANGE_WORDS.some(([re]) => runs(re, part));
 /** A shell, by name or path (bash, sh, zsh, dash). */
 const SHELL = String.raw`(?:\S*[\\/])?(?:bash|sh|zsh|dash)`;
 /** An inline shell command: bash -c "…", bash -lc '…', sh -e -c …, any flags holding c (CR8 #4). What it runs is its own command,
@@ -157,7 +204,7 @@ const MC_ONE = new RegExp(MC.source);
 const DIRECT_WORDS = { ropes: 'changed the ropes', hub75: 'changed the panels', switch: "switched TouchDesigner's show file", bootfile: 'changed the boot file',
   lightsroute: 'moved the lighting port', rebuild: "rebuilt the river's year", mode: "changed the river's year", target: "changed the river's year",
   rules: "changed the river's year", calibrate: 'started a calibration', start: 'started a calibration', cancel: 'stopped the calibration' };
-const directWords = (part) => DIRECT_WORDS[/-Action\s+([a-z0-9]+)/i.exec(part)?.[1]?.toLowerCase()] ?? DIRECT_FIRST.find(([re]) => re.test(part))?.[1] ?? actingFallback(null, part);
+const directWords = (part) => DIRECT_WORDS[/-Action\s+([a-z0-9]+)/i.exec(part)?.[1]?.toLowerCase()] ?? DIRECT_FIRST.find(([re]) => runs(re, part))?.[1] ?? actingFallback(null, part);
 /** "<what it changed> on bitcube directly": "on bitcube" once, also when the words already end with it ("changed something on
  *  bitcube", "stopped a scheduled task on bitcube": CR8 #3). */
 const directly = (words) => `${words}${/\bbitcube\b|\brouter\b/.test(words) ? '' : ' on bitcube'} directly, not through mission control`;
@@ -280,10 +327,20 @@ function pastTense(s) {
 
 /** The controls mission control has (bin/mc.mjs <action>): their changes are named as the band and Recent name them. */
 const MC_ACTIONS = new Set(Object.keys(EXPECT_S));
+/** A step's context, asked for when a line needs it and only once (CR9 #18): ctx itself, or what the function returns (the live
+ *  agent's context is a whole snapshot of mission control: never made for a step that doesn't use it). One that throws is none. */
+function lazyContext(ctx) {
+  if (typeof ctx !== 'function') return () => (ctx && typeof ctx === 'object' ? ctx : {});
+  let got = null;
+  return () => {
+    if (got == null) { try { const c = ctx(); got = c && typeof c === 'object' ? c : {}; } catch { got = {}; } }
+    return got;
+  };
+}
 /** A change asked of mission control through its control socket (bin/mc.mjs), by the change's one name (model.js changeLabel, as the
  *  band, Last done and the history name it: R9 #22); null if not one. ctx: { running (the show file TouchDesigner runs: a switch to
  *  it is "the restart on …"), calDry (the run going is a dry run: its Stop is "the dry run stop"; not known: "to stop the run") }. */
-function mcLine(command, ctx = {}) {
+function mcLine(command, ctxOf = () => ({})) {
   // "status first, then one control" in one command: the step is the control, not the look before it
   const all = [...String(command ?? '').matchAll(MC)];
   if (!all.length) return null;
@@ -293,22 +350,25 @@ function mcLine(command, ctx = {}) {
   try { const j = JSON.parse(m[2] ?? (m[3] != null ? m[3].replace(/\\(.)/g, '$1') : '{}')); if (j && typeof j === 'object' && !Array.isArray(j)) body = j; } catch { /* words from the action alone */ }
   if (!MC_ACTIONS.has(m[1])) return null;                // not one of mission control's controls
   const acting = m[1] !== 'check' && !(m[1] === 'calibrate' && body.action === 'status');
+  // the context only where the words depend on it: a Stop (which run), a switch (to the file running: the restart on it)
   if (m[1] === 'calibrate' && body.action === 'cancel') {
-    if (typeof ctx?.calDry !== 'boolean') return { text: 'asked mission control to stop the run', acting };
-    body = { ...body, dry_run: ctx.calDry };
+    const calDry = ctxOf().calDry;
+    if (typeof calDry !== 'boolean') return { text: 'asked mission control to stop the run', acting };
+    body = { ...body, dry_run: calDry };
   }
-  return { text: `asked mission control for ${changeLabel(m[1], body, { running: typeof ctx?.running === 'string' ? ctx.running : null })}`, acting };
+  const running = m[1] === 'switch' ? ctxOf().running : null;
+  return { text: `asked mission control for ${changeLabel(m[1], body, { running: typeof running === 'string' ? running : null })}`, acting };
 }
 
 /** A Bash step: the agent's description in plain words, else a plain fallback; an acting one says what it changed. */
-function bashLine(description, command, ctx = {}) {
+function bashLine(description, command, ctxOf = () => ({})) {
   // a look through mission control chained to a change made around it ("mc.mjs status && ssh bitcube … probe.ps1 -Action
   // switch"): the change, and that it went around mission control's locks, never "looked at what mission control shows" (R7 #34)
   // an inline shell's command (bash -lc "…") is judged by what it runs (CR8 #4)
   const ps = inlineParts(command), viaMc = ps.filter((x) => MC_ONE.test(x)), direct = ps.filter((x) => !MC_ONE.test(x) && changes(x));
   if (viaMc.length && direct.length) return { text: clip(directly(directWords(direct[0])), TEXT_MAX), acting: true };
   if (viaMc.length && ps.some((x) => !MC_ONE.test(x) && SCRIPT_RUN.test(x))) return { text: 'ran a script, not through mission control', acting: true };
-  const mc = viaMc.length ? mcLine(viaMc.join('\n'), ctx) : null;
+  const mc = viaMc.length ? mcLine(viaMc.join('\n'), ctxOf) : null;
   if (mc) return mc;
   const desc = String(description ?? '').replace(/\s+/g, ' ').trim().replace(/[.\s]+$/, '');
   const onBitcube = /bitcube|\bssh\b/i.test(`${desc} ${command ?? ''}`);
@@ -339,7 +399,7 @@ export function describeTool(block, ctx = {}) {
   const line = (text, raw, acting = false) => ({ text: clip(text, TEXT_MAX), raw: rawOf(raw), acting });
   try {
     switch (block?.name) {
-      case 'Bash': { const b = bashLine(i.description, i.command, ctx ?? {}); return line(b.text, i.command ?? i.description ?? '', b.acting); }
+      case 'Bash': { const b = bashLine(i.description, i.command, lazyContext(ctx)); return line(b.text, i.command ?? i.description ?? '', b.acting); }
       case 'Read': return line(`looked at ${plainFile(i.file_path)}`, i.file_path);
       case 'Edit': case 'Write': case 'NotebookEdit': return line(`changed ${plainFile(i.file_path ?? i.notebook_path)}`, i.file_path ?? i.notebook_path);
       case 'Glob': case 'Grep': return line('searched the repo', i.pattern);

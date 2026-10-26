@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { scrubCreds } from './scrub.mjs';
 import { Applying } from './applying.mjs';
 import { checkedCalibrate, noAnswer } from './lights.mjs';
-import { CAL_RUNNING, changeLabel, tdStarting } from '../public/model.js';
+import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights } from '../public/model.js';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 const PROBE = PS + 'probe.ps1';
@@ -18,18 +18,18 @@ const SNAP_CACHE_MS = 45_000;
  *  path (TouchDesigner stopped and restarted), so it spoils a run as surely as a switch. A dry run (or a decode of earlier
  *  photos) touches no lights, camera or TouchDesigner: it refuses none of them (R7 #20). */
 export const CAL_BLOCKED = ['ropes', 'hub75', 'switch', 'lightsroute', 'rebuild'];
-const calDry = (cal) => cal?.dry_run === true || cal?.mode === 'dry-run' || cal?.mode === 'decode-only' || !!cal?.decode_only;
-/** The 409 a switch or a rebuild gets while TouchDesigner is starting or restarting (model.js tdStarting, the pages' words; shared
- *  with fixture mode), or null. snap: () => the status the pages are served. */
-export function startingBlocked(action, snap, nowMs) {
+/** The 409 a switch or a rebuild gets while TouchDesigner is starting or restarting (model.js tdStartingWhy, the pages' words; shared
+ *  with fixture mode), or null. probe: the full check's reading as kept ({ at, value } or { at, error }), judged by itself, never
+ *  the whole page model; a reading the rule can't read, or a slip in it, refuses (closed, CR9 #11). */
+export function startingBlocked(action, probe) {
   if (action !== 'switch' && action !== 'rebuild') return null;
-  let why = null;
-  try { why = tdStarting(snap(), nowMs); } catch { why = null; }
+  let why;
+  try { const p = probe && typeof probe === 'object' ? probe : null; why = tdStartingWhy(p && !p.error ? p.value ?? null : null); } catch { why = TD_UNREADABLE_WHY; }
   return why ? Object.assign(new Error(why), { status: 409 }) : null;
 }
 /** The 409 a control gets while a calibration runs (shared with fixture mode), or null. */
 export function calBlocked(action, cal) {
-  if (!CAL_BLOCKED.includes(action) || cal?.running !== true || cal.stale === true || calDry(cal)) return null;
+  if (!CAL_BLOCKED.includes(action) || cal?.running !== true || cal.stale === true || calNoLights(cal)) return null;   // model.js: one rule
   return Object.assign(new Error(CAL_RUNNING), { status: 409 });
 }
 // Show files mission control may open: the river's year and the live river. Retired files start with old- (D27) and
@@ -320,7 +320,7 @@ export class Mission {
     // never a switch or rebuild while TouchDesigner opens a file by itself (bitcube's own boot, a crash relaunch: no entry holds
     // it): the pages grey both, and a second switch kills the half-opened file (R9 #34)
     // (a change in flight that holds it answers first, with its own "wait: …")
-    const starting = this.applying.conflict(action, checked) ? null : startingBlocked(action, () => ({ ...this.snapshot(), now: this.now() }), this.now());
+    const starting = this.applying.conflict(action, checked) ? null : startingBlocked(action, this.data.probe);
     if (starting) throw starting;
     // every change in flight is recorded, and one that conflicts with it waits (409): two phones pressing Rebuild must not run
     // two builds and two restarts, and nothing may touch TouchDesigner while a switch restarts it

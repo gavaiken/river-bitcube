@@ -2,7 +2,7 @@
 // buttons can't run, which view the Calibrate block shows, whether the river's year uses a run's map, the run's "last heard"
 // note, the state line's next line, the LED map's provenance words, and where the rope numbers sit on the map. Pure ES
 // module, no DOM: lights.js uses it in the browser and test/lights-words.test.mjs under node --test.
-import { dur, entryWords, entrySaid, untimed, changeLabel } from './model.js';
+import { dur, entryWords, entrySaid, untimed, changeLabel, calDryRun } from './model.js';
 
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s ?? '');
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -79,7 +79,7 @@ export function lostWhy(p, m) {
  *  '<started>~lost' a lost run, so OK on a lost run never hides the result of the same run later); old: a result that ended
  *  long before the page opened; rebuiltAt: when the river's year was rebuilt with this run's map (ms), or null. */
 export function calView({ p, m, dismissed = () => false, old = false, rebuiltAt = null }) {
-  const dry = !!(p?.dry_run || p?.mode === 'dry-run' || p?.result?.dry_run);
+  const dry = calDryRun(p) || !!p?.result?.dry_run;   // model.js: one rule for what a dry run is (CR9 #7)
   if (p?.running === true) {
     const lost = lostWhy(p, m);
     if (!lost) return { view: 'run', key: `run:${p.started}:${dry}`, dry };

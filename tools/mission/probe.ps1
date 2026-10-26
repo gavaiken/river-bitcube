@@ -27,18 +27,17 @@ $out = [ordered]@{ ok = $true; time = (Get-Date).ToString('s') }
 # The very patterns of mission/lib/scrub.mjs PATTERNS (mission/test/review-cr7.test.mjs compares them; tools/tests/test_masks.py
 # runs them): change both together.
 $CRED_URL = '([a-z][a-z0-9+.-]*:\/\/)[^\s/?#"<>]*@'
-$CRED_QUOTED = '((?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])?pass|sshpass)(?![\w-])(?:\\?["''])?\s*[:=]\s*)(["''])((?:\\(?:[\s\S]|$)|(?!\2)[^\\])*)(\2|$)'
-$CRED_ESCAPED = '((?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])?pass|sshpass)(?![\w-])(?:\\?["''])?\s*[:=]\s*)(\\(["'']))((?:\\\\\\\\|\\\\\\\3|\\(?:\\\\)?(?!\\|\3)[\s\S]|\\\\(?!\\|\3)|(?!\3)[^\\]|\\+$)*)(\\\3|$)'
-$CRED_BARE_JSON = '((?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])?pass|sshpass)(?![\w-])(\\?["''])\s*:\s*)(?!\\?["''])(?!(?:null|true|false)(?![^\s"''&,;}\]]))([{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\])*[}\]])*[}\]])*[}\]])*[}\]]|[{\[][^\r\n]*|[^\s"''&,;}\]]+)'
-$CRED_BARE = '((?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])?pass|sshpass)(?![\w-])(?:\\?["''])?\s*[:=]\s*)(?!\\?["''])(?!(?:null|true|false)(?![^\s"''&,;}\]]))([{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\])*[}\]])*[}\]])*[}\]])*[}\]]|[{\[][^\r\n]*|[^\s"''&,;}\]]+)'
+$CRED_QUOTED = '((?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])pass|sshpass|pass(?==)|key(?=\\?["'']\s*:\s*\\?["''])|\\?["''](?:user(?:name)?|login|usr)\\?["'']\s*:\s*(?:\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']|[\w.@-]+)\s*,\s*\\?["'']pass(?=\\?["'']\s*:)|pass(?=\\?["'']\s*:\s*\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']\s*,\s*\\?["''](?:user(?:name)?|login|usr)\\?["'']))(?![\w-])(?:\\?["''])?\s*[:=]\s*)(["''])((?:\\(?:[\s\S]|$)|(?!\2)[^\\])*)(\2|$)'
+$CRED_ESCAPED = '((?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])pass|sshpass|pass(?==)|key(?=\\?["'']\s*:\s*\\?["''])|\\?["''](?:user(?:name)?|login|usr)\\?["'']\s*:\s*(?:\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']|[\w.@-]+)\s*,\s*\\?["'']pass(?=\\?["'']\s*:)|pass(?=\\?["'']\s*:\s*\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']\s*,\s*\\?["''](?:user(?:name)?|login|usr)\\?["'']))(?![\w-])(?:\\?["''])?\s*[:=]\s*)(\\(["'']))((?:\\\\\\\\|\\\\\\\3|\\(?:\\\\)?(?!\\|\3)[\s\S]|\\\\(?!\\|\3)|(?!\3)[^\\]|\\+$)*)(\\\3|$)'
+$CRED_BARE_JSON = '((?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])pass|sshpass|pass(?==)|key(?=\\?["'']\s*:\s*\\?["''])|\\?["''](?:user(?:name)?|login|usr)\\?["'']\s*:\s*(?:\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']|[\w.@-]+)\s*,\s*\\?["'']pass(?=\\?["'']\s*:)|pass(?=\\?["'']\s*:\s*\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']\s*,\s*\\?["''](?:user(?:name)?|login|usr)\\?["'']))(?![\w-])(\\?["''])\s*:\s*)(?!\\?["''])(?!(?:null|true|false)(?![^\s"''&,;}\]]))([{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\])*[}\]])*[}\]])*[}\]])*[}\]]|[{\[][^\r\n]*|[^\s"''&,;}\]]+)'
+$CRED_BARE = '((?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])pass|sshpass|pass(?==)|key(?=\\?["'']\s*:\s*\\?["''])|\\?["''](?:user(?:name)?|login|usr)\\?["'']\s*:\s*(?:\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']|[\w.@-]+)\s*,\s*\\?["'']pass(?=\\?["'']\s*:)|pass(?=\\?["'']\s*:\s*\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']\s*,\s*\\?["''](?:user(?:name)?|login|usr)\\?["'']))(?![\w-])(?:\\?["''])?\s*[:=]\s*)(?!\\?["''])(?!(?:null|true|false)(?![^\s"''&,;}\]]))([{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\])*[}\]])*[}\]])*[}\]])*[}\]]|[{\[][^\r\n]*|[^\s"''&,;}\]]+)'
 $CRED_AUTH = '(\bAuthorization\s*[:=]\s*["'']?(?:(?:Bearer|Basic|Token|Digest)\s+)?)([^\s"'',;]+)'
 $CRED_BEARER = '(\bBearer\s+)([A-Za-z0-9._~+/=-]{12,})'
 $CRED_USER = '((?:^|[\s"''\\/])(?:curl|wget|https?|xh)(?:\.exe)?\s(?:[^\n;&|]*?[\s"''])?(?:-u|--user)(?:[\s=]+|(?=[^\s=-]))[^\s:"''*]+:)([^\s"'']+)'
 $CRED_FLAG = '((?:^|\s)--?(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|pass|token|secret|api[_-]?key)\s+)(?![-*])([^\s"'']+)'
 $CRED_SSHPASS = '(\bsshpass\s+-p\s*)([^\s"'']+)'
-$CRED_MYSQL = '(\b(?:mysql|mysqldump|mysqladmin|mariadb)(?:\.exe)?\s(?:[^\n;&|]*?\s)?-p)([^\s"''-][^\s"'']*)'
-$CRED_UCI = '(\buci\s+(?:-\w+\s+)*(?:set|add_list)\s+[^\s=]*\.key=["'']?|\boption\s+key\s+["'']?)([^\s"'']+)'
-$CRED_KEY_JSON = '((?<![\w-])["'']key["'']\s*:\s*["''])([^"'']*)'
+$CRED_MYSQL = '(\b(?:mysql|mysqldump|mysqladmin|mariadb)(?:\.exe)?\s(?:[^\n;&|]*?\s)?(?-i:-p))([^\s"''-][^\s"'']*)'
+$CRED_UCI = '((?<=[\w\]@-])\.key[1-4]?=["'']?|\boption\s+key[1-4]?\s+["'']?)((?<='')(?:[^''\r\n]|''\\'''')*|(?<=")[^"\r\n]*|(?<![''"])[^\s"'']+)'
 $CRED_SKANT = '(\bsk-ant-)([A-Za-z0-9_-]{8,})'
 function Mask-Creds([string]$s) {
     if ($null -eq $s) { return $null }
@@ -54,7 +53,6 @@ function Mask-Creds([string]$s) {
     $s = $s -replace $CRED_SSHPASS, '$1***'
     $s = $s -replace $CRED_MYSQL, '$1***'
     $s = $s -replace $CRED_UCI, '$1***'
-    $s = $s -replace $CRED_KEY_JSON, '$1***'
     return ($s -replace $CRED_SKANT, '$1***')
 }
 

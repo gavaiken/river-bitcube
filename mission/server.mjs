@@ -75,7 +75,7 @@ import { History, describeEvent, feed } from './lib/history.mjs';
 import { describeTool } from './lib/steps.mjs';
 import { SelfUpdate } from './lib/update.mjs';
 import { Zipper } from './lib/zip.mjs';
-import { CONTACTS, derive } from './public/model.js';
+import { CONTACTS, derive, calDryRun } from './public/model.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const env = process.env;
@@ -142,11 +142,12 @@ async function makeRunner() {
                        controlSocket: SOCKET, onSynced: () => update.check(), context: () => stepContext() });
 }
 /** What a step line needs to name a change as the band does (R9 #22): the show file TouchDesigner runs (a switch to it is the restart
- *  on it), and whether the calibration going is a dry run (its Stop is the dry run stop). */
+ *  on it), and whether the calibration going is a dry run (its Stop is the dry run stop): by the rule the server records that Stop by
+ *  (model.js calDryRun: a decode of earlier photos is a calibration, CR9 #7). */
 function stepContext() {
   const s = mission?.snapshot?.(), td = s?.probe?.value?.td, cal = s?.probe?.value?.calibration;
   return { running: td && td.ok !== false && typeof td.file === 'string' ? td.file : null,
-           ...(cal?.running === true ? { calDry: cal.dry_run === true || cal.mode === 'dry-run' || cal.mode === 'decode-only' } : {}) };
+           ...(cal?.running === true ? { calDry: calDryRun(cal) } : {}) };
 }
 
 let mission = null;                // set below; the self-update's quiet() reads it
@@ -199,8 +200,9 @@ function recordAction(scenario, action, checked, result, error, { source = 'miss
   } catch (e) { console.warn(`history: ${e.message}`); }
 }
 
-/** The run a progress copy describes is a dry run (calibrate.py --dry-run: it touches no lights): its own flag, or its mode. */
-const isDryRun = (c) => !!c && typeof c === 'object' && c.running === true && (c.dry_run === true || c.mode === 'dry-run');
+/** The run a progress copy describes is a dry run going (model.js calDryRun: its own flag, or its mode; one rule with the pages, the
+ *  history and the agent's step lines, CR9 #7). */
+const isDryRun = (c) => !!c && typeof c === 'object' && c.running === true && calDryRun(c);
 /** One control, from a page (POST /api/control/<action>) or the studio agent (the control socket): the whitelist, the locks and
  *  the 409s, the history line. -> { status, body }. A refused request (400, 409, 429) is not something that happened: not recorded. */
 async function runControl(action, b, { scenario, source = 'mission control', calib = 'ok' } = {}) {

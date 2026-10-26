@@ -96,7 +96,7 @@ test('R9 #6, #31: a phone\'s earlier change stays its own after the same control
   for (let i = 0; i < 30; i++) mem.request(`x${i}`);
   assert.equal(mem.mine.requestIds.length, 20, 'the newest 20 are kept');
   assert.match(page('status.js'), /M\.ownEntries\(model, [^\n]*mine\.mine\)/);
-  assert.match(page('lights.js'), /ownEntries\(S\.m, ctls, Date\.now\(\), \{ ids: S\.ownIds, requestIds: S\.ownRequestIds \}\)/);
+  assert.match(page('lights.js'), /ownEntries\(S\.m, ctls, Date\.now\(\), mine\.mine\)/, 'its memory: model.js ownMemory, as Status keeps its own (CR9 #15)');
 });
 
 // ---- #1, #29: a page's own change found by its request id while its answer is on the way, or after it was lost -----------------
@@ -370,7 +370,7 @@ test('R9 #19: a dry run is never "photographing the ropes": Recent, the band and
   assert.equal(m.overall.cause, 'calibrating');
   assert.equal(m.overall.detail, "It walks the calibration's steps without touching the lights (step 1 of 4 now) and ends by itself in about a minute.");
   assert.equal(m.show.calibration.words, 'step 1 of 4');
-  assert.match(page('lights.js'), /dry \? `Step \$\{i \+ 1\}`/);
+  assert.match(page('lights.js'), /dry \? `Step \$\{calStep\(s\)\.n\}`/, 'its step from model.js calStep (CR9 #16)');
 });
 
 // ---- #2: Recent is kept current while it is open -------------------------------------------------------------------------------
@@ -408,7 +408,7 @@ test('R9 #22: a change asked of mission control is named as the band and Recent 
   assert.deepEqual(await stepOf(mc('check')), ['asked mission control for the full check of bitcube', false]);
   assert.deepEqual(await stepOf(mc('nope'), ''), ['ran a command', false], 'not a control of mission control');
   // the live agent passes what TouchDesigner runs, so a switch to it reads as the restart it is
-  assert.match(page('../lib/agent.mjs'), /ctx = context\?\.\(\) \?\? \{\}; \} catch \{ ctx = \{\}; \} yield \{ kind: 'activity', \.\.\.describeTool\(b, ctx\) \}/);
+  assert.match(page('../lib/agent.mjs'), /yield \{ kind: 'activity', \.\.\.describeTool\(b, context\) \}/, 'handed over lazily (CR9 #18)');
   assert.match(readFileSync(new URL('../server.mjs', import.meta.url), 'utf8'), /context: \(\) => stepContext\(\)/);
 });
 
@@ -467,11 +467,13 @@ test('R9 #37: the masks catch SSHPASS=, pass=, mysql\'s attached -p, a Wi-Fi key
   // never what isn't a login
   for (const line of ['op("x").bypass = True', 'the bypass is open', 'sort key=name', 'the primary key: id', 'mysql -u root river', 'else: pass', 'uci show wireless',
                       '"input_tokens": 12', 'a passage', 'compass=north']) assert.equal(scrubCreds(line), line, line);
-  assert.deepEqual(scrubCreds({ SSHPASS: F, pass: F, key: F, keys: ['a'], bypass: true }), { SSHPASS: '***', pass: '***', key: '***', keys: ['a'], bypass: true });
+  assert.deepEqual(scrubCreds({ SSHPASS: F, user: 'admin', pass: F, ssid: 'gray-river', key: F, keys: ['a'], bypass: true }), { SSHPASS: '***', user: 'admin', pass: '***', ssid: 'gray-river', key: '***', keys: ['a'], bypass: true });
+  // a "pass" or a "key" with nothing beside it that makes it a login is left alone (CR9 #13)
+  assert.deepEqual(scrubCreds({ pass: 'A', key: 'river-local' }), { pass: 'A', key: 'river-local' });
   // probe.ps1 carries the very patterns (tools/tests/test_masks.py runs them)
   const src = readFileSync(new URL('../../tools/mission/probe.ps1', import.meta.url), 'utf8');
   const ps = Object.fromEntries([...src.matchAll(/^\$(CRED_\w+) = '((?:[^']|'')*)'$/gm)].map((m) => [m[1], m[2].replace(/''/g, "'")]));
-  for (const [k, v] of [['CRED_MYSQL', PATTERNS.MYSQL], ['CRED_UCI', PATTERNS.UCI], ['CRED_KEY_JSON', PATTERNS.KEYJSON], ['CRED_SKANT', PATTERNS.SKANT], ['CRED_QUOTED', PATTERNS.QUOTED]]) assert.equal(ps[k], v, k);
+  for (const [k, v] of [['CRED_MYSQL', PATTERNS.MYSQL], ['CRED_UCI', PATTERNS.UCI], ['CRED_SKANT', PATTERNS.SKANT], ['CRED_QUOTED', PATTERNS.QUOTED]]) assert.equal(ps[k], v, k);
 });
 
 // ---- #24: the chat's "Not sent" in the controls' form ----------------------------------------------------------------------------

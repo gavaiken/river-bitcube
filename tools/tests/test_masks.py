@@ -87,7 +87,7 @@ def probe_mask():
     steps = re.findall(r"-replace \$(CRED_\w+), '([^']*)'", body)
     assert [name for name, _ in steps] == ['CRED_URL', 'CRED_QUOTED', 'CRED_ESCAPED', 'CRED_BARE_JSON', 'CRED_BARE',
                                            'CRED_AUTH', 'CRED_BEARER', 'CRED_USER', 'CRED_FLAG', 'CRED_SSHPASS',
-                                           'CRED_MYSQL', 'CRED_UCI', 'CRED_KEY_JSON', 'CRED_SKANT'], steps
+                                           'CRED_MYSQL', 'CRED_UCI', 'CRED_SKANT'], steps
     compiled = [(re.compile(pats[name], re.I), re.sub(r'\$(\d+)', r'\\g<\1>', repl)) for name, repl in steps]
 
     def mask(s):
@@ -143,6 +143,20 @@ PROBE_CASES = CASES + [
     ('{"ssid":"gray-river","key":"hunter2"}', '{"ssid":"gray-river","key":"***"}'),
     (f'token sk-ant-oat01-{FAKE}', 'token sk-ant-***'),
     ('op("x").bypass = True; sort key=name', 'op("x").bypass = True; sort key=name'),
+    # CR9 #5: prose keeps its pass; a JSON pass beside a user or login is still masked, in either order
+    ('First pass: all 20 ropes answer; one pass = 29 patterns', 'First pass: all 20 ropes answer; one pass = 29 patterns'),
+    ('{"stage":"ropes-capture","pass":"A"}', '{"stage":"ropes-capture","pass":"A"}'),
+    ('{"pass":"hunter2","user":"admin"}', '{"pass":"***","user":"admin"}'),
+    # CR9 #12: a "key" in escaped JSON, an apostrophe in a quoted key
+    ('{"out":"{\\"key\\":\\"hunter2\\"}"}', '{"out":"{\\"key\\":\\"***\\"}"}'),
+    ('{"ssid":"gray-river","key":"hunter2\'s"}', '{"ssid":"gray-river","key":"***"}'),
+    # CR9 #4: uci show and uci export lines: <anything>.key=, quoted or not, a space or an apostrophe ('\\'') in it
+    ("wireless.default_radio0.key='hunter2 x'\nwireless.default_radio0.ssid='gray-river'", "wireless.default_radio0.key='***'\nwireless.default_radio0.ssid='gray-river'"),
+    ("wireless.wifinet2.key=hunter2 wireless.x.key='it'\\''s hunter2'", "wireless.wifinet2.key=*** wireless.x.key='***'"),
+    ("option key 'hunter2 x'", "option key '***'"),
+    # CR9 #14: mysql's port is -P, its password -p: only the lower case is masked (case-sensitive inside -replace)
+    ('mysql -h db -P3306 -u root -phunter2 river', 'mysql -h db -P3306 -u root -p*** river'),
+    ('mysqldump -P3306 river', 'mysqldump -P3306 river'),
 ]
 
 
