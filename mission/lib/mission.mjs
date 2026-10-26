@@ -3,7 +3,11 @@
 // arbitrary commands. planControl is the whitelist on its own (pure), shared with fixture mode.
 import { execFile } from 'node:child_process';
 import { connect } from 'node:net';
+import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { scrubCreds } from './scrub.mjs';
+import { Applying } from './applying.mjs';
+import { planCalibrate } from './lights.mjs';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 const PROBE = PS + 'probe.ps1';
@@ -68,14 +72,25 @@ async function getJson(url, timeout = 5000, init = {}) {
   return body;
 }
 
+const obj = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : null);
+const CAL_KEEP_S = 24 * 3600;                 // probe.ps1 reports a progress file from the last 24 h, and so does the newest-copy rule
+export const CAL_POLL_MS = 5_000;             // while a run is on, the server reads its progress itself this often
+
+/** A rebuild that went all the way: built, saved and restarted on the file (probe.ps1 -Action rebuild; ok false names the step). */
+export function rebuildSucceeded(r) { return !!r && r.ok !== false && r.rebuilt !== false && r.saved !== false; }
+
 export class Mission {
+  // lights: the Lights instance (lib/lights.mjs) the calibration goes through; stateDir: where the last rebuild is kept (null: memory)
   constructor({ bitcubeHost = '100.73.68.60', sshHost = 'bitcube', seasonsUrl = 'http://100.73.68.60:9981',
                 modalUrl = 'https://to-be-a-river--river.modal.run', riverCam = { host: '192.168.8.217', port: 554 },
-                probe = sshProbe, snap = sshSnap, now = () => Date.now() } = {}) {
-    Object.assign(this, { bitcubeHost, sshHost, seasonsUrl, modalUrl, riverCam, probe, snap, now });
+                probe = sshProbe, snap = sshSnap, now = () => Date.now(), lights = null, stateDir = null } = {}) {
+    Object.assign(this, { bitcubeHost, sshHost, seasonsUrl, modalUrl, riverCam, probe, snap, now, lights, stateDir });
     this.snaps = {};         // cam -> { at, jpeg, pending }
     this.data = {};          // source -> { at, value | error }
     this.timers = [];
+    this.applying = new Applying({ now });     // every control in flight (status.applying; the 409 "wait: ...")
+    this.calNote = null;     // { at, value }: the newest progress file Lights answered with (start, cancel, a progress read)
+    this.lastRebuild = this.#readRebuilt();
   }
 
   #set(name, value, error) {
@@ -110,6 +125,7 @@ export class Mission {
     every(() => this.pollFast(), 5000);
     every(() => this.pollModal(), 30_000);
     every(() => this.pollProbe(), 60_000);
+    every(() => this.pollCalibration(), CAL_POLL_MS);
   }
 
   stop() { this.timers.forEach(clearInterval); this.timers = []; }
@@ -117,7 +133,85 @@ export class Mission {
   snapshot() {
     const out = {};
     for (const [k, v] of Object.entries(this.data)) out[k] = { ...v, age_s: Math.round((this.now() - v.at) / 1000) };
+    // the calibration the pages see is the newest copy there is (Lights' own answer can be up to a minute ahead of the probe)
+    const cal = this.calibration();
+    if (obj(out.probe?.value) && cal !== (out.probe.value.calibration ?? null)) out.probe = { ...out.probe, value: { ...out.probe.value, calibration: cal } };
+    out.applying = this.applying.list();
     return out;
+  }
+
+  // ---- the calibration job: the newest copy of its progress file -------------------------------------------------
+  // The full check carries the progress file, but it runs once a minute; Lights' answers (a start, a cancel, a progress read)
+  // are newer the moment they arrive. Whichever copy bitcube wrote last (its `updated`) is the state, so the lock on the
+  // ropes, the panels, a switch, a rebuild and the lighting port holds from the first second of a run and ends with it.
+
+  /** Keep a progress file Lights answered with, when it is at least as new as the one kept (a failed read changes nothing). */
+  noteCalibration(cal) {
+    const c = obj(cal);
+    if (!c || typeof c.updated !== 'number' || !Number.isFinite(c.updated)) return;
+    if (this.calNote && c.updated < this.calNote.value.updated) return;
+    this.calNote = { at: this.now(), value: scrubCreds(c) };
+  }
+
+  /** The calibration job as the newest copy says (the probe's or Lights'), or null: none in the last 24 h. */
+  calibration() {
+    const pr = obj(this.data.probe?.value?.calibration), n = this.calNote;
+    if (!n || this.now() / 1000 - n.value.updated > CAL_KEEP_S) return pr;
+    const pu = typeof pr?.updated === 'number' ? pr.updated : -Infinity;
+    // the same file read twice: the later read knows more (alive, stale are judged as it is read)
+    if (n.value.updated > pu || (n.value.updated === pu && n.at >= (this.data.probe?.at ?? -Infinity))) return n.value;
+    return pr;
+  }
+
+  /** GET /api/calibration: the job's progress now (Lights.calibration, cached a few seconds), kept as the newest copy. */
+  async calibrationStatus() {
+    if (!this.lights) throw Object.assign(new Error('no calibration here'), { status: 503 });
+    const r = await this.lights.calibration();
+    this.noteCalibration(r);
+    return r;
+  }
+
+  /** While a run is on, read its progress (every CAL_POLL_MS from start()), so the lock ends with the run even with no page open. */
+  async pollCalibration() {
+    const c = this.calibration();
+    if (!this.lights || c?.running !== true || c.stale === true) return;
+    await this.calibrationStatus();
+  }
+
+  /** POST /api/control/calibrate: start, cancel or status through Lights (planCalibrate is the whitelist). A start is a change
+   *  in flight (it waits for a switch, rebuild or boot-file change, and those wait for it); a cancel always goes through. */
+  async calibrate(action, body = {}) {
+    planCalibrate(action, body);
+    if (!this.lights) throw Object.assign(new Error('no calibration here'), { status: 503 });
+    return this.applying.run('calibrate', { ...body, action }, async () => {
+      const r = await this.lights.calibrate(action, body);
+      this.noteCalibration(r?.calibration);
+      return r;
+    });
+  }
+
+  // ---- the last rebuild: which LED map the river's year uses ------------------------------------------------------
+  /** { at, map, file } of the last rebuild that went all the way, or null. */
+  rebuilt() { return this.lastRebuild ? { ...this.lastRebuild } : null; }
+
+  #recordRebuilt(file, r) {
+    const map = (typeof r?.pixelmap?.file === 'string' && r.pixelmap.file) || this.calibration()?.result?.map || this.data.probe?.value?.pixelmap?.file || null;
+    this.lastRebuild = { at: this.now(), map, file };
+    if (!this.stateDir) return;
+    try {
+      mkdirSync(this.stateDir, { recursive: true });
+      const f = join(this.stateDir, 'rebuilt.json');
+      writeFileSync(`${f}.tmp`, JSON.stringify(this.lastRebuild) + '\n');
+      renameSync(`${f}.tmp`, f);
+    } catch (e) { console.warn(`rebuilt.json: ${e.message}`); }
+  }
+
+  #readRebuilt() {
+    if (!this.stateDir) return null;
+    try {
+      const j = JSON.parse(readFileSync(join(this.stateDir, 'rebuilt.json'), 'utf8'));
+      return obj(j) && typeof j.at === 'number' ? { at: j.at, map: typeof j.map === 'string' ? j.map : null, file: typeof j.file === 'string' ? j.file : null } : null;
+    } catch { return null; }
   }
 
   /** The newest still of a camera (cached; one fetch at a time). */
@@ -135,16 +229,16 @@ export class Mission {
     const plan = planControl(action, body);
     // a calibration photographs the ropes and the panels: anything that changes them, restarts TouchDesigner or moves the
     // lighting port spoils the run (the pages refuse these too; this covers the studio chat and a stale page)
-    const blocked = calBlocked(action, this.data.probe?.value?.calibration);
+    const blocked = calBlocked(action, this.calibration());
     if (blocked) throw blocked;
-    if (plan.kind === 'seasons') return this.#seasons(plan.path, plan.body);
-    // a rebuild, a switch or a boot-file change at a time: two phones pressing Rebuild must not run two builds and two restarts
-    if (EXCLUSIVE.includes(action)) {
-      if (this.busy) throw Object.assign(new Error(`${this.busy === 'rebuild' ? 'a rebuild' : 'a show-file change'} is already running; wait for it to finish`), { status: 409 });
-      this.busy = action;
-      try { return await this.#probeAction(plan.args, plan.timeout, action); } finally { this.busy = null; }
-    }
-    return this.#probeAction(plan.args, plan.timeout, action);
+    // every change in flight is recorded, and one that conflicts with it waits (409): two phones pressing Rebuild must not run
+    // two builds and two restarts, and nothing may touch TouchDesigner while a switch restarts it
+    return this.applying.run(action, body, async () => {
+      if (plan.kind === 'seasons') return this.#seasons(plan.path, plan.body);
+      const r = await this.#probeAction(plan.args, plan.timeout, action);
+      if (action === 'rebuild' && rebuildSucceeded(r)) this.#recordRebuilt(body.file, r);
+      return r;
+    }, { running: this.data.probe?.value?.td?.file ?? null });
   }
 
   async #seasons(path, body) {
@@ -161,7 +255,6 @@ export class Mission {
   }
 }
 
-const EXCLUSIVE = ['rebuild', 'switch', 'bootfile'];
 /** Ropes and panels act through TouchDesigner: when its own answer says it failed, the action failed, whatever the probe's
  *  top-level ok says (a probe.ps1 from before 24 Oct reported ok: true with td.ok false). */
 export function actionResult(action, r) {

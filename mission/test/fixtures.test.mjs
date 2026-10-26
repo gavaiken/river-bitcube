@@ -41,7 +41,7 @@ function fixtureDir(names = ['bitcube-offline', 'all-good']) {
   writeFileSync(join(dir, 'Bad Name.json'), '{}');           // names are [a-z0-9-]+ only
   return dir;
 }
-const fm = (dir, now = () => 5_000_000) => new FixtureMission({ dir, stateDir: join(dir, 'state'), now });
+const fm = (dir, now = () => 5_000_000) => new FixtureMission({ dir, stateDir: join(dir, 'state'), now, applyS: 0 });
 
 test('scenarios: listed alphabetically; the cookie picks one, all-good is the default, else the first', () => {
   const m = fm(fixtureDir());
@@ -60,8 +60,8 @@ test('scenarios: listed alphabetically; the cookie picks one, all-good is the de
 test('snapshot: the fixture status plus the scenario name, read again on every call', () => {
   const dir = fixtureDir();
   const m = fm(dir);
-  assert.deepEqual(m.snapshot(), { ...STATUS, fixture: 'all-good', now: 5_000_000 });          // no _scenario.now: served on the real clock
-  assert.deepEqual(m.snapshot('bitcube-offline'), { ...STATUS, fixture: 'bitcube-offline', now: 5_000_000 });
+  assert.deepEqual(m.snapshot(), { ...STATUS, applying: [], fixture: 'all-good', now: 5_000_000 });          // no _scenario.now: served on the real clock
+  assert.deepEqual(m.snapshot('bitcube-offline'), { ...STATUS, applying: [], fixture: 'bitcube-offline', now: 5_000_000 });
   assert.equal(m.snapshot('nope').fixture, 'all-good');
   // edit the file: no restart needed
   writeFileSync(join(dir, 'all-good.json'), scenario('all-good', { status: { bitcube: { at: 4_990_000, value: { online: false } }, probe: { age_s: 70, error: 'x' }, modal: null } }));
@@ -272,7 +272,7 @@ test('the scripted calibration: the progress file\'s shape and stages, cancel, t
   const c5 = run(); c5.start({ dry_run: true }); advance(120_000);
   assert.deepEqual([c5.status().mode, c5.status().before, c5.status().restored, c5.status().result.dry_run], ['dry-run', null, null, true]);
   // FixtureMission: the scenario decides whether a run may start; the probe mirrors it
-  const fm = new FixtureMission({ dir: new URL('./fixtures/', import.meta.url).pathname, stateDir: mkdtempSync(join(tmpdir(), 'fx-')), pixelmapDir: dir, now: () => t });
+  const fm = new FixtureMission({ dir: new URL('./fixtures/', import.meta.url).pathname, stateDir: mkdtempSync(join(tmpdir(), 'fx-')), pixelmapDir: dir, now: () => t, applyS: 0 });
   assert.equal((await fm.calibrate('start', {}, { scenario: 'bitcube-offline' })).error, "bitcube is offline: calibration can't start");
   assert.equal((await fm.calibrate('start', {}, { scenario: 'td-frozen' })).error, "TouchDesigner isn't answering: calibration can't start");
   assert.equal((await fm.calibrate('start', {}, { scenario: 'gallery-cam-down' })).error, "The gallery camera isn't reachable: calibration can't start");
@@ -314,4 +314,62 @@ test('a running calibration shows on the band as Attention: "Calibrating the lig
   await fm.calibrate('cancel', {}, { scenario: 'all-good' });
   assert.equal(derive(fm.snapshot('all-good'), t + 2000).overall.level, 'ok', 'a finished run is no longer news');
   fm.stop();
+});
+
+// ---- applying a change in fixture mode: the same locks as the live server, and a change a page can see confirmed ----------
+test('fixture mode records every change in flight, holds a switch, rebuild or boot-file change, then shows it in that scenario only', async () => {
+  const realFixtures = new URL('./fixtures/', import.meta.url).pathname;
+  const holds = [];
+  let t = 1_792_749_540_000 + 3 * 86_400_000 + 5_000;       // three days after all-good's moment, 5 s later in the day
+  let release = null;
+  const sleep = (ms) => { holds.push(ms); return new Promise((r) => { release = r; }); };
+  const m = new FixtureMission({ dir: realFixtures, stateDir: mkdtempSync(join(tmpdir(), 'fx-apply-')), now: () => t, applyS: 6, sleep,
+                                 pixelmapDir: new URL('../../tools/pixelmap/', import.meta.url).pathname });
+  const clock = m.clock('all-good');
+  assert.deepEqual(m.snapshot('all-good').applying, []);
+  assert.equal(m.snapshot('all-good').probe.value.td.file, 'river-local-oct-22-seasons.toe');
+  const sw = m.control('switch', { file: 'river-online-oct-23.toe' }, 'all-good');
+  await Promise.resolve();
+  assert.deepEqual(holds, [6000], 'a switch holds MISSION_FIXTURE_APPLY_S');
+  t += 4_000;                                                 // the fixture clock stands still; started_at moves back instead
+  const [e] = m.snapshot('all-good').applying;
+  assert.deepEqual([e.action, e.label, e.file, e.started_at, e.expect_s], ['switch', 'the switch to the live river', 'river-online-oct-23.toe', m.clock('all-good') - 4_000, 60]);
+  assert.equal(m.clock('all-good'), clock);
+  await assert.rejects(m.control('ropes', { dark: true }, 'all-good'), (err) => err.status === 409 && err.message === 'wait: the switch to the live river is being applied (started 02:58)');
+  await assert.rejects(m.calibrate('start', {}, { scenario: 'all-good' }), (err) => err.status === 409 && /^wait: the switch to the live river/.test(err.message));
+  assert.equal((await m.control('ropes', { dark: true }, 'td-low-fps')).ok, true, 'another scenario is another world');
+  assert.deepEqual(m.snapshot('td-low-fps').applying, []);
+  release();
+  assert.equal((await sw).ok, true);
+  const after = m.snapshot('all-good');
+  assert.deepEqual([after.applying, after.probe.value.td.file, after.probe.value.boot_file], [[], 'river-online-oct-23.toe', 'river-online-oct-23.toe'], 'TouchDesigner now reports the new file; a switch sets the boot file too');
+  assert.equal(m.snapshot('td-low-fps').probe.value.td.file, 'river-local-oct-22-seasons.toe', 'only in that scenario');
+  // a boot-file change
+  const bf = m.control('bootfile', { file: 'river-local-oct-22-seasons.toe' }, 'all-good');
+  await Promise.resolve();
+  assert.equal(m.snapshot('all-good').applying[0].label, 'the boot file change');
+  release(); await bf;
+  assert.deepEqual([m.snapshot('all-good').probe.value.boot_file, m.snapshot('all-good').probe.value.td.file], ['river-local-oct-22-seasons.toe', 'river-online-oct-23.toe']);
+  // a rebuild holds twice as long, then the map it baked in is the map in use
+  holds.length = 0;
+  m.control('switch', { file: 'river-local-oct-22-seasons.toe' }, 'all-good'); await Promise.resolve(); release(); await new Promise((r) => setImmediate(r));
+  const rb = m.control('rebuild', { file: 'river-local-oct-22-seasons.toe' }, 'all-good');
+  await Promise.resolve();
+  assert.deepEqual(holds, [6000, 12000]);
+  assert.equal(m.snapshot('all-good').applying[0].label, "a rebuild of the river's year");
+  assert.equal(m.rebuilt('all-good'), null);
+  release(); await rb;
+  assert.deepEqual(m.rebuilt('all-good'), { at: t, map: 'pixelmap-2026-10-23.json', file: 'river-local-oct-22-seasons.toe' });
+  assert.equal(m.rebuilt('td-low-fps'), null);
+  // ropes, mode and the rest answer at once (their own answer is bitcube's reading) and lock only themselves meanwhile
+  holds.length = 0;
+  assert.equal((await m.control('mode', { mode: 'manual' }, 'all-good')).ok, true);
+  assert.deepEqual(holds, []);
+  m.stop();
+});
+
+test('MISSION_FIXTURE_APPLY_S 0 holds nothing', async () => {
+  const m = new FixtureMission({ dir: new URL('./fixtures/', import.meta.url).pathname, stateDir: mkdtempSync(join(tmpdir(), 'fx-apply0-')), applyS: 0, sleep: () => { throw new Error('no hold'); } });
+  assert.equal((await m.control('switch', { file: 'river-online-oct-23.toe' }, 'all-good')).ok, true);
+  assert.equal(m.snapshot('all-good').probe.value.td.file, 'river-online-oct-23.toe');
 });

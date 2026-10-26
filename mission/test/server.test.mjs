@@ -159,7 +159,7 @@ test('the v2 routes on the real fixtures: lights, pixelmap, calibration (scripte
   writeFileSync(join(dir, 'pw'), 'test-password\n');
   const fixtures = fileURLToPath(new URL('./fixtures/', import.meta.url));
   const { p, base } = await startServer({ MISSION_PORT: '0', MISSION_STATE_DIR: join(dir, 'state'), MISSION_PASSWORD_FILE: join(dir, 'pw'),
-                                          MISSION_FIXTURES: fixtures, MISSION_FAKE_AGENT: '1', MISSION_FIXTURE_CALIBRATE_S: '3' });
+                                          MISSION_FIXTURES: fixtures, MISSION_FAKE_AGENT: '1', MISSION_FIXTURE_CALIBRATE_S: '3', MISSION_FIXTURE_APPLY_S: '0.2' });
   t.after(() => p.kill());
   const get = (path, headers = {}) => fetch(base + path, { headers, redirect: 'manual' });
   const post = (path, body, headers = {}) => fetch(base + path, { method: 'POST', body: JSON.stringify(body), redirect: 'manual',
@@ -223,7 +223,11 @@ test('the v2 routes on the real fixtures: lights, pixelmap, calibration (scripte
   assert.deepEqual([rb.ok, rb.fixture, rb.action], [true, true, 'rebuild']);
 
   // the scripted calibration: none -> start -> progress -> done; the probe mirrors it; cancel; the drift flag
-  assert.deepEqual(await (await get('/api/calibration', on('all-good'))).json(), { running: false, none: true });
+  // (the rebuild above went all the way: /api/calibration says which map the river's year now uses, on every phone)
+  const none = await (await get('/api/calibration', on('all-good'))).json();
+  assert.deepEqual(none, { running: false, none: true, rebuilt: { at: none.rebuilt.at, map: 'pixelmap-2026-10-23.json', file: 'river-local-oct-22-seasons.toe' } });
+  assert.ok(Math.abs(Date.now() - none.rebuilt.at) < 60_000);
+  assert.equal((await (await get('/api/calibration', on('td-low-fps'))).json()).rebuilt, null, 'the rebuild was in all-good only');
   assert.equal((await post('/api/control/calibrate', { action: 'explode' }, on('all-good'))).status, 400);
   // a body that is not a JSON object is refused before anything runs or is recorded (it threw a TypeError, recorded as a failed start)
   const histBefore = (await (await get('/api/history?kinds=action', on('all-good'))).json()).count;
@@ -304,4 +308,39 @@ test("a body that isn't a JSON object, or a foreign cookie with a stray %, gets 
   const foreign = `other_app=progress=50%; ${mc}`;
   assert.equal((await fetch(base + '/api/status', { headers: { cookie: foreign } })).status, 200);
   assert.equal((await fetch(base + '/status', { headers: { cookie: foreign }, redirect: 'manual' })).status, 200);
+});
+
+test('applying a change over HTTP: status.applying on every phone, 409 "wait: ..." for what it blocks, then the change shows (fixture mode)', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mission-apply-'));
+  writeFileSync(join(dir, 'pw'), 'NOT-A-REAL-PW\n');
+  const fixtures = fileURLToPath(new URL('./fixtures/', import.meta.url));
+  const { p, base } = await startServer({ MISSION_PORT: '0', MISSION_STATE_DIR: join(dir, 'state'), MISSION_PASSWORD_FILE: join(dir, 'pw'),
+                                          MISSION_FIXTURES: fixtures, MISSION_FAKE_AGENT: '1', MISSION_FIXTURE_APPLY_S: '1.5' });
+  t.after(() => p.kill());
+  const post = (path, body, headers = {}) => fetch(base + path, { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json', ...headers } });
+  const mc = (await post('/login', { password: 'NOT-A-REAL-PW' })).headers.get('set-cookie').split(';')[0];
+  const on = { cookie: `${mc}; scenario=all-good` }, other = { cookie: `${mc}; scenario=td-low-fps` };
+  const status = async (h = on) => (await fetch(base + '/api/status', { headers: h })).json();
+  assert.deepEqual((await status()).applying, []);
+  const sw = post('/api/control/switch', { file: 'river-online-oct-23.toe' }, on);
+  let st;
+  for (let i = 0; i < 50; i++) { st = await status(); if (st.applying.length) break; await sleep(20); }
+  const [e] = st.applying;
+  assert.deepEqual([e.action, e.label, e.file, e.expect_s, e.blocks.includes('ropes'), e.blocks.includes('calibrate')], ['switch', 'the switch to the live river', 'river-online-oct-23.toe', 60, true, true]);
+  assert.ok(e.started_at <= st.now && st.now - e.started_at < 2_000, 'started_at on the clock the page judges by');
+  for (const [path, body] of [['/api/control/ropes', { dark: true }], ['/api/control/mode', { mode: 'manual' }], ['/api/control/calibrate', { action: 'start' }], ['/api/control/rebuild', { file: 'river-local-oct-22-seasons.toe' }]]) {
+    const r = await post(path, body, on);
+    const j = await r.json();
+    assert.equal(r.status, 409, path);
+    assert.equal(j.ok, false, path);
+    assert.match(j.error, /^wait: the switch to the live river is being applied \(started 02:5[89]\)$/, path);
+  }
+  assert.equal((await post('/api/control/ropes', { dark: false }, other)).status, 200, 'another scenario is another world');
+  assert.equal((await sw).status, 200);
+  st = await status();
+  assert.deepEqual([st.applying, st.probe.value.td.file, st.probe.value.boot_file], [[], 'river-online-oct-23.toe', 'river-online-oct-23.toe']);
+  assert.equal((await status(other)).probe.value.td.file, 'river-local-oct-22-seasons.toe');
+  // a refused request is not something that happened: only the switch and the other scenario's ropes are in the history
+  const hist = await (await fetch(base + '/api/history?kinds=action', { headers: on })).json();
+  assert.deepEqual(hist.events.map((x) => x.action), ['switch']);
 });
