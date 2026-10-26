@@ -2,7 +2,8 @@
 // know it; dry and decode-only starts; the history's restart mark and feed; the step lines' bridge changes and redirections.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { scrubCreds } from '../lib/scrub.mjs';
+import { readFileSync } from 'node:fs';
+import { scrubCreds, PATTERNS } from '../lib/scrub.mjs';
 
 const FAKE = 'NOT-A-REAL-TOKEN-a1b2c3';
 
@@ -70,4 +71,13 @@ test('CR7 #3: a quoted value is masked to its own closing quote, past an escaped
   scrubCreds(`"token":{${'"a":"\\\\\\"'.repeat(3000)}`);
   scrubCreds(`password:\\"${'\\\\\\'.repeat(5000)}x`);
   assert.ok(Date.now() - t0 < 1000, `${Date.now() - t0} ms`);
+});
+
+test('CR7 #1: probe.ps1 Mask-Creds masks with the very patterns scrubCreds uses, in the same order (tools/tests/test_masks.py runs them)', () => {
+  const src = readFileSync(new URL('../../tools/mission/probe.ps1', import.meta.url), 'utf8');
+  const ps = Object.fromEntries([...src.matchAll(/^\$(CRED_\w+) = '((?:[^']|'')*)'$/gm)].map((m) => [m[1], m[2].replace(/''/g, "'")]));
+  assert.deepEqual(ps, { CRED_URL: PATTERNS.CREDS, CRED_QUOTED: PATTERNS.QUOTED, CRED_ESCAPED: PATTERNS.ESCAPED, CRED_BARE_JSON: PATTERNS.BARE_JSON, CRED_BARE: PATTERNS.BARE });
+  const fn = src.slice(src.indexOf('function Mask-Creds'), src.indexOf('\n}\n', src.indexOf('function Mask-Creds')));
+  assert.deepEqual([...fn.matchAll(/-replace \$(CRED_\w+), '([^']*)'/g)].map((m) => `${m[1]} ${m[2]}`),
+    ['CRED_URL $1***@', 'CRED_QUOTED $1$2***$4', 'CRED_ESCAPED $1$2***$5', 'CRED_BARE_JSON $1$2***$2', 'CRED_BARE $1***']);
 });

@@ -3,6 +3,7 @@ calibrate.py do): ffmpeg takes the last @ too, so an @ or a quote in a camera pa
 at the first @ left the password's tail in record.log, modal-*.log and a hand-run capture.py (review round 5, finding 46).
 """
 import importlib.util
+import json
 import pathlib
 import re
 
@@ -74,3 +75,55 @@ def test_probe_reports_the_boot_file_start_river_would_open():
     assert re.findall(r"'([\w.-]+\.toe)'", probe) == launcher, (probe, launcher)
     assert 'boot-file.txt' in cmd and re.search(r"Join-Path \$river 'boot-file.txt'", src), 'both read River\\boot-file.txt'
     assert '$out.boot_file_chosen' in src
+
+
+def probe_mask():
+    """probe.ps1's Mask-Creds, run here (no PowerShell on the Mac mini): its patterns are .NET regexes in the subset Python's re
+    reads the same way. -replace is case-insensitive, and $N in its replacement is group N."""
+    src = PROBE.read_text(encoding='utf-8')
+    pats = {m.group(1): m.group(2).replace("''", "'") for m in re.finditer(r"^\$(CRED_\w+) = '((?:[^']|'')*)'$", src, re.M)}
+    body = src[src.index('function Mask-Creds'):]
+    body = body[:body.index('\n}\n')]
+    steps = re.findall(r"-replace \$(CRED_\w+), '([^']*)'", body)
+    assert [name for name, _ in steps] == ['CRED_URL', 'CRED_QUOTED', 'CRED_ESCAPED', 'CRED_BARE_JSON', 'CRED_BARE'], steps
+    compiled = [(re.compile(pats[name], re.I), re.sub(r'\$(\d+)', r'\\g<\1>', repl)) for name, repl in steps]
+
+    def mask(s):
+        for rx, repl in compiled:
+            s = rx.sub(repl, s)
+        return s
+    return mask
+
+
+FAKE = 'NOT-A-REAL-TOKEN-a1b2c3'
+PROBE_CASES = CASES + [
+    # R7 #37: a JSON body, a query, an escaped JSON body, a Python dict, "key: value"
+    ('{"password":"x"} ?password=x', '{"password":"***"} ?password=***'),
+    ('body \'{\\"password\\":\\"p@ss w\\"}\'', 'body \'{\\"password\\":\\"***\\"}\''),
+    ("{'passwd': 'secret one', 'pwd': 'two'}", "{'passwd': '***', 'pwd': '***'}"),
+    ('token=abc123&x=1 secret: s3cr3t; Token = "t"', 'token=***&x=1 secret: ***; Token = "***"'),
+    ('"input_tokens": 1234 the passwords file', '"input_tokens": 1234 the passwords file'),
+    # CR7 #1: an object or array value is masked whole, and a bare value in JSON text stays JSON; null, true, false stay
+    (f'[{{"cmd":"Login","code":0,"value":{{"Token":{{"leaseTime":3600,"name":"{FAKE}"}}}}}}]', '[{"cmd":"Login","code":0,"value":{"Token":"***"}}]'),
+    ('{"token":{"a":{"b":[1,{"c":"x}y"}]}},"ok":1}', '{"token":"***","ok":1}'),
+    ('{"token": 123, "secret": null, "pwd": true, "passwd": false}', '{"token": "***", "secret": null, "pwd": true, "passwd": false}'),
+    ('{\\"Token\\":{\\"name\\":\\"x\\"},\\"token\\":99}', '{\\"Token\\":\\"***\\",\\"token\\":\\"***\\"}'),
+    (f'{{"Token":{{"leaseTime":3600,"name":"{FAKE}', '{"Token":"***"'),
+    ('token=abc password={abc}', 'token=*** password=***'),
+    # CR7 #3: past an escaped quote inside the value; a value ending in an escaped backslash; an escaped body's escaped quote
+    ('{"password":"ab\\"cd","user":"admin"}', '{"password":"***","user":"admin"}'),
+    ('{"password":"ab\\\\","user":"admin"}', '{"password":"***","user":"admin"}'),
+    ('"{\\"password\\":\\"ab\\\\\\"cd\\\\\\\\\\",\\"user\\":\\"admin\\"}"', '"{\\"password\\":\\"***\\",\\"user\\":\\"admin\\"}"'),
+    ('{"password":"hunter2', '{"password":"***'),
+]
+
+
+@pytest.mark.parametrize('line,want', PROBE_CASES)
+def test_probe_masks_logins_in_urls_json_and_queries(line, want):
+    """probe.ps1 Mask-Creds hides what mission/lib/scrub.mjs hides, the same way (review CR7 #1, #3): the camera's login reply's
+    token object whole, a bare JSON value as "***" so the JSON stays JSON, a quoted value past an escaped quote inside it."""
+    got = probe_mask()(line)
+    assert got == want, f'{line!r} -> {got!r}'
+    assert FAKE not in got and 'hunter2' not in got and 'cd"' not in got
+    if want.startswith('{"') and want.endswith('}'):
+        json.loads(got)
