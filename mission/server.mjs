@@ -27,8 +27,9 @@
 //                                              a change"); confirmed / expired: the changes it confirmed or gave up on in the last
 //                                              10 min ([{ id, request_id?, action, label, source, file?, started_at, at, maybe? }];
 //                                              a page confirms its own switch, restart, rebuild or boot-file change by its id
-//                                              there); verdicts: the history's verdicts on the last changes that waited for one
-//                                              ([{ id, request_id?, verdict }], hours, across a restart: R8 #0);
+//                                              there); verdicts: the history's verdicts on the last 20 changes that waited for one
+//                                              and the last 10 others ([{ id, request_id?, verdict }], 12 h, across a restart: R8 #0,
+//                                              CR8 #1);
 //                                              probe.value.calibration the newest copy of the calibration job
 //   GET  /api/lights                           what TouchDesigner sends the lights now (lib/lights.mjs CONTRACT); 503 in plain words
 //   GET  /api/pixelmap                         { map, screens, still }: the newest LED map and screens file (lib/lights.mjs)

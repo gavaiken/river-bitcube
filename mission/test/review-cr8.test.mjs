@@ -47,3 +47,54 @@ test('CR8 #12: one table (model.js AWAITED) says which changes wait for the serv
     assert.doesNotMatch(src(f).replace(/^const FILE_ACTIONS = .*$/m, ''), /\[\s*'switch', 'rebuild', 'bootfile'(?:, 'lightsroute'(?:, 'calibrate')?)?\s*\]/, f);
   }
 });
+
+// ---- #1, #14: the long changes' verdicts outlive a burst of quick ones; verdicts() never copies what it keeps --------------------
+
+/** One change through the history as the server records it: its action, then the server's verdict on its entry. */
+function change(h, t, { id, action, body, verdict = 'confirmed', requestId = null }) {
+  h.action({ action, body, ok: true, source: 'mission control', applying_id: id, ...(requestId ? { request_id: requestId } : {}), t });
+  h.judge({ [verdict]: [{ id, action, at: t }] }, t);
+}
+
+test('CR8 #1: a switch\'s verdict stays in status.verdicts for its 12 h however many quick changes come after it, also after a restart', async () => {
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const file = join(mkdtempSync(join(tmpdir(), 'cr8-')), 'history.jsonl');
+  let t = T0;
+  const h = new History({ file, now: () => t });
+  change(h, t, { id: 'ax.sw', action: 'switch', body: { file: LIVE }, requestId: 'rq.sw' });
+  change(h, t += 1000, { id: 'ax.bf', action: 'bootfile', body: { file: YEAR }, verdict: 'expired' });
+  // an evening of quick changes after it: far more than the 20 served and the 500 kept
+  for (let i = 0; i < 700; i++) change(h, t += 1000, { id: `ax.q${i}`, action: i % 2 ? 'ropes' : 'hub75', body: {} });
+  const has = (list, id) => list.find((v) => v.id === id);
+  for (const [who, hh] of [['this server', h], ['after a restart', new History({ file, now: () => t })]]) {
+    const v = hh.verdicts(t);
+    assert.deepEqual(has(v, 'ax.sw'), { id: 'ax.sw', request_id: 'rq.sw', verdict: 'confirmed' }, who);
+    assert.deepEqual(has(v, 'ax.bf'), { id: 'ax.bf', verdict: 'expired' }, who);
+    assert.ok(has(v, 'ax.q699'), `${who}: the newest quick ones are served too (a lost answer's verdict)`);
+    assert.ok(v.length <= 40, `${who}: every phone downloads it on every poll (${v.length})`);
+    assert.deepEqual(v.map((x) => x.id), [...v].sort((a, b) => hh.verdictOf.get(b.id).t - hh.verdictOf.get(a.id).t).map((x) => x.id), `${who}: newest first`);
+    // a page that slept finds its own switch by its request id, and its verdict
+    const m = derive({ ...payload({ t }), verdicts: v }, t);
+    const { entryIdOf, entryVerdict } = await import('../public/model.js');
+    assert.equal(entryVerdict(m, entryIdOf(m, 'rq.sw')), 'confirmed', who);
+  }
+  // its 12 h over, it goes
+  t = T0 + 12 * 3600e3 + 1000;
+  assert.equal(has(h.verdicts(t), 'ax.sw'), undefined);
+});
+
+test('CR8 #14: verdicts() reads only the newest it serves, never a copy of everything kept; judge() on no change waiting is free', () => {
+  let t = T0;
+  const h = new History({ file: null, now: () => t });
+  for (let i = 0; i < 600; i++) change(h, t += 1000, { id: `ax.${i}`, action: i % 50 ? 'ropes' : 'switch', body: { file: LIVE } });
+  const kept = h.verdictOf;
+  for (const k of [Symbol.iterator, 'entries', 'keys', 'values', 'forEach']) kept[k] = () => { throw new Error(`verdicts() walked the whole map (${String(k)})`); };
+  const v = h.verdicts(t);
+  assert.equal(v[0].id, 'ax.599');
+  assert.ok(v.some((x) => x.id === 'ax.550'), 'a switch from 50 changes ago');
+  // judge() with nothing waiting reads neither list
+  const lists = { get confirmed() { throw new Error('read the lists'); }, get expired() { throw new Error('read the lists'); } };
+  assert.deepEqual(h.judge(lists, t), []);
+});

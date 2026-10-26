@@ -14,7 +14,9 @@
 //   recent({ limit = 50, kinds, sinceT }) -> events, newest first (default window: the last keepMs); an action that waited for
 //                                        the server's verdict carries it (verdict: 'confirmed' | 'expired'), so its words do
 //   summary(nowMs) -> { since: { overall, items: { id }, show: { field } }, last_action, count }
-//   verdicts(nowMs, { limit, withinMs }) -> [{ id, request_id?, verdict }]   the server's verdicts kept, newest first (status.verdicts)
+//   verdicts(nowMs, { limit, quick, withinMs }) -> [{ id, request_id?, verdict }]   the server's verdicts kept, newest first
+//                                        (status.verdicts): the newest `limit` on changes that waited for one (model.js AWAITED, a
+//                                        maybe), whatever came after them, and the newest `quick` on the rest, within `withinMs`
 // describeEvent(ev) -> one plain sentence for a feed (glossary words, no jargon; never throws).
 //
 // Events (all carry t, ms epoch on the server's clock; `from` is null the first time something is seen):
@@ -36,7 +38,8 @@
 //                                                          (lib/applying.mjs), so a page can tell it is still being confirmed
 //                                                          (status.applying), confirmed or expired; request_id: the page's own
 //                                                          id for the press (R8 #2). Logins are scrubbed.
-//   { kind: 'verdict', t, applying_id, request_id?, verdict }   the server's verdict on an action's entry ('confirmed' or 'expired'),
+//   { kind: 'verdict', t, applying_id, request_id?, verdict, awaited? }   the server's verdict on an action's entry ('confirmed' or
+//                                                          'expired'; awaited: its action waited for it, awaitsVerdict),
 //                                                          for every action with an entry (the words of those that wait for it,
 //                                                          awaitsVerdict: a switch, a rebuild, a boot-file or lighting port change,
 //                                                          a calibration start, a maybe, follow it), read from status.confirmed /
@@ -76,9 +79,10 @@ export const UNSEEN_GAP_MS = 5 * 60e3;        // unseen for longer than this, a 
 export const RESTART_MARK_MS = 10 * 60e3;     // a piece last seen dark while TouchDesigner restarted, unseen since for longer: its mark lapses
 export const SOURCES = ['mission control', 'studio chat'];
 export const AWAIT_MS = 60 * 60e3;            // an action waits this long at most for its verdict (the server forgets an entry 10 min after its limit)
-export const VERDICTS_SERVED = 20;            // status.verdicts: the newest this many …
+export const VERDICTS_SERVED = 20;            // status.verdicts: the newest this many on changes that waited for one (a switch, …) …
+export const VERDICTS_QUICK = 10;             // … and on the quick ones (ropes, panels, the year's: a page whose answer was lost) …
 export const VERDICTS_MS = 12 * 3600e3;       // … from the last this long (a phone locked for an evening still learns its own)
-const VERDICTS_KEPT = 500;                    // in memory, newest kept
+const VERDICTS_KEPT = 500;                    // in memory, the newest this many of each kind (a burst of quick ones never evicts a switch's)
 const SHOW_FIELDS = ['file', 'mode', 'season', 'ropes'];
 /** The causes of a restart under way: TouchDesigner restarting on a file, then (its first check) coming up. */
 const RESTARTISH = ['td-restarting', 'coming-up'];
@@ -116,8 +120,11 @@ export class History {
     this.prevObs = null;         // the observation before this one
     this.restarted = new Map();  // piece id -> when it was last seen dark while TouchDesigner restarted (no lines of their own), until
                                  // seen fresh after it, or RESTART_MARK_MS without (CR7 #8)
-    this.awaiting = new Map();   // applying_id -> { t, request_id }: actions whose entry has no verdict from the server yet
-    this.verdictOf = new Map();  // applying_id -> { verdict, t, request_id }: the verdicts kept, oldest first (the newest VERDICTS_KEPT)
+    this.awaiting = new Map();   // applying_id -> { t, request_id, long }: actions whose entry has no verdict from the server yet (long:
+                                 // the action waited for it, awaitsVerdict)
+    this.verdictOf = new Map();  // applying_id -> { id, verdict, t, request_id, long }: every verdict kept, by id (recent())
+    this.kept = { long: [], quick: [] };   // the same verdicts, oldest first, each kind its own newest VERDICTS_KEPT: verdicts() reads
+                                           // only the newest of each, and a burst of quick changes never pushes out a switch's (CR8 #1, #14)
     this.#load();
   }
 
@@ -214,11 +221,16 @@ export class History {
       const t = num(nowMs) ?? this.now(), st = obj(status) ?? {};
       for (const [id, w] of this.awaiting) if (t - w.t > AWAIT_MS) this.awaiting.delete(id);
       if (!this.awaiting.size) return out;
-      const ids = (list) => new Set((Array.isArray(list) ? list : []).map((e) => obj(e)?.id).filter((x) => typeof x === 'string'));
-      const conf = ids(st.confirmed), exp = ids(st.expired);
-      for (const [id, w] of [...this.awaiting]) {
-        const verdict = conf.has(id) ? 'confirmed' : exp.has(id) ? 'expired' : null;
-        if (verdict) out.push(this.#record({ kind: 'verdict', t, applying_id: id, ...(w.request_id ? { request_id: w.request_id } : {}), verdict }));
+      // one look at each list (at most ENDED_MAX), only for the ids still waiting: no copy of either (CR8 #14)
+      const found = [];
+      for (const verdict of ['confirmed', 'expired']) {
+        const list = st[verdict];
+        if (!Array.isArray(list)) continue;
+        for (const e of list) { const id = obj(e)?.id; if (typeof id === 'string' && this.awaiting.has(id) && !found.some((f) => f.id === id)) found.push({ id, verdict }); }
+      }
+      for (const { id, verdict } of found) {
+        const w = this.awaiting.get(id);
+        out.push(this.#record({ kind: 'verdict', t, applying_id: id, ...(w.request_id ? { request_id: w.request_id } : {}), verdict, ...(w.long ? { awaited: true } : {}) }));
       }
     } catch (e) { warn('judge failed', e); }
     return out;
@@ -270,14 +282,21 @@ export class History {
     return out.sort((a, b) => b.t - a.t).slice(0, Math.max(0, num(limit) ?? 50));
   }
 
-  /** The server's verdicts kept, newest first: [{ id, request_id?, verdict }] for the last `limit` changes that waited for one,
-   *  within `withinMs` (status.verdicts: a phone that slept past status.confirmed's 10 min, or a restart of the server, still
-   *  learns the verdict on its own change, R8 #0). */
-  verdicts(nowMs, { limit = VERDICTS_SERVED, withinMs = VERDICTS_MS } = {}) {
-    const now = num(nowMs) ?? this.now(), out = [];
-    for (const [id, v] of [...this.verdictOf].reverse()) {
-      if (out.length >= limit || now - v.t > withinMs) break;
-      out.push({ id, ...(v.request_id ? { request_id: v.request_id } : {}), verdict: v.verdict });
+  /** The server's verdicts kept, newest first: [{ id, request_id?, verdict }] for the last `limit` changes that waited for one (a
+   *  switch, a rebuild, a boot-file or lighting port change, a calibration start, a maybe: whatever came after them, CR8 #1) and
+   *  the last `quick` others, within `withinMs` (status.verdicts: a phone that slept past status.confirmed's 10 min, or a restart
+   *  of the server, still learns the verdict on its own change, R8 #0). Reads only what it serves, from the newest back (CR8 #14). */
+  verdicts(nowMs, { limit = VERDICTS_SERVED, quick = VERDICTS_QUICK, withinMs = VERDICTS_MS } = {}) {
+    const now = num(nowMs) ?? this.now();
+    const newest = (list, n) => {
+      const out = [];
+      for (let i = list.length - 1; i >= 0 && out.length < n; i--) { if (now - list[i].t > withinMs) break; out.push(list[i]); }
+      return out;
+    };
+    const a = newest(this.kept.long, limit), b = newest(this.kept.quick, quick), out = [];
+    for (let i = 0, j = 0; i < a.length || j < b.length;) {      // both newest first: merged, the later of two equal times first
+      const v = j >= b.length || (i < a.length && a[i].t >= b[j].t) ? a[i++] : b[j++];
+      out.push({ id: v.id, ...(v.request_id ? { request_id: v.request_id } : {}), verdict: v.verdict });
     }
     return out;
   }
@@ -319,16 +338,24 @@ export class History {
       case 'action':
         S.last_action = ev;
         // every change with an entry gets the server's verdict kept (a quick one too: Last done reads it, CR7 #5)
-        if (typeof ev.applying_id === 'string') this.awaiting.set(ev.applying_id, { t: ev.t, request_id: ev.request_id ?? null });
+        if (typeof ev.applying_id === 'string') this.awaiting.set(ev.applying_id, { t: ev.t, request_id: ev.request_id ?? null, long: awaitsVerdict(ev) });
         break;
-      case 'verdict':
-        if (typeof ev.applying_id !== 'string' || !['confirmed', 'expired'].includes(ev.verdict)) break;
-        this.awaiting.delete(ev.applying_id);
-        this.verdictOf.delete(ev.applying_id);
-        this.verdictOf.set(ev.applying_id, { verdict: ev.verdict, t: ev.t, request_id: typeof ev.request_id === 'string' ? ev.request_id : null });
-        if (this.verdictOf.size > VERDICTS_KEPT) this.verdictOf.delete(this.verdictOf.keys().next().value);
-        if (S.last_action && S.last_action.applying_id === ev.applying_id) S.last_action = { ...S.last_action, verdict: ev.verdict };
+      case 'verdict': {
+        const id = ev.applying_id;
+        if (typeof id !== 'string' || !['confirmed', 'expired'].includes(ev.verdict)) break;
+        // a change that waited for it (a line written before the flag: its action, still waiting, says so)
+        const long = ev.awaited === true || this.awaiting.get(id)?.long === true;
+        this.awaiting.delete(id);
+        const old = this.verdictOf.get(id);
+        if (old) { const l = this.kept[old.long ? 'long' : 'quick'], i = l.lastIndexOf(old); if (i >= 0) l.splice(i, 1); }
+        const v = { id, verdict: ev.verdict, t: ev.t, request_id: typeof ev.request_id === 'string' ? ev.request_id : null, long };
+        this.verdictOf.set(id, v);
+        const list = this.kept[long ? 'long' : 'quick'];
+        list.push(v);
+        if (list.length > VERDICTS_KEPT) this.verdictOf.delete(list.shift().id);
+        if (S.last_action && S.last_action.applying_id === id) S.last_action = { ...S.last_action, verdict: ev.verdict };
         break;
+      }
     }
   }
 
