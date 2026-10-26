@@ -21,7 +21,7 @@ Everything else is open: iterate freely.
 ## Making a new visualization
 - Start from the **baseline template** (`river-baseline-template.toe`, page `docs/files/river-baseline-template.md`): river cam (with the recorded clip as fallback) and gallery cam in, river on the HUB75 screens and down the ropes. Copy it with `tools\td_save.ps1 -Target river-<name>.toe`, give it its own build script `td/build/build_<name>.py`, and add it to `shows.json` with `kind: "viz"`.
 - File names never change after creation. Who made it, who edited it last, when and what changed live in its `shows.json` entry, together with a description of at most 100 words (what it's meant to do, its inputs). Mission control shows these before anyone switches to it, so keep them true: `tools/check` refuses a change to a show file or its build script that doesn't update its entry.
-- Mission control can switch to any offered show and back to the boot file ("Back to boot file").
+- Mission control's "What's showing" card switches to any offered show (after showing its description), "Back to default" returns to the default show, and "Set as default" changes what opens at restart.
 - Registry format and tooling: [`docs/shows.md`](docs/shows.md). Going back to a known-good point: [`docs/checkpoints.md`](docs/checkpoints.md).
 
 **Where you're running.** On bitcube, the paths here are local. Anywhere else (Gavin's Mac mini, Will's laptop), reach bitcube with `ssh bitcube` (on Will's tailnet `bitcube.tail03bc1a.ts.net`, user `user`, key auth) and run its PowerShell tools there (`tools/mini/bitcube_ps.sh` from a Mac); TouchDesigner work happens on bitcube through the bridge (`tools\td.ps1`). Pure repo work (docs, mission control, tests) needs no bitcube.
