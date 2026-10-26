@@ -353,3 +353,33 @@ test('applying a change over HTTP: status.applying on every phone, 409 "wait: ..
   const hist = await (await fetch(base + '/api/history?kinds=action', { headers: on })).json();
   assert.deepEqual(hist.events.map((x) => x.action), ['switch']);
 });
+
+test('round 6 #40, #18: only the checked fields reach the history and the pages; a restart on the running file is recorded as one', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mission-r6-'));
+  writeFileSync(join(dir, 'pw'), 'NOT-A-REAL-PW\n');
+  const fixtures = fileURLToPath(new URL('./fixtures/', import.meta.url));
+  const { p, base } = await startServer({ MISSION_PORT: '0', MISSION_STATE_DIR: join(dir, 'state'), MISSION_PASSWORD_FILE: join(dir, 'pw'),
+                                          MISSION_FIXTURES: fixtures, MISSION_FAKE_AGENT: '1', MISSION_FIXTURE_APPLY_S: '0.3' });
+  t.after(() => p.kill());
+  const post = (path, body, headers = {}) => fetch(base + path, { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json', ...headers } });
+  const mc = (await post('/login', { password: 'NOT-A-REAL-PW' })).headers.get('set-cookie').split(';')[0];
+  const on = { cookie: `${mc}; scenario=all-good` };
+  const junk = { note: 'rtsp://admin:NOT-A-REAL-PW@192.168.9.76:554/x', '<img src=x onerror=alert(1)>': 1, file: '<img src=x onerror=alert(1)>' };
+  assert.equal((await post('/api/control/mode', { mode: 'manual', ...junk }, on)).status, 200);
+  const st = await (await fetch(base + '/api/status', { headers: on })).json();
+  assert.deepEqual(st.last_action.body, { mode: 'manual' });
+  // a calibration start's body never names a file in status.applying (it has none), whatever the request carried
+  const start = post('/api/control/calibrate', { action: 'start', ...junk }, on);
+  const seen = [];
+  for (let i = 0; i < 20; i++) { seen.push(...(await (await fetch(base + '/api/status', { headers: on })).json()).applying); await sleep(5); }
+  assert.equal((await start).status, 200);
+  assert.doesNotMatch(JSON.stringify(seen), /img|NOT-A-REAL-PW/);
+  await post('/api/control/calibrate', { action: 'cancel' }, on);
+  const hist = await (await fetch(base + '/api/history?kinds=action', { headers: on })).json();
+  assert.doesNotMatch(JSON.stringify(hist), /img|onerror|NOT-A-REAL-PW|rtsp/);
+  assert.deepEqual(hist.events.map((e) => e.body).reverse(), [{ mode: 'manual' }, { action: 'start' }, { action: 'cancel' }]);
+  // a switch to the file TouchDesigner runs is the button's "Restart on …", in the history too
+  assert.equal((await post('/api/control/switch', { file: 'river-local-oct-22-seasons.toe' }, on)).status, 200);
+  const last = (await (await fetch(base + '/api/status', { headers: on })).json()).last_action;
+  assert.deepEqual([last.label, last.words], ["the restart on the river's year", "Restarted TouchDesigner on the river's year from mission control"]);
+});

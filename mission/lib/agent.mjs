@@ -30,8 +30,17 @@ export const DENIED = [
 // One step line per tool used, in the team's words, with the raw line kept apart for a tooltip (lib/steps.mjs).
 export { describeTool };
 
+/** The agent's environment: the server's own, its Claude token, and the path of mission control's local control socket
+ *  (MISSION_CONTROL_SOCKET), the one way it changes the installation (mission/bin/mc.mjs reads it; STUDIO.md says so). */
+export function agentEnv(base, { token = null, controlSocket = null } = {}) {
+  const env = { ...base };
+  if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
+  if (controlSocket) env.MISSION_CONTROL_SOCKET = controlSocket;
+  return env;
+}
+
 /** Build the runner the Studio drives. */
-export function agentRunner({ cwd, appendPrompt, token, model, executable, onSynced }) {
+export function agentRunner({ cwd, appendPrompt, token, model, executable, onSynced, controlSocket = null }) {
   return async function* run({ text, resume, signal }) {
     const ac = new AbortController();
     if (signal.aborted) return;
@@ -40,8 +49,7 @@ export function agentRunner({ cwd, appendPrompt, token, model, executable, onSyn
                   : { kind: 'activity', text: "couldn't bring its copy of the repo up to date; working from an older copy", raw: `${sync.error ?? ''}; at ${sync.head.slice(0, 120)}`, acting: false };
     if (onSynced) onSynced(sync);
     signal.addEventListener('abort', () => ac.abort(), { once: true });
-    const env = { ...process.env };
-    if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
+    const env = agentEnv(process.env, { token, controlSocket });
     const q = query({
       prompt: text,
       options: {
