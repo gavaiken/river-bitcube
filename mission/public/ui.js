@@ -453,9 +453,13 @@ export function confirm({ title, body = '', ok = 'OK', cancel = 'Not now', destr
 const SAY_PAUSE_MS = 60, SAY_GAP_MS = 1000;
 const speech = { queue: [], timer: null, lastAt: -Infinity };   // queue: [{ text, region }] (region null: the page's one region)
 const liveWords = new WeakMap();                                 // a hidden region -> the words it stands for now (setLive)
-/** announce(text): says it once through the page's one polite region: a control's applying, done, unconfirmed and failed, a
- *  stepper's new value. Never a ticking time. */
-export function announce(text) { say(text); }
+/** announce(text, key): says it once through the page's one polite region: a control's applying, done, unconfirmed and failed, a
+ *  stepper's new value. Never a ticking time. key: what it is the newest word on (a stepper's value): a newer one with the same key
+ *  replaces it while it waits, so three presses of + say "70 %" once, never "50 %. 60 %. 70 %." */
+export function announce(text, key = null) {
+  if (key) speech.queue = speech.queue.filter((x) => x.key !== key);
+  say(text, null, key);
+}
 /** setLive(region, words): a hidden region's words (the band's, the state line's): said through the queue when they say something
  *  new, never again when a part only went (another phone's change that ended dropping out of the band's words). */
 export function setLive(region, words) {
@@ -476,10 +480,10 @@ export function unannounce(text) {
   const t = String(text ?? '').trim();
   speech.queue = speech.queue.filter((x) => x.text !== t);
 }
-function say(text, region = null) {
+function say(text, region = null, key = null) {
   const t = String(text ?? '').trim();
   if (!t || typeof document === 'undefined') return;
-  if (speech.queue.at(-1)?.text !== t) speech.queue.push({ text: t, region });
+  if (speech.queue.at(-1)?.text !== t) speech.queue.push({ text: t, region, key });
   clearTimeout(speech.timer);
   speech.timer = setTimeout(flushSpeech, Math.max(SAY_PAUSE_MS, speech.lastAt + SAY_GAP_MS - performance.now()));
 }

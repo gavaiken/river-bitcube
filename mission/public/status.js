@@ -1030,7 +1030,7 @@ document.addEventListener('click', async (e) => {
         holds: (mm) => mm.show.ropes.state === (dark ? 'dark' : 'river') });
       break;
     }
-    case 'hub-step': { const cur = m?.show.panels.brightness == null ? null : Math.round(m.show.panels.brightness * 100); if (cur == null && hubDraft == null) break; hubDraft = clamp((hubDraft ?? cur) + Number(b.dataset.d), 0, 100); render(); announce(`${hubDraft} %`); break; }
+    case 'hub-step': { const cur = m?.show.panels.brightness == null ? null : Math.round(m.show.panels.brightness * 100); if (cur == null && hubDraft == null) break; hubDraft = clamp((hubDraft ?? cur) + Number(b.dataset.d), 0, 100); render(); announce(`${hubDraft} %`, 'hub-step'); break; }
     case 'hub-set': { const v = hubDraft; runControl('hub75', '/api/control/hub75', { brightness: v / 100 }, { btn: b, what: changeLabel('hub75', { brightness: v / 100 }), done: `Now ${nb(`${v} %`)}: it shows on the panels within a few seconds`, fail: 'The panels are unchanged',
       holds: (mm) => mm.show.panels.brightness != null && Math.round(mm.show.panels.brightness * 100) === v, onDone: () => { hubDraft = null; } }); break; }
     case 'hub-off': runControl('hub75', '/api/control/hub75', { brightness: 0 }, { btn: b, ask: { title: 'Switch the panels off?', body: `The panels in the gallery go dark now (brightness ${nb('0 %')}). Set a brightness to bring them back.`, ok: 'Panels off', cancel: 'Keep them on' },
@@ -1039,7 +1039,7 @@ document.addEventListener('click', async (e) => {
     case 'mode': { const md = b.dataset.mode; runControl('mode', '/api/control/mode', { mode: md }, { btn: b, what: changeLabel('mode', { mode: md }), done: `Now ${cap(md)}${md === 'manual' ? ': taken over by hand' : ''}`, fail: 'The mode is unchanged',
       noAnswer: 'the lit Mode button and the Season card show the mode bitcube reports', holds: (mm) => mm.show.mode?.id === md }); break; }
     case 'tseason': targetDraft.season = b.dataset.season; render(); break;
-    case 'tint': { const t = targetForm(m?.show.target, targetDraft, m?.show.intensity?.value ?? 0.5); targetDraft.intensity = Math.round(clamp(t.intensity + Number(b.dataset.d), 0, 1) * 10) / 10; render(); announce(`${M.intensityWord(targetDraft.intensity)} (${targetDraft.intensity.toFixed(1)})`); break; }
+    case 'tint': { const t = targetForm(m?.show.target, targetDraft, m?.show.intensity?.value ?? 0.5); targetDraft.intensity = Math.round(clamp(t.intensity + Number(b.dataset.d), 0, 1) * 10) / 10; render(); announce(`${M.intensityWord(targetDraft.intensity)} (${targetDraft.intensity.toFixed(1)})`, 'tint'); break; }
     case 'target-set': {
       const t = targetForm(m?.show.target, targetDraft, m?.show.intensity?.value ?? 0.5);
       if (!t.canApply) break;
