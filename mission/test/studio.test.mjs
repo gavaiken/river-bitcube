@@ -138,3 +138,28 @@ test('a message that queues behind a running one is announced at once', async ()
   assert.ok(seen.includes(1), `status events saw queue lengths ${seen}`);   // "1 waiting" went out when "two" queued
   await s.drained();
 });
+
+test('a camera login never reaches the chat: steps, replies, errors and the saved history are scrubbed (and an old file is on load)', async () => {
+  const { readFileSync, writeFileSync } = await import('node:fs');
+  const PW = 'rtsp://admin:NOT-A-REAL-PW@192.168.9.76:554/Preview_01_sub';
+  const leaky = async function* () {
+    yield { kind: 'session', sessionId: 'S' };
+    yield { kind: 'activity', text: 'grabbed a frame', raw: `ffmpeg -rtsp_transport tcp -i ${PW} -frames:v 1 a.jpg`, acting: false };
+    yield { kind: 'text', text: `ffmpeg said: 401 Unauthorized: ${PW}` };
+    yield { kind: 'error', text: `Command failed: ffmpeg -i ${PW}` };
+    yield { kind: 'result', ok: false, text: `exit 1: ${PW}`, cost: 0, turns: 1 };
+  };
+  const d = dir();
+  const seen = [];
+  const s = new Studio({ runner: leaky, dir: d });
+  s.on('event', (e) => seen.push(e));
+  s.send(`look at ${PW}`); await s.drained();
+  for (const where of [JSON.stringify(s.history()), JSON.stringify(seen), readFileSync(join(d, 'chat.jsonl'), 'utf8')]) {
+    assert.doesNotMatch(where, /NOT-A-REAL-PW|admin:/);
+    assert.match(where, /rtsp:\/\/\*\*\*@192\.168\.9\.76/);
+  }
+  // a history file written before the scrub is served clean
+  const old = dir();
+  writeFileSync(join(old, 'chat.jsonl'), JSON.stringify({ t: 1, kind: 'activity', id: 'x', text: `ran: ffmpeg -i ${PW}` }) + '\n');
+  assert.doesNotMatch(JSON.stringify(new Studio({ runner: leaky, dir: old }).history()), /NOT-A-REAL-PW/);
+});

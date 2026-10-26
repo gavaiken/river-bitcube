@@ -3,6 +3,7 @@
 // below are a second fence, and mission/STUDIO.md tells it who it serves and what it may do (MD8).
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { execFile } from 'node:child_process';
+import { describeTool } from './steps.mjs';
 
 /** Bring the agent's clone to the latest main before every request (as the bitcube Claude is told to). */
 export function syncRepo(cwd) {
@@ -26,21 +27,8 @@ export const DENIED = [
   'Read(/Users/gav/**)', 'Edit(/Users/gav/**)', 'Write(/Users/gav/**)',
 ];
 
-export function describeTool(block) {
-  const i = block.input ?? {};
-  const clip = (s, n = 90) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
-  switch (block.name) {
-    case 'Bash': return `ran: ${clip(i.description || i.command)}`;
-    case 'Read': return `read ${clip(i.file_path, 70)}`;
-    case 'Edit': case 'Write': return `edited ${clip(i.file_path, 70)}`;
-    case 'Glob': case 'Grep': return `searched for ${clip(i.pattern, 60)}`;
-    case 'WebFetch': return `fetched ${clip(i.url, 70)}`;
-    case 'WebSearch': return `searched the web: ${clip(i.query, 60)}`;
-    case 'TodoWrite': return 'updated its to-do list';
-    case 'Agent': return `asked a helper: ${clip(i.description, 60)}`;
-    default: return `used ${block.name}`;
-  }
-}
+// One step line per tool used, in the team's words, with the raw line kept apart for a tooltip (lib/steps.mjs).
+export { describeTool };
 
 /** Build the runner the Studio drives. */
 export function agentRunner({ cwd, appendPrompt, token, model, executable, onSynced }) {
@@ -48,7 +36,8 @@ export function agentRunner({ cwd, appendPrompt, token, model, executable, onSyn
     const ac = new AbortController();
     if (signal.aborted) return;
     const sync = await syncRepo(cwd);
-    yield { kind: 'activity', text: sync.ok ? `synced the repo: ${sync.head.slice(0, 70)}` : `couldn't sync the repo (${sync.error}); working from ${sync.head.slice(0, 40)}` };
+    yield sync.ok ? { kind: 'activity', text: 'brought its copy of the repo up to date', raw: `synced: ${sync.head.slice(0, 200)}`, acting: false }
+                  : { kind: 'activity', text: "couldn't bring its copy of the repo up to date; working from an older copy", raw: `${sync.error ?? ''}; at ${sync.head.slice(0, 120)}`, acting: false };
     if (onSynced) onSynced(sync);
     signal.addEventListener('abort', () => ac.abort(), { once: true });
     const env = { ...process.env };
@@ -77,7 +66,7 @@ export function agentRunner({ cwd, appendPrompt, token, model, executable, onSyn
       } else if (m.type === 'assistant') {
         for (const b of m.message?.content ?? []) {
           if (b.type === 'text' && b.text.trim()) yield { kind: 'text', text: b.text };
-          else if (b.type === 'tool_use') yield { kind: 'activity', text: describeTool(b) };
+          else if (b.type === 'tool_use') yield { kind: 'activity', ...describeTool(b) };
         }
       } else if (m.type === 'result') {
         if (m.session_id) yield { kind: 'session', sessionId: m.session_id };

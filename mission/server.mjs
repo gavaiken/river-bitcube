@@ -39,6 +39,7 @@ import { Mission } from './lib/mission.mjs';
 import { FixtureMission, CALIBRATION_OUTCOMES } from './lib/fixtures.mjs';
 import { Lights, readLocalPixelmap, readLocalScreens } from './lib/lights.mjs';
 import { History, describeEvent } from './lib/history.mjs';
+import { describeTool } from './lib/steps.mjs';
 import { CONTACTS } from './public/model.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -84,15 +85,18 @@ async function makeRunner() {
     const delay = Number(env.MISSION_FAKE_AGENT_DELAY_MS ?? 700);
     return async function* ({ text, resume, signal }) {
       yield { kind: 'session', sessionId: resume ?? 'fake-session' };
-      for (const step of ['read CLAUDE.md', 'ran: Check bitcube is online', 'edited docs/sessions/U.md']) {
+      // the same step lines the real agent's tools give (lib/steps.mjs): plain words, the raw input apart
+      for (const tool of [{ name: 'Read', input: { file_path: 'CLAUDE.md' } },
+                          { name: 'Bash', input: { description: 'Check bitcube is online', command: 'ssh bitcube hostname' } },
+                          { name: 'Edit', input: { file_path: 'docs/sessions/U.md' } }]) {
         await new Promise((r) => setTimeout(r, delay));
         if (signal.aborted) return;
-        yield { kind: 'activity', text: step };
+        yield { kind: 'activity', ...describeTool(tool) };
       }
       // A message with the word "fail" shows what a broken run looks like; anything else gets a markdown reply.
       const failed = /\bfail\b/i.test(text);
       if (failed) yield { kind: 'error', text: '(pretend) ssh: connect to host bitcube port 22: Operation timed out' };
-      else yield { kind: 'text', text: `(pretend agent) You said: ${text}\n\nWhat I found:\n- bitcube answers on port 22\n- TouchDesigner is running \`river-local-oct-22-seasons.toe\` at 60 fps\n- the river camera is **offline**, so the panels show the gallery\n\nNothing needed changing.` };
+      else yield { kind: 'text', text: `(pretend agent) You said: ${text}\n\nWhat I found:\n- bitcube is online\n- TouchDesigner is running **the river's year** at 60 frames a second\n- the River camera is **offline**, so the panels show the gallery\n\nNothing needed changing.` };
       yield { kind: 'result', ok: !failed, text: failed ? 'bitcube did not answer' : '', cost: 0, turns: 4 };
     };
   }

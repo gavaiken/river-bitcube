@@ -6,15 +6,19 @@
 // A runner is an async generator function run({ text, resume, signal }) yielding events:
 //   { kind: 'session', sessionId }          the agent session id (kept in state.json, resumed next time)
 //   { kind: 'text', text }                  something the agent said
-//   { kind: 'activity', text }              a short line about a tool it used
+//   { kind: 'activity', text, raw?, acting? } a step line about a tool it used, in the team's words (lib/steps.mjs); raw is
+//                                           what the tool was given (for a tooltip), acting true when it changed the installation
 //   { kind: 'result', ok, text, cost, turns }
 // Every recorded event carries the request's id (the 'user' event's), so a page pairs replies with their request. A run that
 // ends badly (an 'error' event, a result with ok false, or the runner throwing) is closed by { kind: 'failed', id, text } with
 // the reason in plain words (plainFailure); one the person stopped is closed by { kind: 'stopped', id } instead.
+// Never a login in the chat: every event is scrubbed (lib/scrub.mjs) before it is kept, written or sent, and a history file
+// from before that is scrubbed as it is loaded (a camera's RTSP address in an ffmpeg line holds its password).
 import { EventEmitter } from 'node:events';
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { scrubCreds } from './scrub.mjs';
 
 const HISTORY_IN_MEMORY = 3000;
 
@@ -28,7 +32,7 @@ export class Studio extends EventEmitter {
     this.stateFile = join(dir, 'state.json');
     this.chatFile = join(dir, 'chat.jsonl');
     this.state = readJson(this.stateFile, {});
-    this.events = readLines(this.chatFile).slice(-HISTORY_IN_MEMORY);
+    this.events = readLines(this.chatFile).slice(-HISTORY_IN_MEMORY).map((e) => scrubCreds(e));
     this.queue = [];
     this.current = null;     // { id, text, abort }
     this.idle = Promise.resolve();
@@ -129,7 +133,7 @@ export class Studio extends EventEmitter {
   }
 
   #record(ev) {
-    const e = { t: this.now(), ...ev };
+    const e = scrubCreds({ t: this.now(), ...ev });
     this.events.push(e);
     if (this.events.length > HISTORY_IN_MEMORY) this.events.splice(0, this.events.length - HISTORY_IN_MEMORY);
     appendFileSync(this.chatFile, JSON.stringify(e) + '\n');
