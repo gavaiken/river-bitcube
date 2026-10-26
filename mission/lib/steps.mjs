@@ -63,9 +63,31 @@ const THINGS = [
 ];
 const FALLBACK_VERB = { stop: 'stopped', kill: 'stopped', disable: 'switched off', start: 'started', enable: 'switched on', restart: 'restarted',
   reload: 'restarted', reboot: 'restarted', move: 'moved', aim: 'moved', pan: 'moved', tilt: 'moved', calibrate: 'calibrated', cancel: 'stopped' };
-/** A direct change whose own words are known whatever else the command holds: stopping a run by its cancel file (calibrate.py's
- *  check_cancel), the boot file written by hand (R8 #37). */
-const DIRECT_FIRST = [[/\bcalibration\.cancel\b/i, 'stopped the calibration'], [/\bboot-file\.txt\b/i, 'changed the boot file']];
+// ---- what a command changes on the installation: a small table of state paths and verb classes (R8 #37, CR8 #2, #4, #16) ----
+/** The installation's state files on bitcube, each with what writing it does (its words whatever else the command holds): stopping
+ *  a run by its cancel file (calibrate.py's check_cancel), the boot file written by hand (R8 #37), the people counter's reading the
+ *  year's dynamic mode follows. A write to one is a change wherever it is. */
+const STATE_FILES = [['calibration.cancel', 'stopped the calibration'], ['boot-file.txt', 'changed the boot file'], ['presence.json', "changed the people counter's count"]];
+/** River\ (C:\Users\user\River, \\bitcube\River): what is in it is the installation's state (recordings, models, the gallery state,
+ *  the files above), except the repo checkouts there, which are code and notes (a folder made or a log written in one is no change
+ *  to the show, CR8 #2). The folder by its own name: after user\ or bitcube\, or a path of its own, never "media/river/…". */
+const REPO_DIRS = ['river-bitcube', 'river-agent'];
+const RIVER_DIR = /(?:(?<![\w.~\\/-])|(?<=(?:user|bitcube)[\\/]))River[\\/]+([^\\/\s"';&|]*)/gi;
+/** The verb classes that write a file: PowerShell's and cmd's writers (what they write: the rest of their command), and a redirect
+ *  (>, >>, 2>, &>: its target; never 2>&1 or >&2). */
+const WRITE_VERBS = String.raw`(?:Set-Content|Add-Content|Out-File|New-Item|Remove-Item|Copy-Item|Move-Item|Rename-Item|Clear-Content|\bdel\b|\bcopy\b|\bmove\b|\bren\b)`;
+const WRITE_ARGS = new RegExp(String.raw`${WRITE_VERBS}([^;&|\n]*)`, 'gi');
+const REDIRECT = /(?<!>)>{1,2}\s*["']?([^\s"';&|]+)/g;
+const fileRe = (f) => new RegExp(String.raw`(?<![\w.-])${f.replace(/[.]/g, '\\.')}\b`, 'i');
+const STATE_RE = STATE_FILES.map(([f, words]) => [fileRe(f), words]);
+/** What a command part writes: each writer's arguments and each redirect's target. */
+const writeTargets = (part) => [...part.matchAll(WRITE_ARGS)].map((m) => m[1]).concat([...part.matchAll(REDIRECT)].map((m) => m[1]));
+/** Whether a write's target is the installation's state: a state file, or River\ outside its repo checkouts. */
+const inState = (t) => STATE_RE.some(([re]) => re.test(t)) || [...t.matchAll(RIVER_DIR)].some((m) => !REPO_DIRS.includes(m[1].toLowerCase()));
+/** A command part that writes the installation's state (R8 #37; the repo is not it, CR8 #2). */
+const writesState = (part) => writeTargets(part).some(inState);
+/** A direct change whose own words are known whatever else the command holds (the state files above). */
+const DIRECT_FIRST = STATE_RE;
 /** An acting line that can't be shown as it is: what it did to what ("stopped a scheduled task on bitcube", "changed the ropes"). */
 function actingFallback(verb, ...texts) {
   const t = texts.map((x) => String(x ?? '')).join(' ');
@@ -77,16 +99,30 @@ function actingFallback(verb, ...texts) {
 // A TouchDesigner bridge call that assigns a parameter (td.ps1 "op('/project1/ropes').par.Source='black'") changes the show too,
 // though it looks like a read (R7 #35): by its value, or its expression, mode or bind (.par.X.expr =, p.mode =, p.bindExpr =), or
 // setattr( (CR7 #9); a comparison (==, !=) or a read is not one
-// R8 #37: also a write into River\ (Set-Content, Out-File, New-Item, Remove-Item, Copy-Item, Move-Item, a > redirect: the boot file,
-// calibration.cancel, which stops a run), a build script run inside the show (td.ps1 -File), and an operator switched off or
-// recooked through the bridge (.bypass =, .allowCooking =, .cook(, .store()
-const WRITE_CMD = String.raw`(?:Set-Content|Add-Content|Out-File|New-Item|Remove-Item|Copy-Item|Move-Item|Rename-Item|Clear-Content|\bdel\b|\bcopy\b|\bmove\b|\bren\b)[^;&|\n]*`;
+// R8 #37: also a write to the installation's state (writesState, above), a build script run inside the show (td.ps1 -File), and an
+// operator switched off or recooked through the bridge (.bypass =, .allowCooking =, .cook(, .store()
 const CHANGE_CMD = new RegExp(String.raw`-Action\s+(ropes|hub75|switch|bootfile|lightsroute|rebuild|calibrate|mode|target|rules)\b|\/api\/control\/|Restart-Computer|Stop-Process|Start-Process|taskkill|\bkill\b|schtasks\s+\/(run|end|change)|ptz\.py\s+\w+\s+(?!presets)|td_save|calibrate\.ps1\s+-Action\s+(start|cancel)`
-  + String.raw`|td\.ps1\b[\s\S]*?(?:\.par\.\w+(?:\.\w+)?\s*=(?!=)|\.(?:val|expr|mode|bindExpr|bypass|allowCooking|lock|display|render)\s*=(?!=)|\bsetattr\s*\(|\.(?:cook|store|unstore|destroy|copy|create)\s*\(|\s-File\b)`
-  + String.raw`|${WRITE_CMD}\bRiver[\\/]|>{1,2}\s*["']?[^\s"';&|]*\bRiver[\\/]|(?:${WRITE_CMD}|>{1,2}\s*["']?[^\s"';&|]*)(?:calibration\.cancel|boot-file\.txt)`, 'i');
+  + String.raw`|td\.ps1\b[\s\S]*?(?:\.par\.\w+(?:\.\w+)?\s*=(?!=)|\.(?:val|expr|mode|bindExpr|bypass|allowCooking|lock|display|render)\s*=(?!=)|\bsetattr\s*\(|\.(?:cook|store|unstore|destroy|copy|create)\s*\(|\s-File\b)`, 'i');
+/** A command part that changes the installation: a control, a process, the bridge, or a write to its state. */
+const changes = (part) => CHANGE_CMD.test(part) || writesState(part);
+/** A shell, by name or path (bash, sh, zsh, dash). */
+const SHELL = String.raw`(?:\S*[\\/])?(?:bash|sh|zsh|dash)`;
+/** An inline shell command: bash -c "…", bash -lc '…', sh -e -c …, any flags holding c (CR8 #4). What it runs is its own command,
+ *  judged by its contents (inlineParts), never "ran a script". Groups: the command double-quoted, single-quoted, or bare. */
+const INLINE = new RegExp(String.raw`^${SHELL}(?:\s+--?[A-Za-z][\w-]*)*?\s+-[A-Za-z]*c[A-Za-z]*\s+(?:"((?:[^"\\]|\\[\s\S])*)"|'([^']*)'|([\s\S]+))`);
 /** A local script run after a look through mission control ("mc.mjs status && bash /tmp/x.sh"): what it does can't be told from
- *  here, but it goes around mission control's locks, so the step says so (R8 #37). */
-const SCRIPT_RUN = /^(?:(?:bash|sh|zsh|source)\s+(?!-c\b)\S|\.\s+\S|\.?\/\S+\.(?:sh|py|mjs|js)\b|(?:python3?|node|pwsh|powershell)\s+(?:-\w+\s+)*\S+\.(?:py|sh|mjs|js|ps1)\b)/i;
+ *  here, but it goes around mission control's locks, so the step says so (R8 #37). A shell with only flags before its script (bash
+ *  -x x.sh) too; an inline one (INLINE) is not a script. */
+const SCRIPT_RUN = new RegExp(String.raw`^(?:${SHELL}(?:\s+-[A-Za-z]+)*\s+(?!-)\S|source\s+\S|\.\s+\S|\.?\/\S+\.(?:sh|py|mjs|js)\b|(?:python3?|node|pwsh|powershell)\s+(?:-\w+\s+)*\S+\.(?:py|sh|mjs|js|ps1)\b)`, 'i');
+/** One command line's commands, an inline shell's own commands in its place (bash -lc "a && b" is a and b: CR8 #4), at most 3 deep. */
+function inlineParts(command, depth = 0) {
+  return commandParts(command).flatMap((p) => {
+    const m = depth < 3 ? INLINE.exec(p) : null;
+    if (!m) return [p];
+    const inner = m[1] != null ? m[1].replace(/\\(["\\$`])/g, '$1') : m[2] ?? m[3];
+    return inlineParts(inner, depth + 1);
+  });
+}
 /** node mission/bin/mc.mjs <action> ['<body>']: a change asked of mission control (or its status read). An action can hold
  *  digits (hub75: R7 #22). */
 const MC = /\bmc\.mjs\s+([a-z0-9-]+)(?:\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)"))?/g;
@@ -96,6 +132,9 @@ const DIRECT_WORDS = { ropes: 'changed the ropes', hub75: 'changed the panels', 
   lightsroute: 'moved the lighting port', rebuild: "rebuilt the river's year", mode: "changed the river's year", target: "changed the river's year",
   rules: "changed the river's year", calibrate: 'started a calibration', start: 'started a calibration', cancel: 'stopped the calibration' };
 const directWords = (part) => DIRECT_WORDS[/-Action\s+([a-z0-9]+)/i.exec(part)?.[1]?.toLowerCase()] ?? DIRECT_FIRST.find(([re]) => re.test(part))?.[1] ?? actingFallback(null, part);
+/** "<what it changed> on bitcube directly": "on bitcube" once, also when the words already end with it ("changed something on
+ *  bitcube", "stopped a scheduled task on bitcube": CR8 #3). */
+const directly = (words) => `${words}${/\bon bitcube$/.test(words) ? '' : ' on bitcube'} directly, not through mission control`;
 /** One command line's commands: split at ;, &&, ||, |, |&, & and new lines outside quotes (a JSON body's "a; b" is not two); the &
  *  of a redirection (2>&1, >&2, &>, &>>) is not a separator (CR7 #15). */
 export function commandParts(command) {
@@ -231,14 +270,15 @@ function mcLine(command) {
 function bashLine(description, command) {
   // a look through mission control chained to a change made around it ("mc.mjs status && ssh bitcube … probe.ps1 -Action
   // switch"): the change, and that it went around mission control's locks, never "looked at what mission control shows" (R7 #34)
-  const ps = commandParts(command), viaMc = ps.filter((x) => MC_ONE.test(x)), direct = ps.filter((x) => !MC_ONE.test(x) && CHANGE_CMD.test(x));
-  if (viaMc.length && direct.length) return { text: clip(`${directWords(direct[0])} on bitcube directly, not through mission control`, TEXT_MAX), acting: true };
+  // an inline shell's command (bash -lc "…") is judged by what it runs (CR8 #4)
+  const ps = inlineParts(command), viaMc = ps.filter((x) => MC_ONE.test(x)), direct = ps.filter((x) => !MC_ONE.test(x) && changes(x));
+  if (viaMc.length && direct.length) return { text: clip(directly(directWords(direct[0])), TEXT_MAX), acting: true };
   if (viaMc.length && ps.some((x) => !MC_ONE.test(x) && SCRIPT_RUN.test(x))) return { text: 'ran a script, not through mission control', acting: true };
   const mc = viaMc.length ? mcLine(viaMc.join('\n')) : null;
   if (mc) return mc;
   const desc = String(description ?? '').replace(/\s+/g, ' ').trim().replace(/[.\s]+$/, '');
   const onBitcube = /bitcube|\bssh\b/i.test(`${desc} ${command ?? ''}`);
-  const cmdActs = CHANGE_CMD.test(String(command ?? ''));
+  const cmdActs = direct.length > 0;
   const fallback = cmdActs ? { text: actingFallback(null, command), acting: true } : { text: onBitcube ? 'ran a command on bitcube' : 'ran a command', acting: false };
   if (!desc || RAW_CMD.test(desc)) return fallback;
   const plain = plainWords(desc);

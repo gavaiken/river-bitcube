@@ -225,3 +225,62 @@ test('CR8 #13: Status, Lights and the chat read the server\'s clock from one hel
   assert.match(chat, /noteServerTime\(/);
   for (const [name, s] of [['status.js', st], ['lights.js', lights], ['map.js', src('../public/map.js')]]) assert.doesNotMatch(s, /\.last\.now \+ \w+\.elapsed\(\)/, name);
 });
+
+// ---- #2, #3, #4, #16: step lines: the repo is not the installation; inline shells by their contents; "on bitcube" once ------------
+
+const step = async (command, description = 'Look') => {
+  const { describeTool } = await import('../lib/steps.mjs');
+  const { stepWords } = await import('../public/chat-words.js');
+  const d = describeTool({ name: 'Bash', input: { command, description } });
+  const shown = stepWords(d);            // the page shows every line as it was sent (round 6 #20)
+  assert.deepEqual([shown.text, shown.act], [d.text, d.acting], `the page reworded "${d.text}"`);
+  return [d.text, d.acting];
+};
+const REPO = 'C:\\Users\\user\\River\\river-bitcube', RIVER = 'C:\\Users\\user\\River';
+
+test('CR8 #2, #16: a write inside the repo checkout is no change to the installation; the state files and River\\ outside it are', async () => {
+  // the repo (and Dave's checkout next to it): code and notes, never the show
+  for (const cmd of [`ssh bitcube "New-Item -ItemType Directory -Path ${REPO}\\frames\\x"`, `ssh bitcube "git -C ${REPO} log -5 > ${REPO}\\frames\\log.txt"`,
+                     `ssh bitcube "Set-Content ${REPO}\\docs\\sessions\\N.md x"`, `ssh bitcube "Out-File -FilePath C:/Users/user/River/river-bitcube/frames/a.txt"`,
+                     `ssh bitcube "Copy-Item ${RIVER}\\river-agent\\x.py ${RIVER}\\river-agent\\y.py"`,
+                     `ssh bitcube "Get-Content ${RIVER}\\boot-file.txt > ${REPO}\\frames\\boot.txt"`]) {
+    assert.equal((await step(cmd))[1], false, cmd);
+  }
+  // the installation's state: the boot file, a run's cancel file, the people counter's reading, anything else in River\
+  assert.deepEqual(await step(`ssh bitcube "Set-Content ${RIVER}\\boot-file.txt river-online-oct-23.toe"`, 'Check bitcube'), ['changed the boot file', true]);
+  assert.deepEqual(await step(`ssh bitcube "echo 1 > ${RIVER}\\calibration.cancel"`), ['stopped the calibration', true]);
+  assert.deepEqual(await step('echo 1 &> /c/Users/user/River/calibration.cancel'), ['stopped the calibration', true]);
+  assert.deepEqual(await step(`ssh bitcube "x 2>&1 >> ${RIVER}\\gallery_state\\log.txt"`), ['changed something on bitcube', true]);
+  assert.equal((await step(`ssh bitcube "x 2>&1 >&2"`))[1], false);
+  assert.deepEqual(await step(`ssh bitcube "Set-Content ${RIVER}\\presence.json '{}'"`), ["changed the people counter's count", true]);
+  assert.deepEqual(await step(`ssh bitcube "Remove-Item ${RIVER}\\models\\yolov8n.pt"`), ['changed something on bitcube', true]);
+  assert.deepEqual(await step('ssh bitcube "Set-Content \\\\bitcube\\River\\gallery_state\\x.json 1"'), ['changed something on bitcube', true]);
+  // a path that only has "river" in it is not River\ ("media/river/video" in Dave's logs)
+  assert.equal((await step('python capture.py > media/river/video/log.txt'))[1], false);
+  // reads stay reads
+  assert.equal((await step(`ssh bitcube "Get-Content ${RIVER}\\presence.json"`))[1], false);
+});
+
+test('CR8 #3: a change made around mission control says "on bitcube" once', async () => {
+  assert.deepEqual(await step('node mission/bin/mc.mjs status && ssh bitcube "Stop-Process -Name RopeLights"'), ['changed the ropes on bitcube directly, not through mission control', true]);
+  const [text, acting] = await step('node mission/bin/mc.mjs status && ssh bitcube "Stop-Process -Name foo"');
+  assert.equal(acting, true);
+  assert.equal(text, 'changed something on bitcube directly, not through mission control');
+  assert.equal((text.match(/on bitcube/g) ?? []).length, 1);
+  assert.deepEqual(await step(`node mission/bin/mc.mjs status && ssh bitcube "Set-Content ${RIVER}\\boot-file.txt x"`),
+    ['changed the boot file on bitcube directly, not through mission control', true]);
+});
+
+test('CR8 #4: an inline shell (bash -lc, sh -ec, any flags holding c) is judged by the command it runs, never as a script', async () => {
+  for (const cmd of ['node mission/bin/mc.mjs status && bash -lc "git status"', "node mission/bin/mc.mjs status && sh -ec 'git log -1'",
+                     'node mission/bin/mc.mjs status; zsh -c "ls docs"', 'node mission/bin/mc.mjs status && /bin/bash -e -c "cat x"']) {
+    assert.deepEqual(await step(cmd), ['looked at what mission control shows', false], cmd);
+  }
+  // what it runs, if it is a change or a script, is said as one
+  assert.deepEqual(await step(`node mission/bin/mc.mjs status && bash -lc "ssh bitcube 'Set-Content ${RIVER}\\boot-file.txt x'"`),
+    ['changed the boot file on bitcube directly, not through mission control', true]);
+  assert.deepEqual(await step('node mission/bin/mc.mjs status && bash -lc "bash /tmp/x.sh"'), ['ran a script, not through mission control', true]);
+  // a script is still a script
+  assert.deepEqual(await step('node mission/bin/mc.mjs status && bash -x /tmp/x.sh'), ['ran a script, not through mission control', true]);
+  assert.deepEqual(await step('node mission/bin/mc.mjs status && bash /tmp/x.sh'), ['ran a script, not through mission control', true]);
+});
