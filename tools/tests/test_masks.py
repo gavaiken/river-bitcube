@@ -125,6 +125,15 @@ PROBE_CASES = CASES + [
     ('sshpass -p hunter2 ssh root@h', 'sshpass -p *** ssh root@h'),
     ('ptz.py --password hunter2 --user admin', 'ptz.py --password *** --user admin'),
     ('"input_tokens": 1234 max_tokens secret_ref: x', '"input_tokens": 1234 max_tokens secret_ref: x'),
+    # CR8 #5: curl's attached -uuser:pw, and a keyword glued to its prefix (an env var, camelCase JSON, YAML)
+    ('curl -uadmin:hunter2 https://h/x', 'curl -uadmin:*** https://h/x'),
+    ('PGPASSWORD=hunter2 psql; MYSQLPWD=hunter2 MYSQL_PWD=hunter2 mysql', 'PGPASSWORD=*** psql; MYSQLPWD=*** MYSQL_PWD=*** mysql'),
+    (f'{{"accessToken":"{FAKE}","expires_in":3600}}', '{"accessToken":"***","expires_in":3600}'),
+    ('DBPASSWORD: hunter2', 'DBPASSWORD: ***'),
+    # CR8 #6: -u x:y is a login only for an HTTP client (curl, wget, HTTPie, xh)
+    ('docker run -u 1000:1000 img; sort -u a:b f', 'docker run -u 1000:1000 img; sort -u a:b f'),
+    ('curl -s https://h/x | sort -u a:b', 'curl -s https://h/x | sort -u a:b'),
+    ('"tokens_used": 3, cwd: /x', '"tokens_used": 3, cwd: /x'),
 ]
 
 

@@ -284,3 +284,35 @@ test('CR8 #4: an inline shell (bash -lc, sh -ec, any flags holding c) is judged 
   assert.deepEqual(await step('node mission/bin/mc.mjs status && bash -x /tmp/x.sh'), ['ran a script, not through mission control', true]);
   assert.deepEqual(await step('node mission/bin/mc.mjs status && bash /tmp/x.sh'), ['ran a script, not through mission control', true]);
 });
+
+// ---- #5, #6: curl's attached -uuser:pw and a keyword with no separator before it; -u x:y only for an HTTP client --------------------
+
+test('CR8 #5, #6: the login masks catch curl -uuser:pw and PGPASSWORD=-style keys, and leave docker -u 1000:1000 and sort -u a:b alone', async () => {
+  const { scrubCreds } = await import('../lib/scrub.mjs');
+  const S = 'NOTREALhunter2cr8';
+  for (const [raw, want] of [
+    // #5: curl's attached form; a keyword glued to its prefix (an env var, camelCase JSON, YAML)
+    [`curl -uadmin:${S} https://192.168.9.76/cgi-bin/api.cgi`, 'curl -uadmin:*** https://192.168.9.76/cgi-bin/api.cgi'],
+    [`ssh bitcube "curl.exe -k -uadmin:${S} https://h/x"`, 'ssh bitcube "curl.exe -k -uadmin:*** https://h/x"'],
+    [`PGPASSWORD=${S} psql -h db`, 'PGPASSWORD=*** psql -h db'],
+    [`export MYSQLPWD=${S}; MYSQL_PWD=${S} mysql`, 'export MYSQLPWD=***; MYSQL_PWD=*** mysql'],
+    [`{"accessToken":"${S}","refreshToken":"${S}"}`, '{"accessToken":"***","refreshToken":"***"}'],
+    [`DBPASSWORD: ${S}`, 'DBPASSWORD: ***'],
+    // as before
+    [`curl -u admin:${S} https://h/x`, 'curl -u admin:*** https://h/x'],
+    [`curl -s --user admin:${S} x`, 'curl -s --user admin:*** x'],
+    [`wget --user=admin --password=${S} x`, 'wget --user=admin --password=*** x'],
+    // #6: -u x:y is a login only for an HTTP client: a user and group id, a sort key, another tool after a pipe are not
+    ['docker run -u 1000:1000 img', 'docker run -u 1000:1000 img'],
+    ['sort -u a:b file', 'sort -u a:b file'],
+    ['curl -s https://h/x | sort -u a:b', 'curl -s https://h/x | sort -u a:b'],
+    ['docker run -u 1000:1000 curlimages/curl -s x', 'docker run -u 1000:1000 curlimages/curl -s x'],
+    // still spared
+    ['"input_tokens": 1234, "max_tokens": 9, "tokens_used": 3, the passwords file, secret_ref: x, cwd: /x', '"input_tokens": 1234, "max_tokens": 9, "tokens_used": 3, the passwords file, secret_ref: x, cwd: /x'],
+  ]) {
+    const got = scrubCreds(raw);
+    assert.equal(got, want, raw);
+    assert.doesNotMatch(got, /hunter2/, raw);
+  }
+  assert.deepEqual(scrubCreds({ PGPASSWORD: 'x', accessToken: 'y', tokens_used: 3 }), { PGPASSWORD: '***', accessToken: '***', tokens_used: 3 });
+});

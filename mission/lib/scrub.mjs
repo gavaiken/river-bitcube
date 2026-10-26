@@ -4,9 +4,10 @@
 // body ({"password":"…"}) or a query (?user=admin&password=…), and answers its token in one ({"Token":{"name":"…"}}), so a
 // step's command or a reply can hold it that way too (R7 #37, CR7 #1).
 // scrubCreds() replaces the user:password part of every URL, and the value of every password-like field (password, passwd,
-// pwd, passphrase, token, secret, api_key, with a prefix too: cam_password, access_token, X-Auth-Token, *_TOKEN=; as a JSON or
-// escaped-JSON key, a query or form parameter, or "key: value"), and a command line's login forms (an Authorization header,
-// Bearer, curl -u user:pw, --password pw, sshpass -p pw: R8 #38), with ***:
+// pwd, passphrase, token, secret, api_key, with a prefix too: cam_password, access_token, X-Auth-Token, *_TOKEN=, and glued to it
+// with no separator: PGPASSWORD=, accessToken, DBPASSWORD: (CR8 #5); as a JSON or escaped-JSON key, a query or form parameter, or
+// "key: value"), and a command line's login forms (an Authorization header, Bearer, an HTTP client's -u user:pw or -uuser:pw,
+// --password pw, sshpass -p pw: R8 #38, CR8 #5, #6), with ***:
 //   - a quoted value to its own closing quote, past an escaped quote inside it ("ab\"cd"), whatever it holds (CR7 #3);
 //   - an object or an array whole ({"Token":{"name":"…"}} -> {"Token":"***"}), nested up to NEST_DEPTH levels (one that never
 //     closes, or nests deeper, to the end of its line);
@@ -19,9 +20,9 @@
 // tools/mission/probe.ps1 Mask-Creds does the same on bitcube, with these very patterns (test/review-cr7.test.mjs compares them).
 const CREDS = String.raw`([a-z][a-z0-9+.-]*:\/\/)[^\s/?#"<>]*@`;
 /** A password-like key: password, passwd, pwd, passphrase, token, secret, api_key (apikey, api-key), also with a prefix
- *  (cam_password, CLAUDE_CODE_OAUTH_TOKEN, X-Auth-Token, access_token: R8 #38); never inside a longer word (input_tokens,
- *  max_tokens, passwords, secret_ref). */
-const NAMES = String.raw`(?<![\w-])(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)(?![\w-])`;
+ *  (cam_password, CLAUDE_CODE_OAUTH_TOKEN, X-Auth-Token, access_token: R8 #38), glued too (PGPASSWORD, MYSQLPWD, accessToken:
+ *  CR8 #5); a whole word that ends with one, never one that goes on (input_tokens, max_tokens, tokens_used, passwords, secret_ref). */
+const NAMES = String.raw`(?<![\w-])[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)(?![\w-])`;
 /** The key (never part of a longer word: input_tokens, passwords), its own quote (plain or escaped), then : or =. */
 const KEY = String.raw`(${NAMES}(?:\\?["'])?\s*[:=]\s*)`;
 /** The key in JSON text: quoted (plain or escaped: group 2, the quote the masked value gets), then :. */
@@ -46,19 +47,20 @@ const NESTED = (() => {
  *  never null, true or false. */
 const BARE_VALUE = String.raw`(?!\\?["'])(?!(?:null|true|false)(?![^\s"'&,;}\]]))(${NESTED}|[^\s"'&,;}\]]+)`;
 /** The common login forms of a command line (R8 #38): an Authorization header's credential (Bearer, Basic, Token, Digest), a
- *  bearer token on its own, curl's -u/--user user:password (the password), a --password-like flag's value after a space, and
- *  sshpass -p's. Each keeps what names it and masks the value. */
+ *  bearer token on its own, an HTTP client's -u/--user user:password (curl, wget, HTTPie, xh, earlier in the same command; the
+ *  password; -uuser:pw attached too: CR8 #5), never another tool's -u (docker run -u 1000:1000, sort -u a:b: CR8 #6), a
+ *  --password-like flag's value after a space, and sshpass -p's. Each keeps what names it and masks the value. */
 const AUTH = String.raw`(\bAuthorization\s*[:=]\s*["']?(?:(?:Bearer|Basic|Token|Digest)\s+)?)([^\s"',;]+)`;
 const BEARER = String.raw`(\bBearer\s+)([A-Za-z0-9._~+/=-]{12,})`;
-const USER = String.raw`((?:^|[\s"'])(?:-u|--user)[\s=]+[^\s:"'*]+:)([^\s"']+)`;
+const USER = String.raw`((?:^|[\s"'\\/])(?:curl|wget|https?|xh)(?:\.exe)?\s(?:[^\n;&|]*?[\s"'])?(?:-u|--user)(?:[\s=]+|(?=[^\s=-]))[^\s:"'*]+:)([^\s"']+)`;
 const FLAG = String.raw`((?:^|\s)--?(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)\s+)(?![-*])([^\s"']+)`;
 const SSHPASS = String.raw`(\bsshpass\s+-p\s*)([^\s"']+)`;
 /** The patterns, as probe.ps1 writes them too (the tests compare the two). */
 export const PATTERNS = { CREDS, KEY, KEY_JSON, QUOTED, ESCAPED, ELEM, NESTED, BARE_JSON: KEY_JSON + BARE_VALUE, BARE: KEY + BARE_VALUE, AUTH, BEARER, USER, FLAG, SSHPASS };
 const RE = Object.fromEntries(['CREDS', 'QUOTED', 'ESCAPED', 'BARE_JSON', 'BARE', 'AUTH', 'BEARER', 'USER', 'FLAG', 'SSHPASS'].map((k) => [k, new RegExp(PATTERNS[k], 'gi')]));
-/** An object's key whose value is a login, whatever it holds (a password-like key, a prefix allowed: never input_tokens,
- *  passwords, secret_ref). */
-const SECRET_KEY = /^(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)$/i;
+/** An object's key whose value is a login, whatever it holds (a password-like key, a prefix allowed, glued too: never
+ *  input_tokens, passwords, secret_ref). */
+const SECRET_KEY = /^[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)$/i;
 
 /** "rtsp://admin:pw@10.0.0.1/x" -> "rtsp://***@10.0.0.1/x", '"password":"x"' -> '"password":"***"', "?password=x" ->
  *  "?password=***", '"Token":{"name":"x"}' -> '"Token":"***"'; deep for objects and arrays; anything else unchanged. */
