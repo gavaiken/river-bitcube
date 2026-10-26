@@ -12,7 +12,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function startServer(env) {
   return new Promise((resolve, reject) => {
-    const p = spawn(process.execPath, [SERVER], { env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+    // never the live control socket a session's environment names (the agent's MISSION_CONTROL_SOCKET): the test server's own,
+    // in its state folder, unless the test names one (R7 #33)
+    const base = { ...process.env }; delete base.MISSION_CONTROL_SOCKET;
+    const p = spawn(process.execPath, [SERVER], { env: { ...base, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     const timer = setTimeout(() => { p.kill(); reject(new Error(`server did not start:\n${out}`)); }, 20_000);
     const look = (d) => { out += d; const m = out.match(/http:\/\/127\.0\.0\.1:(\d+)/); if (m) { clearTimeout(timer); resolve({ p, base: m[0] }); } };
