@@ -252,10 +252,17 @@ test('the calibration lock holds from the first second: a started run is taken f
   await m.pollCalibration();
   assert.equal(m.snapshot().probe.value.calibration.stale, true);
   assert.equal((await m.control('ropes', { dark: false })).ok, true, 'a run whose process is gone blocks nothing');
-  // a progress read that failed changes nothing
-  lights.status = { ok: false, error: "can't reach bitcube over SSH" };
-  await m.calibrationStatus();
-  assert.equal(m.snapshot().probe.value.calibration.stale, true);
+  // a progress read that failed, or one that finds no job, changes nothing
+  for (const nothing of [{ ok: false, error: "can't reach bitcube over SSH" }, { running: false, none: true }]) {
+    lights.status = nothing;
+    await m.calibrationStatus();
+    assert.equal(m.snapshot().probe.value.calibration.stale, true, JSON.stringify(nothing));
+  }
+  // a start answer without its updated stamp still holds the lock at once (it counts as now)
+  const bare = new Mission({ lights: fakeLights({ start: { ok: true, started: true, calibration: { running: true } } }), probe: async () => ({ ok: true, td: { ok: true }, calibration: null }) });
+  await bare.pollProbe();
+  await bare.calibrate('start', {});
+  await assert.rejects(bare.control('switch', { file: LIVE }), (e) => e.status === 409 && /calibration is running/.test(e.message));
 });
 
 test('a successful rebuild is recorded, kept in the state folder across a restart, and names the map baked in; a failed one is not', async () => {

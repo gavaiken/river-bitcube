@@ -145,21 +145,23 @@ export class Mission {
   // are newer the moment they arrive. Whichever copy bitcube wrote last (its `updated`) is the state, so the lock on the
   // ropes, the panels, a switch, a rebuild and the lighting port holds from the first second of a run and ends with it.
 
-  /** Keep a progress file Lights answered with, when it is at least as new as the one kept (a failed read changes nothing). */
+  /** Keep a progress file Lights answered with, when it is at least as new as the one kept. A failed read ({ ok: false,
+   *  error }) or "no job" ({ running: false, none: true }) changes nothing; a copy without its updated stamp counts as now. */
   noteCalibration(cal) {
     const c = obj(cal);
-    if (!c || typeof c.updated !== 'number' || !Number.isFinite(c.updated)) return;
-    if (this.calNote && c.updated < this.calNote.value.updated) return;
-    this.calNote = { at: this.now(), value: scrubCreds(c) };
+    if (!c || typeof c.running !== 'boolean' || c.none === true) return;
+    const u = typeof c.updated === 'number' && Number.isFinite(c.updated) ? c.updated : this.now() / 1000;
+    if (this.calNote && u < this.calNote.u) return;
+    this.calNote = { at: this.now(), u, value: scrubCreds(c) };
   }
 
   /** The calibration job as the newest copy says (the probe's or Lights'), or null: none in the last 24 h. */
   calibration() {
     const pr = obj(this.data.probe?.value?.calibration), n = this.calNote;
-    if (!n || this.now() / 1000 - n.value.updated > CAL_KEEP_S) return pr;
+    if (!n || this.now() / 1000 - n.u > CAL_KEEP_S) return pr;
     const pu = typeof pr?.updated === 'number' ? pr.updated : -Infinity;
     // the same file read twice: the later read knows more (alive, stale are judged as it is read)
-    if (n.value.updated > pu || (n.value.updated === pu && n.at >= (this.data.probe?.at ?? -Infinity))) return n.value;
+    if (n.u > pu || (n.u === pu && n.at >= (this.data.probe?.at ?? -Infinity))) return n.value;
     return pr;
   }
 
