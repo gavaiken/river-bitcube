@@ -7,7 +7,7 @@
 import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark, plainError, DOC_LINKS, splitHeadline, announce, unannounce, setLive, goto, bringIntoView,
   WARN_MS, LOST_MS, POLL_TIMEOUT_MS, serverNow, serverClock } from '/ui.js';
 import { fetchTimed } from '/app.js';
-import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, EXPECT_S, ownEntries, endedOnce, START_USUAL } from '/model.js';
+import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, CAL_STAGES, EXPECT_S, ownEntries, endedOnce, START_USUAL, calDryRun, calStep } from '/model.js';
 import { uprightsFromAtlas } from '/screens.js';
 import { calChecklist, ROOM_CHECK, startWhy, dryWhy, calView, rebuiltFor, runNote, nextLine, captureWhen, driftWords, resultWords,
   mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT, calRead, calLeft, changeSince, stateLevel, applyingNow, stateParts, CAL_COPY, runFine,
@@ -20,7 +20,7 @@ const INSTALL_DAY = '20261022';           // the lift at Gray Area: a map captur
 const OLD_RUN_S = 15 * 60;                // a run that ended this long before the page opened is not shown as a result
 // one set of stage words with the Status band (model.js CAL_STAGE_WORDS)
 const STAGE_WORDS = { ...Object.fromEntries(Object.entries(CAL_STAGE_WORDS).map(([k, v]) => [k, v[0].toUpperCase() + v.slice(1)])), done: 'Done' };
-const STAGE_ORDER = ['ropes-capture', 'ropes-decode', 'hub75-capture', 'hub75-locate', 'done'];
+const STAGE_ORDER = [...CAL_STAGES, 'done'];
 const YEAR_FILE = Object.keys(FILES).find((f) => FILES[f].kind === 'year');
 const $ = (sel) => document.querySelector(sel);
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s ?? '');
@@ -897,13 +897,13 @@ function paintRun(p) {
   const again = p.retakes ? `${p.retakes} ${p.retakes === 1 ? 'pattern' : 'patterns'} photographed again` : '';
   const text = fmt.nb([line, again].filter(Boolean).join(' · '));
   const el = $('#cal-line'); if (el && el.textContent !== text) el.textContent = text;
-  // a dry run touches no lights and no camera: its stages are steps (R9 #19)
-  const dry = !!(p.dry_run || p.mode === 'dry-run');
-  const stages = STAGE_ORDER.map((s, i) => `<span class="${s === p.stage ? 'now' : STAGE_ORDER.indexOf(s) < STAGE_ORDER.indexOf(p.stage ?? 'ropes-capture') ? 'done' : ''}">${s !== 'done' && dry ? `Step ${i + 1}` : STAGE_WORDS[s]}</span>`).join('<span aria-hidden="true">→</span>');
+  // a dry run touches no lights and no camera: its stages are steps (R9 #19); what a dry run is and its steps, one rule with the
+  // band and the history (model.js calDryRun, calStep: CR9 #7, #8, #16)
+  const dry = calDryRun(p);
+  const stages = STAGE_ORDER.map((s) => `<span class="${s === p.stage ? 'now' : STAGE_ORDER.indexOf(s) < STAGE_ORDER.indexOf(p.stage ?? 'ropes-capture') ? 'done' : ''}">${s !== 'done' && dry ? `Step ${calStep(s).n}` : STAGE_WORDS[s]}</span>`).join('<span aria-hidden="true">→</span>');
   const st = $('#cal-stages'); if (st && S.html['cal-stages'] !== stages) { S.html['cal-stages'] = stages; st.innerHTML = stages; }
   const pct = Math.round(runFraction(p) * 100), prog = $('#cal-prog'), bar = $('#cal-bar');
-  const step = STAGE_ORDER.indexOf(p.stage) + 1;
-  const vt = `${pct} %, ${dry && p.stage !== 'done' && step ? `step ${step} of 4` : CAL_STAGE_WORDS[p.stage] ?? (p.stage === 'done' ? 'done' : 'starting')}`;
+  const vt = `${pct} %, ${dry && calStep(p.stage) ? calStep(p.stage).words : CAL_STAGE_WORDS[p.stage] ?? (p.stage === 'done' ? 'done' : 'starting')}`;
   if (prog && prog.getAttribute('aria-valuetext') !== vt) { prog.setAttribute('aria-valuenow', String(pct)); prog.setAttribute('aria-valuetext', vt); bar.style.width = `${pct}%`; }
 }
 /** Why a run failed, in the team's words: calibrate.py's plain `reason` (from 24 Oct), else its error when that is already
@@ -925,7 +925,7 @@ function tickCalibrate() {
   runEl?.classList.toggle('quiet', n.grey);
   if (noteEl) { const t = fmt.nb(n.text); if (noteEl.textContent !== t) noteEl.textContent = t; noteEl.hidden = !t; }
   // the model's time left (S.m is derived again every second), the same number as the state line above and the Status page
-  const t = n.grey ? '' : fmt.nb(calLeft({ cal: S.m?.show.calibration, dry: !!(p.dry_run || p.mode === 'dry-run') }));
+  const t = n.grey ? '' : fmt.nb(calLeft({ cal: S.m?.show.calibration, dry: calDryRun(p) }));
   if (left.textContent !== t) left.textContent = t;
   left.hidden = !t;
 }

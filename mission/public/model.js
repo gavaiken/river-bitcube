@@ -55,6 +55,24 @@ const YEAR_FILE = Object.keys(FILES).find((k) => FILES[k].kind === 'year'), LIVE
 export const CAL_STAGE_S = { 'ropes-capture': 170, 'ropes-decode': 40, 'hub75-capture': 35, 'hub75-locate': 10 };   // calibrate.py EXPECTED_S
 export const CAL_TOTAL_S = Object.values(CAL_STAGE_S).reduce((a, b) => a + b, 0);
 export const CAL_STAGE_WORDS = { 'ropes-capture': 'photographing the ropes', 'ropes-decode': 'working out where each rope is', 'hub75-capture': 'photographing the panels', 'hub75-locate': 'finding the panels' };
+/** A run's stages, in order (calibrate.py STAGES). */
+export const CAL_STAGES = Object.keys(CAL_STAGE_S);
+/** A dry run's stage as a step (it touches no lights and no camera, so its stages are steps, never "photographing the ropes": R9
+ *  #19): { n, of, words: "step 2 of 4" }, or null for what is no stage (starting, done). One helper for derive(), Lights and the
+ *  history (CR9 #16). */
+export function calStep(stage) {
+  const i = CAL_STAGES.indexOf(stage);
+  return i < 0 ? null : { n: i + 1, of: CAL_STAGES.length, words: `step ${i + 1} of ${CAL_STAGES.length}` };
+}
+/** A run that is a dry run by name (calibrate.py --dry-run: its own flag, or its mode): "the dry run", its stop "the dry run stop"
+ *  (R8 #21), its stages steps (calStep). A decode of earlier photos is not one: it is "a calibration from earlier photos", whose stage
+ *  is real work (working out where each rope is from the photos) and whose stop is the calibration stop. One rule for derive(),
+ *  Lights, the history, the server's record of a Stop and the agent's step lines (CR9 #7, #8). c: a progress copy, a history event
+ *  (its mode) or a start's body (dry_run). */
+export const calDryRun = (c) => !!c && typeof c === 'object' && (c.dry_run === true || c.mode === 'dry-run');
+/** A run that touches no lights, camera or TouchDesigner: a dry run, or a decode of earlier photos (calibrate.py --decode-only). It
+ *  locks nothing on them, on the pages, on the server and on bitcube (R7 #20; probe.ps1 the same). */
+export const calNoLights = (c) => calDryRun(c) || (!!c && typeof c === 'object' && (c.mode === 'decode-only' || !!c.decode_only));
 // Applying a change (docs/mission-ui.md): what a change in flight blocks, when the server's entry names no blocks of its own.
 // A switch or a rebuild restarts TouchDesigner on the year: everything that touches either waits; a boot-file change only
 // the file controls (and a calibration's start); a lighting port change the lights; the rest only a second copy of itself.
@@ -450,12 +468,12 @@ export function derive(status, nowMs) {
   const calLeftWords = calibrating ? (calNearly ? 'nearly done' : `about ${dur(calLeftS)} more`) : null;
   // a dry run (or a decode of earlier photos) touches no lights; a full run has the ropes in patterns from start to end, and
   // the panels in their own stages: then they are "in calibration patterns", never "showing the river" or "dark on purpose"
-  const calDry = calibrating && (cal.mode === 'dry-run' || cal.mode === 'decode-only' || cal.dry_run === true || !!cal.decode_only);
-  const calRopes = calibrating && !calDry, calPanels = calRopes && /^hub75-/.test(String(cal.stage ?? ''));
+  const calQuiet = calibrating && calNoLights(cal), calDry = calibrating && calDryRun(cal);
+  const calRopes = calibrating && !calQuiet, calPanels = calRopes && /^hub75-/.test(String(cal.stage ?? ''));
   const calWords = calRopes ? (calNearly ? 'in calibration patterns, nearly done' : `in calibration patterns for ${calLeftWords}`) : null;
-  // a dry run touches no lights and no camera: its stage is a step, never "photographing the ropes" (R9 #19)
-  const calStep = Object.keys(CAL_STAGE_S).indexOf(cal?.stage) + 1;
-  const calStageWords = !calibrating ? null : calDry ? (calStep ? `step ${calStep} of ${Object.keys(CAL_STAGE_S).length}` : 'at work') : CAL_STAGE_WORDS[cal.stage] ?? 'at work';
+  // a dry run touches no lights and no camera: its stage is a step, never "photographing the ropes" (R9 #19); a decode of earlier
+  // photos is real work, so its stage is said as a run's is (one rule, model.js calDryRun, calStep: CR9 #8, #16)
+  const calStageWords = !calibrating ? null : calDry ? calStep(cal.stage)?.words ?? 'at work' : CAL_STAGE_WORDS[cal.stage] ?? 'at work';
 
   // Dave's agent: a past next tick is a fault only by day (it rests overnight), measured in daytime minutes.
   const finMs = m ? Date.parse(m.finished_at) : NaN, nextMs = m && num(m.next_tick_epoch) != null ? m.next_tick_epoch * 1000 : null;
@@ -737,6 +755,10 @@ export function derive(status, nowMs) {
       if (calibrating && calDry) add('calibrating', 'warning', 61, "Calibration dry run: the lights stay as they are",
         `It walks the calibration's steps without touching the lights (${calStageWords} now) and ends by itself in about a minute.`,
         'Nothing to do; it ends by itself. To end it now, stop it on the Lights page.', ['ropes']);
+      // a decode of earlier photos: a calibration, never "a dry run", that touches no lights (CR9 #8)
+      else if (calibrating && calQuiet) add('calibrating', 'warning', 61, 'Calibrating from earlier photos: the lights stay as they are',
+        `The calibration is ${calStageWords}, from photos taken earlier, without touching the lights, and ends by itself.`,
+        'Nothing to do; it ends by itself. To end it now, stop it on the Lights page.', ['ropes']);
       else if (calibrating) add('calibrating', 'warning', 61, `Calibrating the lights: the ropes${calPanels ? ' and the panels are' : ' are'} in patterns${calNearly ? ', nearly done' : ` for ${calLeftWords}`}`,
         `The calibration is ${calStageWords}; the ropes${calPanels ? ' and the panels' : ''} go back to what they showed before, by themselves, when it ends.`,
         "Keep people out of the camera's view. If the room is needed now, stop it on the Lights page: the ropes go back at once.", ['ropes', calPanels ? 'hub75 panels' : null]);
@@ -913,7 +935,7 @@ export function derive(status, nowMs) {
     : se.present ? "the river's year page isn't answering" : "the river's year page hasn't been checked yet";
   const cantUnknown = !pr ? (pb.present ? 'the full check of bitcube failed' : "bitcube's full check hasn't run yet") : null;   // what it would change isn't known
   // a dry run (or a decode of earlier photos) touches no lights, no camera and no TouchDesigner: it locks nothing on them (R7 #20)
-  const cantCal = calibrating && !calDry ? CAL_RUNNING : null;
+  const cantCal = calibrating && !calQuiet ? CAL_RUNNING : null;
   const cantOld = pr && pb.stale ? `mission control hasn't heard from bitcube for ${dur(pb.age_s)}` : null;
   // never a second switch while TouchDesigner is opening a file: it kills the half-opened one (another minute dark), and
   // while bitcube's own login is still opening it, a second TouchDesigner could start beside it

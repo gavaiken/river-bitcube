@@ -370,7 +370,7 @@ test('R9 #19: a dry run is never "photographing the ropes": Recent, the band and
   assert.equal(m.overall.cause, 'calibrating');
   assert.equal(m.overall.detail, "It walks the calibration's steps without touching the lights (step 1 of 4 now) and ends by itself in about a minute.");
   assert.equal(m.show.calibration.words, 'step 1 of 4');
-  assert.match(page('lights.js'), /dry \? `Step \$\{i \+ 1\}`/);
+  assert.match(page('lights.js'), /dry \? `Step \$\{calStep\(s\)\.n\}`/, 'its step from model.js calStep (CR9 #16)');
 });
 
 // ---- #2: Recent is kept current while it is open -------------------------------------------------------------------------------

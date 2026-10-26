@@ -69,7 +69,7 @@
 //   nothing here ever throws: history never stops the show.
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { derive, FILES, intensityWord, awaited, changeLabel, confirmLimitS, EXPECT_S } from '../public/model.js';
+import { derive, FILES, intensityWord, awaited, changeLabel, confirmLimitS, EXPECT_S, calDryRun, calStep, CAL_STAGE_WORDS } from '../public/model.js';
 import { scrubCreds } from './scrub.mjs';
 import { REQUEST_ID } from './applying.mjs';
 
@@ -505,8 +505,7 @@ const SAID = [
 const STILL = [
   [/^Dark on purpose\b/, 'are still dark on purpose'], [/^At 0 %/, 'are still at 0 %'], [/^Panel sender present, but the panel output is off/, 'are still switched off in the show file'],
 ];
-const STAGE_STEP = { 'ropes-capture': 1, 'ropes-decode': 2, 'hub75-capture': 3, 'hub75-locate': 4 };
-const STAGE = { 'ropes-capture': 'photographing the ropes', 'ropes-decode': 'working out where each rope is', 'hub75-capture': 'photographing the panels', 'hub75-locate': 'finding the panels', done: 'done' };
+const STAGE = { ...CAL_STAGE_WORDS, done: 'done' };   // one set of stage words with the band and Lights (model.js)
 const MODE_WHY = { automatic: 'the clock turns the year by itself', dynamic: 'the people in the room steer the year', manual: 'someone is steering the year by hand' };
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s);
 const lc = (s) => (!s || /^(?:[A-Z][a-z]+[A-Z]|[A-Z]{2}|Dave|Modal|Gray|Mac |Wi-Fi|Starlink|Colorlight|Ethernet|Tailscale)/.test(s) ? s : s[0].toLowerCase() + s.slice(1));   // keep proper nouns
@@ -565,14 +564,15 @@ function showWords(ev) {
 }
 
 function calibrationWords(ev) {
-  const what = ev.mode === 'dry-run' ? 'A dry run' : ev.mode === 'decode-only' ? 'A calibration from earlier photos' : 'The calibration';
+  // what a run is called and what its stages are: one rule with the band and Lights (model.js calDryRun, calStep: CR9 #7, #8, #16)
+  const dry = calDryRun(ev);
+  const what = dry ? 'A dry run' : ev.mode === 'decode-only' ? 'A calibration from earlier photos' : 'The calibration';
   const stage = STAGE[ev.stage] ?? null;
   if (ev.stale) return `${what} stopped answering: its process is gone`;
   // a dry run touches no lights and no camera: its stages are steps, never "photographing the ropes" (R9 #19)
-  const dry = ev.mode === 'dry-run';
-  const step = STAGE_STEP[ev.stage];
+  const step = calStep(ev.stage);
   if (ev.running && !ev.from?.running) return `${what} started${!dry && stage && stage !== 'done' ? `: ${stage}` : ''}`;
-  if (ev.running) return dry ? `${what} is ${step ? `at step ${step} of 4` : 'running'}` : `${what} is ${stage ?? 'running'}`;
+  if (ev.running) return dry ? `${what} is ${step ? `at ${step.words}` : 'running'}` : `${what} is ${stage ?? 'running'}`;
   if (ev.cancelled) return `${what} was stopped`;
   if (ev.ok === false) return `${what} failed`;
   if (ev.from?.running || ev.stage === 'done') return `${what} finished`;

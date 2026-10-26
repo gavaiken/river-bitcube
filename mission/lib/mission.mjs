@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { scrubCreds } from './scrub.mjs';
 import { Applying } from './applying.mjs';
 import { checkedCalibrate, noAnswer } from './lights.mjs';
-import { CAL_RUNNING, changeLabel, tdStarting } from '../public/model.js';
+import { CAL_RUNNING, changeLabel, tdStarting, calNoLights } from '../public/model.js';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 const PROBE = PS + 'probe.ps1';
@@ -18,7 +18,6 @@ const SNAP_CACHE_MS = 45_000;
  *  path (TouchDesigner stopped and restarted), so it spoils a run as surely as a switch. A dry run (or a decode of earlier
  *  photos) touches no lights, camera or TouchDesigner: it refuses none of them (R7 #20). */
 export const CAL_BLOCKED = ['ropes', 'hub75', 'switch', 'lightsroute', 'rebuild'];
-const calDry = (cal) => cal?.dry_run === true || cal?.mode === 'dry-run' || cal?.mode === 'decode-only' || !!cal?.decode_only;
 /** The 409 a switch or a rebuild gets while TouchDesigner is starting or restarting (model.js tdStarting, the pages' words; shared
  *  with fixture mode), or null. snap: () => the status the pages are served. */
 export function startingBlocked(action, snap, nowMs) {
@@ -29,7 +28,7 @@ export function startingBlocked(action, snap, nowMs) {
 }
 /** The 409 a control gets while a calibration runs (shared with fixture mode), or null. */
 export function calBlocked(action, cal) {
-  if (!CAL_BLOCKED.includes(action) || cal?.running !== true || cal.stale === true || calDry(cal)) return null;
+  if (!CAL_BLOCKED.includes(action) || cal?.running !== true || cal.stale === true || calNoLights(cal)) return null;   // model.js: one rule
   return Object.assign(new Error(CAL_RUNNING), { status: 409 });
 }
 // Show files mission control may open: the river's year and the live river. Retired files start with old- (D27) and

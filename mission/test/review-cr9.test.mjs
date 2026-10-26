@@ -196,3 +196,52 @@ test("CR9 #6: a switch whose answer was lost, its entry known to no list, is don
   boot.show.boot_file = { name: LIVE };
   assert.equal(ownVerdict(boot, { ...lost, sent: { action: 'bootfile', file: LIVE, before: YEAR, sentAt: T0 } }).step, 'done');
 });
+
+// ---- #7, #8, #16: one rule for what a dry run is, one helper for its steps ------------------------------------------------------
+
+test('CR9 #7, #8: a decode of earlier photos touches no lights but is no dry run: real stage words, "the calibration stop", one helper everywhere', async () => {
+  const { derive, calDryRun, calNoLights } = await import('../public/model.js');
+  const { describeEvent } = await import('../lib/history.mjs');
+  const DECODE = { running: true, pid: 9, mode: 'decode-only', decode_only: 'pixelmap-20261018-154155', dry_run: false, stage: 'ropes-decode', expected_s: 40, elapsed_s: 5 };
+  const DRY = { running: true, pid: 9, mode: 'dry-run', dry_run: true, decode_only: null, stage: 'ropes-decode', expected_s: 2, elapsed_s: 1 };
+  assert.deepEqual([calDryRun(DECODE), calNoLights(DECODE), calDryRun(DRY), calNoLights(DRY), calDryRun({ mode: 'full' }), calNoLights({ mode: 'full' })],
+    [false, true, true, true, false, false]);
+  const at = (cal) => { const p = payload({ t: T0 }); p.probe.value.calibration = cal; return derive(p, T0); };
+  const d = at(DECODE), y = at(DRY);
+  assert.equal(d.show.calibration.words, 'working out where each rope is', 'a decode really works out where each rope is');
+  assert.equal(d.show.calibration.dry, false);
+  assert.equal(y.show.calibration.words, 'step 2 of 4');
+  assert.equal(y.show.calibration.dry, true);
+  // a decode locks nothing on the lights (R7 #20), and it is "a calibration", never "a dry run", in its headline and its reasons
+  assert.equal(d.controls.ropes.why, null);
+  assert.equal(d.controls.calibrate.why, 'a calibration is already running');
+  assert.equal(y.controls.calibrate.why, 'a dry run is already running');
+  const dp = d.problems.find((p) => p.id === 'calibrating');
+  assert.doesNotMatch(`${dp.headline} ${dp.summary}`, /dry run|step \d/i);
+  assert.match(dp.headline, /earlier photos: the lights stay as they are/);
+  // the history and the step lines name it the same: a calibration from earlier photos, its stop the calibration stop
+  assert.equal(describeEvent({ kind: 'calibration', running: true, stage: 'ropes-decode', mode: 'decode-only', from: { running: true, stage: null } }), 'A calibration from earlier photos is working out where each rope is');
+  const server = src('../server.mjs');
+  assert.match(server, /const isDryRun = \(c\) => !!c && typeof c === 'object' && c\.running === true && calDryRun\(c\);/);
+  assert.match(server, /calDry: calDryRun\(cal\)/, "the agent's step context: the same rule as the server's record of a Stop");
+  assert.doesNotMatch(server, /mode === 'decode-only'/);
+  assert.match(src('../lib/history.mjs'), /const dry = calDryRun\(ev\);/);
+  assert.match(src('../lib/mission.mjs'), /calNoLights\(cal\)/);
+  assert.match(page('lights.js'), /const dry = calDryRun\(p\);/);
+  assert.match(page('lights-words.js'), /const dry = calDryRun\(p\) \|\| !!p\?\.result\?\.dry_run;/);
+});
+
+test("CR9 #16: a dry run's \"step N of 4\" comes from one helper (model.js calStep), never a table or a literal 4 of its own", async () => {
+  const { calStep, CAL_STAGES, CAL_STAGE_S } = await import('../public/model.js');
+  assert.deepEqual(CAL_STAGES, Object.keys(CAL_STAGE_S));
+  assert.deepEqual(calStep('ropes-decode'), { n: 2, of: 4, words: 'step 2 of 4' });
+  assert.deepEqual(calStep('hub75-locate'), { n: 4, of: 4, words: 'step 4 of 4' });
+  assert.equal(calStep('done'), null);
+  assert.equal(calStep(null), null);
+  const { describeEvent } = await import('../lib/history.mjs');
+  assert.equal(describeEvent({ kind: 'calibration', running: true, stage: 'hub75-capture', mode: 'dry-run', from: { running: true, stage: 'ropes-decode' } }), 'A dry run is at step 3 of 4');
+  assert.doesNotMatch(src('../lib/history.mjs'), /STAGE_STEP|of 4/);
+  assert.doesNotMatch(page('lights.js'), /of 4|const STAGE_ORDER = \['ropes-capture'/);
+  assert.match(page('lights.js'), /calStep\(/);
+  assert.doesNotMatch(page('model.js').slice(page('model.js').indexOf('export function derive')), /step \$\{calStep\} of/);
+});
