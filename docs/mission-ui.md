@@ -151,6 +151,41 @@ Every text pair is above 4.5:1 and every mark above 3:1 except the amber mark on
 
 The palette blends from `show.weights`, so the page itself tells the season (slate when unknown); it never follows the state. Thin translucent lines and text only on panels keep autumn's rust from reading as a red band and summer's gold as amber. `prefers-reduced-motion` stops every animation; the art stays, still.
 
+## Applying a change
+
+Every control is pessimistic: nothing on screen claims a change until bitcube's own reading shows it. The same pattern on every page, every phone and the server (Gavin, 25 Oct: "standard UX patterns for async tasks and blocking editing settings while a change is being applied").
+
+**States of one control** (`ui.js control()`, and status.js `runControl` on the same rules):
+
+| State | When | On screen |
+|---|---|---|
+| ready | nothing in flight | the button, its one-line effect, the current value |
+| blocked | the model says it can't run now (offline, a calibration, **another change being applied** anywhere) | greyed (dashed, full opacity), "Not possible now: <why>." *above* the buttons; inputs disabled too |
+| confirm | a costly change was pressed | the sheet names the cost; focus on the safe button. Withdrawn (with "Not sent: <why>") if the control becomes blocked while it is open; focus then goes to the control's status line, never to the page |
+| applying | the POST is in flight | spinner + "Applying: <what>…"; the control, its siblings **and its inputs** disabled; the host `aria-busy="true"`; long changes (expected over 20 s: switch, rebuild, calibrate) show elapsed m:ss and the usual time ("usually about 1 min") |
+| confirming | the POST answered OK, but the change is only real when the reading shows it (switch: TouchDesigner answering on the new file; rebuild: the map in use; boot file: the boot file the probe reports) | "Sent · waiting for bitcube to show it · 0:34"; still locked |
+| done | the reading shows it (or, for a control whose own answer is bitcube's reading: ropes, panels, mode, target, rules, the answer itself) | "Now <state> · 21:04"; inputs unlock; drafts clear |
+| unconfirmed | no confirming reading within the limit (3 × the usual time, at least 2 min) | "Sent at 21:04, but bitcube doesn't show it yet: look at the Now line, or call Gavin." Unlocks. Never "unchanged" |
+| failed | refused or failed | "<thing> unchanged: <reason in words> (21:04). Try again, or check Status." The draft stays; focus stays on the control |
+
+One page-level polite live region announces applying, done, unconfirmed and failed once each; ticking times are never announced.
+
+**Locks across phones.** The server records every control in flight in `status.applying`: `[{ id, action, label, file?, started_at, expect_s, blocks: [action…] }]` (`label` is team words: "the switch to the live river", "a rebuild of the river's year", "the boot file change", "a ropes change", "a panels change", "a mode change", "a target change", "a rules change", "a lighting port change"; `started_at` is the server's clock). An entry is removed when its request ends, success or failure. A POST that conflicts with an entry gets **409** `{ ok: false, error: "wait: <label> is being applied (started 21:04)" }`; the pages show the server's words as they are. The model turns each entry into `controls.<name>.why = "wait: <label> is being applied"` for every action in its `blocks`, on every phone, from the next `/api/status` (a page that just sent a change refreshes at once). What blocks what:
+
+| In flight | Blocks |
+|---|---|
+| switch, rebuild | everything that touches TouchDesigner or the year: ropes, hub75, mode, target, rules, rules-reset, lightsroute, switch, rebuild, bootfile, calibrate |
+| bootfile | switch, rebuild, bootfile |
+| lightsroute | ropes, hub75, lightsroute, calibrate |
+| ropes, hub75, mode, target, rules, rules-reset | the same action (two phones changing one thing at once) |
+| a calibration running (`calibration.running`, not stale) | ropes, hub75, switch, lightsroute, rebuild (`CAL_BLOCKED`); and a calibration can't start while a switch, rebuild or boot-file change is in flight |
+
+The server takes a started calibration's state from Lights' own answer at once (the probe's copy is up to a minute old), so the lock holds from the first second of the run, on the server and in `/api/status`.
+
+**Forms** (Rules, Target, panel brightness): the unit sits beside every box ("240 s"); a value outside the range says so under its box ("Must be 60 to 1800 s") with `aria-invalid`, and Apply stays disabled; Apply is enabled only when something changed and everything is valid, and says how many ("Apply 2 changes"); the inputs lock while applying; a failure keeps what was typed; a confirmed change clears the draft. Another phone's change arriving while you edit never overwrites what you typed: the box keeps your draft and shows "now N on bitcube" under it.
+
+**Requests never hang the page**: every fetch (status, calibration progress, the LED map, stills, frames) has a time limit; a page that couldn't read something asks again on its own (the next good answer, or every 30 s) and says "hasn't loaded yet", never "there is none".
+
 ## Page specs
 
 ### Status
