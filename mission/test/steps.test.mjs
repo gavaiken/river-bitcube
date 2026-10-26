@@ -77,11 +77,63 @@ test('plainWords: the copy rules applied to free text', () => {
 });
 
 test('code review: slash words are not paths, a repo step is not acting, and "ssh into" reads the same in any case', () => {
-  assert.match(describeTool({ name: 'Bash', input: { description: 'Turn ropes on/off to test box 2', command: 'x' } }).text, /on\/off/);
+  assert.equal(describeTool({ name: 'Bash', input: { description: 'Turn ropes on/off to test box 2', command: 'x' } }).text, 'turned ropes on and off to test box 2');   // the page rewords any "/" (round 6 #20)
   assert.equal(describeTool({ name: 'Bash', input: { description: 'Save the session notes', command: 'x' } }).acting, false);
   assert.equal(describeTool({ name: 'Bash', input: { description: 'Set up a scratch folder', command: 'x' } }).acting, false);
   assert.equal(describeTool({ name: 'Bash', input: { description: 'Set the ropes dark', command: 'x' } }).acting, true);
   const a = describeTool({ name: 'Bash', input: { description: 'ssh into bitcube and check the ropes', command: 'ssh bitcube x' } }).text;
   const b = describeTool({ name: 'Bash', input: { description: 'SSH into bitcube and check the ropes', command: 'ssh bitcube x' } }).text;
   assert.equal(a, b);
+});
+
+test('round 6 #36: a login in a description, a search or a helper\'s task never reaches the step line (scrubbed before the words are made)', () => {
+  const PW = 'NOT-A-REAL-PW';
+  const cases = [
+    ['Bash', { description: `Log in to https://admin:${PW}@192.168.9.76/cgi-bin/api.cgi`, command: 'python tools/cameras/ptz.py gallery presets' }],
+    ['Bash', { description: `Fetch the snapshot from the camera (https://admin:${PW}@192.168.9.76/cgi-bin/api.cgi?cmd=Snap)`, command: 'curl -sk x' }],
+    ['WebSearch', { query: `reolink login fails https://admin:${PW}@cam` }],
+    ['Agent', { description: `Check https://admin:${PW}@192.168.9.76 answers` }],
+    ['Bash', { description: `Grab a frame from rtsp://admin:${PW}@192.168.9.76:554/Preview_01_sub`, command: 'x' }],
+    ['WebFetch', { url: `http://admin:${PW}@192.168.9.76/` }],
+  ];
+  for (const [name, input] of cases) {
+    const s = describeTool({ name, input });
+    assert.doesNotMatch(JSON.stringify(s), /NOT-A-REAL-PW|admin:/, `${name} ${JSON.stringify(input)}`);
+    assert.doesNotMatch(s.text, /htt?pa? ?file|a file:/, `a URL is never cut into a "file": ${s.text}`);
+  }
+  assert.equal(describeTool({ name: 'Bash', input: { description: 'Log in to https://admin:x@192.168.9.76/cgi-bin/api.cgi', command: 'x' } }).text, 'log in to a web page');
+  assert.equal(plainWords('See https://example.org/docs/page for it'), 'See a web page for it');
+});
+
+test('round 6 #20: a step that changes the installation never reads only "worked on it": the page shows every line as it was sent', async () => {
+  const { stepWords } = await import('../public/chat-words.js');
+  const shown = (s) => { const p = stepWords(s); assert.equal(p.text, s.text, `the page reworded "${s.text}"`); assert.equal(p.act, s.acting, s.text); return s; };
+  const cases = [
+    ['Set ropes Source=black on bitcube', 'set the ropes dark on bitcube', true],
+    ['Stop RopeLights scheduled task', "stopped Will's rope lights scheduled task", true],
+    ['Check modal_link status', 'checked Clips to Dave', false],
+    ['Restart TD on the seasons file', "restarted TouchDesigner on the river's year", true],
+    ['Pan the gallery camera left 0.2 s', 'panned the gallery camera left 0.2 s', true],
+    ['Tilt the gallery camera up 0.05 s', 'tilted the gallery camera up 0.05 s', true],
+    ['Set Active=True on /project1/ropes', 'changed the ropes', true],
+    ['Disable the Rope_Lights task on bitcube', 'switched off something on bitcube', true],
+  ];
+  for (const [desc, want, acting] of cases) {
+    const s = shown(bash(desc));
+    assert.deepEqual([s.text, s.acting], [want, acting], desc);
+  }
+  // a command that changes the installation is acting whatever its description, and says what it changed
+  const raw = shown(describeTool({ name: 'Bash', input: { description: 'ssh bitcube "probe.ps1 -Action ropes -Dark"', command: 'ssh bitcube powershell -File C:\\x\\probe.ps1 -Action ropes -Dark' } }));
+  assert.deepEqual([raw.text, raw.acting], ['changed the ropes', true]);
+  const kill = shown(describeTool({ name: 'Bash', input: { description: 'Check something', command: 'ssh bitcube "Stop-Process -Name TouchDesigner"' } }));
+  assert.equal(kill.acting, true);
+  // a change asked of mission control (the agent's one way, bin/mc.mjs) reads in the history's words
+  const mc = (cmd) => shown(describeTool({ name: 'Bash', input: { description: 'Turn the ropes dark through mission control', command: cmd } }));
+  assert.deepEqual(Object.values(mc(`node mission/bin/mc.mjs ropes '{"dark":true}'`)), ['asked mission control to turn the ropes dark', `node mission/bin/mc.mjs ropes '{"dark":true}'`, true]);
+  assert.equal(mc(`node mission/bin/mc.mjs switch '{"file":"river-local-oct-22-seasons.toe"}'`).text, "asked mission control to switch TouchDesigner to the river's year");
+  assert.equal(mc('node mission/bin/mc.mjs calibrate \'{"action":"start","dry_run":true}\'').text, 'asked mission control to start a dry-run calibration');
+  assert.deepEqual([mc('node mission/bin/mc.mjs status').text, mc('node mission/bin/mc.mjs status').acting], ['looked at what mission control shows', false]);
+  assert.equal(mc('node mission/bin/mc.mjs check').acting, false);
+  // the earlier lines too: none is reworded by the page
+  for (const d of ['Check TD fps and errors via the bridge', 'Take a VNC screenshot of bitcube', 'Restart TouchDesigner on river-local-oct-22-seasons.toe', 'Check the Modal agent status JSON']) shown(bash(d));
 });

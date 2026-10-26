@@ -390,8 +390,8 @@ function calibrationWords(ev) {
   return `${what} is not running`;
 }
 
-/** [past, infinitive, what] for an action, from its body. */
-function actionPhrase(ev) {
+/** [past, infinitive, what] for an action, from its body (also lib/steps.mjs: a change the agent asks mission control for). */
+export function actionPhrase(ev) {
   const b = obj(ev.body) ?? {};
   const pct = num(Number(b.brightness)) != null ? `${Math.round(Number(b.brightness) * 100)} %` : 'a new level';
   switch (ev.action) {
