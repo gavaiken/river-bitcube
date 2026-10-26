@@ -6,17 +6,17 @@
 // limit, and what couldn't be read is asked for again by itself. Plain ES module, no build step, no framework.
 import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark, plainError, DOC_LINKS, splitHeadline, announce, goto,
   WARN_MS, LOST_MS, POLL_TIMEOUT_MS } from '/ui.js';
-import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS } from '/model.js';
+import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, EXPECT_S } from '/model.js';
 import { uprightsFromAtlas } from '/screens.js';
 import { calChecklist, ROOM_CHECK, startWhy, dryWhy, calView, rebuiltFor, runNote, nextLine, captureWhen, driftWords, resultWords,
-  mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT, calRead, calLeft, changeSince, stateLevel, applyingNow, stateLive } from '/lights-words.js';
+  mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT, calRead, calLeft, changeSince, stateLevel, applyingNow, stateLive, CAL_COPY, runFine,
+  resultHead, CAL_CTL } from '/lights-words.js';
 
 const N_ROPES = 20, LEDS = 400;
 const LIGHTS_MS = 10_000, CAL_MS = 5_000, STILL_MS = 30_000, FRAME_OLD_S = 30, PROBE_OLD_S = 120;
 const MAP_RETRY_MS = 30_000, MAP_RETRY_MIN_MS = 10_000;   // the LED map, until it loads: on a good status answer (10 s apart), else every 30 s
 const INSTALL_DAY = '20261022';           // the lift at Gray Area: a map captured before this day was made elsewhere (Agape)
 const OLD_RUN_S = 15 * 60;                // a run that ended this long before the page opened is not shown as a result
-const REBUILD_S = 150;                    // lib/applying.mjs EXPECT_S.rebuild: build, save, then the switch
 // one set of stage words with the Status band (model.js CAL_STAGE_WORDS)
 const STAGE_WORDS = { ...Object.fromEntries(Object.entries(CAL_STAGE_WORDS).map(([k, v]) => [k, v[0].toUpperCase() + v.slice(1)])), done: 'Done' };
 const STAGE_ORDER = ['ropes-capture', 'ropes-decode', 'hub75-capture', 'hub75-locate', 'done'];
@@ -780,17 +780,17 @@ function calHtml({ view, dry, lost }, p) {
         <p class="cal-note" id="cal-note" hidden></p>
       </div>
       <div class="cal-ctls"><div class="ctl" id="cal-stop"></div></div>
-      <p class="cal-fine">Started ${esc(fmt.clock(p.started * 1000))}${p.cam ? ` · the ${esc(p.cam)} camera` : ''}. ${dry ? 'The lights stay as they are.' : 'The ropes come back to the river by themselves when it ends.'}</p>`;
+      <p class="cal-fine">${esc(runFine({ started: fmt.clock(p.started * 1000), cam: p.cam, dry }))}</p>`;
     case 'stopped': {
       const forced = p.restored === false && !dry;
       return `<div class="cal-result lv-unknown"><div class="h" id="cal-head" tabindex="-1">${mark('unknown')}<span>${dry ? 'Dry run stopped' : 'Stopped'}</span></div>
-        <p class="r-words">${dry ? 'Dry run stopped; nothing changed.' : forced ? 'Stopped, but it had to be forced: the ropes may still show a pattern. Press Ropes → On on the Status page. No map was written.' : 'Stopped; the ropes are back on the river. No map was written.'}</p>
+        <p class="r-words">${dry ? 'Dry run stopped; nothing changed.' : forced ? 'Stopped, but it had to be forced: the ropes may still show a pattern. Press Ropes → On on the Status page. No map was written.' : CAL_COPY.stopped}</p>
         <div class="cal-dismiss"><button type="button" class="btn" data-cal="dismiss">OK</button>${forced ? '<a class="btn" href="/status">Open Status</a>' : ''}</div></div>`;
     }
     case 'failed': {
       const err = calFailure(p);
       return `<div class="cal-result lv-down"><div class="h" id="cal-head" tabindex="-1">${mark('down')}<span>Calibration failed</span></div>
-        <p class="r-words">${esc(err.replace(/\.?$/, '.'))}${p.restored === false ? ' The ropes may still show a pattern: press Ropes → On on the Status page.' : /back on the river|the map was not saved/i.test(err) ? '' : ' The ropes are back on the river; no map was written.'}</p>
+        <p class="r-words">${esc(err.replace(/\.?$/, '.'))}${p.restored === false ? ' The ropes may still show a pattern: press Ropes → On on the Status page.' : /back on the river|back to what they showed|the map was not saved/i.test(err) ? '' : ` ${CAL_COPY.restored}`}</p>
         <div class="cal-dismiss"><button type="button" class="btn" data-cal="dismiss">OK</button><button type="button" class="btn primary" data-cal="again">Back to Calibrate</button></div></div>`;
     }
     case 'inuse': {
@@ -800,7 +800,7 @@ function calHtml({ view, dry, lost }, p) {
         <p class="r-words">The river's year now uses this map (rebuilt ${esc(fmt.clock(at))}).${res ? ` <span class="muted">${esc(fmt.nb(resultWords(res, seenOnPage(res))))}</span>` : ''}</p>
         <div class="cal-dismiss"><button type="button" class="btn" data-cal="dismiss">OK</button></div></div>`;
     }
-    case 'done': return `<div class="cal-result lv-ok"><div class="h" id="cal-head" tabindex="-1">${mark('ok')}<span>${dry ? 'Dry run finished' : 'Map made'}</span></div>
+    case 'done': return `<div class="cal-result lv-ok"><div class="h" id="cal-head" tabindex="-1">${mark('ok')}<span>${resultHead(dry)}</span></div>
       <p class="r-words">${res ? esc(fmt.nb(resultWords(res, seenOnPage(res)))) : 'The run finished.'}${dry ? ' <span class="muted">A dry run describes the newest existing map; the lights were not changed and nothing was written.</span>' : " The river's year still uses the old map until it is rebuilt."}</p>
       ${dry ? '<div class="cal-dismiss"><button type="button" class="btn" data-cal="dismiss">OK</button></div>'
         : '<div class="cal-ctls"><div class="ctl" id="cal-rebuild"></div></div><div class="cal-dismiss"><button type="button" class="btn" data-cal="dismiss">Keep the old map</button></div>'}</div>`;
@@ -910,11 +910,11 @@ function mountStart(m) {
   const start = control($('#cal-start'), { label: 'Calibrate the lights', kind: 'primary', why: startWhy(m), siblings: pair,
     before: 'Starts the real run: patterns on the ropes for about five minutes, then a new LED map to look at before anything changes. Asks first.',
     confirm: { title: 'Start calibration?', body: "The ropes go into patterns now, for about five minutes, and the show stops meanwhile. Keep people out of the camera's view.", ok: 'Start', cancel: 'Not now', destructive: true },
-    pending: 'Asking bitcube to start…', run: () => startRun(false), done: 'Calibration started', fail: "Calibration didn't start",
+    ...CAL_CTL.start, expectS: EXPECT_S.calibrate, run: () => startRun(false), done: 'Calibration started', fail: "Calibration didn't start",
     noAnswer: 'this block shows the run if it started', onDone: afterStart, onFail: () => pollCal() });
   const dry = control($('#cal-dry'), { label: 'Dry run: the lights stay as they are', kind: 'plain', why: dryWhy(m), siblings: pair,
     before: 'Walks the same steps without touching the lights or the camera, about a minute: a check that bitcube can run one.',
-    pending: 'Asking bitcube to start…', run: () => startRun(true), done: 'Dry run started', fail: "The dry run didn't start",
+    ...CAL_CTL.dry, expectS: EXPECT_S.calibrate, run: () => startRun(true), done: 'Dry run started', fail: "The dry run didn't start",
     noAnswer: 'this block shows the run if it started', onDone: afterStart, onFail: () => pollCal() });
   pair.push(start.button, dry.button);
   start._why = startWhy(m); dry._why = dryWhy(m);
@@ -924,14 +924,14 @@ function mountStart(m) {
  *  gets through on the server too. A dry run touches no lights. */
 function mountStop(dry) {
   return control($('#cal-stop'), { label: dry ? 'Stop the dry run' : 'Stop and restore the ropes', kind: 'danger',
-    before: dry ? 'Ends the check now; the lights were not touched.' : 'Ends the run now; the ropes go back to the river within a few seconds. No map is written.',
-    pending: 'Asking bitcube to stop…', run: () => api('/api/control/calibrate', { action: 'cancel' }), fail: "It didn't stop",
+    before: dry ? 'Ends the check now; the lights were not touched.' : CAL_COPY.stopBefore,
+    ...(dry ? CAL_CTL.stopDry : CAL_CTL.stop), run: () => api('/api/control/calibrate', { action: 'cancel' }), fail: "It didn't stop",
     noAnswer: 'the progress above shows whether it is still running',
     done: (r) => (r?.forced && !dry ? 'Stopped, but it had to be forced' : r?.cancelled === false ? 'Nothing was running' : 'Stopped'),
     onDone: (r) => { if (r?.calibration) { S.cal.p = r.calibration; S.cal.heardAt = performance.now(); S.cal.heardWall = Date.now(); if (r.forced) S.cal.p.restored = false; } watchCalibration(); renderCalibrate(); pollCal(); status.refresh(); },
     onFail: () => pollCal() });
 }
-/** Use this map: rebuild the river's year. Long (about REBUILD_S), blocked by the model's rebuild reason (a calibration, another
+/** Use this map: rebuild the river's year. Long (EXPECT_S.rebuild), blocked by the model's rebuild reason (a calibration, another
  *  change being applied anywhere, the river's year not running…), and confirmed only when mission control's last rebuild
  *  names this run's map, later than the run (GET /api/calibration rebuilt): then the card says "Map in use" on every phone. */
 function mountRebuild(p) {
@@ -939,7 +939,7 @@ function mountRebuild(p) {
   const c = control($('#cal-rebuild'), { label: "Use this map: rebuild the river's year", kind: 'primary', why: S.m ? S.m.controls.rebuild.why : NO_CONTACT, siblings: keep,
     before: `Bakes the new LED map (${esc(captureWhen(p.result?.capture, p.result?.map).words)}) into the river's year and restarts TouchDesigner on it: about a minute dark. Asks first.`,
     confirm: { title: "Rebuild the river's year with this map?", body: "Bakes the new LED map into the river's year and restarts TouchDesigner on it: about a minute dark.", ok: 'Rebuild', cancel: 'Not now', destructive: true },
-    pending: "Rebuilding the river's year with the new map…", expectS: REBUILD_S, run: () => api('/api/control/rebuild', { file: YEAR_FILE }),
+    ...CAL_CTL.rebuild, expectS: EXPECT_S.rebuild, run: () => api('/api/control/rebuild', { file: YEAR_FILE }),
     confirmed: (model) => rebuiltFor(p, model?.rebuilt) != null,
     done: "The river's year uses the new map", fail: "The river's year is unchanged",
     noAnswer: 'this card says "Map in use" if it did',

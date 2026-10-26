@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { derive } from '../public/model.js';
 import { calChecklist, startWhy, dryWhy, calView, lostWhy, rebuiltFor, runNote, nextLine, driftWords, resultWords, captureWhen,
-  mapMissing, placeLabels, ROOM_CHECK, CAL_QUIET_S, calRead, calLeft, untimed, stateLive, changeSince, stateLevel, applyingNow } from '../public/lights-words.js';
+  mapMissing, placeLabels, ROOM_CHECK, CAL_QUIET_S, calRead, untimed, stateLive, calLeft, changeSince, stateLevel, applyingNow, CAL_COPY,
+  runFine, resultHead, CAL_CTL } from '../public/lights-words.js';
 
 const load = (name) => JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8'));
 const model = (name, edit = (s) => s, later = 2000) => { const f = load(name); const s = edit({ ...f.status, now: f._scenario.now }); return derive(s, s.now + later); };
@@ -274,4 +275,27 @@ test('R6 #3: while a change that alters the lights is in flight, a reading from 
   assert.deepEqual(applyingNow(m, ['switch']), []);
   const short = applyingNow(model('all-good', sw(1000, 'ropes', 'a ropes change', 15)));
   assert.match(short[0].line, /^Applying: a ropes change(…| · 0:0\d · usually a few seconds)$/);
+});
+
+test('R6 #22, #24: Calibrate says the ropes go back to what they showed before, never "back to the river"; no fragments', () => {
+  const all = [CAL_COPY.stopBefore, CAL_COPY.stopped, CAL_COPY.restored, runFine({ started: '21:14', cam: 'gallery', dry: false })];
+  for (const t of all) { assert.doesNotMatch(t, /back (to|on) the river/, t); assert.match(t, /what they showed before/, t); }
+  assert.equal(runFine({ started: '21:14', cam: 'gallery', dry: false }),
+    'Started 21:14, using the gallery camera. When it ends, the ropes go back to what they showed before, by themselves.');
+  assert.equal(runFine({ started: '21:14', cam: null, dry: false }), 'Started 21:14. When it ends, the ropes go back to what they showed before, by themselves.');
+  // a dry run touches no lights and no camera
+  assert.equal(runFine({ started: '21:14', cam: 'gallery', dry: true }), 'Started 21:14. The lights stay as they are.');
+  // the result's heading isn't the first words of its own line ("Map made" over "Map made 23 Oct …")
+  assert.equal(resultHead(false), 'New LED map');
+  assert.doesNotMatch(resultWords(DONE.result), new RegExp(`^${resultHead(false)}`));
+  assert.equal(resultHead(true), 'Dry run finished');
+});
+
+test('R6: Lights\' controls take ui.js\'s words for applying ("Applying: <what>…"), never their own', () => {
+  for (const [k, c] of Object.entries(CAL_CTL)) {
+    assert.equal(c.pending, undefined, k);
+    assert.match(c.what, /^(the|a) [a-z]/, k);
+  }
+  assert.equal(CAL_CTL.start.what, 'the start of a calibration');   // lib/applying.mjs's label: one name on every phone
+  assert.equal(CAL_CTL.rebuild.what, "a rebuild of the river's year");
 });

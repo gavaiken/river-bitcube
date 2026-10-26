@@ -172,6 +172,31 @@ export function stateLive({ words, lost = false, stale = false, applying = [] })
   return [head, ...(lost ? [] : applying.map((a) => a.said ?? `Applying: ${a.label}.`))].join(' ');
 }
 
+// ---- the Calibrate block's own words ------------------------------------------------------------------------------
+/** calibrate.py puts back what capture.py found (Active, Source, Brightness): the ropes return to what they showed before the
+ *  run, which is dark when they were dark on purpose, never always "the river" (R6 #22). */
+export const CAL_COPY = {
+  stopBefore: 'Ends the run now; the ropes go back to what they showed before within a few seconds. No map is written.',
+  stopped: 'Stopped; the ropes are back to what they showed before. No map was written.',
+  restored: 'The ropes are back to what they showed before; no map was written.',
+};
+/** The run's fine print: "Started 21:14, using the gallery camera. When it ends, …" (a dry run touches no camera). */
+export function runFine({ started, cam, dry }) {
+  return dry ? `Started ${started}. The lights stay as they are.`
+    : `Started ${started}${cam ? `, using the ${cam} camera` : ''}. When it ends, the ropes go back to what they showed before, by themselves.`;
+}
+/** A finished run's heading: not "Map made" over a line that starts "Map made 23 Oct …" (R6 #24). */
+export const resultHead = (dry) => (dry ? 'Dry run finished' : 'New LED map');
+/** What each Calibrate control is applying, for ui.js control()'s own "Applying: <what>…" line and announcement: the same
+ *  words as every other control (and a calibration's start as lib/applying.mjs labels it for the other phones). */
+export const CAL_CTL = {
+  start: { what: 'the start of a calibration' },
+  dry: { what: 'the start of a dry run' },
+  stop: { what: 'the stop of the calibration' },
+  stopDry: { what: 'the stop of the dry run' },
+  rebuild: { what: "a rebuild of the river's year" },
+};
+
 // ---- the state line's next line --------------------------------------------------------------------------------
 /** Under the state line when the verdict isn't OK: the band's headline cause and where to act ({ text, href, link }), or null.
  *  The cause is left out when the line above already says it ("bitcube is offline" once, not twice). During a calibration
