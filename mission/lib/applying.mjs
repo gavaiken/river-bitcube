@@ -36,7 +36,7 @@
 //                                              the one that sent it) sees the server's verdict, and another phone can say how a
 //                                              change it watched ended (R8 #9)
 // Only the actions in BLOCKS are recorded or checked (a calibration only for its start: Stop must always get through).
-import { TZ, EXPECT_S, APPLY_BLOCKS as BLOCKS, confirmLimitS, changeLabel, FILES, dryStart, waitWords, MAYBE_HOLDS } from '../public/model.js';
+import { TZ, EXPECT_S, APPLY_BLOCKS as BLOCKS, confirmLimitS, changeLabel, FILES, dryStart, waitWords, MAYBE_HOLDS, AWAITED } from '../public/model.js';
 
 /** What an action in flight blocks (mission-ui.md "What blocks what"): one table for the server and the pages, model.js
  *  APPLY_BLOCKS. A boot-file change also keeps a calibration from starting, so the pages grey Calibrate exactly when the server
@@ -47,8 +47,9 @@ export { BLOCKS };
  *  waits 10 s and opens the file (about 40 s). A rebuild: the build and the save, then the switch. A calibration's entry is
  *  only its start (the run reports its own progress). */
 export { EXPECT_S };   // one table for the server and the pages: public/model.js
-/** Changes whose answer comes before they are real: TouchDesigner is still opening the file when a switch or a rebuild answers. */
-export const CONFIRMED_BY_READING = ['switch', 'rebuild', 'bootfile', 'lightsroute'];
+/** Changes whose answer comes before they are real: TouchDesigner is still opening the file when a switch or a rebuild answers.
+ *  model.js AWAITED's 'reading' ones (a calibration's start is confirmed by its run's progress: release()). */
+export const CONFIRMED_BY_READING = Object.keys(AWAITED).filter((k) => AWAITED[k] === 'reading');
 /** A maybe (bitcube didn't answer in time) keeps its lock only for a change that could still be under way on bitcube and must not
  *  be run twice; a quick one (ropes, panels, the year's controls) is no lock: the next reading says what happened. */
 export { MAYBE_HOLDS };   // one table for the server and the pages: public/model.js

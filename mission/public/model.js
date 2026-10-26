@@ -64,6 +64,15 @@ export const APPLY_BLOCKS = {
   ropes: ['ropes'], hub75: ['hub75'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
   calibrate: ['ropes', 'hub75', 'switch', 'lightsroute', 'rebuild', 'calibrate'],   // a calibration's start: what a running one blocks, and a second start
 };
+/** The changes that wait for the server's verdict before they are done, and what shows each on bitcube: a full check's reading
+ *  (TouchDesigner answering on its file, the boot file, the lighting port: R8 #31, #32) or the run's own progress (a calibration,
+ *  recorded only for its start). One table for the server and the pages (CR8 #12): a maybe keeps its lock for these (MAYBE_HOLDS),
+ *  a reading confirms the 'reading' ones (lib/applying.mjs CONFIRMED_BY_READING), Recent says they were asked for until their
+ *  verdict (lib/history.mjs awaitsVerdict), Last done never calls one done without it (status-words.js lastDoneParts), another
+ *  phone hears how one ended (endedSaid), and the history keeps their verdicts for 12 h whatever came after (verdicts, CR8 #1). */
+export const AWAITED = Object.freeze({ switch: 'reading', rebuild: 'reading', bootfile: 'reading', lightsroute: 'reading', calibrate: 'progress' });
+/** Whether a change (its action and checked body) waits for the server's verdict: one in AWAITED, a calibration only for its start. */
+export const awaited = (action, body) => typeof action === 'string' && Object.hasOwn(AWAITED, action) && (action !== 'calibrate' || body?.action === 'start');
 /** A calibration start that touches no lights, camera or TouchDesigner: a dry run, or a decode of earlier photos (calibrate.py
  *  --dry-run, --decode-only; CR7 #6). Its entry locks only a second start, and it waits only for one (CR7 #7). */
 export const dryStart = (action, body) => action === 'calibrate' && !!body && typeof body === 'object' && body.action === 'start'
@@ -1034,7 +1043,7 @@ export function entrySaid(a) {
 export const ENDED_SAID_S = 30;
 /** A change ended confirmed or expired that waited for the server's verdict (a switch, a rebuild, a boot-file change, a lighting
  *  port change, a calibration's start, or one bitcube didn't answer in time): the ones a band showed as applying. */
-const endedAwaited = (e) => e.maybe || ['switch', 'rebuild', 'bootfile', 'lightsroute', 'calibrate'].includes(e.action);
+const endedAwaited = (e) => e.maybe || Object.hasOwn(AWAITED, e.action);   // an entry is a calibration's start (AWAITED)
 /** How another phone's (or the studio chat's) change ended, for a live region, for ENDED_SAID_S after it did: "Done: the change of
  *  the boot file to the live river, from the studio chat." or "The change of the boot file to the live river: bitcube didn't show
  *  it in time."
@@ -1135,7 +1144,7 @@ export function serverJudged(m, id, sent = null) {
 }
 /** A change bitcube didn't answer in time keeps its lock (on the server and every page) only when it could still be under way on
  *  bitcube and must not be run twice (lib/applying.mjs reads this table). */
-export const MAYBE_HOLDS = ['switch', 'rebuild', 'bootfile', 'lightsroute', 'calibrate'];
+export const MAYBE_HOLDS = Object.keys(AWAITED);
 /** This page's own change that bitcube didn't answer in time while its lock holds (R8 #18), said once on its control in place of a
  *  "Wait: …" line about itself: "The switch to the live river got no answer from bitcube in time: it may or may not have happened;
  *  the buttons unlock when bitcube shows it, or by 21:07." */

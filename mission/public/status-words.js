@@ -3,7 +3,7 @@
 // file: probe.ps1 writes boot-file.txt for a switch), the tiles' state words, the band's line for a change in flight from
 // another phone, and when the room's still is due again. status.js lays them out. Relative imports: in the browser these are
 // the same /model.js and /app.js every page loads.
-import { seasonPace, FILES, applyingWords, confirmingWords, entryWords, failWords, notSentWords, LONG_CHANGE_S, changeLabel } from './model.js';
+import { seasonPace, FILES, applyingWords, confirmingWords, entryWords, failWords, notSentWords, LONG_CHANGE_S, changeLabel, awaited } from './model.js';
 import { plainError } from './app.js';
 
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s ?? '');
@@ -141,9 +141,9 @@ export function lastDoneWhat(a) {
 }
 /** Where a change came from, as every line says it: "from mission control", "from the studio chat" (R7 #19). */
 export const fromWords = (source) => (source === 'studio chat' ? 'from the studio chat' : 'from mission control');
-/** A change that is real only once the server confirms it from bitcube's reading: a switch, a rebuild, a boot-file change, a
- *  calibration's start (a dry run's too). */
-const SERVER_CONFIRMS = (a) => ['switch', 'rebuild', 'bootfile'].includes(a?.action) || (a?.action === 'calibrate' && a?.body?.action === 'start');
+/** A change that is real only once the server confirms it from bitcube's reading: a switch, a rebuild, a boot-file or lighting
+ *  port change, a calibration's start (a dry run's too): model.js AWAITED, one table (CR8 #12). */
+const SERVER_CONFIRMS = (a) => awaited(a?.action, a?.body);
 /** The band's "Last done" line's head and tail for the last action (status.last_action) and the status it came with: "Last sent"
  *  and "waiting for bitcube to show it" while the server is still confirming its entry (status.applying, by applying_id), "didn't
  *  show it in time" when it gave up (status.expired, or the verdict the history kept: last_action.verdict), "Last done" once

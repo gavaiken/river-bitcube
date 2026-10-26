@@ -65,7 +65,7 @@
 //   nothing here ever throws: history never stops the show.
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { derive, FILES, intensityWord } from '../public/model.js';
+import { derive, FILES, intensityWord, awaited } from '../public/model.js';
 import { scrubCreds } from './scrub.mjs';
 import { REQUEST_ID } from './applying.mjs';
 
@@ -101,7 +101,7 @@ const sourceOf = (s) => (/studio|chat|agent/i.test(String(s ?? '')) ? 'studio ch
  *  Until the verdict, Recent says it was asked for, never that it happened (R8 #19, #28). */
 export function awaitsVerdict(ev) {
   return !!ev && ev.kind === 'action' && typeof ev.applying_id === 'string' && (ev.ok !== false || ev.maybe === true)
-    && (ev.maybe === true || ['switch', 'rebuild', 'bootfile', 'lightsroute'].includes(ev.action) || (ev.action === 'calibrate' && obj(ev.body)?.action === 'start'));
+    && (ev.maybe === true || awaited(ev.action, obj(ev.body)));     // model.js AWAITED: one table (CR8 #12)
 }
 const warn = (what, e) => console.warn(`history: ${what}: ${e?.message ?? e}`);
 
