@@ -274,10 +274,21 @@ export class History {
     const from = num(sinceT) ?? this.now() - this.keepMs;
     const ks = kinds == null ? null : new Set([].concat(kinds));
     const out = [], now = this.now();
+    // the feed (every kind: Recent): a change that waited for the server's verdict keeps "Asked to …" at its time, and the verdict is
+    // its own line at its own time, so the list never says it was done before it began (R9 #20); asked for by kind, as before
+    const split = ks == null;
+    const asked = split ? new Map(this.events.filter((e) => e.kind === 'action' && typeof e.applying_id === 'string').map((e) => [e.applying_id, e])) : null;
     for (let i = this.events.length - 1; i >= 0; i--) {
       const e = this.events[i];
-      if (!(e.t > from && (ks ? ks.has(e.kind) : e.kind !== 'verdict'))) continue;
-      out.push(this.#judged(e, now));
+      if (!(e.t > from)) continue;
+      if (split && e.kind === 'verdict') {
+        const a = asked.get(e.applying_id);
+        if (a && awaitsVerdict(a)) out.push({ kind: 'verdict', t: e.t, applying_id: e.applying_id, verdict: e.verdict, action: a.action, source: a.source,
+                                              label: typeof a.label === 'string' && a.label ? a.label : changeLabel(a.action, obj(a.body) ?? {}) });
+        continue;
+      }
+      if (!(ks ? ks.has(e.kind) : e.kind !== 'verdict')) continue;
+      out.push(this.#judged(e, now, split));
     }
     return out.sort((a, b) => b.t - a.t).slice(0, Math.max(0, num(limit) ?? 50));
   }
@@ -286,10 +297,11 @@ export class History {
    *  true only while one can still come (CR8 #7): it was sent since this server started (still awaiting: a restart forgets what
    *  was being applied, #load), and it is within its confirm limit from its answer (model.js confirmLimitS, as lib/applying.mjs
    *  counts it) and VERDICT_GRACE_MS. One that never got a verdict is "Sent …", never "Asked to …" forever. Anything else as is. */
-  #judged(e, now) {
+  #judged(e, now, split = false) {
     if (!e || e.kind !== 'action' || typeof e.applying_id !== 'string') return e;
     const v = this.verdictOf.get(e.applying_id);
-    if (v) return { ...e, verdict: v.verdict };
+    // split: its verdict is a line of its own in the feed, so this one says only that it was asked for (R9 #20)
+    if (v) return { ...e, verdict: v.verdict, ...(split && awaitsVerdict(e) ? { split: true } : {}) };
     const pending = awaitsVerdict(e) && this.awaiting.has(e.applying_id) && now - e.t <= confirmLimitS(EXPECT_S[e.action]) * 1000 + VERDICT_GRACE_MS;
     return pending ? { ...e, pending: true } : e;
   }
@@ -493,6 +505,7 @@ const SAID = [
 const STILL = [
   [/^Dark on purpose\b/, 'are still dark on purpose'], [/^At 0 %/, 'are still at 0 %'], [/^Panel sender present, but the panel output is off/, 'are still switched off in the show file'],
 ];
+const STAGE_STEP = { 'ropes-capture': 1, 'ropes-decode': 2, 'hub75-capture': 3, 'hub75-locate': 4 };
 const STAGE = { 'ropes-capture': 'photographing the ropes', 'ropes-decode': 'working out where each rope is', 'hub75-capture': 'photographing the panels', 'hub75-locate': 'finding the panels', done: 'done' };
 const MODE_WHY = { automatic: 'the clock turns the year by itself', dynamic: 'the people in the room steer the year', manual: 'someone is steering the year by hand' };
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s);
@@ -555,8 +568,11 @@ function calibrationWords(ev) {
   const what = ev.mode === 'dry-run' ? 'A dry run' : ev.mode === 'decode-only' ? 'A calibration from earlier photos' : 'The calibration';
   const stage = STAGE[ev.stage] ?? null;
   if (ev.stale) return `${what} stopped answering: its process is gone`;
-  if (ev.running && !ev.from?.running) return `${what} started${stage && stage !== 'done' ? `: ${stage}` : ''}`;
-  if (ev.running) return `${what} is ${stage ?? 'running'}`;
+  // a dry run touches no lights and no camera: its stages are steps, never "photographing the ropes" (R9 #19)
+  const dry = ev.mode === 'dry-run';
+  const step = STAGE_STEP[ev.stage];
+  if (ev.running && !ev.from?.running) return `${what} started${!dry && stage && stage !== 'done' ? `: ${stage}` : ''}`;
+  if (ev.running) return dry ? `${what} is ${step ? `at step ${step} of 4` : 'running'}` : `${what} is ${stage ?? 'running'}`;
   if (ev.cancelled) return `${what} was stopped`;
   if (ev.ok === false) return `${what} failed`;
   if (ev.from?.running || ev.stage === 'done') return `${what} finished`;
@@ -634,20 +650,27 @@ export function describeEvent(ev) {
       case 'item': line = itemWords(e); break;
       case 'show': line = showWords(e); break;
       case 'calibration': line = calibrationWords(e); break;
+      // the server's verdict on a change that waited for it, at its own time (the feed: R9 #20)
+      case 'verdict': line = typeof e.label === 'string' && e.label ? (e.verdict === 'confirmed' ? `bitcube showed ${e.label}` : `bitcube didn't show ${e.label} in time`) : 'Something happened'; break;
       case 'action': {
         const [past, inf, what] = actionPhrase(e), from = `from ${e.source === 'studio chat' ? 'the studio chat' : 'mission control'}`;
         // a change done only on the server's verdict (awaitsVerdict) is never said done from its answer alone: "Asked to …" while
         // the verdict can still come (pending), then done, or "… but bitcube didn't show it in time" (R8 #19, #28); one that never
         // got a verdict (from before a restart of the server, or past its limit) "Sent <its name> …": neither waiting nor done
         // (CR8 #7). recent() and summary() put the verdict, or pending, on it
-        const waits = awaitsVerdict(e);
-        line = e.maybe === true ? (e.verdict === 'confirmed' ? `${past} ${what} ${from}, though bitcube answered late`
-            : e.verdict === 'expired' ? `Tried to ${inf} ${what} ${from}: no answer in time, and bitcube didn't show it`
-            : `Tried to ${inf} ${what} ${from}: no answer in time, so it may or may not have happened`)
+        // one bitcube didn't answer in time is asked for too, in the contract's words, until its verdict; bitcube never answered it,
+        // a later reading showed it (R9 #21). split: the feed says the verdict as its own line (R9 #20)
+        const waits = awaitsVerdict(e), asked = `Asked to ${inf} ${what} ${from}`;
+        const name = typeof e.label === 'string' && e.label ? e.label : changeLabel(e.action, obj(e.body) ?? {});
+        line = e.maybe === true ? (e.split ? `${asked}: no answer in time`
+            : e.verdict === 'confirmed' ? `${past} ${what} ${from} (bitcube showed it, though it didn't answer in time)`
+            : e.verdict === 'expired' ? `${asked}: no answer in time, and bitcube didn't show it`
+            : e.pending === true ? `${asked}: no answer in time, waiting for bitcube to show whether it happened`
+            : `Sent ${name} ${from}: no answer in time, so it may or may not have happened`)
           : e.ok === false ? `Tried to ${inf} ${what} ${from}, but ${plainNote(e.note) ?? 'it failed'}`
-          : waits && e.verdict === 'expired' ? `Asked to ${inf} ${what} ${from}, but bitcube didn't show it in time`
-          : waits && e.verdict !== 'confirmed' ? (e.pending === true ? `Asked to ${inf} ${what} ${from}`
-            : `Sent ${typeof e.label === 'string' && e.label ? e.label : changeLabel(e.action, obj(e.body) ?? {})} ${from}`)
+          : waits && e.split ? asked
+          : waits && e.verdict === 'expired' ? `${asked}, but bitcube didn't show it in time`
+          : waits && e.verdict !== 'confirmed' ? (e.pending === true ? asked : `Sent ${name} ${from}`)
           : `${past} ${what} ${from}`;
         break;
       }

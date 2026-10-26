@@ -384,7 +384,7 @@ test('describeEvent: one plain sentence for every kind, in glossary words', () =
   evs = cal({ running: false, stage: 'done', mode: 'full', ok: true }, T0 + 6 * MIN);
   assert.equal(describeEvent(evs[0]), 'The calibration finished');
   evs = cal({ running: true, stage: 'ropes-capture', mode: 'dry-run', ok: null }, T0 + 7 * MIN);
-  assert.equal(describeEvent(evs[0]), 'A dry run started: photographing the ropes');
+  assert.equal(describeEvent(evs[0]), 'A dry run started', 'a dry run touches no camera (R9 #19)');
   evs = cal({ running: false, stage: 'ropes-capture', mode: 'dry-run', ok: false, cancelled: true }, T0 + 8 * MIN);
   assert.equal(describeEvent(evs[0]), 'A dry run was stopped');
   evs = cal({ running: false, stage: 'hub75-locate', mode: 'full', ok: false, error: 'Traceback (most recent call last): ssh exited 255' }, T0 + 9 * MIN);
@@ -613,5 +613,5 @@ test('round 6 #32: a change that got no answer in time reads as "may or may not 
   const h = new History({ now: () => T0 });
   const ev = h.action({ action: 'switch', body: { file: 'river-online-oct-23.toe' }, ok: false, maybe: true, note: 'bitcube took too long to answer' });
   assert.equal(ev.maybe, true);
-  assert.equal(describeEvent(ev), 'Tried to switch TouchDesigner to the live river from mission control: no answer in time, so it may or may not have happened');
+  assert.equal(describeEvent(ev), 'Sent the switch to the live river from mission control: no answer in time, so it may or may not have happened');   // no entry: no verdict can come (R9 #21)
 });

@@ -136,9 +136,9 @@ test('R8 #19, #28: Recent says a switch, rebuild, boot-file change or start was 
                               'ax.2': "Rebuilt the river's year with the new LED map from mission control", 'ax.3': 'Turned the ropes dark from mission control' });
   // a maybe the server later confirmed or gave up on
   h.action({ action: 'bootfile', body: { file: LIVE }, ok: false, maybe: true, source: 'mission control', applying_id: 'ax.4' });
-  assert.match(describeEvent(h.recent({ kinds: 'action', limit: 1 })[0]), /may or may not have happened$/);
+  assert.match(describeEvent(h.recent({ kinds: 'action', limit: 1 })[0]), /no answer in time, waiting for bitcube to show whether it happened$/);   // R9 #21
   h.observe({ ...payload({ t }), confirmed: [{ id: 'ax.4', action: 'bootfile', at: t }] });
-  assert.equal(describeEvent(h.recent({ kinds: 'action', limit: 1 })[0]), 'Set the boot file to the live river from mission control, though bitcube answered late');
+  assert.equal(describeEvent(h.recent({ kinds: 'action', limit: 1 })[0]), "Set the boot file to the live river from mission control (bitcube showed it, though it didn't answer in time)");
 });
 
 test('R8 #2, #30: over HTTP, a request id rides on the entry and its verdict; the socket\'s status names ids and verdicts', async (t) => {

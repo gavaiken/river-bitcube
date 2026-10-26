@@ -847,7 +847,7 @@ function calHtml({ view, dry, lost }, p) {
 }
 /** The view's first line, said once when it appears: "Map made: Map made 23 Oct …" reads badly, so the heading and the words. */
 function calLine(view, { dry }, p) {
-  if (view === 'run') { const st = CAL_STAGE_WORDS[p?.stage]; return dry ? (st ? `Dry run: ${st}; the lights stay as they are.` : 'Dry run started; the lights stay as they are.') : st ? `Calibrating: ${st}.` : 'Calibration started: the ropes go into patterns now.'; }
+  if (view === 'run') { const st = CAL_STAGE_WORDS[p?.stage]; return dry ? 'Dry run started; the lights stay as they are.' : st ? `Calibrating: ${st}.` : 'Calibration started: the ropes go into patterns now.'; }
   const head = Array.from($('#cal-head')?.querySelectorAll('span:not(.mk)') ?? []).map((x) => x.textContent).join(' ').trim();
   const rw = $('#cal-body .r-words')?.cloneNode(true);
   rw?.querySelectorAll('.muted').forEach((x) => x.remove());
@@ -897,10 +897,13 @@ function paintRun(p) {
   const again = p.retakes ? `${p.retakes} ${p.retakes === 1 ? 'pattern' : 'patterns'} photographed again` : '';
   const text = fmt.nb([line, again].filter(Boolean).join(' · '));
   const el = $('#cal-line'); if (el && el.textContent !== text) el.textContent = text;
-  const stages = STAGE_ORDER.map((s) => `<span class="${s === p.stage ? 'now' : STAGE_ORDER.indexOf(s) < STAGE_ORDER.indexOf(p.stage ?? 'ropes-capture') ? 'done' : ''}">${STAGE_WORDS[s]}</span>`).join('<span aria-hidden="true">→</span>');
+  // a dry run touches no lights and no camera: its stages are steps (R9 #19)
+  const dry = !!(p.dry_run || p.mode === 'dry-run');
+  const stages = STAGE_ORDER.map((s, i) => `<span class="${s === p.stage ? 'now' : STAGE_ORDER.indexOf(s) < STAGE_ORDER.indexOf(p.stage ?? 'ropes-capture') ? 'done' : ''}">${s !== 'done' && dry ? `Step ${i + 1}` : STAGE_WORDS[s]}</span>`).join('<span aria-hidden="true">→</span>');
   const st = $('#cal-stages'); if (st && S.html['cal-stages'] !== stages) { S.html['cal-stages'] = stages; st.innerHTML = stages; }
   const pct = Math.round(runFraction(p) * 100), prog = $('#cal-prog'), bar = $('#cal-bar');
-  const vt = `${pct} %, ${CAL_STAGE_WORDS[p.stage] ?? (p.stage === 'done' ? 'done' : 'starting')}`;
+  const step = STAGE_ORDER.indexOf(p.stage) + 1;
+  const vt = `${pct} %, ${dry && p.stage !== 'done' && step ? `step ${step} of 4` : CAL_STAGE_WORDS[p.stage] ?? (p.stage === 'done' ? 'done' : 'starting')}`;
   if (prog && prog.getAttribute('aria-valuetext') !== vt) { prog.setAttribute('aria-valuenow', String(pct)); prog.setAttribute('aria-valuetext', vt); bar.style.width = `${pct}%`; }
 }
 /** Why a run failed, in the team's words: calibrate.py's plain `reason` (from 24 Oct), else its error when that is already

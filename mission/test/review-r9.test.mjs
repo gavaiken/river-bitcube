@@ -310,3 +310,71 @@ test('R9 #4: a headline is never split at a clock time\'s colon', async () => {
   assert.deepEqual(splitHeadline('TouchDesigner is frozen: the lights are not being driven'), ['TouchDesigner is frozen', 'the lights are not being driven']);
   assert.deepEqual(splitHeadline('Clips failing since 01:02: the link is down'), ['Clips failing since 01:02', 'the link is down']);
 });
+
+// ---- #20, #21: Recent keeps "Asked to …" at its time and says the verdict as its own line; a maybe in the contract's words --------
+
+test('R9 #20: in Recent the verdict is its own line at its own time, after "Asked to …", never the request rewritten as done before it began', async () => {
+  const { History, describeEvent, feed } = await import('../lib/history.mjs');
+  let t = T0;
+  const h = new History({ file: null, now: () => t });
+  h.action({ action: 'switch', body: { file: YEAR }, ok: true, source: 'mission control', label: RESTART, applying_id: 'ax.1' });
+  h.action({ action: 'ropes', body: { dark: true }, ok: true, source: 'mission control', applying_id: 'ax.2' });
+  t += 30_000;
+  h.judge({ confirmed: [{ id: 'ax.1' }, { id: 'ax.2' }] }, t);
+  const lines = feed(h.recent()).map((e) => e.words);
+  assert.deepEqual(lines, ["bitcube showed the restart on the river's year", 'Turned the ropes dark from mission control', "Asked to restart TouchDesigner on the river's year from mission control"],
+    'newest first: the verdict above the request; a quick change\'s verdict is no line of its own');
+  t += 1000;
+  h.action({ action: 'bootfile', body: { file: LIVE }, ok: true, source: 'studio chat', label: 'the change of the boot file to the live river', applying_id: 'ax.3' });
+  t += 200_000;
+  h.judge({ expired: [{ id: 'ax.3' }] }, t);
+  assert.deepEqual(feed(h.recent({ limit: 2 })).map((e) => e.words), ["bitcube didn't show the change of the boot file to the live river in time", 'Asked to set the boot file to the live river from the studio chat']);
+  // the last action (Last done, the socket) keeps one line with its verdict in it
+  assert.equal(describeEvent(h.summary(t).last_action), "Asked to set the boot file to the live river from the studio chat, but bitcube didn't show it in time");
+  assert.equal(describeEvent(h.recent({ kinds: 'action', limit: 3 })[2]), "Restarted TouchDesigner on the river's year from mission control", 'asked for actions alone: folded, as before');
+});
+
+test('R9 #21: a change bitcube didn\'t answer in time reads "Asked to …" until its verdict, never "Tried to …" nor "answered late"', async () => {
+  const { History, describeEvent, feed } = await import('../lib/history.mjs');
+  let t = T0;
+  const h = new History({ file: null, now: () => t });
+  h.action({ action: 'switch', body: { file: LIVE }, ok: false, maybe: true, source: 'mission control', label: 'the switch to the live river', applying_id: 'ax.1' });
+  const one = () => describeEvent(h.recent({ kinds: 'action', limit: 1 })[0]);
+  assert.equal(one(), 'Asked to switch TouchDesigner to the live river from mission control: no answer in time, waiting for bitcube to show whether it happened');
+  t += 60_000;
+  h.judge({ confirmed: [{ id: 'ax.1' }] }, t);
+  assert.equal(one(), "Switched TouchDesigner to the live river from mission control (bitcube showed it, though it didn't answer in time)");
+  assert.deepEqual(feed(h.recent({ limit: 2 })).map((e) => e.words), ['bitcube showed the switch to the live river', 'Asked to switch TouchDesigner to the live river from mission control: no answer in time']);
+  h.action({ action: 'bootfile', body: { file: LIVE }, ok: false, maybe: true, source: 'mission control', applying_id: 'ax.2' });
+  t += 200_000;
+  h.judge({ expired: [{ id: 'ax.2' }] }, t);
+  assert.equal(one(), "Asked to set the boot file to the live river from mission control: no answer in time, and bitcube didn't show it");
+  // one that can never get a verdict (no entry): sent, and nobody knows
+  assert.equal(describeEvent(h.action({ action: 'switch', body: { file: LIVE }, ok: false, maybe: true })), 'Sent the switch to the live river from mission control: no answer in time, so it may or may not have happened');
+});
+
+// ---- #19: a dry run touches no camera: its stages are steps -------------------------------------------------------------------------
+
+test('R9 #19: a dry run is never "photographing the ropes": Recent, the band and Lights name its stage as a step', async () => {
+  const { describeEvent } = await import('../lib/history.mjs');
+  assert.equal(describeEvent({ kind: 'calibration', running: true, stage: 'ropes-capture', mode: 'dry-run', from: null }), 'A dry run started');
+  assert.equal(describeEvent({ kind: 'calibration', running: true, stage: 'ropes-decode', mode: 'dry-run', from: { running: true, stage: 'ropes-capture' } }), 'A dry run is at step 2 of 4');
+  const t = T0;
+  const m = derive(payload({ t, probe: { calibration: { running: true, stage: 'ropes-capture', mode: 'dry-run', dry_run: true, expected_s: 170, elapsed_s: 5 } } }), t);
+  assert.equal(m.overall.cause, 'calibrating');
+  assert.equal(m.overall.detail, "It walks the calibration's steps without touching the lights (step 1 of 4 now) and ends by itself in about a minute.");
+  assert.equal(m.show.calibration.words, 'step 1 of 4');
+  assert.match(page('lights.js'), /dry \? `Step \$\{i \+ 1\}`/);
+});
+
+// ---- #2: Recent is kept current while it is open -------------------------------------------------------------------------------
+
+test('R9 #2: Recent asks again every few seconds while its sheet shows it, and its ages tick from the server\'s clock', () => {
+  const ui = page('ui.js');
+  const body = /async function openRecent\(shell\) \{[\s\S]*?\n\}/.exec(ui)[0];
+  assert.match(ui, /export const RECENT_EVERY_MS = 5000;/);
+  assert.match(body, /setInterval\(\(\) => \{ if \(!showing\(\)\) \{ clearInterval\(timer\); untick\(\); return; \} load\(\); \}, RECENT_EVERY_MS\)/);
+  assert.match(body, /const untick = tick\(/, 'its ages tick every second');
+  assert.match(body, /data-t="\$\{t\}"/);
+  assert.match(body, /const now = typeof st\.j\?\.now === 'number' \? carried\(st\.j\.now, st\.at, st\.wall\) : Date\.now\(\);/, 'on the history\'s own clock, carried forward');
+});

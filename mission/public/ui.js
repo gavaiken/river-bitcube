@@ -197,6 +197,10 @@ export function serverClock() {
   if (h?.last && typeof h.last.now === 'number') return h.last.now + (h.elapsed() ?? 0);
   return skewMs != null ? Date.now() + skewMs : null;
 }
+/** A time on another clock (ms), as it was when this page noted it (performance.now() and Date.now() then), carried forward to now by
+ *  the larger of the monotonic and the wall clock's view, so a phone that slept never reads an old answer as new (Recent's ages on the
+ *  history's own clock, R9 #2). */
+export function carried(ms, at, wall) { return ms + Math.max(performance.now() - at, wall != null ? Date.now() - wall : 0, 0); }
 /** The server's clock now, else the phone's: a control's times are the server's, so they agree with Last done and a 409's
  *  "(started 21:04)" on a phone whose clock is off (R8 #35). */
 export function serverNow() { return serverClock() ?? Date.now(); }
@@ -978,20 +982,42 @@ async function openContacts(shell) {
     : `<div class="contact"><b>${esc(c.name)}</b><span>${esc(c.owns)}</span></div>`).join('');
   s.el.querySelector('p').outerHTML = `${note ? `<p class="muted secondary">${esc(note)}</p>` : ''}<div>${rows}</div>`;
 }
+/** Recent: the history's feed, kept current while the sheet shows it (R9 #2): asked again every 5 s (a request's verdict, a new
+ *  line), its ages ticking every second from the server's own clock, never a snapshot that still says "Asked to … 2 s ago" a minute
+ *  later. A failed refresh keeps the list it has. */
+export const RECENT_EVERY_MS = 5000;
 async function openRecent(shell) {
-  const s = sheet({ title: 'Recent', body: '<p class="muted">Fetching…</p>', actions: [{ label: 'Back to the menu', onClick: () => openMenu(shell) }] });
-  let html;
-  try {
-    const j = await getJSON('/api/history');
-    const now = typeof j?.now === 'number' ? j.now : Date.now();
-    const evs = (Array.isArray(j) ? j : j?.events ?? j?.recent ?? []).slice(0, 40);
-    html = evs.length ? `<div class="recent">${evs.map((e) => {
-      const words = e.words ?? e.text ?? e.sentence ?? e.headline ?? e.summary ?? e.note ?? 'Something happened';
-      const t = typeof e.t === 'number' ? e.t : typeof e.at === 'number' ? e.at : null;
-      return `<div class="ev"><span>${esc(words)}</span><span class="when">${t == null ? '' : esc(fmt.ago(now - t))}</span></div>`; }).join('')}</div>`
-      : '<p class="muted">Nothing recorded yet.</p>';
-  } catch (e) { html = `<p class="muted">${/404|not found/i.test(e.message) ? "Not available on this mission control yet." : `Couldn't fetch it: ${esc(plainError(e))}.`}</p>`; }
-  s.el.querySelector('p').outerHTML = html;
+  const s = sheet({ title: 'Recent', body: '<div class="recent-host"><p class="muted">Fetching…</p></div>', actions: [{ label: 'Back to the menu', onClick: () => openMenu(shell) }] });
+  const host = s.el.querySelector('.recent-host');
+  const st = { j: null, at: null, wall: null, err: null, busy: false, html: null };
+  const showing = () => host.isConnected && !!host.closest('dialog')?.open;
+  // ages on the history's own clock (its answer's `now`: the server's real clock, also in fixture mode, where the status clock is the
+  // scenario's), carried forward since that answer
+  const ages = () => { const now = typeof st.j?.now === 'number' ? carried(st.j.now, st.at, st.wall) : Date.now(); host.querySelectorAll('[data-t]').forEach((x) => { const w = fmt.ago(now - Number(x.dataset.t)); if (x.textContent !== w) x.textContent = w; }); };
+  const draw = () => {
+    let html;
+    if (st.j) {
+      const evs = (Array.isArray(st.j) ? st.j : st.j?.events ?? st.j?.recent ?? []).slice(0, 40);
+      html = evs.length ? `<div class="recent">${evs.map((e) => {
+        const words = e.words ?? e.text ?? e.sentence ?? e.headline ?? e.summary ?? e.note ?? 'Something happened';
+        const t = typeof e.t === 'number' ? e.t : typeof e.at === 'number' ? e.at : null;
+        return `<div class="ev"><span>${esc(words)}</span><span class="when"${t == null ? '' : ` data-t="${t}"`}></span></div>`; }).join('')}</div>`
+        : '<p class="muted">Nothing recorded yet.</p>';
+    } else html = `<p class="muted">${/404|not found/i.test(st.err?.message ?? '') ? 'Not available on this mission control yet.' : `Couldn't fetch it: ${esc(plainError(st.err))}.`}</p>`;
+    if (st.html !== html) { st.html = html; host.innerHTML = html; }
+    ages();
+  };
+  const load = async () => {
+    if (st.busy) return;
+    st.busy = true;
+    try { const j = await getJSON('/api/history'); st.j = j; st.at = performance.now(); st.wall = Date.now(); st.err = null; }
+    catch (e) { st.err = e; }
+    finally { st.busy = false; }
+    if (showing()) draw();
+  };
+  await load();
+  const timer = setInterval(() => { if (!showing()) { clearInterval(timer); untick(); return; } load(); }, RECENT_EVERY_MS);
+  const untick = tick(() => { if (!showing()) { clearInterval(timer); untick(); return; } ages(); });
 }
 function openMenu(shell) {
   const t = getTheme();

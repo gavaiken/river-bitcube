@@ -259,8 +259,8 @@ test('CR7 #5: the server\'s verdict on the last action is kept with the history 
   const again = new History({ file, now: () => t });
   assert.equal(again.summary(t).last_action.verdict, 'confirmed');
   assert.equal(again.summary(t).last_action.applying_id, 'ax.1');
-  // a verdict is bookkeeping, not a line of Recent
-  assert.ok(again.recent({ limit: 50, sinceT: 0 }).every((e) => e.kind !== 'verdict'));
+  // in Recent a verdict is a line of its own, in words, at its own time (R9 #20); the raw bookkeeping event never is
+  assert.deepEqual(again.recent({ limit: 50, sinceT: 0 }).filter((e) => e.kind === 'verdict').map((e) => [e.label, e.verdict]), [['the switch to the live river', 'confirmed']]);
   // expired the same way; a quick change confirmed before its line was written is caught by the next look
   again.action({ action: 'bootfile', body: { file: YEAR }, ok: true, source: 'studio chat', applying_id: 'ax.2' });
   again.observe({ ...payload({ t }), expired: [{ id: 'ax.2', action: 'bootfile', file: YEAR, started_at: t - 200_000, at: t - 1000 }] });

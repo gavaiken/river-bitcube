@@ -453,7 +453,9 @@ export function derive(status, nowMs) {
   const calDry = calibrating && (cal.mode === 'dry-run' || cal.mode === 'decode-only' || cal.dry_run === true || !!cal.decode_only);
   const calRopes = calibrating && !calDry, calPanels = calRopes && /^hub75-/.test(String(cal.stage ?? ''));
   const calWords = calRopes ? (calNearly ? 'in calibration patterns, nearly done' : `in calibration patterns for ${calLeftWords}`) : null;
-  const calStageWords = calibrating ? CAL_STAGE_WORDS[cal.stage] ?? 'at work' : null;
+  // a dry run touches no lights and no camera: its stage is a step, never "photographing the ropes" (R9 #19)
+  const calStep = Object.keys(CAL_STAGE_S).indexOf(cal?.stage) + 1;
+  const calStageWords = !calibrating ? null : calDry ? (calStep ? `step ${calStep} of ${Object.keys(CAL_STAGE_S).length}` : 'at work') : CAL_STAGE_WORDS[cal.stage] ?? 'at work';
 
   // Dave's agent: a past next tick is a fault only by day (it rests overnight), measured in daytime minutes.
   const finMs = m ? Date.parse(m.finished_at) : NaN, nextMs = m && num(m.next_tick_epoch) != null ? m.next_tick_epoch * 1000 : null;
