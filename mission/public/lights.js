@@ -9,7 +9,7 @@ import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark
 import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS } from '/model.js';
 import { uprightsFromAtlas } from '/screens.js';
 import { calChecklist, ROOM_CHECK, startWhy, dryWhy, calView, rebuiltFor, runNote, nextLine, captureWhen, driftWords, resultWords,
-  mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT, calRead } from '/lights-words.js';
+  mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT, calRead, calLeft } from '/lights-words.js';
 
 const N_ROPES = 20, LEDS = 400;
 const LIGHTS_MS = 10_000, CAL_MS = 5_000, STILL_MS = 30_000, FRAME_OLD_S = 30, PROBE_OLD_S = 120;
@@ -699,10 +699,6 @@ const dismissed = () => String(store.get('mc-cal-dismissed') ?? '').split(',').f
 /** OK on a view, remembered on this phone: '<started>' a result, '<started>~lost' a lost run (that never hides its result). */
 function dismiss(key) { if (key == null) return; store.set('mc-cal-dismissed', [...dismissed().slice(-7), String(key)].join(',')); renderCalibrate(); }
 
-function runTotalS(p) {
-  const expected = typeof p.expected_s === 'number' && p.expected_s > 0 ? p.expected_s : null;
-  return expected && CAL_STAGE_S[p.stage] ? CAL_TOTAL_S / CAL_STAGE_S[p.stage] * expected : CAL_TOTAL_S;
-}
 /** How far along the run is, 0–1, by the stages' typical lengths and the step within the stage. */
 function runFraction(p) {
   const stages = STAGE_ORDER.filter((s) => CAL_STAGE_S[s]);
@@ -860,17 +856,15 @@ function calFailure(p) {
     : /hub75-capture/.test(e) ? 'Photographing the panels failed' : /hub75-locate/.test(e) ? 'Finding the panels failed' : 'The run stopped with an error';
   return `${stage}; run it again when the room is empty, or ask Gavin`;
 }
-/** Once a second: the time left, and the "last heard" note (a run not heard from for 30 s greys, and its time left goes). */
+/** Once a second: the model's time left, and the "last heard" note (a run not heard from for 30 s greys, and its time left goes). */
 function tickCalibrate() {
   const p = S.cal.p, left = $('#cal-left'), runEl = $('#cal-run'), noteEl = $('#cal-note');
   if (!p?.running || !left) return;
   const n = runNote({ heardS: heardS(), failing: !!S.cal.error });
   runEl?.classList.toggle('quiet', n.grey);
   if (noteEl) { const t = fmt.nb(n.text); if (noteEl.textContent !== t) noteEl.textContent = t; noteEl.hidden = !t; }
-  let t;
-  if (n.grey) t = '';
-  else if (p.dry_run) t = 'A dry run takes about a minute.';
-  else { const remain = Math.max(0, runTotalS(p) - (p.elapsed_s ?? 0) - heardS()); t = remain < 45 ? 'Nearly done' : `About ${fmt.nb(dur(remain))} left`; }
+  // the model's time left (S.m is derived again every second), the same number as the state line above and the Status page
+  const t = n.grey ? '' : fmt.nb(calLeft({ cal: S.m?.show.calibration, dry: !!(p.dry_run || p.mode === 'dry-run') }));
   if (left.textContent !== t) left.textContent = t;
   left.hidden = !t;
 }

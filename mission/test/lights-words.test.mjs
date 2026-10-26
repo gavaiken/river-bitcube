@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { derive } from '../public/model.js';
 import { calChecklist, startWhy, dryWhy, calView, lostWhy, rebuiltFor, runNote, nextLine, driftWords, resultWords, captureWhen,
-  mapMissing, placeLabels, ROOM_CHECK, CAL_QUIET_S, calRead } from '../public/lights-words.js';
+  mapMissing, placeLabels, ROOM_CHECK, CAL_QUIET_S, calRead, calLeft } from '../public/lights-words.js';
 
 const load = (name) => JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8'));
 const model = (name, edit = (s) => s, later = 2000) => { const f = load(name); const s = edit({ ...f.status, now: f._scenario.now }); return derive(s, s.now + later); };
@@ -191,6 +191,8 @@ test('code review: "map in use" never compares two machines\' clocks when the se
 });
 
 // ---- round 6 ----------------------------------------------------------------------------------------------------
+const CAL = (elapsed = 230) => (s) => { s.probe.value.calibration = { running: true, mode: 'full', stage: 'ropes-capture', expected_s: 170, elapsed_s: elapsed }; return s; };
+
 test('R6 #29: a progress read that is a 2xx but not mission control\'s JSON is a failed read, never "no run"', () => {
   // non-JSON (a cut-off body, a proxy's page): fetchTimed gives body null
   assert.equal(calRead({ ok: true, status: 200, body: null }).good, false);
@@ -209,4 +211,19 @@ test('R6 #29: a progress read that is a 2xx but not mission control\'s JSON is a
   assert.deepEqual(calRead({ ok: true, status: 200, body: { running: false, none: true } }), { good: true, p: null, rebuilt: undefined });
   // a failed read leaves the run on screen: calView of the last good progress is still the run
   assert.equal(calView({ p: RUN, m: model('all-good') }).view, 'run');
+});
+
+test('R6 #13: the Calibrate card\'s time left is the model\'s, the same number as the state line, the Status tile and the band', () => {
+  for (const [elapsed, later] of [[100, 2000], [190, 9000], [230, 20_000]]) {
+    const m = model('all-good', CAL(elapsed), later);
+    const t = calLeft({ cal: m.show.calibration, dry: false });
+    const n = /about (\d+\s(?:s|min|h)) more/.exec(m.show.ropes.words)?.[1];
+    if (n) { assert.equal(t, `About ${n} left`); assert.match(m.overall.headline, new RegExp(`about ${n} more`)); }
+    else { assert.match(m.show.ropes.words, /nearly done/); assert.equal(t, 'Nearly done'); }
+  }
+  assert.equal(calLeft({ cal: null, dry: false }), '');            // the model doesn't know the run (yet): no second guess
+  assert.equal(calLeft({ cal: { left_s: 40 }, dry: true }), 'A dry run takes about a minute.');
+  // the model's own words when it gives them (the last 45 s are "nearly done" on every page)
+  assert.equal(calLeft({ cal: { left_s: 20, left_words: 'nearly done' }, dry: false }), 'Nearly done');
+  assert.equal(calLeft({ cal: { left_s: 200, left_words: 'about 3 min more' }, dry: false }), 'About 3 min left');
 });

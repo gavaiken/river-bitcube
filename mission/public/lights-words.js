@@ -114,6 +114,17 @@ export function calRead({ ok, status, body }) {
   const said = j && typeof j.error === 'string' && j.error.trim() ? j.error.trim().replace(/^Can't read the calibration:\s*/i, '') : '';
   return { good: false, status, error: said || (!ok ? "mission control didn't answer" : "mission control's answer couldn't be read") };
 }
+/** The Calibrate card's time left: the model's (show.calibration: left_words, else left_s), the one time the state line, the
+ *  Status band and the Ropes tile give, never a second reckoning (R6 #13): "About 4 min left", "Nearly done". '' while the
+ *  model doesn't know the run. */
+export function calLeft({ cal, dry }) {
+  if (dry) return 'A dry run takes about a minute.';
+  const w = typeof cal?.left_words === 'string' ? cal.left_words.trim() : '';
+  const more = /^about (.+) more$/.exec(w);
+  if (more) return `About ${more[1]} left`;
+  if (w) return cap(w);
+  return typeof cal?.left_s === 'number' ? `About ${dur(cal.left_s)} left` : '';
+}
 
 // ---- the state line's next line --------------------------------------------------------------------------------
 /** Under the state line when the verdict isn't OK: the band's headline cause and where to act ({ text, href, link }), or null.
