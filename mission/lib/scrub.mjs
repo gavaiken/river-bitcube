@@ -80,12 +80,19 @@ const SKANT = String.raw`(\bsk-ant-)([A-Za-z0-9_-]{8,})`;
 export const PATTERNS = { CREDS, KEY, KEY_JSON, QUOTED, ESCAPED, ELEM, NESTED, BARE_JSON: KEY_JSON + BARE_VALUE, BARE: KEY + BARE_VALUE, AUTH, BEARER, USER, FLAG, SSHPASS, MYSQL, UCI, SKANT };
 const RE = Object.fromEntries(['CREDS', 'QUOTED', 'ESCAPED', 'BARE_JSON', 'BARE', 'AUTH', 'BEARER', 'USER', 'FLAG', 'SSHPASS', 'MYSQL', 'UCI', 'SKANT'].map((k) => [k, new RegExp(PATTERNS[k], 'gi')]));
 /** An object's key whose value is a login, whatever it holds (a password-like key, a prefix allowed, glued too: never
- *  input_tokens, passwords, secret_ref). */
-const SECRET_KEY = /^(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])?pass|sshpass|key)$/i;
+ *  input_tokens, passwords, secret_ref; db_pass, SSHPASS). A number under one is masked too: a PIN is a password. */
+const SECRET_KEY = /^(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])pass|sshpass)$/i;
+/** "pass" and "key" alone are logins only by what is beside them (CR9 #13): pass beside a user, username or login key (a camera's
+ *  { user, pass }), key beside a Wi-Fi network's ssid or encryption, or anywhere under the router's wireless settings (a key named
+ *  wireless, wifi, wlan, radio or router above it); and only a string, an object or an array, never a number or a boolean (a
+ *  calibration's pass "A" or a pass count, a tool's { key: 'river-local' }, a sort key stay). */
+const USER_KEY = /^(?:user(?:name)?|login|usr)$/i, WIFI_KEY = /^(?:ssid|encryption)$/i, WIFI_ABOVE = /wireless|wi-?fi|wlan|radio|router/i;
+const loginBy = (k, keys, wifi) => (/^pass$/i.test(k) && keys.some((x) => USER_KEY.test(x))) || (/^key[1-4]?$/i.test(k) && (wifi || keys.some((x) => WIFI_KEY.test(x))));
 
 /** "rtsp://admin:pw@10.0.0.1/x" -> "rtsp://***@10.0.0.1/x", '"password":"x"' -> '"password":"***"', "?password=x" ->
- *  "?password=***", '"Token":{"name":"x"}' -> '"Token":"***"'; deep for objects and arrays; anything else unchanged. */
-export function scrubCreds(x, depth = 0) {
+ *  "?password=***", '"Token":{"name":"x"}' -> '"Token":"***"'; deep for objects and arrays; anything else unchanged. wifi: under
+ *  the router's wireless settings (an object's "key" there is its Wi-Fi key). */
+export function scrubCreds(x, depth = 0, wifi = false) {
   if (typeof x === 'string') {
     return x.replace(RE.CREDS, '$1***@').replace(RE.QUOTED, '$1$2***$4').replace(RE.ESCAPED, '$1$2***$5')
       .replace(RE.BARE_JSON, '$1$2***$2').replace(RE.BARE, '$1***')
@@ -93,9 +100,12 @@ export function scrubCreds(x, depth = 0) {
       .replace(RE.MYSQL, '$1***').replace(RE.UCI, '$1***').replace(RE.SKANT, '$1***');
   }
   if (depth > 20 || x == null || typeof x !== 'object') return x;
-  if (Array.isArray(x)) return x.map((v) => scrubCreds(v, depth + 1));
+  if (Array.isArray(x)) return x.map((v) => scrubCreds(v, depth + 1, wifi));
   if (Buffer.isBuffer(x) || ArrayBuffer.isView(x)) return x;
-  const out = {};
-  for (const [k, v] of Object.entries(x)) out[k] = SECRET_KEY.test(k) && v != null && typeof v !== 'boolean' ? '***' : scrubCreds(v, depth + 1);
+  const out = {}, keys = Object.keys(x);
+  for (const [k, v] of Object.entries(x)) {
+    const login = v != null && typeof v !== 'boolean' && (SECRET_KEY.test(k) || (typeof v !== 'number' && loginBy(k, keys, wifi)));
+    out[k] = login ? '***' : scrubCreds(v, depth + 1, wifi || WIFI_ABOVE.test(k));
+  }
   return out;
 }

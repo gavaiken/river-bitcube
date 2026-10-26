@@ -467,7 +467,9 @@ test('R9 #37: the masks catch SSHPASS=, pass=, mysql\'s attached -p, a Wi-Fi key
   // never what isn't a login
   for (const line of ['op("x").bypass = True', 'the bypass is open', 'sort key=name', 'the primary key: id', 'mysql -u root river', 'else: pass', 'uci show wireless',
                       '"input_tokens": 12', 'a passage', 'compass=north']) assert.equal(scrubCreds(line), line, line);
-  assert.deepEqual(scrubCreds({ SSHPASS: F, pass: F, key: F, keys: ['a'], bypass: true }), { SSHPASS: '***', pass: '***', key: '***', keys: ['a'], bypass: true });
+  assert.deepEqual(scrubCreds({ SSHPASS: F, user: 'admin', pass: F, ssid: 'gray-river', key: F, keys: ['a'], bypass: true }), { SSHPASS: '***', user: 'admin', pass: '***', ssid: 'gray-river', key: '***', keys: ['a'], bypass: true });
+  // a "pass" or a "key" with nothing beside it that makes it a login is left alone (CR9 #13)
+  assert.deepEqual(scrubCreds({ pass: 'A', key: 'river-local' }), { pass: 'A', key: 'river-local' });
   // probe.ps1 carries the very patterns (tools/tests/test_masks.py runs them)
   const src = readFileSync(new URL('../../tools/mission/probe.ps1', import.meta.url), 'utf8');
   const ps = Object.fromEntries([...src.matchAll(/^\$(CRED_\w+) = '((?:[^']|'')*)'$/gm)].map((m) => [m[1], m[2].replace(/''/g, "'")]));

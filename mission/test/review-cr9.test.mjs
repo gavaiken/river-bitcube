@@ -148,3 +148,20 @@ test('CR9 #4: a uci show line (<anything>.key=…, quoted or not, a space or an 
   ]) assert.equal(scrubCreds(line), want, line);
   for (const line of ['sort key=name', 'x.keys=1', 'wireless.default_radio0.ssid=\'gray-river\'', 'option keyfile x']) assert.equal(scrubCreds(line), line, line);
 });
+
+// ---- #13: an object's "key" or "pass" is a login only by what is beside it ----------------------------------------------------
+
+test('CR9 #13: in an object, "key" is masked only as a Wi-Fi key (beside an ssid or encryption, or under the wireless settings) and "pass" only beside a user; never a number or a boolean', async () => {
+  const { scrubCreds } = await import('../lib/scrub.mjs');
+  const F = 'NOT-A-REAL-PW-cr9';
+  const keep = [{ key: 'river-local', file: 'x' }, { running: true, stage: 'ropes-capture', pass: 'A', step: 3, of: 29 }, { pass: 2 }, { key: 5, ssid: 'gray-river' },
+    { user: 'admin', pass: 1234 }, { ssid: 'gray-river', key: true }, { wireless: { radio0: { channel: 36, key: 7 } } }, { keys: ['a'], bypass: true, compass: 'n' }];
+  for (const x of keep) assert.deepEqual(scrubCreds(x), x, JSON.stringify(x));
+  assert.deepEqual(scrubCreds({ ssid: 'gray-river', key: F, encryption: 'psk2' }), { ssid: 'gray-river', key: '***', encryption: 'psk2' });
+  assert.deepEqual(scrubCreds({ wireless: { default_radio0: { key: F, mode: 'ap' } } }), { wireless: { default_radio0: { key: '***', mode: 'ap' } } });
+  assert.deepEqual(scrubCreds({ router: { wifi: [{ key: F }] } }), { router: { wifi: [{ key: '***' }] } });
+  assert.deepEqual(scrubCreds({ user: 'admin', pass: F }), { user: 'admin', pass: '***' });
+  assert.deepEqual(scrubCreds({ Login: 'admin', PASS: { x: F } }), { Login: 'admin', PASS: '***' });
+  // the names that are always a login stay so, a number too (a numeric secret)
+  assert.deepEqual(scrubCreds({ SSHPASS: F, db_pass: F, password: 42, api_key: F }), { SSHPASS: '***', db_pass: '***', password: '***', api_key: '***' });
+});
