@@ -35,7 +35,7 @@
 // Log out with a confirm), one <dialog class="sheet"> every sheet and confirm reuses, and the theme override
 // remembered in localStorage 'mc-theme'. After Check now the shell fires `document` event 'mc:check' so a page can
 // poll at once; after a theme change, 'mc:theme' (detail: 'auto' | 'light' | 'dark').
-import { api as rawApi, esc, md, plainError, noAnswerText } from '/app.js';
+import { api as rawApi, esc, md, plainError, noAnswerText, POLL_TIMEOUT_MS } from '/app.js';
 import { dur as modelDur, CONTACTS, TZ, ctlInit, ctlStep, ctlView, applyingWords, applyingText, confirmingWords, CONFIRMING_SAID, unconfirmedWords,
   notSentWords, failWords, EXPECT_S, serverJudged } from '/model.js';
 
@@ -184,7 +184,7 @@ export function tick(fn) {
 /** poll(url, { every, onData(payload, receivedAt), onError(err, downForMs) }) → { stop, refresh, last, receivedAt, failedSince }.
  *  `last` is the last good JSON (with `now` filled in when the server sent none), `receivedAt` the performance.now()
  *  it arrived, so a page renders derive(p.last, p.last.now + (performance.now() - p.receivedAt)). 401 → /login. */
-export const POLL_TIMEOUT_MS = 8000;   // a request that hangs this long counts as a failure (a phone's handover, a lock mid-fetch)
+export { POLL_TIMEOUT_MS };          // a request that hangs this long counts as a failure (a phone's handover, a lock mid-fetch): app.js
 const lastStatus = { j: null, wall: null };   // the newest /api/status any poll() on this page received, and when (Date.now())
 export function poll(url, { every = 5000, onData, onError, timeout = POLL_TIMEOUT_MS } = {}) {
   const h = { last: null, receivedAt: null, receivedWall: null, failedSince: null, startedAt: performance.now(), stop, refresh: () => once(true), elapsed };

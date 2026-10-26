@@ -356,3 +356,42 @@ test('CR7 #10: this phone\'s own change still in status.applying is its own whil
   assert.deepEqual(ownEntries(m, [{ action: 'switch', state: 'done', entryId: 'ax.1', at: now }], now), { ownIds: ['ax.1'], ownActions: [] });
   for (const state of ['done', 'failed', 'ready']) assert.deepEqual(ownEntries(m, [{ action: 'switch', state, entryId: null, at: now - 1000 }], now), { ownIds: [], ownActions: [] }, state);
 });
+
+// ---- Lights' timed fetch ---------------------------------------------------------------------------------------------------
+/** A fetch that answers its headers after headersMs, then its body in chunks (after each wait in chunkMs), and errors on abort. */
+function slowFetch(headersMs, chunkMs, text = '{"ok":true}') {
+  return (url, { signal } = {}) => new Promise((resolve, reject) => {
+    const abort = () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+    if (signal?.aborted) return abort();
+    signal?.addEventListener('abort', abort);
+    setTimeout(() => {
+      const parts = chunkMs.map((_, i) => text.slice(Math.floor((i * text.length) / chunkMs.length), Math.floor(((i + 1) * text.length) / chunkMs.length)));
+      const body = new ReadableStream({ start(c) {
+        signal?.addEventListener('abort', () => { try { c.error(Object.assign(new Error('aborted'), { name: 'AbortError' })); } catch { /* closed */ } });
+        let t = 0;
+        chunkMs.forEach((ms, i) => { t += ms; setTimeout(() => { try { c.enqueue(new TextEncoder().encode(parts[i])); if (i === chunkMs.length - 1) c.close(); } catch { /* errored */ } }, t); });
+      } });
+      resolve(new Response(body, { status: 200, headers: { 'content-type': 'application/json' } }));
+    }, headersMs);
+  });
+}
+
+test('CR7 #11: a timed fetch\'s limit is from the start unless it is the idle kind, which only silence ends', async (t) => {
+  const { fetchTimed } = await import('../public/app.js');
+  const real = globalThis.fetch;
+  t.after(() => { globalThis.fetch = real; });
+  // not idle: headers at 300 ms, the body 300 ms later: past a 400 ms limit, though no wait was over 400 ms
+  globalThis.fetch = slowFetch(300, [300]);
+  const t0 = Date.now();
+  await assert.rejects(fetchTimed('/x', undefined, 400), (e) => e.noAnswer === true);
+  assert.ok(Date.now() - t0 < 580, `${Date.now() - t0} ms: given up at its limit, never later`);
+  // the same answer well inside the limit is read
+  globalThis.fetch = slowFetch(50, [50]);
+  assert.deepEqual((await fetchTimed('/x', undefined, 400)).body, { ok: true });
+  // idle: a slow answer that keeps coming loads (each chunk tells the limit it is still coming) ...
+  globalThis.fetch = slowFetch(250, [250, 250, 250]);
+  assert.deepEqual((await fetchTimed('/x', undefined, 400, { idle: true })).body, { ok: true });
+  // ... and silence past the limit ends it
+  globalThis.fetch = slowFetch(250, [250, 700]);
+  await assert.rejects(fetchTimed('/x', undefined, 400, { idle: true }), (e) => e.noAnswer === true);
+});

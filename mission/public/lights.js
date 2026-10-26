@@ -6,6 +6,7 @@
 // limit, and what couldn't be read is asked for again by itself. Plain ES module, no build step, no framework.
 import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark, plainError, DOC_LINKS, splitHeadline, announce, goto,
   WARN_MS, LOST_MS, POLL_TIMEOUT_MS } from '/ui.js';
+import { fetchTimed } from '/app.js';
 import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, EXPECT_S, ownEntries } from '/model.js';
 import { uprightsFromAtlas } from '/screens.js';
 import { calChecklist, ROOM_CHECK, startWhy, dryWhy, calView, rebuiltFor, runNote, nextLine, captureWhen, driftWords, resultWords,
@@ -31,32 +32,6 @@ const store = { get(k) { try { return localStorage.getItem(k); } catch { return 
 const since = (at, wall) => Math.max(0, (performance.now() - at) / 1000, wall != null ? (Date.now() - wall) / 1000 : 0);
 const ropeHue = (r) => `hsl(${(r * 137.5) % 360} 85% 62%)`;   // golden-angle spacing: neighbours never share a hue
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-/** GET with a time limit (ui.js poll()'s 8 s), the body read inside it: { r, body } (body null when it isn't JSON). A request
- *  that hangs throws "no answer in 8 s" instead of holding the page's next ask; 401 goes to the login. `idle`: the limit is on
- *  silence, not on the whole answer: 8 s with no bytes, so the LED map (big even gzipped) loads on a slow phone link as long as
- *  it keeps coming (R7 #1). */
-async function fetchTimed(url, read = (r) => r.json(), timeout = POLL_TIMEOUT_MS, { idle = false } = {}) {
-  const ctrl = new AbortController();
-  let t = setTimeout(() => ctrl.abort(), timeout);
-  const heard = () => { clearTimeout(t); t = setTimeout(() => ctrl.abort(), timeout); };
-  try {
-    const r = await fetch(url, { cache: 'no-store', signal: ctrl.signal });
-    if (r.status === 401) { location.href = '/login'; throw new Error('logged out'); }
-    heard();
-    const body = await (idle && r.body ? readJsonWhileHeard(r, heard) : read(r)).catch((e) => { if (ctrl.signal.aborted) throw e; return null; });
-    return { r, body };
-  } catch (e) {
-    if (ctrl.signal.aborted) throw Object.assign(new Error(`no answer in ${Math.round(timeout / 1000)} s`), { noAnswer: true, waitedS: timeout / 1000 });
-    throw e;
-  } finally { clearTimeout(t); }
-}
-/** An answer's JSON, read chunk by chunk, each chunk telling the time limit the answer is still coming. */
-async function readJsonWhileHeard(r, heard) {
-  const reader = r.body.getReader(), parts = [];
-  for (;;) { const { done, value } = await reader.read(); if (done) break; parts.push(value); heard(); }
-  return JSON.parse(new TextDecoder().decode(await new Blob(parts).arrayBuffer()));
-}
 
 // ---- state ------------------------------------------------------------------------------------------------------
 const S = {
