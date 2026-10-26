@@ -96,7 +96,7 @@ test('R9 #6, #31: a phone\'s earlier change stays its own after the same control
   for (let i = 0; i < 30; i++) mem.request(`x${i}`);
   assert.equal(mem.mine.requestIds.length, 20, 'the newest 20 are kept');
   assert.match(page('status.js'), /M\.ownEntries\(model, [^\n]*mine\.mine\)/);
-  assert.match(page('lights.js'), /ownEntries\(S\.m, ctls, Date\.now\(\), \{ ids: S\.ownIds, requestIds: S\.ownRequestIds \}\)/);
+  assert.match(page('lights.js'), /ownEntries\(S\.m, ctls, Date\.now\(\), mine\.mine\)/, 'its memory: model.js ownMemory, as Status keeps its own (CR9 #15)');
 });
 
 // ---- #1, #29: a page's own change found by its request id while its answer is on the way, or after it was lost -----------------

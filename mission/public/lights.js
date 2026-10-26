@@ -7,7 +7,7 @@
 import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark, plainError, DOC_LINKS, splitHeadline, announce, unannounce, setLive, goto, bringIntoView,
   WARN_MS, LOST_MS, POLL_TIMEOUT_MS, serverNow, serverClock } from '/ui.js';
 import { fetchTimed } from '/app.js';
-import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, CAL_STAGES, EXPECT_S, ownEntries, endedOnce, START_USUAL, calDryRun, calStep } from '/model.js';
+import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, CAL_STAGES, EXPECT_S, ownEntries, endedOnce, START_USUAL, calDryRun, calStep, ownMemory } from '/model.js';
 import { uprightsFromAtlas } from '/screens.js';
 import { calChecklist, ROOM_CHECK, startWhy, dryWhy, calView, rebuiltFor, runNote, nextLine, captureWhen, driftWords, resultWords,
   mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT, calRead, calLeft, changeSince, stateLevel, applyingNow, stateParts, CAL_COPY, runFine,
@@ -46,9 +46,10 @@ const S = {
   calCtl: {},                                // the Calibrate block's live controls: { start, dry } | { stop } | { rebuild }
   chips: [],                                 // each rope chip's last inner HTML (the buttons stay; only what changed is painted)
   rebuildingElsewhere: false,                // a rebuild in status.applying: when it ends, /api/calibration says which map is in use
-  ownIds: [],                                // the server's entries for this page's own changes (applying_id): never "another phone's"
-  ownRequestIds: [],                         // the request ids this page sent (R8 #2): an entry whose answer was lost is its own too (R9 #6)
 };
+// this page's own changes: the server's entries its answers named (applying_id) and the request ids it sent (R8 #2), never "another
+// phone's" (R7 #14, R9 #6); kept as Status keeps its own (model.js ownMemory: the newest 20 of each, CR9 #15)
+const mine = ownMemory();
 // how another phone's change ended, said once by its id, never on the page's first answer (R9 #5, #17, #30)
 const endedNews = endedOnce();
 
@@ -65,11 +66,6 @@ function judgeControls() {
   if (!S.m || pageDown()) return;
   for (const c of Object.values(S.calCtl)) if (c?.button.isConnected) c.update({ model: S.m, readAt: status.receivedWall });
 }
-/** A change this page sent got its entry's id (the answer, or a maybe answer): remember it, so the state line never shows this
- *  page's own change as another phone's, whatever its control shows now (R7 #14). */
-function own(id) { if (typeof id === 'string' && !S.ownIds.includes(id)) S.ownIds = [...S.ownIds.slice(-19), id]; }
-/** A press's own request id, remembered the same way (R9 #6). */
-function ownRequest(rid) { if (typeof rid === 'string' && rid && !S.ownRequestIds.includes(rid)) S.ownRequestIds = [...S.ownRequestIds.slice(-19), rid]; }
 // the shared rule (ui.js): greyed and bannered from the time since the last answer, so a hung request counts too
 const contact = watchContact(status, shell, () => { S.m = model(); render(); });
 const pageDown = () => contact.lost;
@@ -78,7 +74,9 @@ const pageDown = () => contact.lost;
 function render() {
   const m = S.m;
   art.setSeason(m?.show.weights ?? null);
-  renderStateLine(); renderMapCard(); renderChips(); renderStrips(); renderProvenance(); renderCalibrate(); renderFooter();
+  // which changes in flight are this page's own: once a render, for the state line and Calibrate's reasons alike (CR9 #17)
+  const own = ownChanges();
+  renderStateLine(own); renderMapCard(); renderChips(); renderStrips(); renderProvenance(); renderCalibrate(own); renderFooter();
 }
 const put = (id, html) => { if (S.html[id] !== html) { S.html[id] = html; const el = document.getElementById(id); if (el) el.innerHTML = html; } };
 
@@ -86,7 +84,7 @@ const put = (id, html) => { if (S.html[id] !== html) { S.html[id] = html; const 
 function probeAge() { const a = S.m?.overall.checked.probe_age_s; return a == null || status.receivedAt == null ? a ?? null : a + status.elapsed() / 1000; }
 
 // ---- the state line: show.ropes.words · show.panels.words · from bitcube · N s ago ---------------------------------------
-function renderStateLine() {
+function renderStateLine(own = null) {
   const m = S.m;
   if (!m) {
     // the header's thresholds (ui.js WARN_MS, LOST_MS), from when the page started asking: one fact, one wording everywhere
@@ -123,7 +121,8 @@ function renderStateLine() {
   const nx = lost ? null : nextLine(m, from, splitHeadline, words);
   put('state-next', nx ? `${nx.text ? `<span>${esc(fmt.nb(nx.text))}</span> ` : ''}${nx.href ? `<a href="${nx.href}"${nx.href.startsWith('#') ? ' data-jump="calibrate"' : ''}>${esc(nx.link)}</a>` : ''}` : '');
   // the band's quiet line for a change in flight from another phone or the chat (this page's own is said on its control)
-  const own = ownChanges(), lines = lost ? [] : applyingNow(m, own);
+  own ??= ownChanges();
+  const lines = lost ? [] : applyingNow(m, own);
   paintApplying(lines);
   // and, once by its id, how another phone's change ended (R8 #9, R9 #5)
   const ended = lost || !status.last ? [] : endedNews(m, { ownIds: own.ids }, serverClock());
@@ -138,7 +137,7 @@ function sayState(t, once = []) { setLive($('#state-live'), t, { once }); }   //
 const ownChanges = () => {
   const ctls = [['calibrate', S.calCtl.start], ['calibrate', S.calCtl.dry], ['rebuild', S.calCtl.rebuild]].filter(([, c]) => c)
     .map(([action, c]) => ({ action, state: c.state, entryId: c.entryId ?? null, at: c.at }));
-  const o = ownEntries(S.m, ctls, Date.now(), { ids: S.ownIds, requestIds: S.ownRequestIds });
+  const o = ownEntries(S.m, ctls, Date.now(), mine.mine);
   return { ids: o.ownIds, actions: o.ownActions };
 };
 /** "Applying: the restart on the river's year · 0:05 · usually about 1 min" under the state line, one line per change; the
@@ -773,7 +772,7 @@ const heardS = () => (S.cal.heardAt == null ? null : since(S.cal.heardAt, S.cal.
  *  open is withdrawn by its own control when that becomes impossible (ui.js control().update), and Stop keeps its applying
  *  and failed words across the run's every pattern. Leaving a view withdraws any confirm its controls still have open; when
  *  focus was in the block it moves to the new view's heading (or first control), and the new view's first line is said once. */
-function renderCalibrate() {
+function renderCalibrate(own = null) {
   const m = S.m, p = S.cal.p, body = $('#cal-body');
   const v = calView({ p, m, dismissed: (k) => dismissed().includes(String(k)), old: S.cal.old, rebuiltAt: rebuiltFor(p, S.cal.rebuilt) });
   const { view, key, dry } = v;
@@ -789,12 +788,12 @@ function renderCalibrate() {
     if (view === 'run') S.calCtl.stop = mountStop(dry);
     else if (view === 'done' && !dry) S.calCtl.rebuild = mountRebuild(p);
     else if (view === 'before') Object.assign(S.calCtl, mountStart(m));
-    paintCal(view, p);
+    paintCal(view, p, own);
     if (had) calFocusTarget()?.focus({ preventScroll: false });
     if (!first && S.cal.announceOk && view !== 'before') announce(calLine(view, v, p));
     return;
   }
-  paintCal(view, p);
+  paintCal(view, p, own);
 }
 /** Each view's markup; the heading (or the before view's lead) is #cal-head, where focus goes when the view changes. */
 function calHtml({ view, dry, lost }, p) {
@@ -861,24 +860,27 @@ function calFocusTarget() {
   return $('#cal-head');
 }
 /** The parts that change while a view stays, painted in place: the checklist and the buttons' reasons, a run's progress. */
-function paintCal(view, p) {
+function paintCal(view, p, own = null) {
   const m = S.m;
+  // this page's own changes, once a paint (the render's, else asked for here), for each control's reason (CR9 #17)
+  const ownIds = view === 'before' || view === 'done' ? (own ?? ownChanges()).ids : [];
   if (view === 'before') {
     const lis = `${calChecklist(m).map((c) => `<li class="lv-${c.level}">${mark(c.level)}<span>${esc(c.text)}</span></li>`).join('')}
         <li class="you"><span class="mk" aria-hidden="true">·</span><span>${esc(ROOM_CHECK)}</span></li>`;
     const ul = $('#cal-checks');
     if (ul && S.html['cal-checks'] !== lis) { S.html['cal-checks'] = lis; ul.innerHTML = lis; }
-    setWhy(S.calCtl.start, startWhy(m), m?.controls.calibrate.by); setWhy(S.calCtl.dry, dryWhy(m), m?.controls.calibrate.dry?.by);
+    setWhy(S.calCtl.start, startWhy(m), m?.controls.calibrate.by, ownIds); setWhy(S.calCtl.dry, dryWhy(m), m?.controls.calibrate.dry?.by, ownIds);
   }
   if (view === 'run') { paintRun(p); tickCalibrate(); }
-  if (view === 'done') setWhy(S.calCtl.rebuild, m ? m.controls.rebuild.why : NO_CONTACT, m?.controls.rebuild.by);   // confirming ends on the server's verdict (judgeControls)
+  if (view === 'done') setWhy(S.calCtl.rebuild, m ? m.controls.rebuild.why : NO_CONTACT, m?.controls.rebuild.by, ownIds);   // confirming ends on the server's verdict (judgeControls)
 }
 /** A control's reason, given only when it changed (paint is cheap, but every repaint rewrites its words); by: the entry it waits
- *  for, so a control whose own change holds the lock says it once, never "Wait: …" about itself too (R8 #18). */
-function setWhy(c, why, by = null) {
+ *  for, so a control whose own change holds the lock says it once, never "Wait: …" about itself too (R8 #18); ownIds: this page's
+ *  own changes, worked out once a paint (CR9 #17). */
+function setWhy(c, why, by = null, ownIds = []) {
   if (!c?.button.isConnected) return;
   // a sibling's own change on this page (Start's, under Dry run) is said by that control, never as a Wait line here too
-  const own = !!by && ownChanges().ids.includes(by);
+  const own = !!by && ownIds.includes(by);
   if (c._why !== why || c._by !== (by ?? null) || c._own !== own) { c._why = why; c._by = by ?? null; c._own = own; c.update({ why, whyBy: by ?? null, whyOwn: own }); }
 }
 /** Leaving a view: a confirm its controls still hold open (Start, Dry run, Rebuild) is withdrawn, so a press on it can't send
@@ -934,19 +936,19 @@ function tickCalibrate() {
  *  didn't answer in time", never "No answer in a while" after an answer that came at once: R7 #2). */
 function startRun(dry_run, requestId = null) {
   S.cal.pending = true;
-  ownRequest(requestId);
+  mine.request(requestId);
   return api('/api/control/calibrate', { action: 'start', dry_run: !!dry_run, ...(requestId ? { request_id: requestId } : {}) }).catch((e) => {
     const reason = String(e.message || e).replace(/:\s*calibration can't start$/i, '');
     const out = new Error(/^[A-Z][a-z]/.test(reason) && !/^TouchDesigner/.test(reason) ? reason[0].toLowerCase() + reason.slice(1) : reason);
     for (const k of Object.keys(e)) out[k] = e[k];
-    own(e?.applyingId);
+    mine.id(e?.applyingId);
     throw out;
   }).finally(() => { S.cal.pending = false; });
 }
 /** A start answered: its progress copy (when it is newer than the one this page has: a start still 'starting' may answer with
  *  the run before's file), and ask again at once. Done only when the server confirms the run showed up (R7 #27). */
 function afterStart(r) {
-  own(r?.applying_id);
+  mine.id(r?.applying_id);
   const c = r?.calibration, p = S.cal.p;
   if (c && typeof c === 'object' && (!p || !(typeof p.updated === 'number' && typeof c.updated === 'number' && c.updated < p.updated))) {
     S.cal.p = c; S.cal.heardAt = performance.now(); S.cal.heardWall = Date.now(); S.cal.error = null;
@@ -991,13 +993,13 @@ function mountRebuild(p) {
   const c = control($('#cal-rebuild'), { label: "Use this map: rebuild the river's year", kind: 'primary', why: S.m ? S.m.controls.rebuild.why : NO_CONTACT, siblings: keep,
     before: `Bakes the new LED map (${esc(captureWhen(p.result?.capture, p.result?.map).words)}) into the river's year and restarts TouchDesigner on it: about a minute dark. Asks first.`,
     confirm: { title: "Rebuild the river's year with this map?", body: "Bakes the new LED map into the river's year and restarts TouchDesigner on it: about a minute dark.", ok: 'Rebuild', cancel: 'Not now', destructive: true },
-    ...CAL_CTL.rebuild, expectS: EXPECT_S.rebuild, run: ({ requestId } = {}) => { ownRequest(requestId); return api('/api/control/rebuild', { file: YEAR_FILE, ...(requestId ? { request_id: requestId } : {}) }); }, serverConfirms: true,
+    ...CAL_CTL.rebuild, expectS: EXPECT_S.rebuild, run: ({ requestId } = {}) => { mine.request(requestId); return api('/api/control/rebuild', { file: YEAR_FILE, ...(requestId ? { request_id: requestId } : {}) }); }, serverConfirms: true,
     done: "The river's year uses the new map", fail: "The river's year is unchanged",
     noAnswer: 'this card says "Map in use" if it did',
     unconfirmed: "mission control hasn't confirmed which map the river's year uses; call Gavin",
-    onSent: (r) => { own(r?.applying_id); watchCalibration(); pollCal(); status.refresh(); },
+    onSent: (r) => { mine.id(r?.applying_id); watchCalibration(); pollCal(); status.refresh(); },
     onDone: () => { pollCal(); renderCalibrate(); loadMap(); },
-    onFail: (e) => { own(e?.applyingId); pollCal(); status.refresh(); } });
+    onFail: (e) => { mine.id(e?.applyingId); pollCal(); status.refresh(); } });
   c._why = S.m ? S.m.controls.rebuild.why : NO_CONTACT;
   return c;
 }

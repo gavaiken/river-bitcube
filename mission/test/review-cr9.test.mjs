@@ -361,3 +361,27 @@ test('CR9 #11: the server refuses a switch or rebuild it can\'t judge (a reading
   assert.doesNotMatch(lib, /tdStarting\(snap\(\)/);
   assert.match(src('../lib/fixtures.mjs'), /try \{ probe = this\.snapshot\(scenario\)\.probe; \} catch \{ probe = \{ value: 'unreadable' \}; \}[^\n]*\n[^\n]*startingBlocked\(action, probe\)/, 'fixture mode: its scenario\'s reading, closed when it can\'t be read');
 });
+
+// ---- #15, #17: Lights keeps its own changes as Status does, and works out which are its own once a paint -------------------------
+
+test("CR9 #15: Lights remembers its own changes with model.js ownMemory, as Status does, never a hand-rolled copy", () => {
+  const l = page('lights.js');
+  assert.match(l, /import \{[^}]*\bownMemory\b[^}]*\} from '\/model\.js';/);
+  assert.match(l, /^const mine = ownMemory\(\);/m);
+  assert.doesNotMatch(l, /function own\(|function ownRequest\(|S\.ownIds|S\.ownRequestIds|ownIds: \[\],|ownRequestIds: \[\],/);
+  assert.match(l, /ownEntries\(S\.m, ctls, Date\.now\(\), mine\.mine\)/);
+  for (const call of [/mine\.request\(requestId\)/, /mine\.id\(r\?\.applying_id\)/, /mine\.id\(e\?\.applyingId\)/]) assert.match(l, call);
+});
+
+test('CR9 #17: Lights works out its own changes once a render and hands them on: setWhy never asks for them per control', () => {
+  const l = page('lights.js');
+  const setWhy = /function setWhy\([^)]*\) \{[\s\S]*?\n\}/.exec(l)[0];
+  assert.doesNotMatch(setWhy, /ownChanges\(\)/);
+  assert.match(setWhy, /function setWhy\(c, why, by = null, ownIds = \[\]\)/);
+  const render = /function render\(\) \{[\s\S]*?\n\}/.exec(l)[0];
+  assert.equal((render.match(/ownChanges\(\)/g) ?? []).length, 1);
+  assert.match(render, /renderStateLine\(own\);/);
+  assert.match(render, /renderCalibrate\(own\);/);
+  const paint = /function paintCal\([^)]*\) \{[\s\S]*?\n\}/.exec(l)[0];
+  assert.ok((paint.match(/ownChanges\(\)/g) ?? []).length <= 1, 'at most once a paint, when no render handed them on');
+});
