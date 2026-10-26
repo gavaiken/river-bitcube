@@ -154,10 +154,11 @@ test('rope numbers: no number without a leader line sits nearer another rope\'s 
   // as lights.js zoomBox draws it: the box around every point (with its margins), one scale both ways
   const FW = 1440, FH = 808, xs = map.points.map((p) => p.u * FW), ys = map.points.map((p) => (1 - p.v) * FH);
   const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-  const mx = Math.max(40, (x1 - x0) * 0.14), my = Math.max(30, (y1 - y0) * 0.05), bw = x1 - x0 + 2 * mx, bh = y1 - y0 + 2 * my;
+  const mx = Math.max(40, (x1 - x0) * 0.14), my = Math.max(30, (y1 - y0) * 0.05), myTop = Math.max(60, (y1 - y0) * 0.12), bw = x1 - x0 + 2 * mx, bh = y1 - y0 + my + myTop;
   for (const W of [358, 700, 1000]) {   // a phone, a tablet, a desktop
     const H = Math.round(W / Math.min(FW / FH, Math.max(0.8, bw / bh))), k = Math.min(W / bw, H / bh);
-    const anchors = ends.map((e) => (e ? { x: (e.u * FW - (x0 + x1) / 2) * k + W / 2, y: ((1 - e.v) * FH - (y0 + y1) / 2) * k + H / 2 } : null));
+    const cy = (y0 - myTop + y1 + my) / 2;
+    const anchors = ends.map((e) => (e ? { x: (e.u * FW - (x0 + x1) / 2) * k + W / 2, y: ((1 - e.v) * FH - cy) * k + H / 2 } : null));
     const widths = anchors.map((_, i) => (String(i + 1).length === 1 ? 17 : 24));
     const out = placeLabels(anchors, widths, { h: 20, W, H });
     for (let i = 0; i < 20; i++) {

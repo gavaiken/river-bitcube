@@ -174,7 +174,8 @@ export function placeLabels(anchors, widths, { h = 20, W = Infinity, H = Infinit
   const placed = taken.map((b) => ({ ...b }));
   const pts = anchors.map((a, i) => (a ? { i, x: a.x, y: a.y } : null)).filter(Boolean);
   const out = anchors.map(() => null);
-  const DIRS = [[0, -1], [0, 1], [1, 0], [-1, 0], [0.71, -0.71], [-0.71, -0.71], [0.71, 0.71], [-0.71, 0.71]];
+  // above first (the plug ends hang from the ceiling: below them are the ropes themselves), then beside, then below
+  const DIRS = [[0, -1], [0.71, -0.71], [-0.71, -0.71], [1, 0], [-1, 0], [0, 1], [0.71, 0.71], [-0.71, 0.71]];
   const RINGS = [1, 1.6, 2.3, 3.1, 4, 5, 6.2, 7.5, 9, 11, 13.5, 16];
   for (const a of pts) {
     if (only && !only.has(a.i)) continue;
@@ -183,12 +184,9 @@ export function placeLabels(anchors, widths, { h = 20, W = Infinity, H = Infinit
     const hitsBox = (x, y) => placed.some((b) => Math.abs(b.x - x) < (b.w + w) / 2 + 2 && Math.abs(b.y - y) < (b.h + h) / 2 + 2);
     const coversDot = (x, y) => pts.some((q) => Math.abs(q.x - x) < w / 2 + 3 && Math.abs(q.y - y) < h / 2 + 3);
     const ownNearest = (x, y) => { const d = Math.hypot(a.x - x, a.y - y); return pts.every((q) => q === a || Math.hypot(q.x - x, q.y - y) > d + 2); };
-    // above for odd ropes, below for even ones first (the plug ends crowd the ceiling), then around, ring by ring
-    const pref = a.i % 2 ? [0, 1] : [1, 0];
-    const order = [...pref, ...DIRS.map((_, k) => k).filter((k) => !pref.includes(k))];
     let best = null, fallback = null;
     for (const r of RINGS) {
-      for (const k of order) {
+      for (let k = 0; k < DIRS.length; k++) {
         const dist = gap * r + (DIRS[k][0] ? w / 2 * Math.abs(DIRS[k][0]) : 0);
         const [x, y] = fit(a.x + DIRS[k][0] * dist, a.y + DIRS[k][1] * dist);
         if (hitsBox(x, y) || coversDot(x, y)) continue;

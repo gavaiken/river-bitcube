@@ -443,10 +443,11 @@ function zoomBox(W, H) {
   for (const pts of S.map.ropes) for (const p of pts) take(p.x, p.y);
   for (const q of screenQuads()) if (q.located) for (const c of [q.tl, q.tr, q.br, q.bl]) take(c[0], c[1]);
   if (!Number.isFinite(x0)) return whole;
-  const mx = Math.max(40, (x1 - x0) * 0.14), my = Math.max(30, (y1 - y0) * 0.05);
-  const bw = x1 - x0 + 2 * mx, bh = y1 - y0 + 2 * my;
+  // more room above than below: the plug ends hang from the ceiling, and their numbers sit above them
+  const mx = Math.max(40, (x1 - x0) * 0.14), my = Math.max(30, (y1 - y0) * 0.05), myTop = Math.max(60, (y1 - y0) * 0.12);
+  const bw = x1 - x0 + 2 * mx, bh = y1 - y0 + my + myTop;
   const k = Math.min(W / bw, H / bh);
-  return { k, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, zoomed: k > whole.k * 1.02 || bw / bh < (FW / FH) * 0.9, aspect: bw / bh };
+  return { k, cx: (x0 + x1) / 2, cy: (y0 - myTop + y1 + my) / 2, zoomed: k > whole.k * 1.02 || bw / bh < (FW / FH) * 0.9, aspect: bw / bh };
 }
 /** A screen's number in a dark pill at (x, y), moved to the nearest free spot (down, up, then sideways) when it would cover a
  *  label already drawn (`placed`, the boxes so far). */
