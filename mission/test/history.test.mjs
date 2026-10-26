@@ -514,3 +514,59 @@ test('never a login in the history: a calibration error carrying an RTSP address
   assert.equal(describeEvent(h.action({ action: 'ropes', body: { dark: 'true' } })), 'Turned the ropes on from mission control');
   assert.equal(describeEvent(h.action({ action: 'calibrate', body: { action: 'start', dry_run: 'yes' } })), 'Started a calibration from mission control');
 });
+
+test('the same state seen again after a long unseen stretch is a first sighting ("for over"), never the whole stretch', async () => {
+  const { UNSEEN_GAP_MS } = await import('../lib/history.mjs');
+  // a scenario's status as if every source answered at T (its ages hold)
+  const at = (name, T, tweak) => { const j = fixtures[name], c = clone(j.status), d = T - j._scenario.now;
+    for (const k of ['bitcube', 'seasons', 'modal', 'probe']) if (c[k]) { if (c[k].at != null) c[k].at += d; if (c[k].failing_since != null) c[k].failing_since += d; }
+    if (c.modal?.value?.next_tick_epoch) c.modal.value.next_tick_epoch += d / 1000;
+    tweak?.(c); return { ...c, now: T }; };
+  // 1. the gallery camera seen down for 9 min, then bitcube offline for 2 h, then the camera down again
+  {
+    const h = new History({ file: null, now: () => T0 });
+    h.observe(at('all-good', T0), T0);
+    h.observe(at('gallery-cam-down', T0 + MIN), T0 + MIN);
+    h.observe(at('gallery-cam-down', T0 + 10 * MIN), T0 + 10 * MIN);
+    for (let k = 11; k <= 130; k += 10) h.observe(at('bitcube-offline', T0 + k * MIN), T0 + k * MIN);
+    const back = h.observe(at('gallery-cam-down', T0 + 131 * MIN), T0 + 131 * MIN);
+    const g = h.since('gallery camera', T0 + 132 * MIN);
+    assert.deepEqual([g.level, g.since, g.for_s, g.at_least], ['down', T0 + 131 * MIN, 60, true], 'for over 1 min, not down for 131 min');
+    const ev = item(back, 'gallery camera');
+    assert.deepEqual([ev.from, ev.to, ev.gap, ev.still], ['down', 'down', true, true]);
+    sentence(describeEvent(ev), 'still down');
+    assert.match(describeEvent(ev), /^The gallery camera is still down/);
+    assert.equal(h.since('overall', T0 + 132 * MIN).at_least, true);
+  }
+  // 2. the full check stuck for 2 h (every reading a last answer), then fresh again with the camera still down
+  {
+    const h = new History({ file: null, now: () => T0 });
+    h.observe(at('all-good', T0), T0);
+    h.observe(at('gallery-cam-down', T0 + MIN), T0 + MIN);
+    for (let k = 5; k <= 125; k += 10) h.observe(at('gallery-cam-down', T0 + k * MIN, (c) => { c.probe.at = T0 + MIN; c.probe.age_s = (k - 1) * 60; }), T0 + k * MIN);
+    h.observe(at('gallery-cam-down', T0 + 126 * MIN), T0 + 126 * MIN);
+    const g = h.since('gallery camera', T0 + 127 * MIN), o = h.since('overall', T0 + 127 * MIN);
+    assert.deepEqual([g.since, g.at_least], [T0 + 126 * MIN, true], `gallery camera: ${JSON.stringify(g)}`);
+    assert.deepEqual([o.level, o.since, o.at_least], ['warning', T0 + 126 * MIN, true], `overall: ${JSON.stringify(o)}`);
+  }
+  // 3. a short blip (under UNSEEN_GAP_MS) changes nothing: the since stands
+  {
+    const h = new History({ file: null, now: () => T0 });
+    h.observe(at('gallery-cam-down', T0), T0);
+    h.observe(at('bitcube-offline', T0 + MIN), T0 + MIN);
+    const back = h.observe(at('gallery-cam-down', T0 + MIN + UNSEEN_GAP_MS / 2), T0 + MIN + UNSEEN_GAP_MS / 2);
+    assert.equal(item(back, 'gallery camera'), undefined);
+    assert.equal(h.since('gallery camera', T0 + 10 * MIN).since, T0);
+  }
+  // 4. a state watched all along keeps its exact since, however long; and after a restart (nothing seen yet in this
+  //    process) the since from the file stands, as before
+  {
+    const file = tmp();
+    const h = new History({ file, now: () => T0 });
+    for (let k = 0; k <= 180; k += 5) h.observe(at('gallery-cam-down', T0 + k * MIN), T0 + k * MIN);
+    assert.deepEqual([h.since('gallery camera', T0 + 180 * MIN).since, h.since('gallery camera', T0 + 180 * MIN).at_least], [T0, true]);
+    const again = new History({ file, now: () => T0 + 181 * MIN });
+    assert.equal(item(again.observe(at('gallery-cam-down', T0 + 181 * MIN), T0 + 181 * MIN), 'gallery camera'), undefined);
+    assert.equal(again.since('gallery camera', T0 + 181 * MIN).since, T0);
+  }
+});
