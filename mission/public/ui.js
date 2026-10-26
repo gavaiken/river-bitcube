@@ -37,7 +37,7 @@
 // poll at once; after a theme change, 'mc:theme' (detail: 'auto' | 'light' | 'dark').
 import { api as rawApi, esc, md, plainError, noAnswerText, POLL_TIMEOUT_MS } from '/app.js';
 import { dur as modelDur, CONTACTS, TZ, ctlInit, ctlStep, ctlView, applyingWords, applyingText, confirmingWords, CONFIRMING_SAID, unconfirmedWords,
-  notSentWords, failWords, EXPECT_S, serverJudged, entryIdOf, newRequestId, heldWords, confirmLimitS } from '/model.js';
+  notSentWords, failWords, EXPECT_S, newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS } from '/model.js';
 
 export { esc, md, plainError, noAnswerText };
 
@@ -540,6 +540,8 @@ export function whyText(why) {
  *    expectS    the change's usual seconds (model.js EXPECT_S): over 20, the applying line shows m:ss and "usually about N" from
  *               the start; a shorter one (10 s when not given) once it runs past it ("usually a few seconds"); the confirming
  *               line gives it too. usual: words of its own for the confirming line instead
+ *    action     the change's action ('calibrate', 'rebuild', …): a maybe answer that names its entry holds the lock exactly
+ *               when the server's does (model.js heldMaybe: MAYBE_HOLDS, the rule Status follows too, CR8 #10)
  *    serverConfirms  true: the server is the one authority on when it is done (a switch, a restart, a rebuild, a boot-file
  *               change, a calibration's start). The answer names its entry (applying_id); a 2xx waits in "confirming" until
  *               update({ model }) finds that id in status.confirmed (done), or in status.expired (unconfirmed), or its own limit
@@ -713,8 +715,9 @@ export function control(target, opts = {}) {
       if (typeof e?.applyingId === 'string') entryId = e.applyingId;     // a maybe answer still names its entry
       const maybe = !!(e?.maybe || (e?.noAnswer && e?.posted));
       try { o.onFail?.(e); } catch (x) { console.warn('onFail', x); }
-      // bitcube didn't answer a change whose lock holds (its entry stays to its limit): one state, when the buttons unlock (R8 #18)
-      held = !!(maybe && e?.serverMaybe && entryId && o.serverConfirms);
+      // bitcube didn't answer a change whose lock holds (its entry stays to its limit): one state, when the buttons unlock (R8 #18);
+      // by its action, the rule Status and the server follow too (model.js heldMaybe, CR8 #10)
+      held = heldMaybe(o.action, { maybe, serverMaybe: e?.serverMaybe, entryId });
       return go(ctlStep(s, { type: 'error', maybe, now: now() }), held ? heldWords(o.what, fmt.clock(serverNow() + confirmLimitS(o.expectS) * 1000, serverNow()))
         : maybe ? noAnswerText(e, o.noAnswer ?? 'the page shows what bitcube reports', serverNow()) : failText(e));
     }
@@ -741,23 +744,20 @@ export function control(target, opts = {}) {
   function update(n = {}) {
     const { readAt, ...rest } = n;
     Object.assign(o, rest);
-    const waiting = s.state === 'confirming' || s.state === 'unconfirmed';
-    // an answer lost on the way back named no entry: the request id this press sent finds it (R8 #2)
-    if ('model' in n && waiting && !entryId && requestId) entryId = entryIdOf(n.model, requestId);
-    // a held change says when its lock ends by the server's own entry once it is in, so its line and every "Wait: …" agree
-    if ('model' in n && held && s.state === 'unconfirmed') {
-      const e = n.model?.show?.applying?.find((x) => x.id === entryId);
-      if (e?.unlock_at != null) text = heldWords(o.what, fmt.clock(e.unlock_at, serverNow()));
-    }
-    if ('model' in n && waiting && ((o.serverConfirms && (entryId || sent)) || (s.state === 'unconfirmed' && entryId))) {
-      // the server's verdict on this control's own entry, by its id: confirmed (done), expired (unconfirmed now), else waiting;
-      // when it can't be known, a reading taken after the send that shows it (CR7 #4)
-      const v = serverJudged(n.model, entryId, sent);     // sent: only a control that says what it sent (o.sent)
+    // this control's own change, by the one rule Status follows too (model.js ownVerdict, CR8 #10): its entry (an answer lost on
+    // the way back is found by the request id this press sent, R8 #2); a held change's unlock time by the server's own entry once
+    // it is in, so its line and every "Wait: …" agree (R8 #18); the server's verdict on its own entry, by its id: confirmed
+    // (done), expired (unconfirmed now), else waiting; when it can't be known, a reading taken after the send that shows it
+    // (CR7 #4; sent: only a control that says what it sent, o.sent)
+    const own = 'model' in n ? ownVerdict(n.model, { state: s.state, entryId, requestId, sent, serverConfirms: !!o.serverConfirms, held, saidExpired }) : null;
+    if (own) entryId = own.entryId;
+    if (own?.unlockAt != null) text = heldWords(o.what, fmt.clock(own.unlockAt, serverNow()));
+    if (own?.judged) {
       judgedAt = typeof readAt === 'number' ? readAt : now();
-      if (v === 'confirmed') return go(ctlStep(s, { type: 'model', confirmed: true, now: now() }));
-      if (v === 'expired' && s.state === 'confirming') return go(ctlStep(s, { type: 'expired', now: now() }));
+      if (own.step === 'done') return go(ctlStep(s, { type: 'model', confirmed: true, now: now() }));
+      if (own.step === 'expired') return go(ctlStep(s, { type: 'expired', now: now() }));
       // one that may or may not have happened, which the server then gave up on: bitcube didn't show it (said once)
-      if (v === 'expired' && !saidExpired) {
+      if (own.step === 'gave-up') {
         saidExpired = true;
         text = unconfirmedWords(o.what, fmt.clock(sentServer ?? serverNow(), serverNow()), o.unconfirmed ?? 'look at the Now line, or call Gavin');
         if (host.isConnected) say(text);

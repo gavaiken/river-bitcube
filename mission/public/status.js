@@ -11,8 +11,8 @@ import { mountShell, poll, tick, watchContact, focusKey, refocus, park, focusSho
 import { rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows, bootWords, controlLine, failText, notSentText, applyingLine,
   ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash, lastDoneParts, lastDoneWhat, fromWords } from '/status-words.js';
 
-const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, serverJudged, changeLabel, bandSaid,
-  entryIdOf, newRequestId, heldWords, MAYBE_HOLDS, confirmLimitS } = M;
+const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, changeLabel, bandSaid,
+  newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS } = M;
 const $ = (sel, root = document) => root.querySelector(sel);
 const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
 // One name per thing (the copy rules); descriptors live on the card, never in the name.
@@ -775,26 +775,21 @@ function settleControls() {
   for (const [name, c] of Object.entries(ctl)) {
     // only a reading taken after the answer can confirm the change or take a done line away
     const fresh = !!model && !lostContact(model) && p.receivedAt != null && c.refreshAt != null && p.receivedAt > c.refreshAt;
-    const waiting = c.s.state === 'confirming' || c.s.state === 'unconfirmed';
-    // an answer lost on the way back named no entry: the request id this page sent finds it (R8 #2)
-    if (fresh && waiting && !c.entryId && c.requestId) c.entryId = entryIdOf(model, c.requestId);
-    // a held change says when its lock ends by the server's own entry once it is in, so its line and every other "Wait: …" agree
-    if (c.held && c.s.state === 'unconfirmed' && model) {
-      const e = model.show.applying.find((x) => x.id === c.entryId);
-      if (e?.unlock_at != null) c.text = heldWords(c.o?.what, sclock(e.unlock_at));
-    }
-    if (fresh && waiting && (c.o?.serverConfirms || (c.s.state === 'unconfirmed' && c.entryId))) {
-      // the server's verdict on this control's own entry (by id): never the reading's words, which name the same file before and
-      // after a restart (R7 #6, #25). When it can't be known (no id: an answer that never came; or no list names it: over 10 min,
-      // a restart of the server), a switch to another file or a boot-file change is done once a reading taken after the send
-      // shows it (c.sent, CR7 #4); a restart or a rebuild only by its own limit. A quick change whose answer was lost (ropes,
-      // panels, the year's) is done once its entry, found by its request id, is confirmed (R8 #2)
-      const v = serverJudged(model, c.entryId, c.sent);   // c.sent: only a switch or boot-file change says what it sent
+    // the page's own change, judged by the one rule ui.js control() follows too (model.js ownVerdict, CR8 #10): its entry (an
+    // answer lost on the way back is found by the request id this page sent, R8 #2); a held change's unlock time by the server's
+    // own entry once it is in, so its line and every other "Wait: …" agree (R8 #18); and the server's verdict on its own entry
+    // (by id): never the reading's words, which name the same file before and after a restart (R7 #6, #25). When that can't be
+    // known (no id; or no list names it: over 10 min, a restart of the server), a switch to another file or a boot-file change is
+    // done once a reading taken after the send shows it (c.sent, CR7 #4); a restart or a rebuild only by its own limit
+    const own = model ? ownVerdict(model, { state: c.s.state, entryId: c.entryId, requestId: c.requestId, sent: c.sent, serverConfirms: !!c.o?.serverConfirms, held: c.held, saidExpired: c.saidExpired }) : null;
+    if (own?.unlockAt != null) c.text = heldWords(c.o?.what, sclock(own.unlockAt));
+    if (fresh) c.entryId = own.entryId;
+    if (fresh && own.judged) {
       c.judgedWall = p.receivedWall;
-      if (v === 'confirmed') { c.s = ctlStep(c.s, { type: 'model', confirmed: true, now }); finish(name); ended.push(name); }
-      else if (v === 'expired' && c.s.state === 'confirming') { c.s = ctlStep(c.s, { type: 'expired', now }); unconfirm(name); ended.push(name); }
+      if (own.step === 'done') { c.s = ctlStep(c.s, { type: 'model', confirmed: true, now }); finish(name); ended.push(name); }
+      else if (own.step === 'expired') { c.s = ctlStep(c.s, { type: 'expired', now }); unconfirm(name); ended.push(name); }
       // one that may or may not have happened, which the server then gave up on: bitcube didn't show it (said once)
-      else if (v === 'expired' && !c.saidExpired) { c.saidExpired = true; unconfirm(name); ended.push(name); }
+      else if (own.step === 'gave-up') { c.saidExpired = true; unconfirm(name); ended.push(name); }
     } else if (fresh && (c.s.state === 'confirming' || c.s.state === 'unconfirmed') && typeof c.o?.confirmed === 'function') {
       let yes = false;
       try { yes = !!c.o.confirmed(model); } catch (e) { console.warn('confirmed', e); }
@@ -900,9 +895,9 @@ async function runControl(name, path, body, o) {
     const maybe = !!(e?.maybe || (e?.noAnswer && e?.posted));
     c.s = ctlStep(c.s, { type: 'error', maybe, now: Date.now() });
     // bitcube didn't answer a change whose lock holds (the server keeps its entry to its limit): one state on the control, when
-    // the buttons unlock, never a "Wait: …" about itself above it (R8 #18)
-    const held = maybe && e?.serverMaybe && c.entryId && MAYBE_HOLDS.includes(name);
-    c.held = !!held;
+    // the buttons unlock, never a "Wait: …" about itself above it (R8 #18; model.js heldMaybe, the rule control() follows: CR8 #10)
+    const held = heldMaybe(name, { maybe, serverMaybe: e?.serverMaybe, entryId: c.entryId });
+    c.held = held;
     c.text = held ? heldWords(o.what, sclock(serverNow() + confirmLimitS(EXPECT_S[name]) * 1000))
       : maybe ? noAnswerText(e, o.noAnswer ?? 'the Now line shows what bitcube reports', serverNow()) : failText(o.fail, e, sclock(), o.kept);
     announce(c.text);

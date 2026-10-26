@@ -167,3 +167,43 @@ test('CR8 #8: OK, a restart, then OK again: the OK after it starts its own since
   t += 30_000; h.observe(camDown());
   assert.deepEqual([h.since('overall', t).cause, h.since('overall', t).since], ['gallery-cam', began]);
 });
+
+// ---- #10: one rule for a page's own change on Status and in control() ------------------------------------------------------------
+
+test('CR8 #10: whether a maybe holds its lock, and the verdict on a page\'s own change, are one pure rule (model.js) both pages use', async () => {
+  const { heldMaybe, ownVerdict } = await import('../public/model.js');
+  // held: the server answered a maybe naming its entry, for a change whose lock holds (the server's own rule, MAYBE_HOLDS)
+  for (const a of MAYBE_HOLDS) assert.equal(heldMaybe(a, { maybe: true, serverMaybe: true, entryId: 'ax.1' }), true, a);
+  assert.equal(heldMaybe('ropes', { maybe: true, serverMaybe: true, entryId: 'ax.1' }), false, 'a quick change: no lock');
+  assert.equal(heldMaybe('switch', { maybe: true, serverMaybe: false, entryId: 'ax.1' }), false, 'no answer at all: not the server\'s maybe');
+  assert.equal(heldMaybe('switch', { maybe: true, serverMaybe: true, entryId: null }), false, 'no entry named');
+  assert.equal(heldMaybe('switch', { maybe: false, serverMaybe: true, entryId: 'ax.1' }), false);
+  assert.equal(heldMaybe(undefined, { maybe: true, serverMaybe: true, entryId: 'ax.1' }), false);
+  // the verdict, by its entry: found by the request id when the answer was lost (R8 #2); done, given up, or said once
+  const t = T0, list = (extra) => derive(payload({ t, extra }), t);
+  const m = list({ confirmed: [{ id: 'ax.1', request_id: 'rq.1', action: 'switch', at: t }], expired: [{ id: 'ax.2', request_id: 'rq.2', action: 'bootfile', at: t }] });
+  assert.deepEqual(ownVerdict(m, { state: 'unconfirmed', requestId: 'rq.1' }), { entryId: 'ax.1', unlockAt: null, judged: true, step: 'done' });
+  assert.deepEqual(ownVerdict(m, { state: 'confirming', entryId: 'ax.2', serverConfirms: true }), { entryId: 'ax.2', unlockAt: null, judged: true, step: 'expired' });
+  assert.deepEqual(ownVerdict(m, { state: 'unconfirmed', entryId: 'ax.2' }), { entryId: 'ax.2', unlockAt: null, judged: true, step: 'gave-up' });
+  assert.equal(ownVerdict(m, { state: 'unconfirmed', entryId: 'ax.2', saidExpired: true }).step, null, 'said once');
+  // a server-confirmed change with nothing to go on yet is still judged (its own limit counts from the reading); a quick one is not
+  assert.deepEqual(ownVerdict(m, { state: 'confirming', serverConfirms: true }), { entryId: null, unlockAt: null, judged: true, step: null });
+  assert.equal(ownVerdict(m, { state: 'confirming' }).judged, false);
+  assert.equal(ownVerdict(m, { state: 'done', entryId: 'ax.1', serverConfirms: true }).judged, false, 'only a change still waiting');
+  // a held change says when its lock ends by the server's own entry once it is in
+  const h = list({}), held = derive(payload({ t, applying: [{ id: 'ax.5', action: 'switch', label: 'the switch to the live river', file: LIVE, source: 'mission control', phase: 'confirming', maybe: true,
+    started_at: t - 93_000, answered_at: t - 30_000, expect_s: 60, blocks: ['ropes'] }] }), t);
+  assert.equal(ownVerdict(held, { state: 'unconfirmed', entryId: 'ax.5', held: true, serverConfirms: true }).unlockAt, t - 30_000 + 180_000);
+  assert.equal(ownVerdict(h, { state: 'unconfirmed', entryId: 'ax.5', held: true }).unlockAt, null);
+  // both pages use them, and nothing else decides it
+  const st = src('../public/status.js'), ui = src('../public/ui.js'), lights = src('../public/lights.js'), words = src('../public/lights-words.js');
+  for (const [name, s] of [['status.js', st], ['ui.js', ui]]) {
+    assert.match(s, /heldMaybe\(/, name);
+    assert.match(s, /ownVerdict\(/, name);
+    assert.doesNotMatch(s, /MAYBE_HOLDS\.includes|serverJudged\(|entryIdOf\(/, `${name}: no copy of the rule`);
+  }
+  assert.match(ui, /heldMaybe\(o\.action,/, 'control() by its action, as the server decides');
+  assert.match(words, /start: \{ action: 'calibrate',/);
+  assert.match(words, /rebuild: \{ action: 'rebuild',/);
+  assert.match(lights, /\.\.\.CAL_CTL\.rebuild/);
+});

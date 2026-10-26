@@ -244,9 +244,12 @@ test('R8 #2: every page sends its own request id with a control and finds a lost
   const st = readFileSync(new URL('../public/status.js', import.meta.url), 'utf8'), ui = readFileSync(new URL('../public/ui.js', import.meta.url), 'utf8');
   const lights = readFileSync(new URL('../public/lights.js', import.meta.url), 'utf8');
   assert.match(st, /api\(path, requestId \? \{ \.\.\.body, request_id: requestId \} : body\)/);
-  assert.match(st, /c\.entryId = entryIdOf\(model, c\.requestId\)/);
+  assert.match(st, /ownVerdict\(model, \{ state: c\.s\.state, entryId: c\.entryId, requestId: c\.requestId,/);   // CR8 #10: one rule
+  assert.match(st, /if \(fresh\) c\.entryId = own\.entryId/);
   assert.match(ui, /o\.run\?\.\(\{ requestId \}\)/);
-  assert.match(ui, /entryId = entryIdOf\(n\.model, requestId\)/);
+  assert.match(ui, /ownVerdict\(n\.model, \{ state: s\.state, entryId, requestId,/);
+  assert.match(ui, /if \(own\) entryId = own\.entryId/);
+  assert.match(readFileSync(new URL('../public/model.js', import.meta.url), 'utf8'), /\(waiting && c\?\.requestId \? entryIdOf\(m, c\.requestId\) : null\)/, 'found by its request id while it waits');
   assert.equal((lights.match(/request_id: requestId/g) ?? []).length, 2, 'Lights: a start (or dry run) and a rebuild send theirs');
 });
 

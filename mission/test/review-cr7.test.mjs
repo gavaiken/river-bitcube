@@ -332,11 +332,13 @@ test('CR7 #4: with no verdict to go on, a switch to another file or a boot-file 
 
 test('CR7 #4: Status and ui.js control() judge their own change by serverJudged, with what was sent (a switch, a boot-file change)', () => {
   const st = readFileSync(new URL('../public/status.js', import.meta.url), 'utf8'), ui = readFileSync(new URL('../public/ui.js', import.meta.url), 'utf8');
-  assert.match(st, /serverJudged\(model, c\.entryId, c\.sent\)/);
+  // both through model.js ownVerdict (CR8 #10), which judges by serverJudged with what was sent
+  assert.match(st, /ownVerdict\(model, \{ state: c\.s\.state, entryId: c\.entryId, requestId: c\.requestId, sent: c\.sent,/);
+  assert.match(readFileSync(new URL('../public/model.js', import.meta.url), 'utf8'), /const v = serverJudged\(m, entryId, c\?\.sent \?\? null\)/);
   assert.match(st, /sent: \(mm\) => \(\{ action: 'switch', file: f, before: mm\?\.show\.file\?\.name \?\? null \}\)/);
   assert.match(st, /sent: \(mm\) => \(\{ action: 'bootfile', file: f, before: mm\?\.show\.boot_file\?\.name \?\? null \}\)/);
   assert.match(st, /sentAt: p\.last \? p\.last\.now \+ p\.elapsed\(\) : null/, 'the send on the server\'s clock');
-  assert.match(ui, /serverJudged\(n\.model, entryId, sent\)/);
+  assert.match(ui, /ownVerdict\(n\.model, \{ state: s\.state, entryId, requestId, sent,/);
   assert.doesNotMatch(st + ui, /entryVerdict\(/, 'never the verdict alone');
 });
 

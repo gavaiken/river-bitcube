@@ -217,11 +217,11 @@ export const resultHead = (dry) => (dry ? 'Dry run finished' : 'New LED map');
  *  one name (model.js changeLabel, as lib/applying.mjs labels it for the other phones, R7 #19). Stop is no change in flight
  *  anyone else sees: it says what it does, "Stopping the calibration…", never "Applying: the calibration stop…". */
 export const CAL_CTL = {
-  start: { what: changeLabel('calibrate', { action: 'start' }) },
-  dry: { what: changeLabel('calibrate', { action: 'start', dry_run: true }) },
+  start: { action: 'calibrate', what: changeLabel('calibrate', { action: 'start' }) },
+  dry: { action: 'calibrate', what: changeLabel('calibrate', { action: 'start', dry_run: true }) },
   stop: { what: changeLabel('calibrate', { action: 'cancel' }), pending: 'Stopping the calibration…' },
   stopDry: { what: changeLabel('calibrate', { action: 'cancel', dry_run: true }), pending: 'Stopping the dry run…' },
-  rebuild: { what: changeLabel('rebuild', { file: 'river-local-oct-22-seasons.toe' }) },
+  rebuild: { action: 'rebuild', what: changeLabel('rebuild', { file: 'river-local-oct-22-seasons.toe' }) },
 };
 
 // ---- the state line's next line --------------------------------------------------------------------------------

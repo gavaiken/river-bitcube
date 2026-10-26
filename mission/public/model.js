@@ -1145,6 +1145,31 @@ export function serverJudged(m, id, sent = null) {
 /** A change bitcube didn't answer in time keeps its lock (on the server and every page) only when it could still be under way on
  *  bitcube and must not be run twice (lib/applying.mjs reads this table). */
 export const MAYBE_HOLDS = Object.keys(AWAITED);
+/** Whether this page's own change that bitcube didn't answer in time holds its lock (R8 #18): the server's answer was a maybe
+ *  (serverMaybe) naming its entry, and its action is one whose lock holds (MAYBE_HOLDS: the server's own rule, lib/applying.mjs).
+ *  Status (by the control's name) and ui.js control() (by its `action`) decide it here, the same way (CR8 #10). */
+export function heldMaybe(action, { maybe = false, serverMaybe = false, entryId = null } = {}) {
+  return !!maybe && !!serverMaybe && typeof entryId === 'string' && entryId !== '' && MAYBE_HOLDS.includes(action);
+}
+/** A page's own change judged on a new reading: one rule for Status (status.js settleControls) and ui.js control().update (CR8 #10).
+ *  c: { state (its control's), entryId, requestId, sent, serverConfirms, held, saidExpired }. Returns
+ *    entryId   its entry: the one its answer named, else, while it waits, the one that carries the request id it sent (R8 #2)
+ *    unlockAt  when a held change's lock ends, by the server's own entry once it is in (its line and every "Wait: …" agree, R8 #18)
+ *    judged    whether its verdict is the server's to give: a change the server confirms (serverConfirms), or one unconfirmed whose
+ *              entry is known (a quick change whose answer was lost); the page then notes the reading as judged (its own limit)
+ *    step      'done' (confirmed: by its id, or a reading that shows it when no list names it, serverJudged), 'expired' (the
+ *              server gave up on it while it was confirming: unconfirmed now), 'gave-up' (one that may or may not have happened,
+ *              which the server then gave up on: said once, saidExpired), or null (waiting) */
+export function ownVerdict(m, c = {}) {
+  const state = c?.state, waiting = state === 'confirming' || state === 'unconfirmed';
+  const entryId = (typeof c?.entryId === 'string' && c.entryId) || (waiting && c?.requestId ? entryIdOf(m, c.requestId) : null) || null;
+  const unlockAt = c?.held && state === 'unconfirmed' && entryId ? num((m?.show?.applying ?? []).find((x) => x.id === entryId)?.unlock_at) : null;
+  const judged = waiting && (!!c?.serverConfirms || (state === 'unconfirmed' && !!entryId));
+  if (!judged) return { entryId, unlockAt, judged, step: null };
+  const v = serverJudged(m, entryId, c?.sent ?? null);
+  const step = v === 'confirmed' ? 'done' : v === 'expired' && state === 'confirming' ? 'expired' : v === 'expired' && !c?.saidExpired ? 'gave-up' : null;
+  return { entryId, unlockAt, judged, step };
+}
 /** This page's own change that bitcube didn't answer in time while its lock holds (R8 #18), said once on its control in place of a
  *  "Wait: …" line about itself: "The switch to the live river got no answer from bitcube in time: it may or may not have happened;
  *  the buttons unlock when bitcube shows it, or by 21:07." */
