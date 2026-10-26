@@ -37,10 +37,11 @@
 // can't start under a switch, rebuild or boot-file change. So a page can be tested through applying and confirming, a switch,
 // a rebuild or a boot-file change holds for applyS seconds (MISSION_FIXTURE_APPLY_S, 6; a rebuild twice that) before it
 // answers; then, in that scenario's world only and in memory, a switch makes TouchDesigner report the new file (and sets the
-// boot file, as probe.ps1's switch does), a boot-file change its boot_file, and a rebuild records the map in use (rebuilt()).
-// As live, a switch or a rebuild that answered stays in status.applying as 'confirming' while TouchDesigner restarts: for
-// another applyS seconds the world's TouchDesigner reports "restarting on <file>" (what the switch's own answer says live,
-// until the next full check), then it answers on the new file and the next snapshot confirms the change.
+// boot file, as probe.ps1's switch does), a boot-file change its boot_file. As live, a switch or a rebuild that answered stays
+// in status.applying as 'confirming' while TouchDesigner restarts: for another applyS seconds the world's TouchDesigner reports
+// "restarting on <file>" (what the switch's own answer says live, until the next full check), then it answers on the new file
+// and the next snapshot confirms the change (status.confirmed names its entry); a rebuild records the map in use (rebuilt())
+// only then.
 import { readFileSync, readdirSync, existsSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { CAMERAS, calBlocked, checkedControl, awaitsReading } from './mission.mjs';
@@ -88,8 +89,12 @@ export class FixtureMission {
     return this.worlds.get(n);
   }
 
-  /** The last rebuild in a scenario's world, { at, map, file }, or null (Mission.rebuilt's shape). */
-  rebuilt(name) { const r = this.worldFor(name).rebuilt; return r ? { ...r } : null; }
+  /** The last confirmed rebuild in a scenario's world, { at, map, file }, or null (Mission.rebuilt's shape). A rebuild whose
+   *  restart is over is confirmed first (snapshot()). */
+  rebuilt(name) {
+    try { this.snapshot(name); } catch { /* a half-edited scenario */ }
+    const r = this.worldFor(name).rebuilt; return r ? { ...r } : null;
+  }
 
   start() {}      // nothing to poll
   stop() { for (const c of this.calibs.values()) c.stop(); }
@@ -153,6 +158,9 @@ export class FixtureMission {
     }
     if (out.probe?.value) w.applying.confirm(out.probe.value, this.now());
     out.applying = w.applying.list(clock);
+    const ended = w.applying.ended(clock);
+    out.confirmed = ended.confirmed;
+    out.expired = ended.expired;
     out.fixture = n;
     out.now = clock;
     return out;
@@ -192,6 +200,7 @@ export class FixtureMission {
     let td = null;                 // TouchDesigner in this world: a switch to the file it runs reads "the restart on ..."
     try { td = this.snapshot(scenario).probe?.value?.td ?? null; } catch { /* a half-edited scenario: plain words */ }
     const running = typeof td?.file === 'string' ? td.file : null;
+    let baked = null;              // a rebuild's map: the map in use once the rebuild is confirmed (as live)
     return w.applying.run(action, checked, async () => {
       this.#log(action, checked);
       // a rebuild is refused as probe.ps1 refuses it: only into the file TouchDesigner has open, and only while it answers
@@ -206,12 +215,12 @@ export class FixtureMission {
       if (action === 'bootfile') w.boot_file = checked.file;
       if (action === 'rebuild') {
         const done = this.calibFor(scenario).status();
-        const map = (done.ok === true && done.result?.map) || (this.pixelmapDir ? readLocalPixelmap(this.pixelmapDir)?.file : null) || null;
-        w.rebuilt = { at: this.now(), map, file: checked.file };
+        baked = { map: (done.ok === true && done.result?.map) || (this.pixelmapDir ? readLocalPixelmap(this.pixelmapDir)?.file : null) || null, file: checked.file };
       }
       const changed = HOLD[action] ? "fixture mode: nothing on bitcube was changed; only this scenario's world (in memory)" : 'fixture mode: nothing was changed';
       return { ok: true, fixture: true, action, body: checked, note: changed, ...(action === 'rebuild' ? { rebuilt: true, saved: true, switched: true } : {}) };
-    }, { clock: () => this.clock(scenario), running, source, awaits: (r) => awaitsReading(action, r) });
+    }, { clock: () => this.clock(scenario), running, source, awaits: (r) => awaitsReading(action, r),
+         onConfirmed: () => { if (baked) w.rebuilt = { at: this.now(), ...baked }; } });
   }
 
   /** POST /api/control/check in fixture mode: nothing to poll, so only the log line. */

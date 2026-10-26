@@ -24,16 +24,21 @@
 //                                              (the v1 addresses) redirect to /status; /map/ is the engineers' diagram with live dots
 //   GET  /api/status                           lib/mission.mjs snapshot + studio + now (the server's clock) + since + last_action;
 //                                              applying: every control in flight (lib/applying.mjs; docs/mission-ui.md "Applying
-//                                              a change"), and probe.value.calibration the newest copy of the calibration job
+//                                              a change"); confirmed / expired: the changes it confirmed or gave up on in the last
+//                                              10 min ([{ id, action, file?, started_at, at }]; a page confirms its own switch,
+//                                              restart, rebuild or boot-file change by its id there); probe.value.calibration the
+//                                              newest copy of the calibration job
 //   GET  /api/lights                           what TouchDesigner sends the lights now (lib/lights.mjs CONTRACT); 503 in plain words
 //   GET  /api/pixelmap                         { map, screens, still }: the newest LED map and screens file (lib/lights.mjs)
 //   GET  /api/calibration                      the calibration job's progress file, or { running: false, none: true }; plus
-//                                              rebuilt: { at, map, file } | null, the last rebuild that went all the way (the map in use)
+//                                              rebuilt: { at, map, file } | null, the last rebuild that went all the way and was
+//                                              confirmed (TouchDesigner back on the file): the map in use
 //   GET  /api/history?limit=&kinds=&since=     { now, events (with words), since, last_action, count } (lib/history.mjs)
 //   GET  /api/contacts                         { contacts: [{ key, name, owns, tel }] }
 //   GET  /api/camera/<gallery|river>.jpg       the newest still (x-taken, x-age-s headers)
 //   POST /api/control/<action>                 the whitelist in lib/mission.mjs planControl, plus calibrate (lib/lights.mjs
 //                                              planCalibrate), check (the full check now, at most once per 20 s) and rebuild.
+//                                              The answer (a maybe answer too) carries applying_id, its entry in status.applying.
 //                                              A refusal is { ok: false, error }: 400 bad request, 409 "wait: <label> is being
 //                                              applied (started 21:04)" or "a calibration is running: ...", 429 checked too recently
 //   GET  /api/chat/history  /api/chat/events (SSE)   POST /api/chat/send  /api/chat/stop { clear? } (clear drops the waiting requests too)
@@ -166,11 +171,13 @@ observeAll();
 setInterval(observeAll, OBSERVE_EVERY_MS).unref();
 /** Every control, done or failed, goes into the history: its checked fields only (what the whitelist read, never what a client
  *  added), where it came from (mission control or the studio chat: never a person's name, MD4), its label (a restart on the
- *  running file reads as one) and whether it may or may not have happened (maybe: no answer in time). */
+ *  running file reads as one), whether it may or may not have happened (maybe: no answer in time) and its entry's id (while the
+ *  entry is still confirming, the band says "Last sent … waiting for bitcube to show it", not "Last done"). */
 function recordAction(scenario, action, checked, result, error, { source = 'mission control', label = null } = {}) {
   try {
     historyFor(scenario).action({ action, body: checked, ok: !error && result?.ok !== false, maybe: !error && result?.maybe === true,
-                                  note: error ? String(error.message ?? error) : result?.error ?? result?.note ?? null, source, label });
+                                  note: error ? String(error.message ?? error) : result?.error ?? result?.note ?? null, source, label,
+                                  applying_id: !error && typeof result?.applying_id === 'string' ? result.applying_id : null });
   } catch (e) { console.warn(`history: ${e.message}`); }
 }
 

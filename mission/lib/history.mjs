@@ -25,11 +25,13 @@
 //                                                          state seen again after a long unseen stretch (since restarts)
 //   { kind: 'show', t, field, from, to }                   file (the .toe name) | mode | season | ropes (the state word)
 //   { kind: 'calibration', t, running, stage, ok, cancelled, mode, error, stale, from: { running, stage } | null }
-//   { kind: 'action', t, action, body, ok, note, source, label?, maybe? }   source: 'mission control' | 'studio chat' (never a
+//   { kind: 'action', t, action, body, ok, note, source, label?, maybe?, applying_id? }   source: 'mission control' | 'studio chat' (never a
 //                                                          person: MD4); body: the request's checked fields (what the
 //                                                          whitelist read), cut to BODY_MAX chars of JSON; label: the change's
 //                                                          own words ("the restart on the river's year"); maybe: no answer in
-//                                                          time, so it may or may not have happened. Logins are scrubbed.
+//                                                          time, so it may or may not have happened; applying_id: its entry
+//                                                          (lib/applying.mjs), so a page can tell it is still being confirmed
+//                                                          (status.applying), confirmed or expired. Logins are scrubbed.
 //
 // Rules, and why:
 // - 'unknown' is the absence of knowledge, not a state. A piece that can't be checked (bitcube offline, the server
@@ -154,7 +156,9 @@ export class History {
     const label = typeof e.label === 'string' && e.label.trim() ? scrubCreds(e.label.trim()).slice(0, 80) : null;
     return this.#record({ kind: 'action', t: num(e.t) ?? this.now(), action: str(e.action == null ? 'unknown' : String(e.action), 40) || 'unknown',
                           body: smallBody(scrubCreds(e.body)), ok: e.ok !== false, note: e.note == null ? null : scrubCreds(String(e.note)).slice(0, 200),
-                          source: sourceOf(e.source), ...(label ? { label } : {}), ...(e.maybe === true ? { maybe: true } : {}) });
+                          source: sourceOf(e.source), ...(label ? { label } : {}), ...(e.maybe === true ? { maybe: true } : {}),
+                          // the change's entry in status.applying: while it is still there (confirming), Last done says "Last sent"
+                          ...(typeof e.applying_id === 'string' && e.applying_id ? { applying_id: e.applying_id.slice(0, 40) } : {}) });
   }
 
   /** When the current level began. `level` is the last KNOWN level: while the page's model says unknown (not checked,

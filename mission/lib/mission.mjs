@@ -94,17 +94,24 @@ export class Mission {
     Object.assign(this, { bitcubeHost, sshHost, seasonsUrl, modalUrl, riverCam, probe, snap, now, lights, stateDir, later, recheckMs, seasonsTimeoutMs });
     this.snaps = {};         // cam -> { at, jpeg, pending }
     this.data = {};          // source -> { at, value | error }
+    this.askedAt = {};       // source -> when the reading kept in data was asked (a full check: an older one never replaces it)
     this.timers = [];
     this.applying = new Applying({ now });     // every control in flight (status.applying; the 409 "wait: ...")
     this.calNote = null;     // { at, value }: the newest progress file Lights answered with (start, cancel, a progress read)
     this.lastRebuild = this.#readRebuilt();
   }
 
-  #set(name, value, error) {
+  /** Keep a source's reading (or its failure). asked: when it was asked (ms); a reading asked before the one already kept is
+   *  older news and is dropped (a full check on its 60 s timer, asked before a switch answered, landing after the switch's own
+   *  reading: it would put TouchDesigner back on the file it is restarting on). Returns whether it was kept. */
+  #set(name, value, error, asked = null) {
+    if (asked != null && this.askedAt[name] != null && asked < this.askedAt[name]) return false;
+    if (asked != null) this.askedAt[name] = asked;
     // a failure keeps when the failures in a row began (failing_since), so "failing for 52 min" can grow past one poll
     const prev = this.data[name], t = this.now();
     // never a login in what the pages are served (a camera's RTSP address in an ffmpeg line, see scrub.mjs)
     this.data[name] = { at: t, ...(error ? { error: scrubCreds(String(error)), failing_since: prev?.error ? prev.failing_since ?? prev.at : t } : { value: scrubCreds(value) }) };
+    return true;
   }
 
   async pollFast() {
@@ -125,7 +132,8 @@ export class Mission {
   async pollProbe() {
     const asked = this.now();
     const r = await this.probe(this.sshHost);
-    if (r.ok === false && !r.td) this.#set('probe', null, r.error); else this.#set('probe', r);
+    // kept only when asked after the reading already kept (pollProbe and a control's own reading race: R7 #25)
+    if (r.ok === false && !r.td) this.#set('probe', null, r.error, asked); else this.#set('probe', r, null, asked);
     // a switch or rebuild that answered before this check was asked is done once TouchDesigner answers on its file
     if (r.td) this.applying.confirm(scrubCreds(r), asked);
   }
@@ -161,6 +169,11 @@ export class Mission {
     const served = cal && cal === this.calNote?.value ? { ...cal, read_age_s: Math.max(0, Math.round((this.now() - this.calNote.at) / 1000)) } : cal;
     if (obj(out.probe?.value) && served !== (out.probe.value.calibration ?? null)) out.probe = { ...out.probe, value: { ...out.probe.value, calibration: served } };
     out.applying = this.applying.list();
+    // the server's verdict on every change it confirmed or gave up on in the last 10 min: a page confirms its own switch,
+    // restart, rebuild or boot-file change only by its entry's id here, never from a file name (R7 #6, #25)
+    const ended = this.applying.ended();
+    out.confirmed = ended.confirmed;
+    out.expired = ended.expired;
     return out;
   }
 
@@ -234,20 +247,28 @@ export class Mission {
       if (!this.applying.has(id)) return;
       let c = null;
       try { c = await this.lights.calibration(); this.noteCalibration(c); } catch { /* a failed read: try again */ }
-      if (isNew(c) || isNew(this.calibration()) || n >= CAL_START_READS) this.applying.release(id);
+      if (isNew(c) || isNew(this.calibration())) this.applying.release(id, 'confirmed');
+      else if (n >= CAL_START_READS) this.applying.release(id, 'expired');
       else this.#watchStart(id, isNew, n + 1);
     }, CAL_POLL_MS);
   }
 
   // ---- the last rebuild: which LED map the river's year uses ------------------------------------------------------
-  /** { at, map, file } of the last rebuild that went all the way, or null. */
+  /** { at, map, file, run } of the last rebuild that went all the way and was confirmed (TouchDesigner answering on the file
+   *  after it), or null. */
   rebuilt() { return this.lastRebuild ? { ...this.lastRebuild } : null; }
 
-  #recordRebuilt(file, r) {
+  /** What a rebuild baked in, read at its answer: the map (the answer's, else the run's result, else the newest on bitcube),
+   *  the file, and the run whose map it is. Recorded as the map in use only once the rebuild is confirmed (R7 #26). */
+  #rebuildOf(file, r) {
     const cal = this.calibration();
     const map = (typeof r?.pixelmap?.file === 'string' && r.pixelmap.file) || cal?.result?.map || this.data.probe?.value?.pixelmap?.file || null;
     // the run whose map this is, by its own started stamp (bitcube's clock): a page matches it exactly, never across two clocks
     const run = cal && cal.ok === true && cal.result?.map === map && typeof cal.started === 'number' ? cal.started : null;
+    return { map, file, run };
+  }
+
+  #recordRebuilt({ map, file, run }) {
     this.lastRebuild = { at: this.now(), map, file, run };
     if (!this.stateDir) return;
     try {
@@ -289,12 +310,16 @@ export class Mission {
     // two builds and two restarts, and nothing may touch TouchDesigner while a switch restarts it
     // A switch or rebuild that answered OK stays in status.applying ('confirming', still blocking what it blocks: a second switch
     // would kill the half-opened file) until the full check shows TouchDesigner answering on that file, or its confirm limit.
+    // A rebuild's map is the map in use only when it is confirmed: never while TouchDesigner is still restarting on it, and
+    // never for one whose TouchDesigner doesn't come back (R7 #26)
+    let baked = null;
     return this.applying.run(action, checked, async () => {
       if (plan.kind === 'seasons') return this.#seasons(plan.path, plan.body);
       const r = await this.#probeAction(plan.args, plan.timeout, action);
-      if (action === 'rebuild' && rebuildSucceeded(r)) this.#recordRebuilt(checked.file, r);
+      if (action === 'rebuild' && (rebuildSucceeded(r) || r?.maybe === true)) baked = this.#rebuildOf(checked.file, r);
       return r;
-    }, { running: this.data.probe?.value?.td?.file ?? null, source, awaits: (r) => awaitsReading(action, r), onPending: () => this.#recheckSoon() });
+    }, { running: this.data.probe?.value?.td?.file ?? null, source, awaits: (r) => awaitsReading(action, r), onPending: () => this.#recheckSoon(),
+         onConfirmed: () => { if (baked) this.#recordRebuilt(baked); } });
   }
 
   async #seasons(path, body) {
@@ -312,7 +337,9 @@ export class Mission {
   async #probeAction(args, timeout, action = null) {
     const asked = this.now();
     const r = await this.probe(this.sshHost, args, timeout);
-    if (r.ok !== false || r.td) this.#set('probe', r);
+    // an action's reading is bitcube as the action left it (a switch: TouchDesigner stopped, "restarting on <file>"), so it is
+    // as new as its answer: a full check asked before that answer never replaces it
+    if (r.ok !== false || r.td) this.#set('probe', r, null, this.now());
     if (r.td) this.applying.confirm(scrubCreds(r), asked);
     // the answer goes to the page as it is: every log line in it (modal_link.*.last, recorder.last) is scrubbed as the snapshot is
     return scrubCreds(actionResult(action, r));

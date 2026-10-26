@@ -285,14 +285,18 @@ test('a successful rebuild is recorded, kept in the state folder across a restar
   answer = { ok: true, rebuilt: true, saved: true, switched: true, td: { ok: false, error: `restarting on ${YEAR}` }, pixelmap: { file: 'pixelmap-2026-10-25.json' } };
   t += 60_000;
   await m.control('rebuild', { file: YEAR });
-  assert.deepEqual(m.rebuilt(), { at: AT_2104 + 60_000, map: 'pixelmap-2026-10-25.json', file: YEAR, run: null }, 'no finished run with this map: no run named');
-  assert.deepEqual(new Mission({ stateDir: dir }).rebuilt(), { at: AT_2104 + 60_000, map: 'pixelmap-2026-10-25.json', file: YEAR, run: null }, 'kept across a restart');
+  assert.equal(m.rebuilt(), null, 'TouchDesigner is still restarting on it: recorded once it is confirmed (R7 #26)');
+  answer = { ok: true, td: { ok: true, file: YEAR } };
+  t += 30_000; await m.pollProbe();
+  assert.deepEqual(m.rebuilt(), { at: AT_2104 + 90_000, map: 'pixelmap-2026-10-25.json', file: YEAR, run: null }, 'no finished run with this map: no run named');
+  assert.deepEqual(new Mission({ stateDir: dir }).rebuilt(), { at: AT_2104 + 90_000, map: 'pixelmap-2026-10-25.json', file: YEAR, run: null }, 'kept across a restart');
   // without the map in the answer: the finished calibration's map
   const lights = fakeLights();
   lights.status = { running: false, ok: true, stage: 'done', started: T0 - 300, updated: T0, result: { map: 'pixelmap-2026-10-24.json' } };
-  const m2 = new Mission({ lights, probe: async () => ({ ok: true, rebuilt: true, saved: true, td: {} }), later: () => {} });
+  const m2 = new Mission({ lights, probe: async (_h, args) => (args ? { ok: true, rebuilt: true, saved: true, td: {} } : { ok: true, td: { ok: true, file: YEAR } }), later: () => {} });
   await m2.calibrationStatus();
   await m2.control('rebuild', { file: YEAR });
+  await m2.pollProbe();
   assert.equal(m2.rebuilt().map, 'pixelmap-2026-10-24.json');
   assert.equal(m2.rebuilt().run, T0 - 300, 'the run baked in, by its own started stamp (bitcube\'s clock)');
 });
@@ -414,7 +418,7 @@ test('round 6 #32: a maybe answer keeps its lock until the confirm limit (bitcub
   const c = driven({ action: async () => ({ ok: false, maybe: true, error: 'bitcube took too long to answer' }) });
   await c.m.pollProbe();
   const r = await c.m.control('ropes', { dark: true });
-  assert.deepEqual(r, { ok: false, maybe: true, error: 'bitcube took too long to answer' });
+  assert.deepEqual(r, { ok: false, maybe: true, error: 'bitcube took too long to answer', applying_id: r.applying_id });
   // a quick change (ropes, panels, the year's controls) that may or may not have happened is no lock: the next reading says
   // which (code review of round 6: a 2 min lock on the mode for a slow page was worse than the doubt)
   assert.deepEqual(c.m.snapshot().applying, []);
@@ -428,7 +432,8 @@ test('round 6 #32: a maybe answer keeps its lock until the confirm limit (bitcub
   await new Promise((ok) => slow.listen(0, '127.0.0.1', ok));
   const m = new Mission({ seasonsUrl: `http://127.0.0.1:${slow.address().port}`, seasonsTimeoutMs: 150, later: () => {} });
   try {
-    assert.deepEqual(await m.control('mode', { mode: 'manual' }), { ok: false, maybe: true, error: "the river's year page took too long to answer" });
+    const mr = await m.control('mode', { mode: 'manual' });
+    assert.deepEqual(mr, { ok: false, maybe: true, error: "the river's year page took too long to answer", applying_id: mr.applying_id });
     assert.deepEqual(m.snapshot().applying, [], 'a quick change: no lock (the next reading of the page says which)');
   } finally { slow.closeAllConnections(); slow.close(); }
   const none = new Mission({ seasonsUrl: 'http://127.0.0.1:9', later: () => {} });

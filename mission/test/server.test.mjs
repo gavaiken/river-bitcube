@@ -95,7 +95,9 @@ test('server in fixture mode: /version, login, /fixtures, status, stills, contro
   assert.equal((await post('/api/control/shell', { cmd: 'rm' }, { cookie: mc })).status, 400);
   const ctl = await post('/api/control/mode', { mode: 'manual' }, { cookie: mc, origin: new URL(base).origin });
   assert.equal(ctl.status, 200);
-  assert.deepEqual(await ctl.json(), { ok: true, fixture: true, action: 'mode', body: { mode: 'manual' }, note: 'fixture mode: nothing was changed' });
+  const cj = await ctl.json();
+  assert.deepEqual(cj, { ok: true, fixture: true, action: 'mode', body: { mode: 'manual' }, note: 'fixture mode: nothing was changed', applying_id: cj.applying_id });
+  assert.equal(typeof cj.applying_id, 'string');
   const log = readFileSync(join(dir, 'state', 'controls.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
   assert.deepEqual(log.map((l) => [l.action, l.body]), [['mode', { mode: 'manual' }]]);
   // ... and into the history: /api/status says what was last done, /api/history lists it in words

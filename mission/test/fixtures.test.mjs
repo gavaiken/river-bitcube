@@ -60,8 +60,8 @@ test('scenarios: listed alphabetically; the cookie picks one, all-good is the de
 test('snapshot: the fixture status plus the scenario name, read again on every call', () => {
   const dir = fixtureDir();
   const m = fm(dir);
-  assert.deepEqual(m.snapshot(), { ...STATUS, applying: [], fixture: 'all-good', now: 5_000_000 });          // no _scenario.now: served on the real clock
-  assert.deepEqual(m.snapshot('bitcube-offline'), { ...STATUS, applying: [], fixture: 'bitcube-offline', now: 5_000_000 });
+  assert.deepEqual(m.snapshot(), { ...STATUS, applying: [], confirmed: [], expired: [], fixture: 'all-good', now: 5_000_000 });          // no _scenario.now: served on the real clock
+  assert.deepEqual(m.snapshot('bitcube-offline'), { ...STATUS, applying: [], confirmed: [], expired: [], fixture: 'bitcube-offline', now: 5_000_000 });
   assert.equal(m.snapshot('nope').fixture, 'all-good');
   // edit the file: no restart needed
   writeFileSync(join(dir, 'all-good.json'), scenario('all-good', { status: { bitcube: { at: 4_990_000, value: { online: false } }, probe: { age_s: 70, error: 'x' }, modal: null } }));
@@ -100,8 +100,9 @@ test('control: checked exactly like the real one, logged, and never acted on', a
   const realFetch = globalThis.fetch;
   globalThis.fetch = () => { throw new Error('fixture mode must not use the network'); };
   t.after(() => { globalThis.fetch = realFetch; });
-  assert.deepEqual(await m.control('mode', { mode: 'manual' }),
-                   { ok: true, fixture: true, action: 'mode', body: { mode: 'manual' }, note: 'fixture mode: nothing was changed' });
+  const mode = await m.control('mode', { mode: 'manual' });
+  assert.deepEqual(mode, { ok: true, fixture: true, action: 'mode', body: { mode: 'manual' }, note: 'fixture mode: nothing was changed', applying_id: mode.applying_id });
+  assert.equal(typeof mode.applying_id, 'string', 'the answer names its entry');
   await m.control('switch', { file: 'river-online-oct-23.toe' });
   for (const [a, b] of [['mode', { mode: 'chaos' }], ['switch', { file: 'evil.toe' }], ['shell', {}]]) {
     await assert.rejects(m.control(a, b), (e) => e.status === 400, a);
@@ -366,7 +367,9 @@ test('fixture mode records every change in flight, holds a switch, rebuild or bo
   assert.equal(m.snapshot('all-good').applying[0].label, "a rebuild of the river's year");
   assert.equal(m.rebuilt('all-good'), null);
   release(); await rb;
-  assert.deepEqual(m.rebuilt('all-good'), { at: t, map: 'pixelmap-2026-10-23.json', file: 'river-local-oct-22-seasons.toe' });
+  assert.equal(m.rebuilt('all-good'), null, 'TouchDesigner is restarting on it: not the map in use yet (R7 #26)');
+  t += 6_001;
+  assert.deepEqual(m.rebuilt('all-good'), { at: t, map: 'pixelmap-2026-10-23.json', file: 'river-local-oct-22-seasons.toe' }, 'confirmed: in use');
   assert.equal(m.rebuilt('td-low-fps'), null);
   const rebuiltAt = t;
   // a rebuild is refused, as probe.ps1 refuses it, unless TouchDesigner answers on that very file
