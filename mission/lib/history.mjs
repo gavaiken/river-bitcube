@@ -127,6 +127,9 @@ export class History {
     this.verdictOf = new Map();  // applying_id -> { id, verdict, t, request_id, long }: every verdict kept, by id (recent())
     this.kept = { long: [], quick: [] };   // the same verdicts, oldest first, each kind its own newest VERDICTS_KEPT: verdicts() reads
                                            // only the newest of each, and a burst of quick changes never pushes out a switch's (CR8 #1, #14)
+    this.actionOf = new Map();   // applying_id -> its action event, and verdictIn: -> its verdict event, while each is among the events:
+    this.verdictIn = new Map();  // kept as events are recorded and pruned (#index), never rebuilt per recent() (CR9 #19); the feed splits
+                                 // an action from its verdict exactly when that verdict's event is there to be its own line (CR9 #9)
     this.#load();
   }
 
@@ -277,12 +280,11 @@ export class History {
     // the feed (every kind: Recent): a change that waited for the server's verdict keeps "Asked to …" at its time, and the verdict is
     // its own line at its own time, so the list never says it was done before it began (R9 #20); asked for by kind, as before
     const split = ks == null;
-    const asked = split ? new Map(this.events.filter((e) => e.kind === 'action' && typeof e.applying_id === 'string').map((e) => [e.applying_id, e])) : null;
     for (let i = this.events.length - 1; i >= 0; i--) {
       const e = this.events[i];
       if (!(e.t > from)) continue;
       if (split && e.kind === 'verdict') {
-        const a = asked.get(e.applying_id);
+        const a = this.actionOf.get(e.applying_id);
         if (a && awaitsVerdict(a)) out.push({ kind: 'verdict', t: e.t, applying_id: e.applying_id, verdict: e.verdict, action: a.action, source: a.source,
                                               label: typeof a.label === 'string' && a.label ? a.label : changeLabel(a.action, obj(a.body) ?? {}) });
         continue;
@@ -299,9 +301,11 @@ export class History {
    *  counts it) and VERDICT_GRACE_MS. One that never got a verdict is "Sent …", never "Asked to …" forever. Anything else as is. */
   #judged(e, now, split = false) {
     if (!e || e.kind !== 'action' || typeof e.applying_id !== 'string') return e;
-    const v = this.verdictOf.get(e.applying_id);
-    // split: its verdict is a line of its own in the feed, so this one says only that it was asked for (R9 #20)
-    if (v) return { ...e, verdict: v.verdict, ...(split && awaitsVerdict(e) ? { split: true } : {}) };
+    // its verdict: the one kept by id (the newest VERDICTS_KEPT), else its own event among the events (kept 48 h)
+    const ve = this.verdictIn.get(e.applying_id), v = this.verdictOf.get(e.applying_id)?.verdict ?? ve?.verdict;
+    // split: its verdict is a line of its own in the feed, so this one says only that it was asked for (R9 #20); decided by that
+    // event being there, as recent() decides the verdict's line, never by the capped map (CR9 #9)
+    if (v) return { ...e, verdict: v, ...(split && ve && awaitsVerdict(e) ? { split: true } : {}) };
     const pending = awaitsVerdict(e) && this.awaiting.has(e.applying_id) && now - e.t <= confirmLimitS(EXPECT_S[e.action]) * 1000 + VERDICT_GRACE_MS;
     return pending ? { ...e, pending: true } : e;
   }
@@ -394,7 +398,7 @@ export class History {
     this.lines = lines.length;
     this.torn = raw.length > 0 && !raw.endsWith('\n');
     for (const l of lines) {
-      try { const ev = JSON.parse(l); if (obj(ev) && num(ev.t) != null && typeof ev.kind === 'string') { this.events.push(ev); this.#apply(ev); } }
+      try { const ev = JSON.parse(l); if (obj(ev) && num(ev.t) != null && typeof ev.kind === 'string') { this.events.push(ev); this.#index(ev); this.#apply(ev); } }
       catch { /* a torn or hand-edited line: skipped, never fatal */ }
     }
     // what was being applied before this start can't get a verdict now: the server keeps its entries in memory only (CR8 #7)
@@ -405,6 +409,7 @@ export class History {
 
   #record(ev) {
     this.events.push(ev);
+    this.#index(ev);
     this.#apply(ev);
     this.#prune(this.now());                 // events are rare (transitions, not polls), so a scan per event costs nothing
     if (!this.file) return ev;
@@ -424,7 +429,18 @@ export class History {
     const keep = new Set(latest.values());
     const fresh = this.events.filter((ev) => keep.has(ev) || now - ev.t <= this.keepMs);
     let extra = fresh.length - keep.size - this.max;      // non-markers beyond max go, oldest first
+    const before = this.events;
     this.events = extra > 0 ? fresh.filter((ev) => { if (keep.has(ev) || extra <= 0) return true; extra--; return false; }) : fresh;
+    if (this.events.length !== before.length) { const still = new Set(this.events); for (const ev of before) if (!still.has(ev)) this.#index(ev, false); }
+  }
+
+  /** recent()'s index of the actions and verdicts among the events, by their entry's id (CR9 #19): added as an event is recorded or
+   *  loaded, dropped as it is pruned. */
+  #index(ev, add = true) {
+    const id = ev?.applying_id, map = ev?.kind === 'action' ? this.actionOf : ev?.kind === 'verdict' ? this.verdictIn : null;
+    if (!map || typeof id !== 'string') return;
+    if (add) map.set(id, ev);
+    else if (map.get(id) === ev) map.delete(id);
   }
 
   /** Rewrite the file as what is in memory, so it stays near max lines however long the server runs. */

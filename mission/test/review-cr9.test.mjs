@@ -245,3 +245,56 @@ test("CR9 #16: a dry run's \"step N of 4\" comes from one helper (model.js calSt
   assert.match(page('lights.js'), /calStep\(/);
   assert.doesNotMatch(page('model.js').slice(page('model.js').indexOf('export function derive')), /step \$\{calStep\} of/);
 });
+
+// ---- #9, #19: Recent's split lines from the events themselves, its index kept as they come and go -------------------------------
+
+test("CR9 #9: an older change whose verdict the capped map forgot is still \"Asked to …\" beside its own verdict line, never \"Sent …\" and a verdict too", async () => {
+  const { History, feed } = await import('../lib/history.mjs');
+  let t = T0;
+  const h = new History({ file: null, now: () => t });
+  const asked = (i) => {
+    h.action({ action: 'switch', body: { file: i % 2 ? LIVE : YEAR }, ok: true, source: 'mission control', applying_id: `a.${i}`, t });
+    t += 1000;
+    h.judge({ confirmed: [{ id: `a.${i}`, action: 'switch' }] }, t);
+    t += 1000;
+  };
+  for (let i = 0; i < 502; i++) asked(i);          // more than the verdicts the history keeps by id (VERDICTS_KEPT, 500)
+  const lines = feed(h.recent({ limit: 5000 }));
+  const first = lines.filter((l) => l.applying_id === 'a.0');
+  assert.deepEqual(first.map((l) => l.words).sort(), ["Asked to switch TouchDesigner to the river's year from mission control", "bitcube showed the switch to the river's year"].sort());
+  assert.ok(!lines.some((l) => /^Sent /.test(l.words)), 'never "Sent …" beside a verdict line of its own');
+});
+
+test('CR9 #19: Recent reads its actions by id from an index kept as events are added and pruned, never a Map rebuilt over every event per call', async () => {
+  const { History, feed } = await import('../lib/history.mjs');
+  let t = T0;
+  const h = new History({ file: null, now: () => t, keepMs: 60_000, max: 50 });
+  for (let i = 0; i < 40; i++) {
+    h.action({ action: 'switch', body: { file: YEAR }, ok: true, source: 'mission control', applying_id: `b.${i}`, t });
+    t += 1000;
+    h.judge({ confirmed: [{ id: `b.${i}` }] }, t);
+    t += 1000;
+  }
+  h.events.filter = () => { throw new Error('recent() rebuilt its index over every event'); };
+  const lines = feed(h.recent({ limit: 500 }));
+  // the window is the last minute: what was pruned is gone from the index too, and every action left has its verdict line
+  const ids = new Set(lines.filter((l) => l.kind === 'action').map((l) => l.applying_id));
+  const verdicts = lines.filter((l) => l.kind === 'verdict');
+  assert.ok(ids.size > 0 && ids.size < 40);
+  for (const v of verdicts) assert.ok(ids.has(v.applying_id) || !h.events.some((e) => e.kind === 'action' && e.applying_id === v.applying_id), v.applying_id);
+  assert.ok(lines.filter((l) => l.kind === 'action').every((l) => /^Asked to /.test(l.words)));
+});
+
+test('CR9 #9, #19: a history read back from its file indexes its actions and verdicts too: the split lines survive a restart of the server', async () => {
+  const { History, feed } = await import('../lib/history.mjs');
+  const { mkdtempSync } = await import('node:fs'); const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const file = join(mkdtempSync(join(tmpdir(), 'cr9-')), 'history.jsonl');
+  let t = T0;
+  const a = new History({ file, now: () => t });
+  a.action({ action: 'bootfile', body: { file: LIVE }, ok: true, source: 'studio chat', applying_id: 'c.1', t });
+  t += 5000;
+  a.judge({ expired: [{ id: 'c.1' }] }, t);
+  const b = new History({ file, now: () => t + 1000 });
+  assert.deepEqual(feed(b.recent()).filter((l) => l.applying_id === 'c.1').map((l) => l.words),
+    ["bitcube didn't show the change of the boot file to the live river in time", 'Asked to set the boot file to the live river from the studio chat']);
+});
