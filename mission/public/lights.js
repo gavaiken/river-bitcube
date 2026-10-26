@@ -9,7 +9,7 @@ import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark
 import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS } from '/model.js';
 import { uprightsFromAtlas } from '/screens.js';
 import { calChecklist, ROOM_CHECK, startWhy, dryWhy, calView, rebuiltFor, runNote, nextLine, captureWhen, driftWords, resultWords,
-  mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT } from '/lights-words.js';
+  mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT, calRead } from '/lights-words.js';
 
 const N_ROPES = 20, LEDS = 400;
 const LIGHTS_MS = 10_000, CAL_MS = 5_000, STILL_MS = 30_000, FRAME_OLD_S = 30, PROBE_OLD_S = 120;
@@ -656,11 +656,14 @@ async function pollCal() {
   S.cal.fetching = true;
   try {
     const { r, body } = await fetchTimed('/api/calibration');
-    const j = body ?? {};
-    if (!r.ok || (j.ok === false && !('running' in j))) throw Object.assign(new Error(j.error || `HTTP ${r.status}`), body ? { status: r.status } : {});
+    // only mission control's progress answer is a read: a 2xx that isn't it (a cut-off body, a proxy's page) is a failed
+    // one, like a 503 or no answer: the last good progress, Stop and when bitcube was last heard all stay
+    const read = calRead({ ok: r.ok, status: r.status, body });
+    if (!read.good) throw new Error(read.error);
+    const j = body;
     const wasRunning = S.cal.p?.running === true;
-    S.cal.p = j.none ? null : j; S.cal.heardAt = performance.now(); S.cal.heardWall = Date.now(); S.cal.error = null;
-    if ('rebuilt' in j) S.cal.rebuilt = j.rebuilt ?? null;
+    S.cal.p = read.p; S.cal.heardAt = performance.now(); S.cal.heardWall = Date.now(); S.cal.error = null;
+    if (read.rebuilt !== undefined) S.cal.rebuilt = read.rebuilt;
     // ended before this page opened: show only a recent one, judged on the server's clock (never this phone's)
     const nowS = typeof j.age_s === 'number' ? null : serverNowMs() != null ? serverNowMs() / 1000 : null;
     if (!wasRunning && !j.running && !S.cal.seenStarted) S.cal.old = typeof j.age_s === 'number' ? j.age_s > OLD_RUN_S : nowS != null && typeof j.updated === 'number' && nowS - j.updated > OLD_RUN_S;

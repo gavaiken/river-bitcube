@@ -104,6 +104,17 @@ export function runNote({ heardS, failing }) {
   return grey ? { grey, text: `Last heard from bitcube ${dur(heardS)} ago` } : { grey: false, text: '' };
 }
 
+/** One read of GET /api/calibration: { good: true, p, rebuilt } (p null for "no job"; rebuilt undefined when the answer has
+ *  none), or { good: false, error }. A good read is mission control's progress answer, which always carries a boolean
+ *  `running`; anything else (a 2xx that isn't JSON, a cut-off body, a proxy's page, a refusal) is a failed read, so the last
+ *  good progress and Stop stay (R6 #29). */
+export function calRead({ ok, status, body }) {
+  const j = body && typeof body === 'object' && !Array.isArray(body) ? body : null;
+  if (ok && j && typeof j.running === 'boolean') return { good: true, p: j.none ? null : j, rebuilt: 'rebuilt' in j ? j.rebuilt ?? null : undefined };
+  const said = j && typeof j.error === 'string' && j.error.trim() ? j.error.trim().replace(/^Can't read the calibration:\s*/i, '') : '';
+  return { good: false, status, error: said || (!ok ? "mission control didn't answer" : "mission control's answer couldn't be read") };
+}
+
 // ---- the state line's next line --------------------------------------------------------------------------------
 /** Under the state line when the verdict isn't OK: the band's headline cause and where to act ({ text, href, link }), or null.
  *  The cause is left out when the line above already says it ("bitcube is offline" once, not twice). During a calibration

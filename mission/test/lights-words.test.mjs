@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { derive } from '../public/model.js';
 import { calChecklist, startWhy, dryWhy, calView, lostWhy, rebuiltFor, runNote, nextLine, driftWords, resultWords, captureWhen,
-  mapMissing, placeLabels, ROOM_CHECK, CAL_QUIET_S } from '../public/lights-words.js';
+  mapMissing, placeLabels, ROOM_CHECK, CAL_QUIET_S, calRead } from '../public/lights-words.js';
 
 const load = (name) => JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8'));
 const model = (name, edit = (s) => s, later = 2000) => { const f = load(name); const s = edit({ ...f.status, now: f._scenario.now }); return derive(s, s.now + later); };
@@ -188,4 +188,25 @@ test('code review: "map in use" never compares two machines\' clocks when the se
   const rebuilt = { at: (1_800_000_400 - 600) * 1000, map: 'pixelmap-2026-10-25.json', run: 1_800_000_000 };
   assert.equal(rebuiltFor(run, rebuilt), rebuilt.at);
   assert.equal(rebuiltFor({ ...run, started: 1_800_009_000 }, rebuilt), null, 'another run on the same day with the same map name is not it');
+});
+
+// ---- round 6 ----------------------------------------------------------------------------------------------------
+test('R6 #29: a progress read that is a 2xx but not mission control\'s JSON is a failed read, never "no run"', () => {
+  // non-JSON (a cut-off body, a proxy's page): fetchTimed gives body null
+  assert.equal(calRead({ ok: true, status: 200, body: null }).good, false);
+  // JSON, but not a progress answer: no boolean `running`
+  for (const body of [{}, [], 'x', 3, { ok: true }, { running: 'yes' }, { ok: false, error: "Can't read the calibration" }]) {
+    const r = calRead({ ok: true, status: 200, body });
+    assert.equal(r.good, false, JSON.stringify(body));
+    assert.ok(r.error && !/null|undefined|JSON|HTTP/.test(r.error), r.error);
+  }
+  assert.equal(calRead({ ok: false, status: 503, body: { ok: false, error: "Can't read the calibration: bitcube didn't answer" } }).good, false);
+  assert.equal(calRead({ ok: false, status: 502, body: null }).good, false);
+  // a good read: a run, a finished (or failed) run, or "no job"
+  assert.deepEqual(calRead({ ok: true, status: 200, body: { ...RUN, rebuilt: null } }), { good: true, p: { ...RUN, rebuilt: null }, rebuilt: null });
+  const failedRun = { running: false, ok: false, started: 1, error: 'x' };
+  assert.equal(calRead({ ok: true, status: 200, body: failedRun }).p, failedRun);
+  assert.deepEqual(calRead({ ok: true, status: 200, body: { running: false, none: true } }), { good: true, p: null, rebuilt: undefined });
+  // a failed read leaves the run on screen: calView of the last good progress is still the run
+  assert.equal(calView({ p: RUN, m: model('all-good') }).view, 'run');
 });
