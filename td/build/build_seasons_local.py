@@ -277,8 +277,10 @@ def amount(name, src, x, y, expr):
     return a
 
 
+# Noise translate y moves the pattern UP the field (camera space, so up the room: measured 26 Oct), so every falling
+# overlay negates its phase.
 # 1. torrent: fast streaks down the water, only where it's bright (foam), stronger with intensity
-tn = noise('torrent_noise', 0, -150, 0.5, 6.0, 0.35, ty=f"{M}.ph('torrent'){T}", tz=f"{M}.ph('drift'){T}")
+tn = noise('torrent_noise', 0, -150, 0.5, 6.0, 0.35, ty=f"-{M}.ph('torrent'){T}", tz=f"{M}.ph('drift'){T}")
 tt = threshold('torrent_streaks', tn, 150, -150, f"1 - (0.04 + 0.3 * {I}){T}")
 tm = mult('torrent_foam', tt, mono, 300, -150)
 tc = colour('torrent_tint', 300, -300, [f"1 - 0.1 * {M}.w(2){T}", f"1 - 0.15 * {M}.w(2){T}", f"1 - 0.45 * {M}.w(2){T}"])
@@ -292,13 +294,13 @@ gc = colour('glint_tint', 300, -600, [f"{M}.tint(0, 'glint'){T}", f"{M}.tint(1, 
 gcol = mult('glint_col', gm, gc, 450, -450)
 ga = amount('glints', gcol, 600, -450, f"parent().par.Overlay * (1.2 * {M}.w(0) + 0.9 * {M}.w(2) + 0.3 * {M}.w(1)){T}")
 # 3. autumn leaves: sparse warm flecks drifting down
-ln = noise('leaf_noise', 0, -750, 0.12, 1.4, 1.0, ty=f"{M}.ph('leaves'){T}", tz=f"0.3 * {M}.ph('drift'){T}")
+ln = noise('leaf_noise', 0, -750, 0.12, 1.4, 1.0, ty=f"-{M}.ph('leaves'){T}", tz=f"0.3 * {M}.ph('drift'){T}")
 lt = threshold('leaf_flecks', ln, 150, -750, '0.86')
 lc = colour('leaf_tint', 300, -900, ['1.0', '0.42', '0.12'])
 lcol = mult('leaf_col', lt, lc, 450, -750)
 la = amount('leaves', lcol, 600, -750, f"parent().par.Overlay * 1.3 * {M}.w(3){T}")
 # 4. spring rain: thin streaks with trails (feedback), as in the rain checkpoint
-rn = noise('rain_noise', 0, -1050, 0.6, 4.5, 0.55, ty=f"{M}.ph('rain'){T}", tz="absTime.seconds * 0.35")
+rn = noise('rain_noise', 0, -1050, 0.6, 4.5, 0.55, ty=f"-{M}.ph('rain'){T}", tz="absTime.seconds * 0.35")
 rd = threshold('rain_drops', rn, 150, -1050, '0.93')
 rseed = get(nullTOP, 'rain_seed', 300, -1050)
 rseed.inputConnectors[0].connect(rd)

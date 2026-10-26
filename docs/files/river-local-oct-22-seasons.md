@@ -14,7 +14,7 @@ A river in the Sierra foothills flows through the room, slowed and quickened and
 - **Does:**
   - Crossfades the slow, normal and fast copies by **intensity**: winter plays it 4× slower (with generated in-between frames, since the camera only gives 16 fps), summer 2× faster.
   - Grades the river through the current seasons' blended palette, with some natural colour kept so it reads as a real river.
-  - Overlays: torrent streaks on the bright water (grow with intensity), glints (ice in winter, sun in summer), autumn leaf flecks, spring rain.
+  - Overlays: torrent streaks on the bright water (grow with intensity), glints (ice in winter, sun in summer), autumn leaf flecks, spring rain. Streaks, leaves and rain fall **down** the ropes and screens (26 Oct: they had been rising).
   - Samples the result onto the ropes through the camera pixel map, and onto the four HUB75 quads. The map is `pixelmap-2026-10-23.json`, captured at Gray Area with the gallery cam where it now hangs (all 20 ropes). A rope a map misses borrows its neighbour's positions (`tools/pixelmap/fill.py`), so it's never sent black.
 - **Modes:** automatic (4-minute year), dynamic (people steer it; needs the counter), manual (targets). After a restart: dynamic if the counter is running, otherwise automatic; never manual.
 - **Controls:** the control page (port 9981), or in TD `/project1/seasons` (Look page: gain, river brightness and contrast, natural colour, overlays, blur, HUB75 gain and gamma). Rules are saved in `River\seasons-rules.json`.
