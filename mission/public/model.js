@@ -898,6 +898,9 @@ export function confirmingWords(elapsedS, usual = null) {
   const u = typeof usual === 'string' ? usual : num(usual) != null ? usualWords(usual) : '';
   return `Sent · waiting for bitcube to show it · ${elapsedClock(elapsedS)}${u ? ` · ${u}` : ''}`;
 }
+/** Words without their numbers ("for about 40 s more" and "for about 35 s more" read the same): a live region says a headline
+ *  again only when this changes, so a ticking time is never re-announced (R6 #8; Status's band and Lights' state line). */
+export const sansTime = (t) => String(t ?? '').replace(/\d+(?:[.,]\d+)?(?:[\s\u00a0]*(?:s|min|h|days)\b)?/g, '#');
 /** What the page's live region says once on entering confirming (never with a time). */
 export const CONFIRMING_SAID = 'Sent; waiting for bitcube to show it';
 /** Another phone's change in flight (a show.applying entry), for the band: "Applying: the switch to the live river · 0:23 · usually

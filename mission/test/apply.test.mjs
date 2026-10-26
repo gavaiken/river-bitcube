@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { derive, ctlInit, ctlStep, ctlView, confirmLimitS, elapsedClock, applyingWords, confirmingWords, APPLY_BLOCKS, LONG_CHANGE_S,
-  usualWords, applyingText, entryWords, unconfirmedWords, notSentWords, failWords, CONFIRMING_SAID } from '../public/model.js';
+  usualWords, applyingText, entryWords, unconfirmedWords, notSentWords, failWords, CONFIRMING_SAID, sansTime } from '../public/model.js';
 
 const load = (name) => JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8'));
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -302,4 +302,12 @@ test('R6 #14: a change refused because a calibration is running says to stop it 
   assert.equal(failWords('The ropes are unchanged', "bitcube didn't answer", '21:04'), "The ropes are unchanged: bitcube didn't answer (21:04). Try again, or see the verdict above.");
   assert.equal(failWords('The ropes are unchanged', "bitcube didn't answer", '21:04', { tail: 'Try again, or check Status.' }), "The ropes are unchanged: bitcube didn't answer (21:04). Try again, or check Status.");
   assert.equal(failWords('The rules are unchanged', 'no answer', '21:04', { kept: 'What you typed is kept.' }), 'The rules are unchanged: no answer (21:04). What you typed is kept. Try again, or see the verdict above.');
+});
+
+test('R6 #8: a live region tells a new headline from the same one with a time that moved on', () => {
+  const a = 'Attention. Calibrating the lights: the ropes are in patterns for about 40 s more.';
+  assert.equal(sansTime(a), sansTime('Attention. Calibrating the lights: the ropes are in patterns for about 4 min more.'));
+  assert.equal(sansTime('Attention. bitcube restarted 6 min ago and is still coming up.'), sansTime('Attention. bitcube restarted 7\u00a0min ago and is still coming up.'));
+  assert.notEqual(sansTime(a), sansTime('Attention. Calibrating the lights: the ropes are in patterns, nearly done.'));
+  assert.notEqual(sansTime(a), sansTime('Attention. The ropes are dark on purpose; everything else is up.'));
 });

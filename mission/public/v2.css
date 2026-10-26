@@ -300,7 +300,8 @@ details.row > summary .mk { margin-top: 2px; }
 .row .since { font-size: 14px; color: var(--muted); font-weight: 600; }
 .chev { color: var(--muted); font-size: 22px; line-height: 1; transition: transform 0.2s; }
 details[open] > summary .chev { transform: rotate(90deg); }
-.row-body { padding: 0 var(--gutter) 16px; display: grid; gap: var(--gap); }
+.row-body { padding: 0 var(--gutter) 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap); }   /* a nested row never widens it past the card */
+.row-body > * { min-width: 0; }
 .row-body .detail { font-size: 15px; line-height: 1.45; }
 .fold .row-body details.row { border: 1px solid var(--line); border-radius: var(--radius-btn); }
 .fold .row-body details.row + details.row { margin-top: 8px; }
@@ -345,8 +346,9 @@ details.fine .fine-list { border-top: 1px solid var(--line); margin: 0 calc(-1 *
 .ctl-status.done { color: var(--ok-text); }
 .ctl-status.failed { color: var(--down-text); }
 .ctl-status.unconfirmed { color: var(--warn-text); }
-.ctl-status:focus { outline: none; }
-.ctl-status:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }   /* focus waits here while its button is disabled */
+.ctl-status:focus, .ctl-why:focus, .ctl-h:focus, .ctl:focus, .band h1:focus { outline: none; }
+/* focus waits on these while its control is disabled: the status line, or the line that says why ("Wait: …") */
+.ctl-status:focus-visible, .ctl-why:focus-visible, .ctl-h:focus-visible, .ctl:focus-visible, .band h1:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 [aria-busy="true"] .btn:disabled { cursor: progress; }
 .spin { width: 16px; height: 16px; flex: none; margin-top: 2px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -453,6 +455,11 @@ dialog.sheet .menu-row .btn .chev { margin-left: auto; }
   details.installer > summary { flex-wrap: wrap; row-gap: 0; }
   .installer > summary .note { flex: 1 1 100%; order: 9; padding-bottom: 6px; }   /* its own line under the title, not a sliver beside it */
   .row-body { padding: 0 10px 14px; }
+  /* an opened "N things can't be checked" fold: its rows take the fold's full width, without side borders, so none runs past
+     the card's edge (R6 #6) */
+  .fold > .row-body { padding: 0 8px 12px; }
+  .fold .row-body details.row { border-left: 0; border-right: 0; border-radius: 0; }
+  .fold .row-body details.row > summary { padding-left: 2px; padding-right: 0; }
 }
 @media (min-width: 900px) {
   nav.tabs {

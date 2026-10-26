@@ -36,7 +36,8 @@
 // remembered in localStorage 'mc-theme'. After Check now the shell fires `document` event 'mc:check' so a page can
 // poll at once; after a theme change, 'mc:theme' (detail: 'auto' | 'light' | 'dark').
 import { api as rawApi, esc, md, plainError, noAnswerText } from '/app.js';
-import { dur as modelDur, CONTACTS, TZ, ctlInit, ctlStep, ctlView, applyingWords, confirmingWords } from '/model.js';
+import { dur as modelDur, CONTACTS, TZ, ctlInit, ctlStep, ctlView, applyingWords, applyingText, confirmingWords, CONFIRMING_SAID, unconfirmedWords,
+  notSentWords, failWords, EXPECT_S } from '/model.js';
 
 export { esc, md, plainError, noAnswerText };
 
@@ -180,7 +181,7 @@ export function tick(fn) {
  *  `last` is the last good JSON (with `now` filled in when the server sent none), `receivedAt` the performance.now()
  *  it arrived, so a page renders derive(p.last, p.last.now + (performance.now() - p.receivedAt)). 401 → /login. */
 export const POLL_TIMEOUT_MS = 8000;   // a request that hangs this long counts as a failure (a phone's handover, a lock mid-fetch)
-const lastStatus = { j: null };          // the newest /api/status any poll() on this page received (the menu reads it)
+const lastStatus = { j: null, wall: null };   // the newest /api/status any poll() on this page received, and when (Date.now())
 export function poll(url, { every = 5000, onData, onError, timeout = POLL_TIMEOUT_MS } = {}) {
   const h = { last: null, receivedAt: null, receivedWall: null, failedSince: null, startedAt: performance.now(), stop, refresh: () => once(true), elapsed };
   let timer = null, ctrl = null, stopped = false;
@@ -203,7 +204,7 @@ export function poll(url, { every = 5000, onData, onError, timeout = POLL_TIMEOU
       if (mine !== ctrl) return;                            // replaced meanwhile: the newer request reports
       if (typeof j.now !== 'number') j.now = Date.now();
       h.last = j; h.receivedAt = performance.now(); h.receivedWall = Date.now(); h.failedSince = null;
-      if (/^\/api\/status\b/.test(url)) lastStatus.j = j;
+      if (/^\/api\/status\b/.test(url)) { lastStatus.j = j; lastStatus.wall = h.receivedWall; }
       onData?.(j, h.receivedAt);
     } catch (e) {
       if (mine !== ctrl) return;
@@ -309,26 +310,58 @@ export function focusKey(node) {
   if (!parts.length) { const s = node.closest('summary'); return s && s !== node ? focusKey(s) : node.tagName === 'SUMMARY' && node.parentElement?.dataset.id ? `details[data-id="${CSS.escape(node.parentElement.dataset.id)}"] > summary` : null; }
   return node.tagName.toLowerCase() + parts.join('');
 }
-/** Focus an element that isn't a control (a status line, a heading): it gets tabindex -1 so it can hold focus. */
+/** The outermost closed <details> that hides n (its content, not its own summary), or null. Chrome still gives such content
+ *  boxes (content-visibility), so getClientRects can't tell; it can't take focus. */
+export function closedAround(n) {
+  let out = null;
+  for (let d = n?.parentElement?.closest('details:not([open])'); d; d = d.parentElement?.closest('details:not([open])')) {
+    if (!d.querySelector(':scope > summary')?.contains(n)) out = d;
+  }
+  return out;
+}
+/** Can n take focus where it is: connected, drawn (an empty status line is display: none), not inside a closed <details>? */
+export const drawn = (n) => n instanceof Element && n.isConnected && !n.hidden && n.getClientRects().length > 0 && !closedAround(n);
+/** Focus an element that isn't a control (a status line, a heading): it gets tabindex -1 so it can hold focus. An element that
+ *  isn't drawn can't: false, and the caller tries the next place. */
 function focusEl(n) {
-  if (!(n instanceof Element) || !n.isConnected) return false;
+  if (!drawn(n)) return false;
   if (!n.matches('a[href], button, input, select, textarea, summary, [tabindex]')) n.setAttribute('tabindex', '-1');
   n.focus({ preventScroll: true });
   return document.activeElement === n;
 }
-/** Puts focus back on the control `key` names inside root, or, when it is disabled now, on the nearest status line (or
- *  `fallback`, also when there is no key: a control() button has its status line as its fallback). */
+const says = (n) => !!n && !n.hidden && !!n.textContent.trim();
+/** Focus t where it is drawn now; when a closed <details> hides it (a row that moved into the collapsed fine list), the summary of
+ *  the outermost closed one, so focus is never lost to <body> for want of a drawn place. */
+export function focusShown(t) {
+  if (!(t instanceof Element) || !t.isConnected) return false;
+  const closed = closedAround(t), n = closed ? closed.querySelector(':scope > summary') : t;
+  if (!n) return false;
+  if (!n.matches('a[href], button, input, select, textarea, summary, [tabindex]')) n.setAttribute('tabindex', '-1');
+  n.focus({ preventScroll: true });
+  return document.activeElement === n;
+}
+/** Where focus waits while the control under it is blocked or busy (another phone's change, a calibration, lost contact, its own
+ *  request): the line that says why ("Wait: …", "Not possible now: …"), else its status line when that says something, else
+ *  `fallback`, else the control's heading, else its box. Never an empty line (it is display: none), never <body> (R6 #2, #7, #28).
+ *  Returns whether focus landed. */
+export function park(host, fallback = null) {
+  if (!(host instanceof Element)) return fallback ? focusEl(fallback) : false;
+  const closed = closedAround(host);   // its row moved into a collapsed list: that list's summary
+  if (closed) { const sum = closed.querySelector(':scope > summary'); sum?.focus({ preventScroll: true }); return !!sum && document.activeElement === sum; }
+  const why = host.querySelector('.ctl-why'), st = host.querySelector('.ctl-status');
+  for (const n of [says(why) ? why : null, says(st) ? st : null, fallback, host.querySelector('.ctl-h'), host]) if (n && focusEl(n)) return true;
+  return false;
+}
+/** Puts focus back on the control `key` names inside root, or, when it is disabled now, where it waits (park: its own status line
+ *  when that says something, else the line that says why, else `fallback`, also when there is no key). */
 export function refocus(key, root = document, fallback = null) {
   if (!key) return fallback ? focusEl(fallback) : false;
   let t = null;
   try { t = root.querySelector(key); } catch { /* a stale key */ }
-  if (t && !t.disabled) {
-    if (!t.matches('a[href], button, input, select, textarea, summary, [tabindex]')) t.setAttribute('tabindex', '-1');
-    t.focus({ preventScroll: true }); return document.activeElement === t;
-  }
-  // its own status line first (a .ctl can hold several controls), else the box's, else the fallback
-  const near = (t?._mcStatus?.isConnected ? t._mcStatus : null) ?? t?.closest('.ctl')?.querySelector('.ctl-status') ?? fallback;
-  return near ? focusEl(near) : false;
+  if (t && !t.disabled) return focusShown(t);
+  const own = t?._mcStatus?.isConnected ? t._mcStatus : null;
+  if (says(own) && focusEl(own)) return true;
+  return park(t?.closest('.ctl, [data-ctl], .ctl-host') ?? null, fallback);
 }
 /** sheet({ title, body, actions, focus }) opens the bottom sheet (body: HTML string or a Node; actions: [{ label, kind: 'primary'|'danger'|'plain',
  *  onClick, keep }] stacked full width, each closes the sheet unless `keep`); a Close button when there are no actions.
@@ -371,7 +404,7 @@ export function sheet({ title, body = '', actions = null, onClose = null, focus 
       // A disabled opener (a confirm withdrawn because the control became impossible, a change now applying, a run that
       // ended) can't hold focus: its status line takes it, never <body>, also when the opener has no data-* identity.
       const st = opener instanceof Element && opener._mcStatus?.isConnected ? opener._mcStatus : null;
-      if (!(opener instanceof Element && opener.isConnected) || opener.disabled) { if (!refocus(openerKey, document, st) && st) focusEl(st); }
+      if (!(opener instanceof Element && opener.isConnected) || opener.disabled) { if (!refocus(openerKey, document, st) && !(st && focusEl(st))) park(opener instanceof Element ? opener.closest('.ctl, [data-ctl], .ctl-host') : null); }
     }
     onClose?.();
   }
@@ -431,10 +464,18 @@ export function whyText(why) {
  *               "wait: <label> is being applied" reads "Wait: …"); an open confirm is withdrawn with "Not sent: <why>"
  *    confirm    a confirm() spec (or a function returning one), asked first; focus starts on the safe button
  *    run()      async: POSTs via api() and returns the answer (ok: false or a throw is a failure)
- *    pending | what   the applying line: `pending` as written, else "Applying: <what>…" (default "Sending to bitcube…")
- *    expectS    the change's usual seconds: over 20, the applying line shows m:ss and "usually about N"
- *    confirmed(model, { sentAt, result }) → boolean: given, a 2xx waits in "confirming" until update({ model }) shows it,
- *               or turns "unconfirmed" after max(3 × expectS, 120) s; without it, the answer itself is bitcube's reading
+ *    pending | what   the applying line: `pending` as written, else "Applying: <what>…" (default "Sending to bitcube…"); `what`
+ *               (team words: "the rebuild of the river's year") also names the change when it goes unconfirmed
+ *    expectS    the change's usual seconds (model.js EXPECT_S): over 20, the applying line shows m:ss and "usually about N" from
+ *               the start; a shorter one (10 s when not given) once it runs past it ("usually a few seconds"); the confirming
+ *               line gives it too. usual: words of its own for the confirming line instead
+ *    confirmed(model, { sentAt, result }) → boolean: given, a 2xx waits in "confirming" until update({ model, readAt }) shows it,
+ *               or turns "unconfirmed" after max(3 × expectS, 120) s, but only once a reading taken after that limit has been
+ *               judged (readAt: when that reading was taken, Date.now() by default; nothing is judged while the page has no
+ *               contact), so a phone that slept through it never goes unconfirmed by its clock alone; an unconfirmed change a
+ *               later reading shows ends done. Without it, the answer itself is bitcube's reading
+ *    holds(model) → boolean   optional: a done line gives way to a newer reading that no longer shows it (once one has, or after
+ *               a minute)
  *    done       "Dark" → "Dark · 21:04" (a string, or fn(result) → string); fail "The ropes are unchanged" → "<fail>:
  *               <reason> (21:04). Try again, or check Status."
  *    noAnswer   where to look when it may or may not have happened ("the Now line shows what bitcube reports")
@@ -475,13 +516,14 @@ export function control(target, opts = {}) {
   if (ident && !status.hasAttribute('data-ctl-status')) status.setAttribute('data-ctl-status', ident);
   button._mcStatus = status;     // refocus() and the sheet: where focus goes when this button is disabled under it
   const box = host.closest('.ctl') ?? (host.classList.contains('ctl') ? host : null);
-  let s = ctlInit(o.why), text = '', applyText = null, result = null, asking = null, untick = null;
+  let s = ctlInit(o.why), text = '', applyText = null, result = null, asking = null, untick = null, judgedAt = null, parked = false;
   const now = () => Date.now();
   const elapsedS = () => (s.sentAt == null ? 0 : (now() - s.sentAt) / 1000);
   const lockEls = () => { const l = typeof o.lock === 'function' ? o.lock() : o.lock; return l ? Array.from(l instanceof Element ? [l] : l).filter((x) => x instanceof Element) : []; };
   const sibs = () => (o.siblings ?? Array.from((box ?? host).querySelectorAll('button'))).filter((b) => b !== button);
   const hold = (els, on, flag) => { for (const b of els) { if (on) { if (!b.disabled) { b.disabled = true; b.dataset[flag] = '1'; } } else if (b.dataset[flag]) { b.disabled = false; delete b.dataset[flag]; } } };
-  const busyLine = () => (s.state === 'confirming' ? confirmingWords(elapsedS()) : applyingWords(applyText ?? o.pending ?? (o.what ? `Applying: ${o.what}…` : 'Sending to bitcube…'), elapsedS(), o.expectS));
+  const busyLine = () => (s.state === 'confirming' ? confirmingWords(elapsedS(), o.usual ?? o.expectS ?? null)
+    : applyingWords(applyText ?? o.pending ?? (o.what ? applyingText(o.what) : 'Sending to bitcube…'), elapsedS(), o.expectS));
   function paint() {
     const v = ctlView(s, o.why);
     button.textContent = o.label;
@@ -494,14 +536,19 @@ export function control(target, opts = {}) {
     if (whyEl.textContent !== w) whyEl.textContent = w;
     whyEl.hidden = !w;
     // what had focus and is disabled now (the button, a sibling, a locked input: another phone's change arrived, or this one
-    // started) can't keep it: the status line takes it, never <body>
+    // started) can't keep it: the line that says why takes it (its status line while its own change is in flight), never an
+    // empty line and never <body>; when the block ends, focus goes back to the button (R6 #2, #7, #28)
     const had = document.activeElement;
     button.disabled = v.disabled;
     box?.classList.toggle('off', !!o.why && !v.busy);
     if (v.busy) host.setAttribute('aria-busy', 'true'); else host.removeAttribute('aria-busy');
     hold(sibs(), v.busy, 'mcHeld');
     hold(lockEls(), v.lockInputs, 'mcLocked');
-    if (had && had !== document.body && had.disabled && (had === button || (box ?? host).contains(had) || lockEls().includes(had))) focusEl(status);
+    if (had && had !== document.body && had.disabled && (had === button || (box ?? host).contains(had) || lockEls().includes(had))) {
+      const spot = v.busy ? (says(status) ? status : null) : (says(whyEl) ? whyEl : null);
+      if (!(spot && focusEl(spot)) && !park(host, beforeEl)) park(box ?? host);
+      if (!v.busy && had === button) parked = true;
+    }
     const cls = `ctl-status${v.busy ? ` pending ${s.state}` : ['done', 'failed', 'unconfirmed'].includes(s.state) ? ` ${s.state}` : ''}`;
     if (status.className !== cls) status.className = cls;
     if (v.busy) {
@@ -512,10 +559,19 @@ export function control(target, opts = {}) {
       const html = text ? `<span class="t">${esc(text)}</span>` : '';
       if (status.innerHTML !== html) status.innerHTML = html;
     }
+    // the block that moved focus off the button ended: it takes focus back, unless focus went elsewhere meanwhile
+    if (parked && !button.disabled) {
+      const a = document.activeElement;
+      if (!a || a === document.body || a === whyEl || a === status || a === beforeEl || a === host || a === box || a?.classList?.contains('ctl-h')) button.focus({ preventScroll: true });
+      parked = false;
+    }
   }
   function ticking(on) {
     if (on && !untick) untick = tick(() => {
-      if (s.state === 'confirming') { const n = ctlStep(s, { type: 'tick', expectS: o.expectS, now: now() }); if (n.state !== s.state) return go(n); }
+      // never by the clock alone: not while the page has no contact (a phone waking from sleep), and only once a reading taken
+      // after the limit has been judged (R6 #0)
+      const contact = lastStatus.wall == null || Date.now() - lastStatus.wall <= LOST_MS;
+      if (s.state === 'confirming' && contact) { const n = ctlStep(s, { type: 'tick', expectS: o.expectS, now: now(), readAt: judgedAt }); if (n.state !== s.state) return go(n); }
       paint();
     });
     else if (!on && untick) { untick(); untick = null; }
@@ -528,14 +584,15 @@ export function control(target, opts = {}) {
     const focusHere = host.contains(document.activeElement) || (idle && next.state === 'applying');
     s = next;
     const clockNow = fmt.clock(now());
-    if (s.state === 'applying' && was !== 'applying') { text = ''; announce(applyText ?? o.pending ?? (o.what ? `Applying: ${o.what}` : 'Sending to bitcube')); }
+    if (s.state === 'applying' && was !== 'applying') { text = ''; judgedAt = null; announce(String(applyText ?? o.pending ?? (o.what ? applyingText(o.what) : 'Sending to bitcube…')).replace(/…$/, '')); }
+    else if (s.state === 'confirming' && was !== 'confirming') announce(CONFIRMING_SAID);   // said once, without its time (R6 #9)
     else if (s.state === 'done' && was !== 'done') {
       const d = typeof o.done === 'function' ? o.done(result) : o.done;
       text = words ?? `${d} · ${clockNow}${result?.fixture ? ' (fixture mode: nothing really changed)' : ''}`;
       announce(text);
       try { o.onDone?.(result); } catch (e) { console.warn('onDone', e); }
     } else if (s.state === 'unconfirmed' && was !== 'unconfirmed') {
-      text = words ?? `Sent at ${fmt.clock(s.sentAt ?? now())}, but bitcube doesn't show it yet: ${o.unconfirmed ?? 'look at the Now line, or call Gavin'}.`;
+      text = words ?? unconfirmedWords(o.what, fmt.clock(s.sentAt ?? now()), o.unconfirmed ?? 'look at the Now line, or call Gavin');   // names what was sent (R6 #16)
       announce(text);
     } else if (s.state === 'failed') { text = words ?? text; announce(text); }
     ticking(s.state === 'applying' || s.state === 'confirming');
@@ -548,10 +605,8 @@ export function control(target, opts = {}) {
     if (button.disabled) focusEl(status);
     else if (document.activeElement === status) button.focus({ preventScroll: true });
   }
-  function failWords(e) {
-    const why = plainError(e);
-    return /^wait: /i.test(why) ? `${o.fail}: ${why.slice(6)}. Try again when it is done.` : /try again/i.test(why) ? `${o.fail}: ${why} (${fmt.clock(now())}).` : `${o.fail}: ${why} (${fmt.clock(now())}). Try again, or check Status.`;
-  }
+  /** The failure in model.js's words, the same as Status's; this page has no verdict of its own, so it points at Status. */
+  const failText = (e) => failWords(o.fail, plainError(e), fmt.clock(now()), { tail: 'Try again, or check Status.' });
   async function send(next) {
     applyText = null;
     go(next);
@@ -562,7 +617,7 @@ export function control(target, opts = {}) {
     } catch (e) {
       const maybe = !!(e?.maybe || (e?.noAnswer && e?.posted));
       try { o.onFail?.(e); } catch (x) { console.warn('onFail', x); }
-      return go(ctlStep(s, { type: 'error', maybe, now: now() }), maybe ? noAnswerText(e, o.noAnswer ?? 'the page shows what bitcube reports') : failWords(e));
+      return go(ctlStep(s, { type: 'error', maybe, now: now() }), maybe ? noAnswerText(e, o.noAnswer ?? 'the page shows what bitcube reports') : failText(e));
     }
     try { o.onSent?.(result); } catch (e) { console.warn('onSent', e); }
     go(ctlStep(s, { type: 'ok', confirmed: typeof o.confirmed === 'function' ? false : null, now: now() }));
@@ -581,22 +636,30 @@ export function control(target, opts = {}) {
     // judged again now it is answered: a control that became impossible meanwhile sends nothing
     const ans = ctlStep(s, { type: yes ? 'yes' : 'no', why: o.why, now: now() });
     if (ans.effect === 'send') return send(ans);
-    if (ans.notSent) return go(ans, `Not sent: ${String(ans.notSent).replace(/^wait: /i, '')} (${fmt.clock(now())}).`);
+    if (ans.notSent) return go(ans, notSentWords(ans.notSent, fmt.clock(now())));
     s = ans; paint();
   });
   function update(n = {}) {
-    Object.assign(o, n);
-    if ('model' in n && s.state === 'confirming' && typeof o.confirmed === 'function') {
+    const { readAt, ...rest } = n;
+    Object.assign(o, rest);
+    if ('model' in n && (s.state === 'confirming' || s.state === 'unconfirmed') && typeof o.confirmed === 'function') {
       let yes = false;
       try { yes = !!o.confirmed(n.model, { sentAt: s.sentAt, answeredAt: s.answeredAt, result }); } catch (e) { console.warn('confirmed', e); }
+      judgedAt = typeof readAt === 'number' ? readAt : now();   // when the reading just judged was taken
       if (yes) return go(ctlStep(s, { type: 'model', confirmed: true, now: now() }));
+    } else if ('model' in n && s.state === 'done' && typeof o.holds === 'function') {
+      let holds;
+      try { holds = !!o.holds(n.model); } catch (e) { console.warn('holds', e); }
+      const r = ctlStep(s, { type: 'reading', holds, why: o.why, now: now() });
+      if (r.effect === 'drop') text = '';
+      s = r;
     }
     const next = ctlStep(s, { type: 'why', why: o.why, now: now() });
     if (next.effect === 'withdraw') {
       // a confirm still open for a control that just became impossible is withdrawn, with the reason on the control and
       // focus on its status line (the sheet's close() puts it there: the button is disabled now)
       const a = asking; asking = null;
-      go(next, `Not sent: ${String(next.notSent).replace(/^wait: /i, '')} (${fmt.clock(now())}).`);
+      go(next, notSentWords(next.notSent, fmt.clock(now())));
       a?.close();
       if (!host.contains(document.activeElement)) focusEl(status);
       return;
@@ -681,7 +744,7 @@ function openMenu(shell) {
     <div class="menu-row">
       <button class="btn" type="button" data-m="contacts">Who to call <span class="chev" aria-hidden="true">›</span></button>
       <button class="btn" type="button" data-m="recent">Recent <span class="chev" aria-hidden="true">›</span></button>
-      <div class="ctl" data-m="check-host"><div class="ctl-h">The full check</div><div class="ctl-before"></div><button class="btn" type="button" data-m="check">Check now</button><div class="ctl-status"></div></div>
+      <div class="ctl" data-m="check-host"><div class="ctl-h" data-m="check-h">The full check</div><div class="ctl-before"></div><button class="btn" type="button" data-m="check">Check now</button><div class="ctl-status"></div></div>
     </div>
     <div><div class="ctl-h">Theme</div><div class="seg" role="group" aria-label="Theme">${['auto', 'light', 'dark'].map((x) => `<button type="button" data-theme="${x}" class="${t === x ? 'lit' : ''}" aria-pressed="${t === x}">${cap(x)}</button>`).join('')}</div></div>
     <div class="links">${DOC_LINKS.map(([l, h]) => `<a href="${h}" ${h.startsWith('/') ? '' : 'target="_blank" rel="noopener"'}>${esc(l)}</a>`).join('')}</div>
@@ -690,11 +753,14 @@ function openMenu(shell) {
   body.querySelector('[data-m="contacts"]').onclick = () => openContacts(shell);
   body.querySelector('[data-m="recent"]').onclick = () => openRecent(shell);
   body.querySelector('.seg').onclick = (e) => { const b = e.target.closest('[data-theme]'); if (!b) return; setTheme(b.dataset.theme); body.querySelectorAll('[data-theme]').forEach((x) => { x.classList.toggle('lit', x === b); x.setAttribute('aria-pressed', x === b); }); };
-  const check = control(body.querySelector('[data-m="check"]'), { ...checkWords(bitcubeOffline()), fail: "The check didn't start",
+  // the eyebrow over the button says what it does: the full check, or, while bitcube is offline, reaching bitcube (R6 #24)
+  const eyebrow = body.querySelector('[data-m="check-h"]');
+  const words = (offline) => { eyebrow.textContent = offline ? 'Reach bitcube' : 'The full check'; return checkWords(offline); };
+  const check = control(body.querySelector('[data-m="check"]'), { ...words(bitcubeOffline()), fail: "The check didn't start", expectS: EXPECT_S.check,
     run: async () => { shell.setChecking(true); try { return await api('/api/control/check', {}); } finally { shell.setChecking(false); } },
     onDone: () => document.dispatchEvent(new CustomEvent('mc:check')) });
   // a page that doesn't poll the status (the studio chat) asks once, so the button says what it will do
-  if (bitcubeOffline() == null) fetchStatus().then((j) => { if (j && !check.busy && check.button.isConnected) check.update(checkWords(j?.bitcube?.value?.online === false)); });
+  if (bitcubeOffline() == null) fetchStatus().then((j) => { if (j && !check.busy && check.button.isConnected) check.update(words(j?.bitcube?.value?.online === false)); });
 }
 /** The menu's Check now, in the same words as Status's: "Try bitcube again" (the quick check) while bitcube is offline. */
 function checkWords(offline) {
