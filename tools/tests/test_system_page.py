@@ -191,6 +191,19 @@ def test_phone_layout_has_a_bottom_sheet_and_no_sideways_scroll(page):
     assert p.pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
 
 
+def test_phone_tabs_scroll_sideways_and_never_overlap(page):
+    # R5 #2: the 44 px touch minimum once let the nowrap tabs shrink under their labels ("bitcSbecrAt3IOpen quesFionag"),
+    # so a tap on "questions" landed on "For agents". Each tab keeps its label's width; the row scrolls instead.
+    p = page(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    tabs = p.pg.evaluate("""[...document.querySelectorAll('.tabs button')].map((b) => {
+        const r = b.getBoundingClientRect(); return { t: b.textContent, w: r.width, h: r.height, need: b.scrollWidth, left: r.left, right: r.right }; })""")
+    assert all(t["need"] <= t["w"] + 1 for t in tabs), tabs
+    assert all(t["w"] >= 44 and t["h"] >= 44 for t in tabs), tabs
+    assert all(a["right"] <= b["left"] + 0.5 for a, b in zip(tabs, tabs[1:])), tabs
+    assert p.pg.evaluate("document.querySelector('.tabs').scrollWidth > document.querySelector('.tabs').clientWidth")
+    assert p.pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+
+
 def test_dark_theme_follows_the_system_and_the_toggle(page):
     p = page(color_scheme="dark")
     dark_bg = p.pg.evaluate("getComputedStyle(document.body).backgroundColor")

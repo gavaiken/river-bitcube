@@ -6,6 +6,7 @@
 // Plain ES module, no build, no framework, no external scripts.
 import { mountShell, poll, tick, watchContact, art, fmt, sheet, esc, mark, chip, WORD, MARK, DOC_LINKS, sinceAgrees, NAMES_FROM_BITCUBE, WARN_MS } from '/ui.js';
 import { derive, dur } from '/model.js';
+import { shownLevel, notYet, rowWord, sinceWords, mapAction, pointsAtStatus, contactNotice } from '/map-words.js';
 
 const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
 const CHECK = { mini: 'the Mac mini', bitcube: "bitcube's full check", modal: "the Mac mini, asking Dave's agent" };
@@ -52,7 +53,7 @@ const SUB_OF_MAP = Object.fromEntries(Object.entries(SUB_MAP).map(([k, v]) => [v
 const wide = () => matchMedia('(min-width: 760px)').matches;
 
 // ---- state -------------------------------------------------------------------------------------------------
-const S = { m: null, nodesHtml: '', openBox: null, sheetHtml: '', sheetEl: null };
+const S = { m: null, openBox: null, sheetHtml: '', sheetEl: null };
 const shell = mountShell({ page: 'map', title: 'System map' });
 const p = poll('/api/status', { every: 5000,
   onData: () => { shell.setAge(0); shell.setStale(null); render(); },
@@ -67,6 +68,7 @@ function model() { return p.last ? derive(p.last, p.last.now + p.elapsed()) : nu
 const itemOf = (m, id) => m?.items.find((x) => x.id === id) ?? null;
 const lost = () => contact.lost || (S.m && S.m.overall.cause === 'page');
 const elapsedS = () => (p.receivedAt == null ? 0 : p.elapsed() / 1000);
+const notice = contactNotice();
 
 // ---- words -------------------------------------------------------------------------------------------------
 /** The pill on a link: the spec's words ("no answer", "no frames", "no internet", "not driven", "picture frozen",
@@ -115,50 +117,67 @@ function fromLine(it) {
   const old = age != null && age > 120;
   return `<span class="from ${old ? 'old' : ''}">from ${FROM[it.checked_from] ?? it.checked_from}${age == null ? ' · not checked yet' : ` · ${fmt.nb(dur(age))} ago`}${it.stale ? ' · last answer' : ''}</span>`;
 }
-/** "Down for 9 min" from the server's history (status.since), carried forward; never this page's own watch start. */
+/** "Down for 9 min" from the server's history (status.since), carried forward while fresh; never this page's own watch start. */
 function sinceLine(it) {
   const s = p.last?.since?.items?.[it.id];
   // as Status: never for an OK item, and never when it would contradict the words beside it (ui.js sinceAgrees)
   if (!s || s.for_s == null || s.level !== it.level || it.level === 'ok' || !sinceAgrees(s, [it.summary, it.detail], NAMES_FROM_BITCUBE.has(it.id), S.m?.show.uptime_s)) return '';
-  return `<div class="since">${WORD[it.level]} for ${s.at_least ? 'over ' : ''}${fmt.nb(dur(s.for_s + elapsedS()))}</div>`;
+  // from a last answer it stops where the item was last seen ("Down for over 22 min when last seen"), never ticking on
+  const w = sinceWords(s, it, elapsedS());
+  return w ? `<div class="since">${esc(fmt.nb(w))}</div>` : '';
 }
 
 // ---- the chain -----------------------------------------------------------------------------------------------
 /** A sub-item that is not there yet (the people counter) is a known, normal absence: the grey '·' mark Status uses and
  *  "Not available yet"; never a green ✓. An unknown one (behind an offline bitcube) says Unknown, never "not available". */
-const notYet = (it) => !!it?.muted && it.level !== 'unknown';
+// A row from a last answer (its source is old, or contact is lost) is never green: the grey mark and "· last answer"
+// (map-words.js shownLevel, rowWord), whatever the box around it shows.
 function subRow(m, id) {
-  const it = itemOf(m, id);
-  const lvl = it?.level ?? 'unknown';
-  const mk = notYet(it) ? '<span class="mk lv-unknown" aria-hidden="true">·</span>' : mark(lvl);
-  return `<span class="sub lv-${notYet(it) ? 'unknown' : lvl} ${it?.muted ? 'muted-sub' : ''}">${mk}<span>${esc(shortName(id, it))}</span><span class="w">${notYet(it) ? 'Not available yet' : WORD[lvl]}</span></span>`;
+  const it = itemOf(m, id), ny = notYet(it), lvl = ny ? 'unknown' : shownLevel(it);
+  const mk = ny ? '<span class="mk lv-unknown" aria-hidden="true">·</span>' : mark(lvl);
+  return `<span class="sub lv-${lvl} ${it?.muted ? 'muted-sub' : ''} ${it?.stale ? 'stale' : ''}">${mk}<span>${esc(shortName(id, it))}</span><span class="w">${esc(rowWord(it))}</span></span>`;
 }
 function shortName(id, it) {
   const n = { recorder: 'River recorder', router: 'Router', 'people counter': 'People counter', seasons: "The river's year (its page)", 'rope box 1': 'Rope box 1', 'rope box 2': 'Rope box 2', 'modal link': 'Clips to Dave' }[id];
   return n ?? (it?.name ?? id).replace(/ \(.*\)$/, '');
 }
-function boxHtml(m, b) {
-  const it = itemOf(m, b.item), lvl = it?.level ?? 'unknown';
+/** A box's parts (its class, its accessible name, its inside): render() patches the button in place, so a box that has
+ *  focus keeps it (and a screen reader its place) when its words change, as Status keeps focus across its re-renders. */
+function boxParts(m, b) {
+  const it = itemOf(m, b.item), lvl = shownLevel(it), word = WORD[it?.level] ?? WORD.unknown;
   const sum = it ? it.summary : 'Not known yet';
   // the name a screen reader hears: the box, its own state, and every row inside it (a sub-item can be the one not OK)
-  const subs = (b.subs ?? []).map((id) => { const s = itemOf(m, id); return `${shortName(id, s)}: ${notYet(s) ? 'not available yet' : WORD[s?.level ?? 'unknown']}`; });
-  const label = `${b.name}: ${WORD[lvl]}${it?.stale ? ' (last answer)' : ''}. ${sum}${subs.length ? `. ${subs.join('; ')}` : ''}`;
-  return `<button type="button" class="node ${b.id} lv-${lvl} ${it?.stale ? 'stale' : ''}" data-box="${b.id}" aria-haspopup="dialog" aria-label="${esc(label)}">
-    <span class="nname">${esc(b.name)}</span>
-    <span class="nstate">${mark(lvl)}<span>${WORD[lvl]}</span>${it?.stale ? '<span class="last">· last answer</span>' : ''}</span>
+  const subs = (b.subs ?? []).map((id) => { const s = itemOf(m, id); return `${shortName(id, s)}: ${notYet(s) ? 'not available yet' : WORD[s?.level ?? 'unknown']}${s?.stale ? ' (last answer)' : ''}`; });
+  const label = `${b.name}: ${word}${it?.stale ? ' (last answer)' : ''}. ${sum}${subs.length ? `. ${subs.join('; ')}` : ''}`;
+  return { cls: `node ${b.id} lv-${lvl}${it?.stale ? ' stale' : ''}`, label,
+    inner: `<span class="nname">${esc(b.name)}</span>
+    <span class="nstate">${mark(lvl)}<span>${word}</span>${it?.stale ? '<span class="last">· last answer</span>' : ''}</span>
     <span class="nsum">${esc(fmt.nb(sum))}</span>
-    ${b.subs?.length ? `<span class="subs">${b.subs.map((id) => subRow(m, id)).join('')}</span>` : ''}</button>`;
+    ${b.subs?.length ? `<span class="subs">${b.subs.map((id) => subRow(m, id)).join('')}</span>` : ''}` };
 }
+const CHAIN = BOXES.filter((b) => b.id !== 'mini');
 function render() {
   const m = (S.m = model());
   art.setSeason(m?.show.weights ?? null);
   $('#connecting').hidden = !!m;
-  const mini = itemOf(m, 'mission control'), miniLvl = mini?.level ?? 'unknown';
   renderMini(m);
-  // the arrows' words for a screen reader (the drawn links are aria-hidden): "TouchDesigner to Ropes: not driven"
-  const words = m ? `<ul class="sr-only" aria-label="The links">${LINKS.map((l) => `<li>${esc(`${BOX[l.from].name} to ${BOX[l.to].name}: ${linkWord(l, itemOf(m, l.item), m)}`)}</li>`).join('')}</ul>` : '';
-  const html = '<svg class="lks" id="lks" aria-hidden="true"></svg>' + BOXES.filter((b) => b.id !== 'mini').map((b) => boxHtml(m, b)).join('') + words;
-  if (html !== S.nodesHtml) { $('#nodes').innerHTML = html; S.nodesHtml = html; }
+  const wrap = $('#nodes');
+  // built once; after that every box is patched in place (never re-created), so focus survives every answer
+  if (!wrap.querySelector('[data-box]')) {
+    wrap.innerHTML = '<svg class="lks" id="lks" aria-hidden="true"></svg>' + CHAIN.map((b) => `<button type="button" data-box="${b.id}" aria-haspopup="dialog"></button>`).join('') +
+      '<ul class="links-list" id="linkWords" aria-label="The links"></ul>';
+  }
+  for (const b of CHAIN) {
+    const el = wrap.querySelector(`[data-box="${b.id}"]`), x = boxParts(m, b);
+    if (el.className !== x.cls) el.className = x.cls;
+    if (el.getAttribute('aria-label') !== x.label) el.setAttribute('aria-label', x.label);
+    if (el._mcHtml !== x.inner) { el.innerHTML = x.inner; el._mcHtml = x.inner; }
+  }
+  // the arrows' words (the drawn links are aria-hidden): "TouchDesigner to Ropes: not driven"; under 300 px wide, where the
+  // chain is one box per row and the arrows can't be drawn, this list is shown instead (map.css)
+  const ul = $('#linkWords'), words = m ? LINKS.map((l) => `<li>${esc(`${BOX[l.from].name} to ${BOX[l.to].name}: ${linkWord(l, itemOf(m, l.item), m)}`)}</li>`).join('') : '';
+  if (ul._mcHtml !== words) { ul.innerHTML = words; ul._mcHtml = words; }
+  ul.hidden = !m;
   requestAnimationFrame(drawLinks);
   renderAges();
 }
@@ -175,8 +194,9 @@ function renderMini(m) {
 function renderAges() {
   const m = S.m;
   const banner = $('#banner'), isLost = lost();
-  // the banner ticks every second, so it is not a live region: #map-live says "No contact" once, and clears on return
-  const said = isLost ? 'No contact with mission control.' : '';
+  // the banner ticks every second, so it is not a live region: #map-live says "No contact" once, and "Contact with mission
+  // control is back." once when it returns, then clears (map-words.js contactNotice)
+  const said = notice(isLost, performance.now());
   if ($('#map-live').textContent !== said) $('#map-live').textContent = said;
   if (isLost) {
     // before the first answer, from when the page started asking (as the header and Status count), never from the first abort
@@ -213,7 +233,7 @@ function drawLinks() {
   const pills = [];
   for (const l of LINKS) {
     const a = rect(l.from), b = rect(l.to), it = m ? itemOf(m, l.item) : null;
-    const lvl = it?.level ?? 'unknown', stale = !!it?.stale;
+    const lvl = shownLevel(it), stale = !!it?.stale;   // a link from a last answer is grey, never green
     const vertical = isWide ? (l.from === 'bitcube' && l.to === 'td') : true;
     let x1, y1, x2, y2;
     if (vertical) {
@@ -244,20 +264,20 @@ addEventListener('resize', () => requestAnimationFrame(drawLinks));
 // ---- the sheet: the box's own item, its sub-items, the link on its arrow, and the lines for Will ----------------
 const srcKey = (it) => (it.checked_from === 'bitcube' ? 'probe' : it.checked_from === 'modal' ? 'modal' : SOURCE_OF[it.id] ?? null);
 function itemRow(m, id, extra = '') {
-  const it = itemOf(m, id), lvl = it?.level ?? 'unknown', ny = notYet(it);
-  return `<div class="r lv-${ny ? 'unknown' : lvl} ${it?.muted ? 'muted-sub' : ''} ${extra}">${ny ? '<span class="mk lv-unknown" aria-hidden="true">·</span>' : mark(lvl)}<span class="n">${esc(it?.name ?? shortName(id, null))}</span><span class="w">${ny ? 'Not available yet' : WORD[lvl]}${it?.stale ? ' · last answer' : ''}</span>
+  const it = itemOf(m, id), ny = notYet(it), lvl = ny ? 'unknown' : shownLevel(it);   // a last answer: grey, never green
+  return `<div class="r lv-${lvl} ${it?.muted ? 'muted-sub' : ''} ${it?.stale ? 'stale' : ''} ${extra}">${ny ? '<span class="mk lv-unknown" aria-hidden="true">·</span>' : mark(lvl)}<span class="n">${esc(it?.name ?? shortName(id, null))}</span><span class="w">${esc(rowWord(it))}</span>
     <span class="s">${esc(fmt.nb(it?.summary ?? 'Not known yet'))}${it && !it.muted && it.age_s != null ? ` · ${fmt.nb(dur(it.age_s + elapsedS()))} ago` : ''}</span></div>`;
 }
 function sheetBody(b) {
-  const m = S.m, it = itemOf(m, b.item), lvl = it?.level ?? 'unknown';
+  const m = S.m, it = itemOf(m, b.item), lvl = shownLevel(it);   // from a last answer: the grey chip, never the green one
   const outLinks = LINKS.filter((l) => l.from === b.id), inLinks = LINKS.filter((l) => l.to === b.id);   // every arrow in, not the first
   const linkRows = outLinks.filter((l) => l.item !== b.item && !(b.subs ?? []).includes(l.item)).map((l) => itemRow(m, l.item, 'lnk-row'));   // clips to Dave: on the arrow
   let html = `<div class="sh">
-    <div class="sh-top">${chip(lvl, WORD[lvl], it?.stale ? 'stale' : '')}${fromLine(it)}</div>
+    <div class="sh-top">${chip(lvl, rowWord(it), it?.stale ? 'stale' : '')}${fromLine(it)}</div>
     <p class="sh-sum">${esc(fmt.nb(it?.summary ?? 'Not known yet'))}</p>
     ${it?.detail ? `<p class="sh-detail">${esc(fmt.nb(it.detail))}</p>` : ''}
     ${it ? sinceLine(it) : ''}
-    ${it?.action ? `<div class="todo ${lvl === 'ok' ? 'quiet' : ''}"><div class="label">What to do</div><div class="action">${esc(fmt.nb(it.action))}</div></div>` : ''}
+    ${it?.action ? `<div class="todo ${lvl === 'ok' ? 'quiet' : ''}"><div class="label">What to do</div><div class="action">${esc(fmt.nb(mapAction(it.action)))}</div>${pointsAtStatus(it.action) ? `<a class="to-status" href="/status#r-${esc(it.id.replace(/\s+/g, '-'))}">Go to it on Status →</a>` : ''}</div>` : ''}
     <p class="secondary muted">${esc(b.lead)}</p>`;
   const rows = [...(b.subs ?? []).map((id) => itemRow(m, id)), ...linkRows];
   if (rows.length) html += `<div class="rows">${rows.join('')}</div>`;
