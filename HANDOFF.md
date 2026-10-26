@@ -4,11 +4,12 @@ The baton. **Read this first, every session; rewrite it before you stop** (rules
 
 - **Holder:** Gavin (coordinator session on the Mac mini, with two helper agents)
 - **Where:** repo only (bitcube is free; the boot file is running)
-- **Updated:** 2026-10-26 14:08 PT
+- **Updated:** 2026-10-26 14:20 PT
 - **Next holder:** Will, once the "Ready for Will" list below is all ✅
 
 ## The show right now
 - At Gray Area. bitcube boots **the river's year** (`river-local-oct-22-seasons.toe`); **the live river** (`river-online-oct-23.toe`) is the other show file mission control offers.
+- 26 Oct (Gavin, calibration session; [`docs/sessions/calibrate.md`](docs/sessions/calibrate.md)): Calibrate now launches its job through a scheduled task (every run had died with the SSH session; dry run verified, a real run still to do). In the boot file, torrent streaks, leaves and rain now fall down the room (they rose).
 - Mission control v2 is live (round 10 merged; open minor items in [`docs/mission-known-issues.md`](docs/mission-known-issues.md)).
 - Checkpoint `checkpoint-2026-10-26` taken (tags in both repos, bitcube and mini archives): [`docs/checkpoints.md`](docs/checkpoints.md).
 
