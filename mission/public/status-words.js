@@ -131,6 +131,26 @@ export function failText(fail, e, clock, kept = '') { return failWords(fail, pla
  *  applied. Press again when it is done." (model.js notSentWords). */
 export const notSentText = (why, clock) => notSentWords(why, clock);
 
+// ---- Last done: from the server's history, and its verdict on that change ------------------------------------------------
+/** The band's "Last done" line's head and tail for the last action (status.last_action) and the status it came with: "Last sent"
+ *  and "waiting for bitcube to show it" while the server is still confirming its entry (status.applying, by applying_id), "didn't
+ *  show it in time" when it gave up (status.expired), "Last done" once confirmed or when it is no longer listed; a failure is
+ *  "Last tried", a quick change bitcube didn't answer in time (no lock) "may or may not have happened". Never "done" for a change
+ *  the server is still confirming (R7 #3, #16, #28). */
+export function lastDoneParts(a, st) {
+  const id = typeof a?.applying_id === 'string' ? a.applying_id : null;
+  const has = (list) => !!id && Array.isArray(list) && list.some((e) => e && e.id === id);
+  if (has(st?.applying)) {
+    return a.maybe === true ? { head: 'Last sent', tail: ' · no answer in time; waiting for bitcube to show whether it happened' }
+      : { head: 'Last sent', tail: ' · waiting for bitcube to show it' };
+  }
+  if (has(st?.expired)) return { head: 'Last sent', tail: " · bitcube didn't show it in time" };
+  if (has(st?.confirmed)) return { head: 'Last done', tail: '' };
+  if (a?.maybe === true) return { head: 'Last sent', tail: ' · no answer in time: it may or may not have happened' };
+  if (a?.ok === false) return { head: 'Last tried', tail: a.note ? ` · failed: ${plainError(a.note)}` : '' };
+  return { head: 'Last done', tail: '' };
+}
+
 // ---- another phone's change in flight, on the band ---------------------------------------------------------------------
 /** "Applying: the switch to the live river · 0:23 · usually about 1 min", then "Waiting for bitcube to show the switch to the
  *  live river · …" once its request answered (model show.applying entry, seconds since it began; model.js entryWords). */

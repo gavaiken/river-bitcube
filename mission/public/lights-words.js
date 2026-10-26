@@ -148,13 +148,26 @@ export function stateLevel({ levels, lost = false, stale = false, change = null 
 /** The band's quiet line for each change in flight, under the state line (Lights has no band): [{ label, line, said }], line
  *  "Applying: the restart on the river's year · 0:05 · usually about 1 min" (model.js entryWords, the band's own words, which
  *  say "Waiting for bitcube to show …" once the request has answered; else applyingWords), said the same without its times.
- *  own: the actions this page's own controls are applying or confirming (their status line says it). */
+ *  own: this page's own changes (their controls say them): { ids } the entries its controls hold (applying_id: the change is
+ *  this page's whatever its control shows now, confirming or unconfirmed), { actions } a request still in flight that has no id
+ *  yet; a plain list is actions. */
 export function applyingNow(m, own = []) {
-  return (m?.show.applying ?? []).filter((a) => !own.includes(a.action)).map((a) => {
-    const waiting = a.phase === 'confirming';
+  const ids = Array.isArray(own) ? [] : own?.ids ?? [], actions = Array.isArray(own) ? own : own?.actions ?? [];
+  return (m?.show.applying ?? []).filter((a) => !actions.includes(a.action) && !(a.id && ids.includes(a.id))).map((a) => {
     const line = entryWords(a, a.elapsed_s);
-    return { label: a.label, line, said: waiting ? `Waiting for bitcube to show ${a.label}.` : `Applying: ${a.label}.` };
+    const said = a.maybe === true ? `No answer in time for ${a.label}: waiting for bitcube to show whether it happened.`
+      : a.phase === 'confirming' ? `Waiting for bitcube to show ${a.label}.` : `Applying: ${a.label}.`;
+    return { label: a.label, line, said };
   });
+}
+/** The status with its calibration taken from a newer progress read that shows the run ended (p: GET /api/calibration's
+ *  progress), so the controls a finished run blocked (Rebuild, the ropes) unlock with the result card, not up to a poll later
+ *  (R7 #31). Anything else (an older copy, a run still going, no copy) leaves the status as it is. Never changes its argument. */
+export function calNewer(status, p) {
+  const pv = status?.probe?.value, cur = pv?.calibration;
+  if (!pv || typeof pv !== 'object' || !p || typeof p !== 'object' || p.running !== false || typeof p.updated !== 'number') return status;
+  if (cur && typeof cur === 'object' && (cur.running !== true || (typeof cur.updated === 'number' && cur.updated >= p.updated))) return status;
+  return { ...status, probe: { ...status.probe, value: { ...pv, calibration: p } } };
 }
 /** A text without its ticking times ("for about 40 s more", "for 3 min", "6 min ago"): what a live region may say. */
 export function untimed(text) {

@@ -282,6 +282,12 @@ export function derive(status, nowMs) {
              // its limit runs from the answer once there is one (lib/applying.mjs #prune): a slow rebuild keeps its whole limit
              old: (answered ?? started) != null && (applyNow - (answered ?? started)) / 1000 > confirmLimitS(expect_s) };
   }).filter((a) => !a.old).map(({ old: _o, ...a }) => a);
+  // The server's verdict on the changes it saw through (status.confirmed) or gave up on (status.expired) in the last 10 min: a
+  // page confirms its own switch, restart, rebuild or boot-file change by its entry's id here (entryVerdict), never from a file
+  // name: a restart names the same file before and after (R7 #6, #25).
+  const ended = (list) => (Array.isArray(list) ? list : []).map(obj).filter((e) => e && typeof e.id === 'string' && typeof e.action === 'string')
+    .map((e) => ({ id: e.id, action: e.action, file: typeof e.file === 'string' ? e.file : null, at: num(e.at) }));
+  const confirmedList = ended(st.confirmed), expiredList = ended(st.expired);
   // A switch or a rebuild (it ends in a switch to the river's year) restarts TouchDesigner: until it answers on the file, the full
   // check sees it not running (the launcher waits 10 s), then not answering while the file loads. That is the restart, never a
   // fault to press Switch for (a second switch kills the half-opened file: another minute dark) (R6 #26).
@@ -760,6 +766,8 @@ export function derive(status, nowMs) {
     calibration: calibrating ? { left_s: calLeftS, left_words: calLeftWords, stage: typeof cal.stage === 'string' ? cal.stage : null, dry: calDry, words: calStageWords } : null,
     uptime_s: upS != null ? Math.round(upS) : null,   // bitcube's uptime as of the server's clock (its restart = now - uptime)
     applying,   // [{ id, action, label, file, started_at (ms), expect_s, elapsed_s, blocks, phase, words }]: changes in flight, from any phone
+    confirmed: confirmedList,   // [{ id, action, file, at }]: changes the server confirmed in the last 10 min (entryVerdict)
+    expired: expiredList,       // the same, for changes it gave up on (no reading showed them within their limit)
     words: tdOk ? `${cap(tdWords)}${yearOk ? `: ${year.season}, ${intensityWord(intensity)}, ${modeWords}` : ''}. ${cap(ropesWords)}.` : (top?.headline ?? ''),
   };
 
@@ -823,7 +831,8 @@ export const DONE_HOLD_S = 60;
  *    error { maybe }         applying → failed, or unconfirmed when it may have happened (no answer, an unreadable one)
  *    model { confirmed }     confirming or unconfirmed → done when bitcube's reading shows it (a phone that slept through
  *                            confirming, or a request whose answer was lost, still ends done when the change shows: R6 #0)
- *    tick { expectS, readAt } confirming → unconfirmed after max(3 × expectS, 120) s since it was sent, but only once a reading
+ *    expired {}              confirming → unconfirmed: the server gave up on it (its entry is in status.expired)
+ *    tick { expectS, readAt } confirming → unconfirmed after max(3 × expectS, 120) s since it was answered, but only once a reading
  *                            taken after that limit has been judged (readAt: the wall time of the newest reading judged; null:
  *                            none yet, so a phone waking from sleep, or out of contact, never turns it unconfirmed by its clock
  *                            alone; undefined: a caller that tracks no readings goes by the clock)
@@ -851,9 +860,11 @@ export function ctlStep(s, ev) {
     case 'ok': return s.state !== 'applying' ? same : ev.confirmed === false ? to('confirming', { answeredAt: now }) : to('done', { answeredAt: now });
     case 'error': return s.state !== 'applying' ? same : to(ev.maybe ? 'unconfirmed' : 'failed', { answeredAt: now });
     case 'model': return (s.state === 'confirming' || s.state === 'unconfirmed') && ev.confirmed === true ? to('done', { seen: true }) : same;
+    case 'expired': return s.state === 'confirming' ? to('unconfirmed') : same;
     case 'tick': {
       if (s.state !== 'confirming' || now == null) return same;
-      const limitMs = confirmLimitS(ev.expectS) * 1000, sent = s.sentAt ?? now;
+      // from the answer, as the server counts its lock (a slow rebuild keeps its whole limit); from the press before one
+      const limitMs = confirmLimitS(ev.expectS) * 1000, sent = s.answeredAt ?? s.sentAt ?? now;
       if (now - sent <= limitMs) return same;
       if (ev.readAt !== undefined && !(num(ev.readAt) != null && ev.readAt - sent > limitMs)) return same;
       return to('unconfirmed');
@@ -910,8 +921,21 @@ export const CONFIRMING_SAID = 'Sent; waiting for bitcube to show it';
 /** Another phone's change in flight (a show.applying entry), for the band: "Applying: the switch to the live river · 0:23 · usually
  *  about 1 min", then, once its request answered (phase 'confirming'), "Waiting for bitcube to show the switch to the live river · …". */
 export function entryWords(a, elapsedS) {
+  const from = a?.source === 'studio chat' ? ' · from the studio chat' : '';
+  // one bitcube didn't answer in time (maybe): not an ordinary change in progress, and its usual time means nothing now (R7 #15)
+  if (a?.maybe === true) return `No answer in time for ${a?.label ?? 'a change'}${from}: waiting for bitcube to show whether it happened · ${elapsedClock(elapsedS)}`;
   const head = a?.phase === 'confirming' ? `Waiting for bitcube to show ${a?.label ?? 'a change'}` : `Applying: ${a?.label ?? 'a change'}`;
-  return `${head}${a?.source === 'studio chat' ? ' · from the studio chat' : ''} · ${elapsedClock(elapsedS)} · ${usualWords(a?.expect_s)}`;
+  return `${head}${from} · ${elapsedClock(elapsedS)} · ${usualWords(a?.expect_s)}`;
+}
+/** The server's verdict on one entry, by its id (applying_id): 'pending' (still in status.applying: applying or confirming),
+ *  'confirmed' (status.confirmed: bitcube's reading showed it), 'expired' (status.expired: none did within its limit), or null
+ *  (not known: no id, an older server, or forgotten after 10 min). m: derive()'s model. */
+export function entryVerdict(m, id) {
+  if (!id || !m?.show) return null;
+  if ((m.show.applying ?? []).some((e) => e.id === id)) return 'pending';
+  if ((m.show.confirmed ?? []).some((e) => e.id === id)) return 'confirmed';
+  if ((m.show.expired ?? []).some((e) => e.id === id)) return 'expired';
+  return null;
 }
 /** A change no reading showed in time, naming what was sent: "The switch to the live river was sent at 21:13, but bitcube doesn't
  *  show it yet: look at the Now line, or call Gavin." (what: the change in team words, or null for "Sent at 21:13, …"). */

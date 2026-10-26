@@ -44,7 +44,7 @@ export function plainError(msg) {
   const m = String(msg?.message ?? msg ?? '');
   if (msg?.unreadable) return "mission control's answer couldn't be read";
   if (msg?.noAnswer && msg?.notOurs) return "mission control didn't answer";
-  if (msg?.noAnswer) return `no answer in ${dur(msg.waitedS)}`;
+  if (msg?.noAnswer) return typeof msg.waitedS === 'number' ? `no answer in ${dur(msg.waitedS)}` : 'no answer in time';
   if (msg?.notOurs) return "mission control didn't answer";
   if (/^wait: [^{}[\]|\\]+$/.test(m)) return m.replace(/[.\s]+$/, '');
   const answered = typeof msg?.status === 'number';
@@ -77,7 +77,7 @@ export function plainError(msg) {
  *  may not have happened, so it never says "unchanged". `where` names where to look ("the Now line shows what bitcube reports"). */
 export function noAnswerText(e, where) {
   const first = e?.unreadable ? "Mission control's answer couldn't be read" : e?.notOurs ? "Mission control didn't answer" : e?.serverMaybe ? "bitcube didn't answer in time"
-    : `No answer in ${dur(e?.waitedS)}`;
+    : typeof e?.waitedS === 'number' ? `No answer in ${dur(e.waitedS)}` : 'No answer in time';   // never "in a while" (R7 #2)
   return `${first}: it may or may not have happened; ${where} (${clock(Date.now())}).`;
 }
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

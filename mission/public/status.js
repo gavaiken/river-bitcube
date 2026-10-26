@@ -9,9 +9,9 @@ import * as M from '/model.js';
 import { mountShell, poll, tick, watchContact, focusKey, refocus, park, focusShown, drawn, art, fmt, confirm, sheet, api, plainError, noAnswerText, esc, goto, mark, chip, WORD, MARK,
   NAMES_FROM_BITCUBE, sinceAgrees as sinceAgreesWith, splitHeadline, WARN_MS, LOST_MS, announce, whyText, POLL_TIMEOUT_MS } from '/ui.js';
 import { rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows, bootWords, controlLine, failText, notSentText, applyingLine,
-  ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash } from '/status-words.js';
+  ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash, lastDoneParts } from '/status-words.js';
 
-const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, sansTime } = M;
+const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, sansTime, entryVerdict } = M;
 const $ = (sel, root = document) => root.querySelector(sel);
 const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
 // One name per thing (the copy rules); descriptors live on the card, never in the name.
@@ -36,15 +36,18 @@ const ACTION_WORDS = {
   target: (b) => `Target → ${b?.season ?? ''}${b?.intensity != null ? `, ${M.intensityWord(b.intensity)}` : ''}`,
   rules: () => 'Rules applied', 'rules-reset': () => 'Rules reset', bootfile: (b) => `Boot file → ${FILES[b?.file]?.label ?? b?.file ?? ''}`,
   lightsroute: (b) => `Lighting port → ${b?.route === 'direct' ? "bitcube's LIGHTS port" : b?.route === 'router' ? 'the spare router port' : b?.route ?? ''}`,
-  check: () => 'Full check of bitcube', calibrate: (b) => `Calibration ${b?.action === 'cancel' ? 'stopped' : b?.action === 'start' ? 'started' : 'looked at'}`,
-  rebuild: () => "Rebuilt the river's year with the new LED map",
+  // a start and a rebuild are said as the change itself, so "Last sent: … · waiting for bitcube to show it" reads as well as "Last done"
+  check: () => 'Full check of bitcube', calibrate: (b) => (b?.action === 'start' ? `Start of a ${b?.dry_run ? 'dry run' : 'calibration'}` : `Calibration ${b?.action === 'cancel' ? 'stopped' : 'looked at'}`),
+  rebuild: () => "Rebuild of the river's year with the new LED map",
 };
 
 // ---- state ------------------------------------------------------------------------------------------------------
 let model = null;
 const openRows = new Set();   // expanded rows, kept across re-renders
 // Each control's state (model.js ctlStep): name -> { s, text, applyText, expectS, o (what it was asked to do), result, key (the
-// pressed button's focus key), host (its .ctl's id), asking (the open confirm), refreshAt }. Rules and its reset share the form.
+// pressed button's focus key), host (its .ctl's id), asking (the open confirm), refreshAt, entryId (its change's entry on the
+// server, applying_id: the band leaves it out, and a switch or boot-file change is done when status.confirmed names it) }.
+// Rules and its reset share the form.
 const ctl = {};
 const SHARE = { rules: ['rules-reset'], 'rules-reset': ['rules'] };
 const stillTried = { gallery: 0, river: 0 }, stillBusy = { gallery: false, river: false };   // Date.now() of the last try; one at a time
@@ -310,8 +313,11 @@ function bandHTML(m) {
 /** Changes in flight from another phone or the studio chat (status.applying): a quiet ticking line each, so a greyed control's
  *  "Wait: …" has its cause in view. This page's own change in flight is said on its control instead. */
 function applyingHTML(m) {
-  // this phone's own change, applying or confirming, is said on its control only: never two states for one change (R6 #4)
-  const others = (m.show.applying ?? []).filter((a) => !busy(a.action));
+  // this phone's own change is said on its control only: never two states for one change (R6 #4). Its entry by id, whatever its
+  // control shows now (confirming, or unconfirmed while the server still holds it); a request still in flight, which has no id
+  // yet, by its action (R7 #15)
+  const ownIds = new Set(Object.values(ctl).map((c) => c.entryId).filter(Boolean));
+  const others = (m.show.applying ?? []).filter((a) => !(a.id && ownIds.has(a.id)) && !(ctl[a.action]?.s.state === 'applying' && !ctl[a.action].entryId));
   if (!others.length || lostContact(m)) return '';
   return `<div class="applying-now">${others.map((a) => `<div class="applying-line"><span class="spin" aria-hidden="true"></span><span data-el="${a.started_at != null ? Math.max(0, Math.round((p.last.now - a.started_at) / 1000)) : a.elapsed_s}" data-label="${esc(a.label)}" data-exp="${a.expect_s ?? ''}" data-phase="${esc(a.phase ?? 'applying')}" data-source="${esc(a.source ?? '')}"></span></div>`).join('')}</div>`;
 }
@@ -360,16 +366,17 @@ function checkLine(m) {
   const label = busy('check') ? 'Checking…' : offline ? 'Try bitcube again' : 'Check now';
   return `<div class="check-line" id="ctl-check" data-ctl="check"><span>${txt}</span><button type="button" class="btn link" id="ctl-check-go" data-act="checknow" ${off('check') ? 'disabled' : ''}>${label}</button>${statusLine('ctl-check', ['check'])}</div>`;
 }
-/** "Last done: Ropes → Dark · 21:04 · from mission control", from the server's history (never a name). */
+/** "Last done: Ropes → Dark · 21:04 · from mission control", from the server's history (never a name); "Last sent: … · waiting
+ *  for bitcube to show it" while the server is still confirming that change (its entry is in status.applying), "… didn't show it
+ *  in time" when it gave up (status-words.js lastDoneParts: never "done" before the server says so, R7 #3, #16, #28). */
 function lastDone() {
   const a = p.last?.last_action;
   if (!a || typeof a.t !== 'number') return '';
   const restart = a.action === 'switch' && /^the restart on /i.test(String(a.label ?? ''));
   const what = restart ? `Restart on ${FILES[a.body?.file]?.label ?? 'the show file'}` : ACTION_WORDS[a.action]?.(a.body) ?? a.words ?? a.action;
   const when = fmt.clock(a.t);
-  const head = a.maybe === true ? 'Last sent' : a.ok === false ? 'Last tried' : 'Last done';
-  const tail = a.maybe === true ? ' · no answer in time: it may or may not have happened' : a.ok === false && a.note ? ` · failed: ${esc(plainError(a.note))}` : '';
-  return `<div class="last-done">${head}: <b>${esc(what)}</b> · ${esc(when)} · from ${esc(a.source ?? 'mission control')}${tail}</div>`;
+  const { head, tail } = lastDoneParts(a, p.last);
+  return `<div class="last-done">${head}: <b>${esc(what)}</b> · ${esc(when)} · from ${esc(a.source ?? 'mission control')}${esc(tail)}</div>`;
 }
 
 // ---- the piece now: season, tiles, the room ----------------------------------------------------------------------------
@@ -675,7 +682,14 @@ function settleControls() {
   for (const [name, c] of Object.entries(ctl)) {
     // only a reading taken after the answer can confirm the change or take a done line away
     const fresh = !!model && !lostContact(model) && p.receivedAt != null && c.refreshAt != null && p.receivedAt > c.refreshAt;
-    if (fresh && (c.s.state === 'confirming' || c.s.state === 'unconfirmed') && typeof c.o?.confirmed === 'function') {
+    if (fresh && (c.s.state === 'confirming' || c.s.state === 'unconfirmed') && c.o?.serverConfirms) {
+      // the server's verdict on this control's own entry (by id): never the reading's words, which name the same file before and
+      // after a restart (R7 #6, #25). No id (an answer that never came): only its own limit ends it.
+      const v = entryVerdict(model, c.entryId);
+      c.judgedWall = p.receivedWall;
+      if (v === 'confirmed') { c.s = ctlStep(c.s, { type: 'model', confirmed: true, now }); finish(name); ended.push(name); }
+      else if (v === 'expired' && c.s.state === 'confirming') { c.s = ctlStep(c.s, { type: 'expired', now }); unconfirm(name); ended.push(name); }
+    } else if (fresh && (c.s.state === 'confirming' || c.s.state === 'unconfirmed') && typeof c.o?.confirmed === 'function') {
       let yes = false;
       try { yes = !!c.o.confirmed(model); } catch (e) { console.warn('confirmed', e); }
       c.judgedWall = p.receivedWall;          // the tick may turn it unconfirmed only after a reading past its limit was judged
@@ -711,13 +725,18 @@ function tickControls() {
     const n = ctlStep(c.s, { type: 'tick', expectS: c.expectS, now: Date.now(), readAt: c.judgedWall ?? null });
     if (n.state === c.s.state) continue;
     c.s = n;
-    // it names what was sent: "The boot file change to the live river was sent at 21:13, but bitcube doesn't show it yet: …" (R6 #16)
-    c.text = unconfirmedWords(c.o?.what, fmt.clock(c.s.sentAt ?? Date.now()), c.o?.unconfirmed ?? 'look at the Now line, or call Gavin');
-    announce(c.text);
+    unconfirm(name);
     changed = true;
     queueMicrotask(() => afterEnd(name));
   }
   if (changed) render();
+}
+/** Unconfirmed: it names what was sent, "The boot file change to the live river was sent at 21:13, but bitcube doesn't show it yet:
+ *  …" (R6 #16), said once. */
+function unconfirm(name) {
+  const c = ctl[name];
+  c.text = unconfirmedWords(c.o?.what, fmt.clock(c.s.sentAt ?? Date.now()), c.o?.unconfirmed ?? 'look at the Now line, or call Gavin');
+  announce(c.text);
 }
 /** Done: "<done> · 21:04", said once; the form's draft cleared. */
 function finish(name) {
@@ -750,7 +769,7 @@ async function runControl(name, path, body, o) {
   }
   if (next.effect !== 'send') { c.s = next; render(); return; }
   // applying: the control, its siblings and its inputs locked; focus waits on its status line
-  Object.assign(c, { s: next, text: '', o: { holds: o.confirmed, ...o }, result: null, refreshAt: null, judgedWall: null, expectS: EXPECT_S[name] ?? null,
+  Object.assign(c, { s: next, text: '', o: { holds: o.confirmed, ...o }, result: null, refreshAt: null, judgedWall: null, entryId: null, expectS: EXPECT_S[name] ?? null,
     usual: name === 'bootfile' ? BOOT_USUAL : null, applyText: o.pending ?? M.applyingText(o.what) });
   for (const other of SHARE[name] ?? []) if (ctl[other] && !busy(other)) ctl[other] = { s: ctlInit(), text: '' };
   const a = document.activeElement, idle = !a || a === document.body, here = !!(a && c.host && document.getElementById(c.host)?.contains(a));
@@ -764,6 +783,7 @@ async function runControl(name, path, body, o) {
   let r;
   try { r = await api(path, body); }
   catch (e) {
+    c.entryId = typeof e?.applyingId === 'string' ? e.applyingId : null;   // a maybe answer still names its entry
     const maybe = !!(e?.maybe || (e?.noAnswer && e?.posted));
     c.s = ctlStep(c.s, { type: 'error', maybe, now: Date.now() });
     c.text = maybe ? noAnswerText(e, o.noAnswer ?? 'the Now line shows what bitcube reports') : failText(o.fail, e, fmt.clock(Date.now()), o.kept);
@@ -775,7 +795,8 @@ async function runControl(name, path, body, o) {
   }
   if (name === 'check') shell.setChecking(false);
   c.result = r;
-  c.s = ctlStep(c.s, { type: 'ok', confirmed: typeof o.confirmed === 'function' ? false : null, now: Date.now() });
+  c.entryId = typeof r?.applying_id === 'string' ? r.applying_id : null;
+  c.s = ctlStep(c.s, { type: 'ok', confirmed: typeof o.confirmed === 'function' || o.serverConfirms ? false : null, now: Date.now() });
   if (c.s.state === 'done') finish(name);
   else if (c.s.state === 'confirming') announce(CONFIRMING_SAID);   // said once, never with its time (R6 #9)
   // a reading asked for from now on is taken after the answer: only such a reading can confirm the change
@@ -901,14 +922,14 @@ document.addEventListener('click', async (e) => {
     case 'switch': {
       const f = b.dataset.file, w = switchWords(f, m?.show.file?.name, m?.show.boot_file);   // the button's own words
       runControl('switch', '/api/control/switch', { file: f }, { btn: b, ask: () => { const x = switchWords(f, model?.show.file?.name, model?.show.boot_file); return { title: x.title, body: x.body, ok: x.ok, cancel: 'Leave it' }; },
-        what: w.what, done: w.done, fail: 'The show file is unchanged', confirmed: (mm) => switchShows(mm, f),
+        what: w.what, done: w.done, fail: 'The show file is unchanged', serverConfirms: true, holds: (mm) => switchShows(mm, f),
         noAnswer: 'the Now line shows what bitcube reports', unconfirmed: 'look at the Now line, or call Gavin' });
       break;
     }
     case 'bootfile': {
       const f = b.dataset.file, label = fileLabel(f);
       runControl('bootfile', '/api/control/bootfile', { file: f }, { btn: b, ask: { title: `Open ${label} at boot?`, body: 'From the next restart of bitcube, TouchDesigner opens this file. What is showing now does not change.', ok: 'Change the boot file', cancel: 'Leave it' },
-        what: `the boot file change to ${label}`, done: `Now ${label} opens at boot, from bitcube's next restart`, fail: 'The boot file is unchanged', confirmed: (mm) => bootShows(mm, f),
+        what: `the boot file change to ${label}`, done: `Now ${label} opens at boot, from bitcube's next restart`, fail: 'The boot file is unchanged', serverConfirms: true, holds: (mm) => bootShows(mm, f),
         noAnswer: 'the Now line shows what bitcube reports' });
       break;
     }
