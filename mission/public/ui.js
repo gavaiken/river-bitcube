@@ -35,10 +35,10 @@
 // Log out with a confirm), one <dialog class="sheet"> every sheet and confirm reuses, and the theme override
 // remembered in localStorage 'mc-theme'. After Check now the shell fires `document` event 'mc:check' so a page can
 // poll at once; after a theme change, 'mc:theme' (detail: 'auto' | 'light' | 'dark').
-import { api as rawApi, esc, md } from '/app.js';
+import { api as rawApi, esc, md, plainError, noAnswerText } from '/app.js';
 import { dur as modelDur, CONTACTS, TZ } from '/model.js';
 
-export { esc, md };
+export { esc, md, plainError, noAnswerText };
 
 // ---- vocabulary ------------------------------------------------------------------------------------------------
 /** State words by level: ok, warning, down, unknown → OK, Attention, Down, Unknown. */
@@ -130,43 +130,6 @@ export async function api(path, body, opts) {
   if (/\/api\/control\/(ropes|hub75)$/.test(path) && j?.td && j.td.ok === false) throw Object.assign(new Error(j.td.error || "TouchDesigner didn't answer"), { status: 200 });
   return j;
 }
-/** A failed request's reason in the team's words, never a library's ("mission control didn't answer"). An error that
- *  came back inside an answer (e.status set) means mission control answered: what failed was its call to bitcube. */
-export function plainError(msg) {
-  const m = String(msg?.message ?? msg ?? '');
-  if (msg?.noAnswer) return `no answer in ${modelDur(msg.waitedS)}`;
-  if (msg?.notOurs) return "mission control didn't answer";
-  const answered = typeof msg?.status === 'number';
-  // the river's year page's own refusal (td/seasons/seasons_td.py): its reason in the rules' words, not "didn't accept it"
-  if (/"quieter" must be below "busier"/i.test(m)) return "the river's year refused it: Quieter than usual must be below Busier than usual; change one and apply again";
-  // a slip in mission control's own code (a JavaScript message, which names no 'XxxError'): never shown as it is
-  if (/Cannot read propert|Cannot set propert|is not a function|is not defined|is not iterable|of (?:null|undefined)\b|\(reading '/i.test(m)) return "mission control couldn't do it";
-  if (/logged out/i.test(m)) return 'you were logged out';
-  if (/TD bridge|bridge/i.test(m)) return "TouchDesigner didn't answer";
-  if (answered && /fetch failed|timeout|timed out|aborted/i.test(m)) return "bitcube didn't answer";
-  if (/failed to fetch|fetch failed|networkerror|load failed/i.test(m)) return "mission control didn't answer";
-  if (/can't reach bitcube|ssh/i.test(m)) return "bitcube didn't answer";
-  if (/took too long|timeout|timed out|aborted/i.test(m)) return 'bitcube took too long to answer';
-  if (msg?.status === 429 || /checked \d+ s ago; wait/i.test(m)) return 'the full check ran a moment ago; try again in 20 s';
-  if (/^HTTP 404/.test(m) || /not found/i.test(m)) return "this mission control can't do that yet";
-  if (/^HTTP 50\d/.test(m)) return "mission control couldn't reach bitcube";
-  if (/^HTTP 4\d\d/.test(m) || msg?.status === 400) return "mission control didn't accept it";
-  if (/rebuild refused|is running .*\.toe, not /i.test(m)) return 'TouchDesigner is running a different show file, so it was refused';
-  if (/no show file/i.test(m)) return "that show file isn't on bitcube";
-  if (/nothing was saved/i.test(m)) return "bitcube couldn't save it; nothing was saved";
-  if (/probe failed|no answer from the probe|\(exit \d+\)|\bexit \d+\b/i.test(m)) return "bitcube couldn't do it";
-  // never a raw message: a step id, a script, a file name, a traceback or a code reads as "bitcube couldn't do it"
-  if (/Traceback|[A-Z][a-z]+Error\b|\.(ps1|py|toe|json|mjs)\b|[{}[\]|\\]|\bpid \d+/.test(m)) return "bitcube couldn't do it";
-  // a status code inside some other sentence ("… HTTP 503 …"): the code means nothing to the team
-  if (/\bHTTP \d{3}\b/.test(m)) return answered ? "bitcube couldn't do it" : "mission control didn't answer";
-  return m.replace(/[.\s]+$/, '') || 'no answer';
-}
-
-/** A control whose POST got no answer in time: it may or may not have happened, so it never says "unchanged". */
-export function noAnswerText(e, where) {
-  return `No answer in ${modelDur(e.waitedS)}: it may or may not have happened; ${where} (${fmt.clock(Date.now())}).`;
-}
-
 // ---- "since": the server's history, only when it can't contradict the words beside it --------------------------------
 /** Seconds of every duration a sentence states ("for 30 min", "6 min ago"). */
 export function statedS(texts) {

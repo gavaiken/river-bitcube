@@ -1,4 +1,7 @@
-// Shared helpers for mission control's pages (ui.js builds on these: api, esc, md).
+// Shared helpers for mission control's pages (ui.js builds on these and re-exports them: api, esc, md, plainError, noAnswerText).
+// A relative import, so node's tests load it too (test/client.test.mjs); in the browser it is the same /model.js ui.js loads.
+import { dur, clock } from './model.js';
+
 /** How long a request may go unanswered before the page gives up: a little past the server's own limit for the action
  *  (about 60 s; a rebuild builds, saves and restarts, up to 400 s), so a hung POST never leaves a control pending for good. */
 export function apiTimeout(path, body) {
@@ -6,25 +9,75 @@ export function apiTimeout(path, body) {
   return /\/api\/control\/rebuild$/.test(path) ? 420_000 : 75_000;
 }
 export async function api(path, body, { timeout = apiTimeout(path, body) } = {}) {
-  const ctrl = new AbortController();
+  const ctrl = new AbortController(), posted = body !== undefined;
   const timer = setTimeout(() => ctrl.abort(), timeout);
   let r;
   try {
     r = await fetch(path, body === undefined ? { signal: ctrl.signal } : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal });
   } catch (e) {
     // no answer in time: the request may or may not have reached bitcube (noAnswer tells the control to say so)
-    if (ctrl.signal.aborted) throw Object.assign(new Error(`no answer in ${Math.round(timeout / 1000)} s`), { noAnswer: true, waitedS: timeout / 1000, posted: body !== undefined });
+    if (ctrl.signal.aborted) throw Object.assign(new Error(`no answer in ${Math.round(timeout / 1000)} s`), { noAnswer: true, maybe: posted, waitedS: timeout / 1000, posted });
     throw e;
   } finally { clearTimeout(timer); }
   if (r.status === 401) { location.href = '/login'; throw new Error('logged out'); }
   const j = await r.json().catch(() => null);
+  const ours = j != null && typeof j === 'object';
+  // A POST whose answer can't be read was received: mission control ran it (a 2xx), or a proxy may have passed it on before
+  // failing (a 5xx page). It may or may not have happened, so the control never says "unchanged" (maybe, noAnswer).
+  const maybe = (msg, extra) => Object.assign(new Error(msg), { noAnswer: true, maybe: true, posted: true, waitedS: null, ...extra });
   // an error that isn't mission control's JSON (a proxy's 502 page while the server is down) means mission control itself
   // didn't answer: never "couldn't reach bitcube", which would send someone to check bitcube's power
-  if (!r.ok && (j == null || typeof j !== 'object')) throw Object.assign(new Error("mission control didn't answer"), { status: r.status, notOurs: true });
+  if (!r.ok && !ours) {
+    if (posted && r.status >= 500) throw maybe("mission control didn't answer", { status: r.status, notOurs: true });
+    throw Object.assign(new Error("mission control didn't answer"), { status: r.status, notOurs: true });
+  }
   if (!r.ok) throw Object.assign(new Error(j?.error || `HTTP ${r.status}`), { status: r.status });
   // a 2xx that isn't our JSON (a proxy's page, a cut-off body) is not a success
-  if (j == null || typeof j !== 'object') throw new Error("mission control's answer couldn't be read");
+  if (!ours) { if (posted) throw maybe("mission control's answer couldn't be read", { unreadable: true }); throw Object.assign(new Error("mission control's answer couldn't be read"), { unreadable: true }); }
   return j;
+}
+
+/** A failed request's reason in the team's words, never a library's ("mission control didn't answer"). An error that
+ *  came back inside an answer (e.status set) means mission control answered: what failed was its call to bitcube. The
+ *  server's own "wait: <label> is being applied (started 21:04)" (a 409 while another change is applied) reads as it is. */
+export function plainError(msg) {
+  const m = String(msg?.message ?? msg ?? '');
+  if (msg?.unreadable) return "mission control's answer couldn't be read";
+  if (msg?.noAnswer && msg?.notOurs) return "mission control didn't answer";
+  if (msg?.noAnswer) return `no answer in ${dur(msg.waitedS)}`;
+  if (msg?.notOurs) return "mission control didn't answer";
+  if (/^wait: [^{}[\]|\\]+$/.test(m)) return m.replace(/[.\s]+$/, '');
+  const answered = typeof msg?.status === 'number';
+  // the river's year page's own refusal (td/seasons/seasons_td.py): its reason in the rules' words, not "didn't accept it"
+  if (/"quieter" must be below "busier"/i.test(m)) return "the river's year refused it: Quieter than usual must be below Busier than usual; change one and apply again";
+  // a slip in mission control's own code (a JavaScript message, which names no 'XxxError'): never shown as it is
+  if (/Cannot read propert|Cannot set propert|is not a function|is not defined|is not iterable|of (?:null|undefined)\b|\(reading '/i.test(m)) return "mission control couldn't do it";
+  if (/logged out/i.test(m)) return 'you were logged out';
+  if (/TD bridge|bridge/i.test(m)) return "TouchDesigner didn't answer";
+  if (answered && /fetch failed|timeout|timed out|aborted/i.test(m)) return "bitcube didn't answer";
+  if (/failed to fetch|fetch failed|networkerror|load failed/i.test(m)) return "mission control didn't answer";
+  if (/can't reach bitcube|ssh/i.test(m)) return "bitcube didn't answer";
+  if (/took too long|timeout|timed out|aborted/i.test(m)) return 'bitcube took too long to answer';
+  if (msg?.status === 429 || /checked \d+ s ago; wait/i.test(m)) return 'the full check ran a moment ago; try again in 20 s';
+  if (/^HTTP 404/.test(m) || /not found/i.test(m)) return "this mission control can't do that yet";
+  if (/^HTTP 50\d/.test(m)) return "mission control couldn't reach bitcube";
+  if (/^HTTP 4\d\d/.test(m) || msg?.status === 400) return "mission control didn't accept it";
+  if (/rebuild refused|is running .*\.toe, not /i.test(m)) return 'TouchDesigner is running a different show file, so it was refused';
+  if (/no show file/i.test(m)) return "that show file isn't on bitcube";
+  if (/nothing was saved/i.test(m)) return "bitcube couldn't save it; nothing was saved";
+  if (/probe failed|no answer from the probe|\(exit \d+\)|\bexit \d+\b/i.test(m)) return "bitcube couldn't do it";
+  // never a raw message: a step id, a script, a file name, a traceback or a code reads as "bitcube couldn't do it"
+  if (/Traceback|[A-Z][a-z]+Error\b|\.(ps1|py|toe|json|mjs)\b|[{}[\]|\\]|\bpid \d+/.test(m)) return "bitcube couldn't do it";
+  // a status code inside some other sentence ("… HTTP 503 …"): the code means nothing to the team
+  if (/\bHTTP \d{3}\b/.test(m)) return answered ? "bitcube couldn't do it" : "mission control didn't answer";
+  return m.replace(/[.\s]+$/, '') || 'no answer';
+}
+
+/** A control whose POST got no usable answer (none in time, one that couldn't be read, a proxy's error page): it may or
+ *  may not have happened, so it never says "unchanged". `where` names where to look ("the Now line shows what bitcube reports"). */
+export function noAnswerText(e, where) {
+  const first = e?.unreadable ? "Mission control's answer couldn't be read" : e?.notOurs ? "Mission control didn't answer" : `No answer in ${dur(e?.waitedS)}`;
+  return `${first}: it may or may not have happened; ${where} (${clock(Date.now())}).`;
 }
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 /** Just enough markdown for the agent's replies: code blocks, inline code, bold, links, lists, paragraphs. */
