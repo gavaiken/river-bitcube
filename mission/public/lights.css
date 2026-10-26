@@ -6,6 +6,11 @@
 .stateline .from { font-size: 14px; margin-top: 4px; }
 .stateline .from.old { color: var(--warn-text); font-weight: 700; }
 .stateline .next:empty { display: none; }
+/* a change in flight from another phone or the chat: the band's quiet ticking line (Lights has no band) */
+.stateline .applying-now { display: grid; gap: 4px; margin-top: 6px; }
+.stateline .applying-now:empty { display: none; }
+.stateline .applying-line { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; font-weight: 600; color: var(--muted); line-height: 1.35; overflow-wrap: break-word; }
+.stateline .applying-line .spin { width: 14px; height: 14px; margin-top: 2px; }
 .stateline .next { font-size: 15px; line-height: 1.4; margin-top: 6px; display: flex; flex-wrap: wrap; gap: 0 10px; align-items: center; }
 .stateline .next a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; color: var(--accent); }
 

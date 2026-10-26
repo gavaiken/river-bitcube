@@ -9,7 +9,7 @@ import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark
 import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS } from '/model.js';
 import { uprightsFromAtlas } from '/screens.js';
 import { calChecklist, ROOM_CHECK, startWhy, dryWhy, calView, rebuiltFor, runNote, nextLine, captureWhen, driftWords, resultWords,
-  mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT, calRead, calLeft } from '/lights-words.js';
+  mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT, calRead, calLeft, changeSince, stateLevel, applyingNow, stateLive } from '/lights-words.js';
 
 const N_ROPES = 20, LEDS = 400;
 const LIGHTS_MS = 10_000, CAL_MS = 5_000, STILL_MS = 30_000, FRAME_OLD_S = 30, PROBE_OLD_S = 120;
@@ -91,7 +91,7 @@ function renderStateLine() {
     // the header's thresholds (ui.js WARN_MS, LOST_MS), from when the page started asking: one fact, one wording everywhere
     const ms = performance.now() - status.startedAt;
     put('state-words', ms > LOST_MS ? "This page can't reach mission control." : ms > WARN_MS ? `No answer from mission control yet · ${fmt.nb(dur(ms / 1000))}` : 'Connecting to mission control…');
-    put('state-from', ''); put('state-next', ''); sayState(ms > LOST_MS ? "This page can't reach mission control." : ''); return;
+    put('state-from', ''); put('state-next', ''); paintApplying([]); sayState(ms > LOST_MS ? "This page can't reach mission control." : ''); return;
   }
   // show.ropes.words says "in calibration patterns" during a run (the model's own state), so the line needs no exception
   const ropes = m.show.ropes, panels = m.show.panels;
@@ -100,17 +100,20 @@ function renderStateLine() {
   const ropesItem = m.items.find((x) => x.id === 'ropes');
   // one rule with Status and the map: the item's own stale flag says whether this is a last answer
   const stale = !lost && !!ropesItem?.stale;
-  // the line speaks for the ropes and the panels, so its mark is the worse of the two; a last answer is never green
-  const RANK = { down: 0, warning: 1, unknown: 2, ok: 3 };
-  const worst = [levelOf('ropes'), levelOf('hub75 panels')].sort((a, b) => RANK[a] - RANK[b])[0];
-  const lv = lost || stale ? 'unknown' : worst;
-  put('state-words', `<span class="lv-${lv}">${mark(lv)}</span> ${esc(words)}`);
+  // the line speaks for the ropes and the panels, so its mark is the worse of the two; a last answer is never green, and nor
+  // is a reading from before a change in flight that alters the lights (a restart: the ropes go dark meanwhile)
   const a = probeAge(), pr = m.sources.probe;
+  const levels = [levelOf('ropes'), levelOf('hub75 panels')];
+  const change = lost || stale ? null : changeSince(m, a);
+  const before = !!change && stateLevel({ levels }) === 'ok';   // the model still says all is well: say the reading is older
+  const lv = stateLevel({ levels, lost, stale, change });
+  put('state-words', `<span class="lv-${lv}">${mark(lv)}</span> ${esc(words)}`);
   const from = lost ? `No contact with mission control for ${fmt.nb(dur(status.elapsed() / 1000))}: this is how it was at ${fmt.clock(status.last.now, status.last.now)}`
     : m.overall.cause === 'bitcube-offline' ? 'bitcube is offline'
     : a == null ? 'Not checked yet'
     : pr.present && !pr.ok ? `bitcube's full check failed · ${fmt.nb(dur(a))} ago`
     : stale ? `last seen from bitcube ${fmt.nb(dur(a))} ago: this is how it was then`
+    : before ? `from bitcube · ${fmt.nb(dur(a))} ago, before ${change.label}`
     : `from bitcube · ${fmt.nb(dur(a))} ago`;
   const el = $('#state-from');
   el.textContent = from;
@@ -118,10 +121,28 @@ function renderStateLine() {
   // when it isn't OK, the band's headline cause (once: not when the line above says it) and where to act (Lights has no band)
   const nx = lost ? null : nextLine(m, from, splitHeadline);
   put('state-next', nx ? `${nx.text ? `<span>${esc(fmt.nb(nx.text))}</span> ` : ''}<a href="${nx.href}"${nx.href.startsWith('#') ? ' data-jump="calibrate"' : ''}>${esc(nx.link)}</a>` : '');
-  sayState(lost ? `No contact with mission control. ${words}` : stale ? `Last seen: ${words}` : words);
+  // the band's quiet line for a change in flight from another phone or the chat (this page's own is said on its control)
+  const lines = lost ? [] : applyingNow(m, ownChanges());
+  paintApplying(lines);
+  sayState(stateLive({ words, lost, stale, applying: lines }));
 }
-/** Screen readers hear the state line's words when they change, never its ticking age (lights.html #state-live). */
+/** Screen readers hear the state line's words when they change, never a ticking time (lights.html #state-live; lights-words
+ *  stateLive drops "for about 40 s more" and the changes' m:ss). */
 function sayState(t) { const l = $('#state-live'); if (l && l.textContent !== t) l.textContent = t; }
+/** The actions this page's own controls are applying or confirming: their status line says it, so the state line doesn't. */
+const ownChanges = () => [S.calCtl.start?.busy || S.calCtl.dry?.busy ? 'calibrate' : null, S.calCtl.rebuild?.busy ? 'rebuild' : null].filter(Boolean);
+/** "Applying: the restart on the river's year · 0:05 · usually about 1 min" under the state line, one line per change; the
+ *  m:ss is painted in place each second, so the spinner never restarts. */
+function paintApplying(lines) {
+  const host = $('#state-applying');
+  if (!host) return;
+  const key = lines.map((l) => l.label).join('\n');
+  if (host.dataset.key !== key) {
+    host.dataset.key = key;
+    host.innerHTML = lines.map(() => '<div class="applying-line"><span class="spin" aria-hidden="true"></span><span class="t"></span></div>').join('');
+  }
+  host.querySelectorAll('.t').forEach((t, i) => { const w = fmt.nb(lines[i].line); if (t.textContent !== w) t.textContent = w; });
+}
 function levelOf(id) { return S.m?.items.find((x) => x.id === id)?.level ?? 'unknown'; }
 // "Progress and Stop → Calibrate": open the block, bring it into view, and put focus in it (its heading or first control)
 $('#state-next').addEventListener('click', (e) => {

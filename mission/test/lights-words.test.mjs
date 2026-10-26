@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { derive } from '../public/model.js';
 import { calChecklist, startWhy, dryWhy, calView, lostWhy, rebuiltFor, runNote, nextLine, driftWords, resultWords, captureWhen,
-  mapMissing, placeLabels, ROOM_CHECK, CAL_QUIET_S, calRead, calLeft } from '../public/lights-words.js';
+  mapMissing, placeLabels, ROOM_CHECK, CAL_QUIET_S, calRead, calLeft, untimed, stateLive, changeSince, stateLevel, applyingNow } from '../public/lights-words.js';
 
 const load = (name) => JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8'));
 const model = (name, edit = (s) => s, later = 2000) => { const f = load(name); const s = edit({ ...f.status, now: f._scenario.now }); return derive(s, s.now + later); };
@@ -213,6 +213,27 @@ test('R6 #29: a progress read that is a 2xx but not mission control\'s JSON is a
   assert.equal(calView({ p: RUN, m: model('all-good') }).view, 'run');
 });
 
+test('R6 #8: the state line\'s hidden live region never carries a ticking time', () => {
+  assert.equal(untimed('The ropes are in calibration patterns for about 40 s more · the panels show the river at 100 %.'),
+    'The ropes are in calibration patterns · the panels show the river at 100 %.');
+  assert.equal(untimed('The ropes are in calibration patterns for about 4 min more · the panels are in calibration patterns for about 4 min more.'),
+    'The ropes are in calibration patterns · the panels are in calibration patterns.');
+  assert.equal(untimed("bitcube restarted 6 min ago and is still coming up"), 'bitcube restarted and is still coming up');
+  assert.equal(untimed("Mission control hasn't heard from bitcube for 3 min."), "Mission control hasn't heard from bitcube.");
+  assert.equal(untimed('The ropes show the river · the panels show the river at 100 %.'), 'The ropes show the river · the panels show the river at 100 %.');
+  // the same live words at every poll of a run: said once, not every 5 s
+  const at = (elapsed) => { const m = model('all-good', CAL(elapsed)); return [m.show.ropes.words, stateLive({ words: `${m.show.ropes.words} · ${m.show.panels.words}.` })]; };
+  const [w1, said1] = at(180), [w2, said2] = at(185);
+  assert.notEqual(w1, w2);              // the words tick ("about 55 s more", then "about 50 s more")
+  assert.equal(said1, said2);           // what is said doesn't
+  assert.doesNotMatch(said1, /\d+ (s|min)\b/);
+  // a change in flight is said once, by its name, without its m:ss
+  const live = stateLive({ words: 'The ropes show the river.', applying: [{ label: "the restart on the river's year", line: "Applying: the restart on the river's year · 0:05 · usually about 1 min" }] });
+  assert.equal(live, "The ropes show the river. Applying: the restart on the river's year.");
+  assert.equal(stateLive({ words: 'The ropes show the river.', lost: true }), 'No contact with mission control. The ropes show the river.');
+  assert.equal(stateLive({ words: 'The ropes show the river.', stale: true }), 'Last seen: The ropes show the river.');
+});
+
 test('R6 #13: the Calibrate card\'s time left is the model\'s, the same number as the state line, the Status tile and the band', () => {
   for (const [elapsed, later] of [[100, 2000], [190, 9000], [230, 20_000]]) {
     const m = model('all-good', CAL(elapsed), later);
@@ -226,4 +247,31 @@ test('R6 #13: the Calibrate card\'s time left is the model\'s, the same number a
   // the model's own words when it gives them (the last 45 s are "nearly done" on every page)
   assert.equal(calLeft({ cal: { left_s: 20, left_words: 'nearly done' }, dry: false }), 'Nearly done');
   assert.equal(calLeft({ cal: { left_s: 200, left_words: 'about 3 min more' }, dry: false }), 'About 3 min left');
+});
+
+test('R6 #3: while a change that alters the lights is in flight, a reading from before it is never shown green', () => {
+  const sw = (startedAgoMs, action = 'switch', label = "the restart on the river's year", expect_s = 60) => (s) => {
+    s.applying = [{ id: 'a1', action, label, file: 'river-local-oct-22-seasons.toe', started_at: s.now - startedAgoMs, expect_s, blocks: ['ropes'] }]; return s; };
+  const m = model('all-good', sw(5000));
+  const age = m.overall.checked.probe_age_s;   // the reading is older than the switch
+  assert.ok(age > 7);
+  const ch = changeSince(m, age);
+  assert.equal(ch?.label, "the restart on the river's year");
+  assert.equal(stateLevel({ levels: ['ok', 'ok'], change: ch }), 'unknown');
+  assert.equal(stateLevel({ levels: ['ok', 'ok'], change: null }), 'ok');
+  assert.equal(stateLevel({ levels: ['warning', 'ok'], change: ch }), 'warning');   // the model knows better than "not known"
+  assert.equal(stateLevel({ levels: ['ok', 'down'] }), 'down');
+  assert.equal(stateLevel({ levels: ['ok', 'ok'], stale: true }), 'unknown');
+  // a reading taken after the change began speaks for itself; a mode change doesn't alter what the lights show
+  assert.equal(changeSince(m, 3), null);
+  assert.equal(changeSince(model('all-good', sw(5000, 'mode', 'a mode change')), age), null);
+  for (const a of ['rebuild', 'ropes', 'hub75', 'lightsroute', 'calibrate']) assert.ok(changeSince(model('all-good', sw(5000, a, 'x')), age), a);
+  // the band's quiet line, under the state line: every change in flight but this page's own (its control says it)
+  const lines = applyingNow(m);
+  assert.equal(lines.length, 1);
+  assert.match(lines[0].line, /^Applying: the restart on the river's year · 0:0\d · usually about 1\smin$/);
+  assert.equal(lines[0].said, "Applying: the restart on the river's year.");
+  assert.deepEqual(applyingNow(m, ['switch']), []);
+  const short = applyingNow(model('all-good', sw(1000, 'ropes', 'a ropes change', 15)));
+  assert.match(short[0].line, /^Applying: a ropes change(…| · 0:0\d · usually a few seconds)$/);
 });

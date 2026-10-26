@@ -2,7 +2,9 @@
 // buttons can't run, which view the Calibrate block shows, whether the river's year uses a run's map, the run's "last heard"
 // note, the state line's next line, the LED map's provenance words, and where the rope numbers sit on the map. Pure ES
 // module, no DOM: lights.js uses it in the browser and test/lights-words.test.mjs under node --test.
-import { dur } from './model.js';
+import * as M from './model.js';
+
+const { dur } = M;
 
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s ?? '');
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -124,6 +126,50 @@ export function calLeft({ cal, dry }) {
   if (more) return `About ${more[1]} left`;
   if (w) return cap(w);
   return typeof cal?.left_s === 'number' ? `About ${dur(cal.left_s)} left` : '';
+}
+
+// ---- the state line --------------------------------------------------------------------------------------------
+/** The changes that alter what the ropes or the panels show: a switch or a rebuild restarts TouchDesigner (the lights go dark),
+ *  the ropes, the panels, the lighting port, a calibration's start. A mode, target or rules change only steers the river. */
+export const LIGHTS_CHANGES = ['switch', 'rebuild', 'ropes', 'hub75', 'lightsroute', 'calibrate'];
+/** The first change in flight (show.applying: any phone, or the studio chat) that alters what the lights show and began after
+ *  bitcube's reading on the state line (readingAgeS: that reading's age, s), else null: the reading may no longer hold. */
+export function changeSince(m, readingAgeS) {
+  if (!m || typeof readingAgeS !== 'number') return null;
+  return (m.show.applying ?? []).find((a) => LIGHTS_CHANGES.includes(a.action) && typeof a.elapsed_s === 'number' && a.elapsed_s < readingAgeS) ?? null;
+}
+const RANK = { down: 0, warning: 1, unknown: 2, ok: 3 };
+/** The state line's mark: the worse of the ropes and the panels (it speaks for both); grey for a last answer (stale, or contact
+ *  lost); and never green while a change that alters the lights runs past a reading from before it (R6 #3: "✓ The ropes show
+ *  the river" during a restart). A worse level stays: the model knows something is wrong. */
+export function stateLevel({ levels, lost = false, stale = false, change = null }) {
+  if (lost || stale) return 'unknown';
+  const worst = [...levels].sort((a, b) => (RANK[a] ?? 2) - (RANK[b] ?? 2))[0] ?? 'unknown';
+  return worst === 'ok' && change ? 'unknown' : worst;
+}
+/** The band's quiet line for each change in flight, under the state line (Lights has no band): [{ label, line, said }], line
+ *  "Applying: the restart on the river's year · 0:05 · usually about 1 min" (model.js entryWords, the band's own words, which
+ *  say "Waiting for bitcube to show …" once the request has answered; else applyingWords), said the same without its times.
+ *  own: the actions this page's own controls are applying or confirming (their status line says it). */
+export function applyingNow(m, own = []) {
+  return (m?.show.applying ?? []).filter((a) => !own.includes(a.action)).map((a) => {
+    const waiting = a.phase === 'confirming';
+    const line = typeof M.entryWords === 'function' ? M.entryWords(a, a.elapsed_s) : M.applyingWords(`Applying: ${a.label}…`, a.elapsed_s, a.expect_s);
+    return { label: a.label, line, said: waiting ? `Waiting for bitcube to show ${a.label}.` : `Applying: ${a.label}.` };
+  });
+}
+/** A text without its ticking times ("for about 40 s more", "for 3 min", "6 min ago"): what a live region may say. */
+export function untimed(text) {
+  return String(text ?? '')
+    .replace(/\s*\b(?:for\s+)?(?:about\s+|over\s+)?\d+(?:[.,]\d+)?\s*(?:s|min|h|days?)\b(?:\s+(?:more|ago|left))?/g, '')
+    .replace(/\s+([.,;:])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+}
+/** What the state line's hidden polite region says: its words without a ticking time, and each change in flight by name, so
+ *  a screen reader hears it again only when the state changes, never at every poll of a calibration (R6 #8). */
+export function stateLive({ words, lost = false, stale = false, applying = [] }) {
+  const w = untimed(words);
+  const head = lost ? `No contact with mission control. ${w}` : stale ? `Last seen: ${w}` : w;
+  return [head, ...(lost ? [] : applying.map((a) => a.said ?? `Applying: ${a.label}.`))].join(' ');
 }
 
 // ---- the state line's next line --------------------------------------------------------------------------------
