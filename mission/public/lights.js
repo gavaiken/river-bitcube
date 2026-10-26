@@ -120,7 +120,7 @@ function renderStateLine() {
   el.textContent = from;
   el.className = `from muted${lost || stale || (a != null && a > PROBE_OLD_S) ? ' old' : ''}`;
   // when it isn't OK, the band's headline cause (once: not when the line above says it) and where to act (Lights has no band)
-  const nx = lost ? null : nextLine(m, from, splitHeadline);
+  const nx = lost ? null : nextLine(m, from, splitHeadline, words);
   put('state-next', nx ? `${nx.text ? `<span>${esc(fmt.nb(nx.text))}</span> ` : ''}${nx.href ? `<a href="${nx.href}"${nx.href.startsWith('#') ? ' data-jump="calibrate"' : ''}>${esc(nx.link)}</a>` : ''}` : '');
   // the band's quiet line for a change in flight from another phone or the chat (this page's own is said on its control)
   const own = ownChanges(), lines = lost ? [] : applyingNow(m, own);

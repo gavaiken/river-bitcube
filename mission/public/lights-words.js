@@ -234,8 +234,8 @@ export const CAL_CTL = {
 /** Under the state line when the verdict isn't OK: the band's headline cause and where to act ({ text, href, link }), or null.
  *  The cause is left out when the line above already says it ("bitcube is offline" once, not twice). During a calibration
  *  the place to act is the Calibrate block below (its progress and Stop), not Status, which sends you back here.
- *  split: ui.js splitHeadline (the band's split). */
-export function nextLine(m, from, split) {
+ *  split: ui.js splitHeadline (the band's split); said: the state line's own words. */
+export function nextLine(m, from, split, said = '') {
   if (!m) return null;
   const o = m.overall;
   if (o.level === 'ok' || o.cause === 'page') return null;
@@ -243,7 +243,8 @@ export function nextLine(m, from, split) {
   const head = /^Checking$/i.test(cause.trim()) ? o.headline : cause;
   const text = head.replace(/[.\s]+$/, '');
   const norm = (s) => String(s ?? '').toLowerCase().replace(/[.\s]+$/, '').trim();
-  const same = norm(text) === norm(from);
+  // said once: not when the line above (from) or the state line's own words (said: "… not being driven: TouchDesigner is frozen") say it
+  const same = norm(text) === norm(from) || (!!said && norm(said).includes(norm(text)));
   if (o.cause === 'calibrating') return { text: same ? '' : `${cap(text)}.`, href: '#calibrate', link: 'Progress and Stop → Calibrate' };
   // a restart someone chose here: nothing to do but wait, so no errand to Status, and the restart said once (R8 #24)
   if (o.cause === 'td-restarting' && m.show?.restart?.chosen) return { text: 'Started on purpose; back in about a minute.', href: null, link: null };

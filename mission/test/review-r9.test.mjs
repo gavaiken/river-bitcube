@@ -292,6 +292,12 @@ test('R9 #36: TouchDesigner frozen or not running: the ropes are "not being driv
   assert.equal(describeEvent({ kind: 'show', field: 'ropes', from: 'river', to: 'not-driven', t }), 'The ropes stopped being driven');
   assert.match(page('map-words.js'), /st === 'not-driven'\) return 'not driven'/);
   assert.match(page('lights.js'), /ropesSt === 'not-driven'/);
+  // and Lights' next line never says the cause again when the state line now says it
+  const { nextLine } = await import('../public/lights-words.js');
+  const split = (h) => { const i = h.indexOf(':'); return i < 0 ? [h, ''] : [h.slice(0, i), h.slice(i + 1).trim()]; };
+  assert.deepEqual(nextLine(fz, 'from bitcube · 20 s ago', split, stateWords(fz)), { text: '', href: '/status', link: 'What to do → Status' });
+  assert.equal(nextLine(fz, 'from bitcube · 20 s ago', split).text, 'TouchDesigner is frozen.', 'without the state words, as before');
+  assert.match(page('lights.js'), /nextLine\(m, from, splitHeadline, words\)/);
 });
 
 // ---- #26: the Installer's summary; #4: a headline's clock time is never cut ------------------------------------------------------
