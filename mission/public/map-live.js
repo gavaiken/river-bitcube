@@ -8,8 +8,9 @@
 (function () {
   const TIMEOUT_MS = 8000;
   const SVGNS = 'http://www.w3.org/2000/svg';
-  let last = null, gotAt = null, gotWall = null, W = null;
-  import('/map-words.js').then((M) => { W = M; paint(); }).catch(() => { /* the documented colours stay */ });
+  let last = null, gotAt = null, gotWall = null, W = null, notice = null;
+  const startedAt = performance.now();
+  import('/map-words.js').then((M) => { W = M; notice = M.contactNotice(); paint(); }).catch(() => { /* the documented colours stay */ });
   /** ms since the last answer: the larger of the monotonic and the wall clock (a phone that slept). */
   const sinceMs = () => (gotAt == null ? null : Math.max(performance.now() - gotAt, Date.now() - gotWall, 0));
 
@@ -85,6 +86,10 @@
         if (t.textContent !== tip) t.textContent = tip;
       }
     });
+    // the bar ticks, so it is not a live region: a hidden one says "No contact with mission control." once when contact is
+    // lost (30 s without an answer, or none since the page started asking) and "Contact with mission control is back." once
+    const said = document.getElementById('live-said'), ms = sinceMs();
+    if (said && notice) { const t = notice((ms ?? performance.now() - startedAt) > 30_000, performance.now()); if (said.textContent !== t) said.textContent = t; }
     const a = document.getElementById('live-age');
     if (!a) return;
     const words = W ? `· ${W.liveLine(last, sinceMs())}` : '· connecting to mission control';
@@ -94,7 +99,7 @@
   const bar = document.createElement('div');
   bar.id = 'live-bar';
   // spaces between the keys, so a screen reader says "OK, needs attention, down" and not "OKneeds attention"
-  bar.innerHTML = `<b>Live:</b> <span class="k">${icon('ok')}OK,</span> <span class="k">${icon('warning')}needs attention,</span> <span class="k">${icon('down')}down,</span> <span class="k">${icon('unknown')}not known</span> <span id="live-age"></span>`;
+  bar.innerHTML = `<b>Live:</b> <span class="k">${icon('ok')}OK,</span> <span class="k">${icon('warning')}needs attention,</span> <span class="k">${icon('down')}down,</span> <span class="k">${icon('unknown')}not known</span> <span id="live-age"></span><span id="live-said" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap"></span>`;
   // the bar sits over the page's bottom: the page gets that much room below its last line, so nothing stays covered
   const room = () => { document.body.style.paddingBottom = `${bar.offsetHeight + 20}px`; };
   document.addEventListener('DOMContentLoaded', () => { document.body.appendChild(bar); room(); if (window.ResizeObserver) new ResizeObserver(room).observe(bar); paint(); });
