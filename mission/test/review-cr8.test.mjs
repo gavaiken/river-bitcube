@@ -98,3 +98,38 @@ test('CR8 #14: verdicts() reads only the newest it serves, never a copy of every
   const lists = { get confirmed() { throw new Error('read the lists'); }, get expired() { throw new Error('read the lists'); } };
   assert.deepEqual(h.judge(lists, t), []);
 });
+
+// ---- #7: "Asked to …" only while a verdict can still come ------------------------------------------------------------------------
+
+test('CR8 #7: Recent says "Asked to …" only while the change can still get a verdict; one that never will reads "Sent …", never done', async () => {
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const file = join(mkdtempSync(join(tmpdir(), 'cr8-')), 'history.jsonl');
+  let t = T0;
+  const h = new History({ file, now: () => t });
+  h.action({ action: 'switch', body: { file: LIVE }, ok: true, source: 'studio chat', label: 'the switch to the live river', applying_id: 'ax.1' });
+  h.action({ action: 'rebuild', body: { file: YEAR }, ok: true, source: 'mission control', applying_id: 'ax.2' });
+  const words = (hh = h) => Object.fromEntries(hh.recent({ kinds: 'action' }).map((e) => [e.applying_id, describeEvent(e)]));
+  const last = (hh = h) => describeEvent(hh.summary(t).last_action);
+  assert.deepEqual(words(), { 'ax.1': 'Asked to switch TouchDesigner to the live river from the studio chat', 'ax.2': "Asked to rebuild the river's year with the new LED map from mission control" });
+  assert.equal(last(), "Asked to rebuild the river's year with the new LED map from mission control", 'Last done\'s words the same');
+  // a server restart forgets what it was applying: nothing from before it can still get a verdict
+  const after = new History({ file, now: () => t });
+  assert.deepEqual(words(after), { 'ax.1': 'Sent the switch to the live river from the studio chat', 'ax.2': "Sent the rebuild of the river's year from mission control" });
+  assert.equal(last(after), "Sent the rebuild of the river's year from mission control");
+  // past its confirm limit (a switch 3 min, a rebuild 7.5 min, from its answer) and a minute for the next look, no verdict will come
+  t += 4 * 60_000 + 1000;
+  assert.deepEqual(words(), { 'ax.1': 'Sent the switch to the live river from the studio chat', 'ax.2': "Asked to rebuild the river's year with the new LED map from mission control" });
+  t += 5 * 60_000;
+  assert.equal(words()['ax.2'], "Sent the rebuild of the river's year from mission control");
+  // a verdict that does come still says how it ended
+  h.judge({ confirmed: [{ id: 'ax.2' }] }, t);
+  assert.equal(words()['ax.2'], "Rebuilt the river's year with the new LED map from mission control");
+  // quick changes and failures read as before
+  h.action({ action: 'ropes', body: { dark: true }, ok: true, source: 'mission control', applying_id: 'ax.3' });
+  h.action({ action: 'bootfile', body: { file: LIVE }, ok: false, maybe: true, source: 'mission control', applying_id: 'ax.4' });
+  t += 3600e3;
+  assert.equal(words()['ax.3'], 'Turned the ropes dark from mission control');
+  assert.match(words()['ax.4'], /may or may not have happened$/);
+});

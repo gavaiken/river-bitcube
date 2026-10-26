@@ -12,7 +12,8 @@
 //   since(id, nowMs) -> { level, since, for_s, at_least } | null      id: an item id or 'overall' (adds cause, stale)
 //   sinceShow(field, nowMs) -> { value, since, for_s, at_least } | null   field: file | mode | season | ropes
 //   recent({ limit = 50, kinds, sinceT }) -> events, newest first (default window: the last keepMs); an action that waited for
-//                                        the server's verdict carries it (verdict: 'confirmed' | 'expired'), so its words do
+//                                        the server's verdict carries it (verdict: 'confirmed' | 'expired'), so its words do, or
+//                                        pending: true while one can still come (summary().last_action too; CR8 #7)
 //   summary(nowMs) -> { since: { overall, items: { id }, show: { field } }, last_action, count }
 //   verdicts(nowMs, { limit, quick, withinMs }) -> [{ id, request_id?, verdict }]   the server's verdicts kept, newest first
 //                                        (status.verdicts): the newest `limit` on changes that waited for one (model.js AWAITED, a
@@ -68,7 +69,7 @@
 //   nothing here ever throws: history never stops the show.
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { derive, FILES, intensityWord, awaited } from '../public/model.js';
+import { derive, FILES, intensityWord, awaited, changeLabel, confirmLimitS, EXPECT_S } from '../public/model.js';
 import { scrubCreds } from './scrub.mjs';
 import { REQUEST_ID } from './applying.mjs';
 
@@ -79,6 +80,7 @@ export const UNSEEN_GAP_MS = 5 * 60e3;        // unseen for longer than this, a 
 export const RESTART_MARK_MS = 10 * 60e3;     // a piece last seen dark while TouchDesigner restarted, unseen since for longer: its mark lapses
 export const SOURCES = ['mission control', 'studio chat'];
 export const AWAIT_MS = 60 * 60e3;            // an action waits this long at most for its verdict (the server forgets an entry 10 min after its limit)
+export const VERDICT_GRACE_MS = 60e3;         // a verdict is recorded at the next look at the lists (every 5 s): past its limit and this, none will come
 export const VERDICTS_SERVED = 20;            // status.verdicts: the newest this many on changes that waited for one (a switch, …) …
 export const VERDICTS_QUICK = 10;             // … and on the quick ones (ropes, panels, the year's: a page whose answer was lost) …
 export const VERDICTS_MS = 12 * 3600e3;       // … from the last this long (a phone locked for an evening still learns its own)
@@ -271,15 +273,25 @@ export class History {
   recent({ limit = 50, kinds, sinceT } = {}) {
     const from = num(sinceT) ?? this.now() - this.keepMs;
     const ks = kinds == null ? null : new Set([].concat(kinds));
-    const out = [];
+    const out = [], now = this.now();
     for (let i = this.events.length - 1; i >= 0; i--) {
       const e = this.events[i];
       if (!(e.t > from && (ks ? ks.has(e.kind) : e.kind !== 'verdict'))) continue;
-      // an action carries the server's verdict on its entry, once there is one: its words wait for it (R8 #19)
-      const v = e.kind === 'action' && typeof e.applying_id === 'string' ? this.verdictOf.get(e.applying_id) : null;
-      out.push(v ? { ...e, verdict: v.verdict } : e);
+      out.push(this.#judged(e, now));
     }
     return out.sort((a, b) => b.t - a.t).slice(0, Math.max(0, num(limit) ?? 50));
+  }
+
+  /** An action with the server's verdict on its entry, once there is one, its words waiting for it (R8 #19); without one, pending:
+   *  true only while one can still come (CR8 #7): it was sent since this server started (still awaiting: a restart forgets what
+   *  was being applied, #load), and it is within its confirm limit from its answer (model.js confirmLimitS, as lib/applying.mjs
+   *  counts it) and VERDICT_GRACE_MS. One that never got a verdict is "Sent …", never "Asked to …" forever. Anything else as is. */
+  #judged(e, now) {
+    if (!e || e.kind !== 'action' || typeof e.applying_id !== 'string') return e;
+    const v = this.verdictOf.get(e.applying_id);
+    if (v) return { ...e, verdict: v.verdict };
+    const pending = awaitsVerdict(e) && this.awaiting.has(e.applying_id) && now - e.t <= confirmLimitS(EXPECT_S[e.action]) * 1000 + VERDICT_GRACE_MS;
+    return pending ? { ...e, pending: true } : e;
   }
 
   /** The server's verdicts kept, newest first: [{ id, request_id?, verdict }] for the last `limit` changes that waited for one (a
@@ -306,7 +318,7 @@ export class History {
     const now = num(nowMs) ?? this.now();
     const items = Object.fromEntries(Object.keys(this.state.items).map((id) => [id, this.since(id, now)]));
     const show = Object.fromEntries(Object.keys(this.state.show).map((f) => [f, this.sinceShow(f, now)]));
-    return { since: { overall: this.since('overall', now), items, show }, last_action: this.state.last_action, count: this.events.length };
+    return { since: { overall: this.since('overall', now), items, show }, last_action: this.#judged(this.state.last_action, now), count: this.events.length };
   }
 
   // ---- state, from events (the same code replays the file at start) ------------------------------------------
@@ -371,6 +383,8 @@ export class History {
       try { const ev = JSON.parse(l); if (obj(ev) && num(ev.t) != null && typeof ev.kind === 'string') { this.events.push(ev); this.#apply(ev); } }
       catch { /* a torn or hand-edited line: skipped, never fatal */ }
     }
+    // what was being applied before this start can't get a verdict now: the server keeps its entries in memory only (CR8 #7)
+    this.awaiting.clear();
     this.#prune(this.now());
     if (this.lines > 2 * this.max) this.#compact();
   }
@@ -619,15 +633,18 @@ export function describeEvent(ev) {
       case 'calibration': line = calibrationWords(e); break;
       case 'action': {
         const [past, inf, what] = actionPhrase(e), from = `from ${e.source === 'studio chat' ? 'the studio chat' : 'mission control'}`;
-        // a change done only on the server's verdict (awaitsVerdict) is never said done from its answer alone: "Asked to …" until
-        // the verdict, then done, or "… but bitcube didn't show it in time" (R8 #19, #28); recent() puts the verdict on it
+        // a change done only on the server's verdict (awaitsVerdict) is never said done from its answer alone: "Asked to …" while
+        // the verdict can still come (pending), then done, or "… but bitcube didn't show it in time" (R8 #19, #28); one that never
+        // got a verdict (from before a restart of the server, or past its limit) "Sent <its name> …": neither waiting nor done
+        // (CR8 #7). recent() and summary() put the verdict, or pending, on it
         const waits = awaitsVerdict(e);
         line = e.maybe === true ? (e.verdict === 'confirmed' ? `${past} ${what} ${from}, though bitcube answered late`
             : e.verdict === 'expired' ? `Tried to ${inf} ${what} ${from}: no answer in time, and bitcube didn't show it`
             : `Tried to ${inf} ${what} ${from}: no answer in time, so it may or may not have happened`)
           : e.ok === false ? `Tried to ${inf} ${what} ${from}, but ${plainNote(e.note) ?? 'it failed'}`
           : waits && e.verdict === 'expired' ? `Asked to ${inf} ${what} ${from}, but bitcube didn't show it in time`
-          : waits && e.verdict !== 'confirmed' ? `Asked to ${inf} ${what} ${from}`
+          : waits && e.verdict !== 'confirmed' ? (e.pending === true ? `Asked to ${inf} ${what} ${from}`
+            : `Sent ${typeof e.label === 'string' && e.label ? e.label : changeLabel(e.action, obj(e.body) ?? {})} ${from}`)
           : `${past} ${what} ${from}`;
         break;
       }
