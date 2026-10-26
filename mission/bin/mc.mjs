@@ -10,8 +10,7 @@
 //     ropes '{"dark":true}'   hub75 '{"brightness":0.8}'   switch '{"file":"river-local-oct-22-seasons.toe"}'
 //     bootfile '{"file":"river-online-oct-23.toe"}'   rebuild '{"file":"river-local-oct-22-seasons.toe"}'
 //     lightsroute '{"route":"router"}'   mode '{"mode":"manual"}'   target '{"season":"summer","intensity":0.7}'
-//     rules '{"rules":{"cycle_seconds":240}}'   rules-reset   check   calibrate '{"action":"start"}'
-//   A calibration is stopped on the Lights page, by a person: calibrate '{"action":"cancel"}' is refused here (403).
+//     rules '{"rules":{"cycle_seconds":240}}'   rules-reset   check   calibrate '{"action":"start"}'   calibrate '{"action":"cancel"}'
 //
 // Prints mission control's JSON answer. Exit 0: done (ok); 1: refused, failed or may not have happened (the answer says which:
 // a 409 "wait: …" means try again when that is done; maybe: true means look at status before trying again); 2: a usage error,

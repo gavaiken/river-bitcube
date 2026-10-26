@@ -31,7 +31,7 @@ export const DENIED = [
 export { describeTool };
 
 /** The agent's environment: the server's own, its Claude token, and the path of mission control's local control socket
- *  (MISSION_CONTROL_SOCKET), the one way it changes the installation (mission/bin/mc.mjs reads it; STUDIO.md says so). */
+ *  (MISSION_CONTROL_SOCKET): mission/bin/mc.mjs makes a change through mission control with it (STUDIO.md says when). */
 export function agentEnv(base, { token = null, controlSocket = null } = {}) {
   const env = { ...base };
   if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;

@@ -49,7 +49,6 @@
 //                                              ok } | null, show_file { file, label } | null, boot_file, blocked { <action>: why } }
 //   POST /control/<action>                     exactly POST /api/control/<action>: the same whitelist, locks and 409 "wait: …",
 //                                              recorded with source 'studio chat' (Applying line, Last done and Recent say so);
-//                                              but calibrate { action: 'cancel' } is 403: a person stops a run on the Lights page
 import { createServer } from 'node:http';
 import { connect as netConnect } from 'node:net';
 import { readFileSync, existsSync, mkdirSync, copyFileSync, chmodSync, lstatSync, unlinkSync, statSync } from 'node:fs';
@@ -483,7 +482,6 @@ const server = createServer(async (req, res) => {
 });
 
 // ---- the local control socket (the studio agent's way to change the installation: bin/mc.mjs) -----------------------------
-const CHAT_NO_CANCEL = "the studio chat can't stop a calibration: a person stops it on the Lights page (say so in the chat instead)";
 const local = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://local');
   const scenario = FIXTURES ? url.searchParams.get('scenario') ?? undefined : undefined;   // fixture mode: which world (default as a page)
@@ -495,7 +493,6 @@ const local = createServer(async (req, res) => {
       if (!isObject(b)) return send(res, 400, { ok: false, error: NOT_OBJECT });
       // a calibration is stopped on the Lights page, by a person (STUDIO.md): the chat can't end a teammate's run halfway
       // through a capture, whatever it was asked (R7 #36). A refusal: not recorded
-      if (m[1] === 'calibrate' && b.action === 'cancel') return send(res, 403, { ok: false, error: CHAT_NO_CANCEL });
       const r = await runControl(m[1], b, { scenario, source: 'studio chat' });
       return send(res, r.status, r.body);
     }

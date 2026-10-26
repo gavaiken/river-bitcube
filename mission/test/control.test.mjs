@@ -101,15 +101,10 @@ test('the control socket: 0600 in the state folder, the same controls and locks 
   const cs = await mc(socket, 'status');
   assert.equal(cs.json.calibration.running, true);
   assert.equal(cs.json.blocked.switch, 'a calibration is running. Stop it on the Lights page first');
-  // the chat never stops a teammate's run: a calibration is stopped on the Lights page, by a person (R7 #36); a phone's Stop
-  // always gets through
+  // the chat can stop a run when it is asked to (Gavin, 26 Oct: the agent does whatever it is asked), and Stop is never blocked
   const stop = await mc(socket, 'calibrate', '{"action":"cancel"}');
-  assert.deepEqual([stop.code, stop.json.status, stop.json.ok], [1, 403, false]);
-  assert.match(stop.json.error, /Lights page/);
-  assert.equal((await mc(socket, 'status')).json.calibration.running, true, 'still running');
-  assert.notEqual((await lastAction()).body?.action, 'cancel', 'a refusal is not recorded');
-  const phoneStop = await post('/api/control/calibrate', { action: 'cancel' }, phone);
-  assert.deepEqual([phoneStop.status, (await phoneStop.json()).cancelled], [200, true], 'Stop always gets through from a phone');
+  assert.deepEqual([stop.code, stop.json.ok, stop.json.cancelled], [0, true, true]);
+  assert.equal((await lastAction()).source, 'studio chat', 'recorded as the chat\'s');
 
   // the CLI's own refusals: unknown action, a body that is not a JSON object
   assert.equal((await mc(socket, 'shell', '{}')).code, 2);
