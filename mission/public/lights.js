@@ -11,7 +11,7 @@ import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, EXPECT_S
 import { uprightsFromAtlas } from '/screens.js';
 import { calChecklist, ROOM_CHECK, startWhy, dryWhy, calView, rebuiltFor, runNote, nextLine, captureWhen, driftWords, resultWords,
   mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT, calRead, calLeft, changeSince, stateLevel, applyingNow, stateLive, CAL_COPY, runFine,
-  resultHead, CAL_CTL, calNewer } from '/lights-words.js';
+  resultHead, CAL_CTL, calNewer, stateWords } from '/lights-words.js';
 
 const N_ROPES = 20, LEDS = 400;
 const LIGHTS_MS = 10_000, CAL_MS = 5_000, STILL_MS = 30_000, FRAME_OLD_S = 30, PROBE_OLD_S = 120;
@@ -92,8 +92,8 @@ function renderStateLine() {
     put('state-from', ''); put('state-next', ''); paintApplying([]); sayState(ms > LOST_MS ? "This page can't reach mission control." : ''); return;
   }
   // show.ropes.words says "in calibration patterns" during a run (the model's own state), so the line needs no exception
-  const ropes = m.show.ropes, panels = m.show.panels;
-  const words = `${cap(ropes.words)} · ${panels.words}.`;
+  // a restart's dark ropes and panels said once (R8 #24)
+  const words = stateWords(m);
   const lost = m.overall.cause === 'page' || pageDown();
   const ropesItem = m.items.find((x) => x.id === 'ropes');
   // one rule with Status and the map: the item's own stale flag says whether this is a last answer
@@ -118,7 +118,7 @@ function renderStateLine() {
   el.className = `from muted${lost || stale || (a != null && a > PROBE_OLD_S) ? ' old' : ''}`;
   // when it isn't OK, the band's headline cause (once: not when the line above says it) and where to act (Lights has no band)
   const nx = lost ? null : nextLine(m, from, splitHeadline);
-  put('state-next', nx ? `${nx.text ? `<span>${esc(fmt.nb(nx.text))}</span> ` : ''}<a href="${nx.href}"${nx.href.startsWith('#') ? ' data-jump="calibrate"' : ''}>${esc(nx.link)}</a>` : '');
+  put('state-next', nx ? `${nx.text ? `<span>${esc(fmt.nb(nx.text))}</span> ` : ''}${nx.href ? `<a href="${nx.href}"${nx.href.startsWith('#') ? ' data-jump="calibrate"' : ''}>${esc(nx.link)}</a>` : ''}` : '');
   // the band's quiet line for a change in flight from another phone or the chat (this page's own is said on its control)
   const own = ownChanges(), lines = lost ? [] : applyingNow(m, own);
   paintApplying(lines);

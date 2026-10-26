@@ -6,7 +6,7 @@
 // Plain ES module, no build, no framework, no external scripts.
 import { mountShell, poll, tick, watchContact, art, fmt, sheet, esc, mark, chip, WORD, MARK, DOC_LINKS, sinceAgrees, NAMES_FROM_BITCUBE, WARN_MS } from '/ui.js';
 import { derive, dur } from '/model.js';
-import { shownLevel, notYet, rowWord, sinceWords, mapAction, pointsAtStatus, contactNotice } from '/map-words.js';
+import { shownLevel, notYet, rowWord, sinceWords, mapAction, pointsAtStatus, contactNotice, linkWord, linkWordNow } from '/map-words.js';
 
 const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
 const CHECK = { mini: 'the Mac mini', bitcube: "bitcube's full check", modal: "the Mac mini, asking Dave's agent" };
@@ -71,53 +71,6 @@ const elapsedS = () => (p.receivedAt == null ? 0 : p.elapsed() / 1000);
 const notice = contactNotice();
 
 // ---- words -------------------------------------------------------------------------------------------------
-/** The pill on a link: the spec's words ("no answer", "no frames", "no internet", "not driven", "picture frozen",
- *  "sending black", "clips failing", "sync quiet", "not known"), from the link's own item; from a last answer (the item is stale:
- *  an old full check, contact lost) with "· last answer", as the boxes say it, never "running" as if now (R8 #33). */
-function linkWord(link, it, m) {
-  const w = linkWordNow(link, it, m);
-  return it?.stale && w !== 'not known' ? `${w} · last answer` : w;
-}
-function linkWordNow(link, it, m) {
-  if (!it || it.level === 'unknown') return 'not known';
-  const L = it.level, s = it.summary ?? '';
-  switch (link.item) {
-    case 'gallery camera': return L === 'ok' ? 'answers' : L === 'down' ? 'no answer' : 'see details';
-    case 'river camera':
-      if (m.show.river.live === true) return 'live frames';
-      if (/no frames/i.test(s)) return 'no frames';
-      if (it.cause === 'no-internet' || /no internet/i.test(s)) return 'no internet';
-      return L === 'down' ? 'no answer' : L === 'ok' ? 'answers' : 'see details';
-    case 'internet': return L === 'ok' ? 'online' : L === 'down' ? 'no internet' : 'see details';
-    case 'touchdesigner':
-      if (/frozen|not answering/i.test(s)) return 'not answering';
-      if (/not running/i.test(s)) return 'not running';
-      if (/restart|starting|coming up/i.test(s)) return 'starting';
-      if (/slow/i.test(s)) return 'running slowly';
-      return L === 'ok' ? 'running' : 'see details';
-    case 'ropes': {
-      const st = m.show.ropes.state;
-      if (st === 'calibrating') return 'calibrating';
-      if (st === 'dark') return 'sending black';
-      if (st === 'restarting') return 'dark, restarting';
-      if (st === 'not-reaching') return /frozen|not running|not being driven/i.test(s) ? 'not driven' : /restart|starts/i.test(s) ? 'dark, restarting' : 'not reaching';
-      if (L === 'warning') return /slowly|frames a second/i.test(s) ? 'driven slowly' : 'see details';
-      return L === 'ok' ? 'sender open' : 'see details';
-    }
-    case 'hub75 panels':
-      if (m.show.panels.state === 'calibrating') return 'calibrating';
-      if (/frozen/i.test(s)) return 'picture frozen';
-      if (L === 'down') return 'no sender';
-      if (L === 'warning') return /dark|off|brightness 0/i.test(s) ? 'dark' : 'see details';
-      return 'picture sent';
-    case 'modal link':
-      if (/not running|not started/i.test(s)) return 'not running';
-      if (/failing/i.test(s)) return 'clips failing';
-      if (/nothing new/i.test(s)) return 'agent quiet';
-      return L === 'ok' ? 'clips posting' : 'see details';
-  }
-  return WORD[L].toLowerCase();
-}
 /** "from bitcube · 20 s ago", amber past 2 min; "not checked yet" without an age. */
 function fromLine(it) {
   if (!it) return '';

@@ -17,17 +17,25 @@ export const NO_CONTACT = "this page hasn't heard from mission control yet";
 export function calChecklist(m) {
   const item = (id) => m?.items.find((x) => x.id === id) ?? null;
   const lv = (id) => item(id)?.level ?? 'unknown';
+  // an unknown line says why it isn't known, as Status's rows do: bitcube offline, its full check failed; "hasn't been checked
+  // yet" only before the first check (R8 #34). are: "is" or "are" for what is named.
+  const unknownWhy = (name, id, are = 'is') => {
+    const x = item(id), s = String(x?.summary ?? '');
+    if (x?.cause === 'bitcube-offline' || /which is offline/i.test(s)) return `${name} can't be checked: bitcube is offline`;
+    if (/full check of bitcube failed/i.test(s)) return `${name} can't be checked: the full check of bitcube failed`;
+    return `${name} ${are === 'are' ? "haven't" : "hasn't"} been checked yet`;
+  };
   const both = [lv('rope box 1'), lv('rope box 2')];
   const boxLevel = both.every((l) => l === 'ok') ? 'ok' : both.includes('down') ? 'down' : both.includes('warning') ? 'warning' : 'unknown';
-  const boxWhy = boxLevel === 'unknown' ? "the rope boxes haven't been checked yet"
+  const boxWhy = boxLevel === 'unknown' ? unknownWhy('the rope boxes', 'rope box 1', 'are')
     : both[0] !== 'ok' && both[1] !== 'ok' ? 'neither rope box is answering' : both[0] !== 'ok' ? "rope box 1 isn't answering" : "rope box 2 isn't answering";
   const td = item('touchdesigner'), tdSum = td?.summary ?? '';
-  const tdWhy = !td || td.level === 'unknown' ? "TouchDesigner hasn't been checked yet"
+  const tdWhy = !td || td.level === 'unknown' ? unknownWhy('TouchDesigner', 'touchdesigner')
     : td.level === 'down' ? (/not running/i.test(tdSum) ? "TouchDesigner isn't running" : "TouchDesigner isn't answering")
     : /slow/i.test(tdSum) ? `TouchDesigner is running slowly (${tdSum.replace(/^Running slowly: /i, '')})`
     : /restart|start/i.test(tdSum) ? 'TouchDesigner is still starting' : "TouchDesigner isn't ready";
   const cam = lv('gallery camera');
-  const camWhy = cam === 'unknown' ? "the gallery camera hasn't been checked yet" : "the gallery camera isn't reachable";
+  const camWhy = cam === 'unknown' ? unknownWhy('the gallery camera', 'gallery camera') : "the gallery camera isn't reachable";
   // from a last answer (the full check is old, or contact is lost) a line is never a green ✓ and never in the present tense: the
   // grey mark and "when last seen", as Status's fine list (R7 #29)
   const old = (...ids) => ids.some((id) => item(id)?.stale);
@@ -130,6 +138,14 @@ export function calLeft({ cal, dry }) {
 }
 
 // ---- the state line --------------------------------------------------------------------------------------------
+/** The state line's big words: "The ropes show the river · the panels show the river at 100 %.", and once, never twice, what a
+ *  restart does to both: "The ropes and the panels are dark while TouchDesigner restarts." (R8 #24). */
+export function stateWords(m) {
+  const r = m?.show?.ropes, p = m?.show?.panels;
+  if (!r || !p) return '';
+  if (r.state === 'restarting' && p.state === 'restarting') return `The ropes and the panels are dark while TouchDesigner ${/\bstarts$/.test(r.words) && !/restarts$/.test(r.words) ? 'starts' : 'restarts'}.`;
+  return `${cap(r.words)} · ${p.words}.`;
+}
 /** The changes that alter what the ropes or the panels show: a switch or a rebuild restarts TouchDesigner (the lights go dark),
  *  the ropes, the panels, the lighting port, a calibration's start. A mode, target or rules change only steers the river. */
 export const LIGHTS_CHANGES = ['switch', 'rebuild', 'ropes', 'hub75', 'lightsroute', 'calibrate'];
@@ -223,6 +239,8 @@ export function nextLine(m, from, split) {
   const norm = (s) => String(s ?? '').toLowerCase().replace(/[.\s]+$/, '').trim();
   const same = norm(text) === norm(from);
   if (o.cause === 'calibrating') return { text: same ? '' : `${cap(text)}.`, href: '#calibrate', link: 'Progress and Stop → Calibrate' };
+  // a restart someone chose here: nothing to do but wait, so no errand to Status, and the restart said once (R8 #24)
+  if (o.cause === 'td-restarting' && m.show?.restart?.chosen) return { text: 'Started on purpose; back in about a minute.', href: null, link: null };
   return { text: same ? '' : `${cap(text)}.`, href: '/status', link: 'What to do → Status' };
 }
 

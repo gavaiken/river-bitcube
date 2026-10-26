@@ -25,7 +25,8 @@ test('the Calibrate checklist reads as sentences, sentence case; its reasons sta
   assert.equal(lnc[1].text, 'Neither rope box is answering');
   assert.equal(lnc[1].why, 'neither rope box is answering');
   const off = calChecklist(model('bitcube-offline'));
-  for (const c of off) { assert.equal(c.level, 'unknown'); assert.match(c.text, /^[A-Z].*(hasn't|haven't) been checked yet$/, c.text); }
+  // behind an offline bitcube a line says so, never "hasn't been checked yet" (R8 #34)
+  for (const c of off) { assert.equal(c.level, 'unknown'); assert.match(c.text, /^[A-Z].* can't be checked: bitcube is offline$/, c.text); }
   for (const c of [...ok, ...lnc, ...off]) assert.match(c.text, /^[A-Z]/, c.text);
 });
 

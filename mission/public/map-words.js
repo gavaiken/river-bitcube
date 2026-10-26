@@ -6,6 +6,58 @@ import { derive, dur, POLL_S, STALE_FACTOR, PAGE_STALE_S } from './model.js';
 const WORD = { ok: 'OK', warning: 'Attention', down: 'Down', unknown: 'Unknown' };   // ui.js WORD (ui.js can't load under node)
 const RANK = { down: 0, warning: 1, unknown: 2, ok: 3 };                                 // the headline order: worst first
 
+// ---- the chain's links -------------------------------------------------------------------------------------------
+/** The pill on a link (map.js): the spec's words ("no answer", "no frames", "no internet", "not driven", "picture frozen",
+ *  "sending black", "clips failing", "agent quiet", "restarting", "dark, restarting", "starting", "not known"), from the link's own item; from a last answer (the item is stale:
+ *  an old full check, contact lost) with "· last answer", as the boxes say it, never "running" as if now (R8 #33). */
+export function linkWord(link, it, m) {
+  const w = linkWordNow(link, it, m);
+  return it?.stale && w !== 'not known' ? `${w} · last answer` : w;
+}
+export function linkWordNow(link, it, m) {
+  if (!it || it.level === 'unknown') return 'not known';
+  const L = it.level, s = it.summary ?? '';
+  switch (link.item) {
+    case 'gallery camera': return L === 'ok' ? 'answers' : L === 'down' ? 'no answer' : 'see details';
+    case 'river camera':
+      if (m.show.river.live === true) return 'live frames';
+      if (/no frames/i.test(s)) return 'no frames';
+      if (it.cause === 'no-internet' || /no internet/i.test(s)) return 'no internet';
+      return L === 'down' ? 'no answer' : L === 'ok' ? 'answers' : 'see details';
+    case 'internet': return L === 'ok' ? 'online' : L === 'down' ? 'no internet' : 'see details';
+    case 'touchdesigner':
+      if (/frozen|not answering/i.test(s)) return 'not answering';
+      if (/not running/i.test(s)) return 'not running';
+      // a restart is "restarting", as the box beside it says; "starting" is bitcube's own start (R8 #26)
+      if (m.show.restart || it.cause === 'td-restarting') return 'restarting';
+      if (/restart|starting|coming up/i.test(s)) return 'starting';
+      if (/slow/i.test(s)) return 'running slowly';
+      return L === 'ok' ? 'running' : 'see details';
+    case 'ropes': {
+      const st = m.show.ropes.state;
+      if (st === 'calibrating') return 'calibrating';
+      if (st === 'dark') return 'sending black';
+      if (st === 'restarting') return 'dark, restarting';
+      if (st === 'not-reaching') return /frozen|not running|not being driven/i.test(s) ? 'not driven' : /restart|starts/i.test(s) ? 'dark, restarting' : 'not reaching';
+      if (L === 'warning') return /slowly|frames a second/i.test(s) ? 'driven slowly' : 'see details';
+      return L === 'ok' ? 'sender open' : 'see details';
+    }
+    case 'hub75 panels':
+      if (m.show.panels.state === 'calibrating') return 'calibrating';
+      if (/frozen/i.test(s)) return 'picture frozen';
+      if (L === 'down') return 'no sender';
+      if (m.show.panels.state === 'restarting') return 'dark, restarting';   // as the ropes' arrow and the box say it (R8 #26)
+      if (L === 'warning') return /dark|off|brightness 0/i.test(s) ? 'dark' : 'see details';
+      return 'picture sent';
+    case 'modal link':
+      if (/not running|not started/i.test(s)) return 'not running';
+      if (/failing/i.test(s)) return 'clips failing';
+      if (/nothing new/i.test(s)) return 'agent quiet';
+      return L === 'ok' ? 'clips posting' : 'see details';
+  }
+  return WORD[L].toLowerCase();
+}
+
 // ---- the chain's rows --------------------------------------------------------------------------------------------
 /** The level a row, a mark, a chip or a pill shows: an item from a last answer (its source is old, or contact is lost) is
  *  never green and never red: grey, with its word kept and "last answer" beside it (contract rule 3, as Status's tiles). */
