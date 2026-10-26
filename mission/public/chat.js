@@ -3,6 +3,7 @@
 // their request by id, and keeps the pinned status bar and the composer. Server API unchanged: history, events, send, stop.
 import { mountShell, tick, art, fmt, control, confirm, api, esc, md, chip, mark, plainError, WARN_MS, LOST_MS } from '/ui.js';
 import { TZ } from '/model.js';
+import { stateOf as judge, stepWords, stepsToggle, excerpt } from '/chat-words.js';
 
 const $ = (id) => document.getElementById(id);
 const shell = mountShell({ page: 'chat', title: 'Studio chat' });
@@ -31,7 +32,6 @@ const pageStart = performance.now();   // when this page started asking (the hea
  *  so a phone whose monotonic clock paused in sleep never undercounts a request that has run for an hour. */
 const runS = (m) => (m ? Math.max(0, (performance.now() - m.at) / 1000, (Date.now() - m.wall) / 1000) : 0);
 const key = (e) => `${e.t}|${e.kind}|${e.id ?? ''}|${(e.text ?? '').length}|${e.ok ?? ''}`;
-const excerpt = (s, n) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? `${s.slice(0, n - 1)}…` : s; };
 const ordinal = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][Math.min(n % 10, 4)] ?? 'th'}`;
 const touch = () => matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
 
@@ -57,8 +57,8 @@ function take(e) {
   if (!r) { r = { id, t: e.t, text: '', steps: [], texts: [], notices: [], orphan: true }; S.reqs.set(id, r); S.order.push(id); }
   S.dirty.add(id);
   switch (e.kind) {
-    case 'started': r.started = e.t; if (!S.startedAt.has(id)) { const ago = Math.max(0, Date.now() - e.t); S.startedAt.set(id, { at: performance.now() - ago, wall: Date.now() - ago }); } break;
-    case 'activity': r.steps.push({ t: e.t, text: e.text ?? '' }); break;
+    case 'started': r.started = e.t; r.startedArrivedAt = performance.now(); if (!S.startedAt.has(id)) { const ago = Math.max(0, Date.now() - e.t); S.startedAt.set(id, { at: performance.now() - ago, wall: Date.now() - ago }); } break;
+    case 'activity': r.steps.push({ t: e.t, ...stepWords(e) }); break;   // { text, title, act }: the team's words, the raw line for the tooltip
     case 'text': if (e.text) r.texts.push(e.text); break;
     case 'notice': r.notices.push(e.text ?? ''); break;
     case 'error': r.error = e.text ?? ''; break;
@@ -72,95 +72,8 @@ function take(e) {
 /** The ordered requests. */
 const reqs = () => S.order.map((id) => S.reqs.get(id)).sort((a, b) => (a.t ?? 0) - (b.t ?? 0));
 
-/** A request's state from its events and the live status: waiting (with its place), working, done, stopped, failed, unknown. */
-function stateOf(r) {
-  if (r.failed) return { s: 'failed', t: r.failed.t, reason: r.failed.text };
-  if (r.stopped) return { s: 'stopped', t: r.stopped };
-  if (r.result) {
-    if (r.result.ok) return { s: 'done', t: r.result.t };
-    return { s: 'failed', t: r.result.t, reason: plainFailure(r.result.text || r.error) };
-  }
-  if (r.error && !S.status?.running) return { s: 'failed', t: r.t, reason: plainFailure(r.error) };
-  const st = S.status;
-  if (st?.current?.id === r.id) return { s: 'working' };
-  const qi = st?.queue?.findIndex((q) => q.id === r.id) ?? -1;
-  if (qi >= 0) return { s: 'waiting', place: qi + 1 };
-  if (r.started && st && !st.running && !S.lostAt) return { s: 'unknown' };       // the server moved on without a verdict
-  // a request newer than the last status (its event came first) is waiting for the status that lists it, not "not finished"
-  if (!r.started && st && !S.lostAt) return r.arrivedAt != null && r.arrivedAt > S.statusAt ? { s: 'waiting', place: null } : { s: 'unknown' };
-  return r.started ? { s: 'working' } : { s: 'waiting', place: null };
-}
-/** Why a run failed, in the team's words (the same table as lib/studio.mjs, for history written before 'failed' events). */
-function plainFailure(raw) {
-  const s = String(raw ?? '').trim();
-  if (!s) return 'the agent stopped with an error';
-  if (/ssh|connect to host|port 22|bitcube did not answer|bitcube didn't answer/i.test(s)) return "bitcube didn't answer";
-  if (/no claude token|setup-token/i.test(s)) return 'the agent has no token yet';
-  if (/timed? ?out|timeout|took too long/i.test(s)) return 'it took too long';
-  if (/rate limit|overloaded|529|too many requests/i.test(s)) return 'the agent is busy; try again in a minute';
-  if (/quota|budget|credit|billing/i.test(s)) return 'the agent is out of credit';
-  if (/network|ENOTFOUND|ECONN|fetch failed/i.test(s)) return "the agent couldn't reach the internet";
-  if (/^the agent|^bitcube|^it took/i.test(s)) return s.replace(/[.\s]+$/, '');
-  return 'the agent stopped with an error';
-}
-
-// ---- activity lines in plain verbs ---------------------------------------------------------------------------------
-const PAST = { check: 'checked', run: 'ran', restart: 'restarted', set: 'set', switch: 'switched', list: 'listed', show: 'showed', get: 'got',
-  fetch: 'fetched', pull: 'pulled', push: 'pushed', save: 'saved', rebuild: 'rebuilt', start: 'started', stop: 'stopped', open: 'opened',
-  read: 'read', look: 'looked', capture: 'captured', take: 'took', grab: 'grabbed', make: 'made', turn: 'turned', send: 'sent', test: 'tested',
-  verify: 'verified', compare: 'compared', count: 'counted', find: 'found', search: 'searched', print: 'printed', query: 'queried',
-  update: 'updated', install: 'installed', write: 'wrote', create: 'created', delete: 'deleted', remove: 'removed', kill: 'killed',
-  tail: 'tailed', ping: 'pinged', inspect: 'inspected', measure: 'measured', confirm: 'confirmed', report: 'reported', wait: 'waited',
-  commit: 'committed', build: 'built', render: 'rendered', dim: 'dimmed', raise: 'raised', lower: 'lowered', ask: 'asked', call: 'called' };
-const ACTS = /\b(bitcube|touchdesigner|td\.ps1|td_save|probe\.ps1|frames\.ps1|calibrate|rebuild|ropes?|rope box|panels?|hub75|lights?|camera|cam\b|router|switch(ed|ing)?|restart|reboot|brightness|dark|black|season|mode|target|artnet|art-net|sender|boot file|modal|ptz|vnc|screenshot|\/api\/control|start-river|scheduled task)/i;
-const RAW_CMD = /[|;&`$<>{}]|^\s*(ssh|scp|powershell|pwsh|python3?|node|git|curl|ffmpeg|ls|cat|grep|tail|head|cd|npm|pytest)\b/;
-/** A file the agent read or changed, in plain words ("the calibration script", "the repo's notes"): never a path or a file
- *  name on the page (the raw line stays in the step's tooltip). */
-function plainFile(path) {
-  const p = String(path ?? '').trim().replace(/\\/g, '/'), f = p.split('/').pop().toLowerCase();
-  if (/^calibrate\.(py|ps1)$/.test(f)) return 'the calibration script';
-  if (/^(td|td_save|td_mission)\.(ps1|py)$/.test(f)) return 'the TouchDesigner script';
-  if (/^probe\.ps1$/.test(f)) return 'the full-check script';
-  if (/^frames\.ps1$/.test(f)) return 'the script that reads the lights';
-  if (/\.toe$/.test(f)) return 'a show file';
-  if (f === 'claude.md') return "the repo's notes";
-  if (f === 'glossary.md') return 'the glossary';
-  if (/\/sessions\//.test(p)) return 'the session notes';
-  if (/plan\.md$/.test(f)) return 'the plan';
-  if (/\.md$/.test(f)) return 'the docs';
-  if (/^system\.json$/.test(f)) return 'the system map';
-  if (/^pixelmap-.*\.json$|^screens-.*\.json$/.test(f)) return 'the LED map';
-  if (/(^|\/)mission\//.test(p)) return "mission control's code";
-  if (/(^|\/)td\//.test(p)) return "the show file's code";
-  if (/(^|\/)tools\/pixelmap\//.test(p)) return 'the LED map tools';
-  if (/\.(py|ps1|mjs|js|sh|cmd)$/.test(f)) return 'a script';
-  if (/\.(json|ya?ml|ini|cfg|conf)$/.test(f)) return 'a settings file';
-  return 'a file';
-}
-/** "read X" → "looked at <X in words>"; "ran: Y" → Y as what it did; "edited Z" → "changed <Z in words>". Returns { text, act };
- *  a raw command is never shown (the whole line is the step's tooltip). Changing a file is not acting on the installation. */
-function plainStep(raw) {
-  let s = String(raw ?? '').trim();
-  let m;
-  if ((m = s.match(/^read (.+)$/i))) return { text: `looked at ${plainFile(m[1])}`, act: false };
-  if ((m = s.match(/^edited (.+)$/i))) return { text: `changed ${plainFile(m[1])}`, act: false };
-  if ((m = s.match(/^ran:\s*(.+)$/i))) {
-    const y = m[1].trim();
-    if (RAW_CMD.test(y)) return { text: /bitcube|ssh/i.test(y) ? 'ran a command on bitcube' : 'ran a command', act: ACTS.test(y) };
-    const w = y.match(/^([A-Za-z]+)(\b.*)$/);
-    const verb = w ? (PAST[w[1].toLowerCase()] ?? w[1].toLowerCase()) : '';
-    const text = w ? `${verb}${w[2]}` : y;
-    return { text: text.replace(/[.\s]+$/, ''), act: ACTS.test(y) };
-  }
-  if ((m = s.match(/^synced the repo/i))) return { text: 'brought its copy of the repo up to date', act: false };
-  if ((m = s.match(/^couldn't sync the repo/i))) return { text: "couldn't bring its copy of the repo up to date; working from an older copy", act: false };
-  if ((m = s.match(/^searched for (.+)$/i))) return { text: `searched for ${m[1]}`, act: false };
-  if ((m = s.match(/^searched the web: (.+)$/i))) return { text: `searched the web for ${m[1]}`, act: false };
-  if ((m = s.match(/^fetched (.+)$/i))) return { text: `fetched ${m[1]}`, act: false };
-  if ((m = s.match(/^asked a helper: (.+)$/i))) return { text: `asked a helper to ${m[1].replace(/^[A-Z]/, (c) => c.toLowerCase())}`, act: false };
-  if ((m = s.match(/^used (.+)$/i))) return { text: `used ${m[1]}`, act: false };
-  return { text: s, act: false };
-}
+/** A request's state (chat-words.js): its own events first, then the live status, never judged against a status older than it. */
+const stateOf = (r) => judge(r, S.status, { statusAt: S.statusAt, lost: S.lostAt != null });
 
 // ---- rendering ----------------------------------------------------------------------------------------------------
 const thread = $('thread');
@@ -173,7 +86,8 @@ function dayLabel(t) {
   if (k === yest) return 'Yesterday';
   return k.replace(/ \d{4}$/, (y) => (y.trim() === String(new Date().getFullYear()) ? '' : y));
 }
-const stepHtml = (st, p) => `<div class="step${p.act ? ' act' : ''}"><span class="dot" aria-hidden="true"></span><span title="${esc(excerpt(st.text, 200))}">${esc(p.text)}</span></div>`;
+/** One step: the team's words on the page; the agent's raw line only in the tooltip (title), for Will. */
+const stepHtml = (st) => `<div class="step${st.act ? ' act' : ''}"><span class="dot" aria-hidden="true"></span><span${st.title && st.title !== st.text ? ` title="${esc(excerpt(st.title, 200))}"` : ''}>${esc(st.text)}</span></div>`;
 
 function chipFor(r, st) {
   switch (st.s) {
@@ -187,13 +101,14 @@ function chipFor(r, st) {
 }
 function cardHtml(r) {
   const st = stateOf(r);
-  const steps = r.steps.map((x) => [x, plainStep(x.text)]);
-  const acting = steps.filter(([, p]) => p.act), quiet = steps.filter(([, p]) => !p.act);
+  const steps = r.steps;
+  const acting = steps.filter((x) => x.act), quiet = steps.filter((x) => !x.act);
+  const tog = stepsToggle(quiet.length, acting.length, r.text);
   const stepsHtml = steps.length ? `<div class="steps">
-      ${acting.map(([x, p]) => stepHtml(x, p)).join('')}
-      ${quiet.length ? `<details class="more" ${S.open.has(r.id) ? 'open' : ''}><summary aria-label="${esc(`${quiet.length} ${acting.length ? 'more ' : ''}${quiet.length === 1 ? 'step' : 'steps'} for ‘${excerpt(r.text || 'this request', 50)}’`)}"><span class="chev" aria-hidden="true">›</span>${quiet.length} ${quiet.length === 1 ? 'step' : 'steps'}${acting.length ? ' more' : ''}</summary><div class="steps">${quiet.map(([x, p]) => stepHtml(x, p)).join('')}</div></details>` : ''}
+      ${acting.map(stepHtml).join('')}
+      ${quiet.length ? `<details class="more" ${S.open.has(r.id) ? 'open' : ''}><summary aria-label="${esc(tog.label)}"><span class="chev" aria-hidden="true">›</span>${esc(tog.visible)}</summary><div class="steps">${quiet.map(stepHtml).join('')}</div></details>` : ''}
     </div>` : '';
-  const lastStep = steps.length ? steps[steps.length - 1][1] : null;
+  const lastStep = steps.length ? steps[steps.length - 1] : null;
   const working = st.s === 'working' ? `<div class="working-line"><span class="spin" aria-hidden="true"></span><span>Working on it…${lastStep ? ` <span class="now">· just now: ${esc(lastStep.text)}</span>` : ''}</span></div>` : '';
   const reply = r.texts.length ? `<div class="reply">${r.texts.map((t) => md(t)).join('')}</div>` : '';
   const notices = r.notices.map((n) => `<p class="notice">${esc(n)}</p>`).join('');
