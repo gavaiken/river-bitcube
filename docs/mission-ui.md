@@ -181,7 +181,7 @@ One page-level polite live region announces applying, confirming, done, unconfir
 | lightsroute | ropes, hub75, lightsroute, calibrate |
 | ropes, hub75, mode, target, rules, rules-reset | the same action (two phones changing one thing at once) |
 | a calibration starting (the start request) | ropes, hub75, switch, lightsroute, rebuild, calibrate; a dry run's start (or a decode of earlier photos) only a second start, nothing waits for it, and it waits only for another start (CR7 #6, #7) |
-| a calibration running (`calibration.running`, not stale) | ropes, hub75, switch, lightsroute, rebuild (`CAL_BLOCKED`); a dry run or a decode of earlier photos nothing (they touch no lights: R7 #20); and a calibration can't start while a switch, rebuild or boot-file change is in flight. Stop is never blocked on the pages; the studio chat can't stop a run (the socket's 403) |
+| a calibration running (`calibration.running`, not stale) | ropes, hub75, switch, lightsroute, rebuild (`CAL_BLOCKED`); a dry run or a decode of earlier photos nothing (they touch no lights: R7 #20); and a calibration can't start while a switch, rebuild or boot-file change is in flight. Stop is never blocked, on the pages or for the studio chat |
 
 The server takes a started calibration's state from Lights' own answer at once (the probe's copy is up to a minute old), so the lock holds from the first second of the run, on the server and in `/api/status`.
 
