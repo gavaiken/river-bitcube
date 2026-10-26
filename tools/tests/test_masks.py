@@ -150,6 +150,10 @@ PROBE_CASES = CASES + [
     # CR9 #12: a "key" in escaped JSON, an apostrophe in a quoted key
     ('{"out":"{\\"key\\":\\"hunter2\\"}"}', '{"out":"{\\"key\\":\\"***\\"}"}'),
     ('{"ssid":"gray-river","key":"hunter2\'s"}', '{"ssid":"gray-river","key":"***"}'),
+    # CR9 #4: uci show and uci export lines: <anything>.key=, quoted or not, a space or an apostrophe ('\\'') in it
+    ("wireless.default_radio0.key='hunter2 x'\nwireless.default_radio0.ssid='gray-river'", "wireless.default_radio0.key='***'\nwireless.default_radio0.ssid='gray-river'"),
+    ("wireless.wifinet2.key=hunter2 wireless.x.key='it'\\''s hunter2'", "wireless.wifinet2.key=*** wireless.x.key='***'"),
+    ("option key 'hunter2 x'", "option key '***'"),
     # CR9 #14: mysql's port is -P, its password -p: only the lower case is masked (case-sensitive inside -replace)
     ('mysql -h db -P3306 -u root -phunter2 river', 'mysql -h db -P3306 -u root -p*** river'),
     ('mysqldump -P3306 river', 'mysqldump -P3306 river'),

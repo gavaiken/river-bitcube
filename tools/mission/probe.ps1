@@ -37,7 +37,7 @@ $CRED_USER = '((?:^|[\s"''\\/])(?:curl|wget|https?|xh)(?:\.exe)?\s(?:[^\n;&|]*?[
 $CRED_FLAG = '((?:^|\s)--?(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|pass|token|secret|api[_-]?key)\s+)(?![-*])([^\s"'']+)'
 $CRED_SSHPASS = '(\bsshpass\s+-p\s*)([^\s"'']+)'
 $CRED_MYSQL = '(\b(?:mysql|mysqldump|mysqladmin|mariadb)(?:\.exe)?\s(?:[^\n;&|]*?\s)?(?-i:-p))([^\s"''-][^\s"'']*)'
-$CRED_UCI = '(\buci\s+(?:-\w+\s+)*(?:set|add_list)\s+[^\s=]*\.key=["'']?|\boption\s+key\s+["'']?)([^\s"'']+)'
+$CRED_UCI = '((?<=[\w\]@-])\.key[1-4]?=["'']?|\boption\s+key[1-4]?\s+["'']?)((?<='')(?:[^''\r\n]|''\\'''')*|(?<=")[^"\r\n]*|(?<![''"])[^\s"'']+)'
 $CRED_SKANT = '(\bsk-ant-)([A-Za-z0-9_-]{8,})'
 function Mask-Creds([string]$s) {
     if ($null -eq $s) { return $null }

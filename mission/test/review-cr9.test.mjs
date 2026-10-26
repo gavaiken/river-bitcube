@@ -128,3 +128,23 @@ test('CR9 #12: a "key" inside a JSON string (escaped quotes) is masked like the 
   assert.equal(PATTERNS.KEYJSON, undefined, 'one rule: "key" is one of the names, so QUOTED and ESCAPED mask it');
   assert.doesNotMatch(src('../../tools/mission/probe.ps1'), /CRED_KEY_JSON/);
 });
+
+// ---- #4: the Wi-Fi key in uci show and uci export output ----------------------------------------------------------------------
+
+test('CR9 #4: a uci show line (<anything>.key=…, quoted or not, a space or an apostrophe in it) and uci export are masked, here and in probe.ps1', async () => {
+  const { scrubCreds } = await import('../lib/scrub.mjs');
+  const F = 'NOT-A-REAL-PW-cr9';
+  const show = `wireless.radio0.channel='36'\nwireless.default_radio0.ssid='gray-river'\nwireless.default_radio0.key='${F}'\nwireless.default_radio0.encryption='psk2'\n`;
+  assert.equal(scrubCreds(show), show.replace(F, '***'));
+  for (const [line, want] of [
+    [`wireless.@wifi-iface[1].key='${F}'`, "wireless.@wifi-iface[1].key='***'"],
+    [`wireless.wifinet2.key=${F}`, 'wireless.wifinet2.key=***'],
+    [`wireless.default_radio0.key='a b ${F}'`, "wireless.default_radio0.key='***'"],
+    [`wireless.default_radio0.key='it'\\''s ${F}'`, "wireless.default_radio0.key='***'"],
+    [`wireless.wep.key1='${F}'`, "wireless.wep.key1='***'"],
+    [`wireless.default_radio0.sae_password='${F}' wireless.x.password=${F}`, "wireless.default_radio0.sae_password='***' wireless.x.password=***"],
+    [`uci set wireless.@wifi-iface[1].key='two ${F}'`, "uci set wireless.@wifi-iface[1].key='***'"],
+    [`\toption key '${F} x'`, "\toption key '***'"],
+  ]) assert.equal(scrubCreds(line), want, line);
+  for (const line of ['sort key=name', 'x.keys=1', 'wireless.default_radio0.ssid=\'gray-river\'', 'option keyfile x']) assert.equal(scrubCreds(line), line, line);
+});

@@ -68,10 +68,13 @@ const FLAG = String.raw`((?:^|\s)--?(?:[\w-]*[_-])?(?:password|passwd|pwd|passph
 const SSHPASS = String.raw`(\bsshpass\s+-p\s*)([^\s"']+)`;
 /** R9 #37: mysql's password attached to -p (with a space it is a database name, and it asks; -P is its port, so -p is matched by
  *  its case, CR9 #14); the Wi-Fi key the router keeps
- *  (uci set ….key=, "option key" in its config); a bare Anthropic token (sk-ant-…), wherever it stands. ("key" as a JSON key is
+ *  (UCI, below); a bare Anthropic token (sk-ant-…), wherever it stands. ("key" as a JSON key is
  *  one of the NAMES: CR9 #12.) */
 const MYSQL = String.raw`(\b(?:mysql|mysqldump|mysqladmin|mariadb)(?:\.exe)?\s(?:[^\n;&|]*?\s)?(?-i:-p))([^\s"'-][^\s"']*)`;
-const UCI = String.raw`(\buci\s+(?:-\w+\s+)*(?:set|add_list)\s+[^\s=]*\.key=["']?|\boption\s+key\s+["']?)([^\s"']+)`;
+/** The router's Wi-Fi key wherever uci writes it (CR9 #4): <anything>.key= (uci show's lines, wireless.default_radio0.key='…', and uci
+ *  set's; key1-key4 for WEP) and "option key" (uci export, the config file), quoted or not: a quoted value to its own closing
+ *  quote, a space or uci's '\'' (an apostrophe) inside it included. (.password= is one of the NAMES.) */
+const UCI = String.raw`((?<=[\w\]@-])\.key[1-4]?=["']?|\boption\s+key[1-4]?\s+["']?)((?<=')(?:[^'\r\n]|'\\'')*|(?<=")[^"\r\n]*|(?<!['"])[^\s"']+)`;
 const SKANT = String.raw`(\bsk-ant-)([A-Za-z0-9_-]{8,})`;
 /** The patterns, as probe.ps1 writes them too (the tests compare the two). */
 export const PATTERNS = { CREDS, KEY, KEY_JSON, QUOTED, ESCAPED, ELEM, NESTED, BARE_JSON: KEY_JSON + BARE_VALUE, BARE: KEY + BARE_VALUE, AUTH, BEARER, USER, FLAG, SSHPASS, MYSQL, UCI, SKANT };
