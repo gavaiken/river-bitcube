@@ -143,7 +143,8 @@ export class FixtureMission {
       out[k] = src;
     }
     // The calibration job, as probe.ps1 reports it: the progress file while a run is on or recent (only behind a full check).
-    const cal = this.calibFor(n).probeView();
+    // read now, as Mission.snapshot serves Lights' own reads (read_age_s): never aged by the full check's own age (R7 #32)
+    const cal0 = this.calibFor(n).probeView(), cal = cal0 ? { ...cal0, read_age_s: 0 } : null;
     if (cal && out.probe && typeof out.probe === 'object' && out.probe.value && typeof out.probe.value === 'object') out.probe = { ...out.probe, value: { ...out.probe.value, calibration: cal } };
     // What a switch or a boot-file change did in this world (in memory), as the next full check would report it: while the
     // switch's TouchDesigner restarts, "restarting on <file>" (the switch's own answer, live); then the new file, which confirms it.

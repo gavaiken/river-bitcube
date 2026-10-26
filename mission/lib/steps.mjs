@@ -71,8 +71,29 @@ function actingFallback(verb, ...texts) {
 }
 /** A command that changes the installation whatever its description says (the page's CHANGE_CMD, and calibrate.ps1). */
 const CHANGE_CMD = /-Action\s+(ropes|hub75|switch|bootfile|lightsroute|rebuild|calibrate|mode|target|rules)\b|\/api\/control\/|Restart-Computer|Stop-Process|Start-Process|taskkill|\bkill\b|schtasks\s+\/(run|end|change)|ptz\.py\s+\w+\s+(?!presets)|td_save|calibrate\.ps1\s+-Action\s+(start|cancel)/i;
-/** node mission/bin/mc.mjs <action> ['<body>']: a change asked of mission control (or its status read). */
-const MC = /\bmc\.mjs\s+([a-z-]+)(?:\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)"))?/g;
+/** node mission/bin/mc.mjs <action> ['<body>']: a change asked of mission control (or its status read). An action can hold
+ *  digits (hub75: R7 #22). */
+const MC = /\bmc\.mjs\s+([a-z0-9-]+)(?:\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)"))?/g;
+const MC_ONE = new RegExp(MC.source);
+/** What a change made directly on bitcube (probe.ps1 or calibrate.ps1 -Action <x>, not through mission control) changed. */
+const DIRECT_WORDS = { ropes: 'changed the ropes', hub75: 'changed the panels', switch: "switched TouchDesigner's show file", bootfile: 'changed the boot file',
+  lightsroute: 'moved the lighting port', rebuild: "rebuilt the river's year", mode: "changed the river's year", target: "changed the river's year",
+  rules: "changed the river's year", calibrate: 'started a calibration', start: 'started a calibration', cancel: 'stopped the calibration' };
+const directWords = (part) => DIRECT_WORDS[/-Action\s+([a-z0-9]+)/i.exec(part)?.[1]?.toLowerCase()] ?? actingFallback(null, part);
+/** One command line's commands: split at ;, &&, ||, |, & and new lines outside quotes (a JSON body's "a; b" is not two). */
+function parts(command) {
+  const s = String(command ?? ''), out = [];
+  let cur = '', q = null;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (q) { cur += c; if (c === '\\' && q === '"' && i + 1 < s.length) cur += s[++i]; else if (c === q) q = null; continue; }
+    if (c === "'" || c === '"') { q = c; cur += c; continue; }
+    if (c === ';' || c === '\n' || c === '|' || c === '&') { if (cur.trim()) out.push(cur.trim()); cur = ''; if ((c === '|' || c === '&') && s[i + 1] === c) i++; continue; }
+    cur += c;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
 /** Words that are as often things as actions after "and" ("the ropes and light"), so only a first word is taken as a verb. */
 const NOUNISH = new Set(['light', 'note', 'view', 'report', 'count', 'call', 'watch', 'test', 'copy', 'record', 'build', 'search']);
 // a raw command, in any case ("SSH bitcube …" as "ssh bitcube …"); "ssh into bitcube and check …" is a description, not one
@@ -184,7 +205,11 @@ function mcLine(command) {
 
 /** A Bash step: the agent's description in plain words, else a plain fallback; an acting one says what it changed. */
 function bashLine(description, command) {
-  const mc = mcLine(command);
+  // a look through mission control chained to a change made around it ("mc.mjs status && ssh bitcube … probe.ps1 -Action
+  // switch"): the change, and that it went around mission control's locks, never "looked at what mission control shows" (R7 #34)
+  const ps = parts(command), viaMc = ps.filter((x) => MC_ONE.test(x)), direct = ps.filter((x) => !MC_ONE.test(x) && CHANGE_CMD.test(x));
+  if (viaMc.length && direct.length) return { text: clip(`${directWords(direct[0])} on bitcube directly, not through mission control`, TEXT_MAX), acting: true };
+  const mc = viaMc.length ? mcLine(viaMc.join('\n')) : null;
   if (mc) return mc;
   const desc = String(description ?? '').replace(/\s+/g, ' ').trim().replace(/[.\s]+$/, '');
   const onBitcube = /bitcube|\bssh\b/i.test(`${desc} ${command ?? ''}`);

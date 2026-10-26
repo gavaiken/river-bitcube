@@ -17,8 +17,15 @@ $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $river = Split-Path $repo -Parent
 $out = [ordered]@{ ok = $true; time = (Get-Date).ToString('s') }
 # A camera's login never leaves bitcube: masked up to the authority's LAST @ (as mission/lib/scrub.mjs; ffmpeg takes the last
-# @ too), and masked BEFORE a line is cut, or a cut between two @ leaves a tail nobody can recognise as a login.
-function Mask-Creds([string]$s) { if ($null -eq $s) { return $null }; return ($s -replace '([a-z][a-z0-9+.-]*://)[^\s/?#"<>]*@', '$1***@') }
+# @ too), and masked BEFORE a line is cut, or a cut between two @ leaves a tail nobody can recognise as a login. The camera's own
+# HTTP API takes it as a JSON field or a query ("password":"…", ?password=…): those values are masked too, as scrubCreds does.
+$CRED_KEY = '((?<![\w-])(?:password|passwd|pwd|token|secret)(?![\w-])(?:\\?["''])?\s*[:=]\s*)'
+function Mask-Creds([string]$s) {
+    if ($null -eq $s) { return $null }
+    $s = $s -replace '([a-z][a-z0-9+.-]*://)[^\s/?#"<>]*@', '$1***@'
+    $s = $s -replace ($CRED_KEY + '(\\?(["'']))((?:(?!\\?\3).)*)(\\?\3)'), '$1$2***$5'
+    return ($s -replace ($CRED_KEY + '(?!\\?["''])([^\s"''&,;}\]]+)'), '$1***')
+}
 
 $BOOT_FILES = @('river-local-oct-22-seasons.toe', 'river-online-oct-23.toe')   # retired show files start with old- (D27): never offered
 $REBUILD_FILES = @('river-local-oct-22-seasons.toe')     # the only file build_seasons_local.py rebuilds (its own guard agrees)
