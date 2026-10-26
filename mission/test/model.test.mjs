@@ -420,7 +420,7 @@ test('lost contact flips by the unrounded > 30 s rule, in the same second as the
 
 test("raw errors never reach the words: a failed full check, a year page's HTTP 500, an unreachable agent (the raw text stays in sources and raw)", () => {
   const RAW = /\b(ssh|probe|exit \d|HTTP|fetch failed)\b/i;
-  for (const [err, want] of [["can't reach bitcube over SSH", /couldn't reach bitcube/], ['probe failed (exit 1)', /couldn't run the check/],
+  for (const [err, want] of [["can't reach bitcube over SSH", /couldn't log in to bitcube/], ['probe failed (exit 1)', /couldn't run the check/],
     ['no answer from the probe', /couldn't run the check/], ['bitcube took too long to answer', /didn't answer the check in time/]]) {
     const fx = clone(byName['all-good']);
     fx.status.probe = { at: fx._scenario.now - 20_000, error: err };
@@ -484,4 +484,172 @@ test("an old show file running is Attention with the way back to the river's yea
   // a bitcube that hasn't pulled the rename still reports the old name: same reading
   fx.status.probe.value.td.file = 'river-online-oct-20.toe';
   assert.equal(run(fx).overall.cause, 'old-file');
+});
+
+// ---- round 5 ---------------------------------------------------------------------------------------------------------
+const calib = (fx, cal) => { fx.status.probe.value.calibration = { running: true, mode: 'full', dry_run: false, ...cal }; return fx; };
+
+test('during a calibration the ropes (and the panels in their own stages) are in calibration patterns at Attention, never "showing the river" or "dark on purpose" (R5 #17)', () => {
+  const fx = calib(clone(byName['all-good']), { stage: 'ropes-capture', expected_s: 170, elapsed_s: 20 });
+  let m = run(fx);
+  const ropes = () => m.items.find((x) => x.id === 'ropes'), panels = () => m.items.find((x) => x.id === 'hub75 panels');
+  assert.equal(m.show.ropes.state, 'calibrating');
+  assert.match(m.show.ropes.words, /^the ropes are in calibration patterns for about \d+ min more$/);
+  assert.equal(ropes().level, 'warning');
+  assert.match(ropes().summary, /^In calibration patterns for about \d+ min more$/);
+  assert.equal(ropes().cause, 'calibrating');
+  assert.equal(m.show.ropes.summary, ropes().summary);
+  assert.doesNotMatch(`${m.show.ropes.words} ${ropes().summary} ${m.show.words}`, /show the river|showing the river|dark on purpose/i);
+  assert.equal(m.show.panels.state, 'river', 'the panels are photographed only in their own stages');
+  // capture.py sends black between patterns: still calibrating, never "dark on purpose"
+  fx.status.probe.value.td.ropes.source = 'black'; fx.status.probe.value.td.ropes.status.source = 'black';
+  m = run(fx);
+  assert.equal(m.show.ropes.state, 'calibrating');
+  assert.equal(m.problems.find((p) => p.id === 'ropes-dark'), undefined);
+  // the panel stages: the panels too
+  calib(fx, { stage: 'hub75-capture', expected_s: 35, elapsed_s: 210 });
+  m = run(fx);
+  assert.equal(m.show.panels.state, 'calibrating');
+  assert.match(m.show.panels.words, /^the panels are in calibration patterns/);
+  assert.equal(panels().level, 'warning');
+  assert.equal(panels().cause, 'calibrating');
+  assert.match(panels().summary, /^In calibration patterns/);
+  assert.equal(m.show.ropes.state, 'calibrating');
+  // a dry run touches no lights: the ropes show the river, and the band doesn't say they are in patterns
+  calib(fx, { mode: 'dry-run', dry_run: true, stage: 'ropes-capture', expected_s: 170, elapsed_s: 5 });
+  fx.status.probe.value.td.ropes.source = 'canvas'; fx.status.probe.value.td.ropes.status.source = 'canvas';
+  m = run(fx);
+  assert.equal(m.show.ropes.state, 'river');
+  assert.equal(ropes().level, 'ok');
+  assert.equal(m.overall.cause, 'calibrating');
+  assert.doesNotMatch(m.overall.headline, /patterns/);
+  for (const s of ['river', 'calibrating']) assert.ok(s);
+});
+
+test("the ropes' connection held by another program (10048) says so and calls Gavin; never the cable advice (R5 #20)", () => {
+  const fx = clone(byName['all-good']);
+  Object.assign(fx.status.probe.value.td.ropes.status, { open: false, retrying: true, error: '[WinError 10048] Only one usage of each socket address is normally permitted' });
+  const m = run(fx);
+  assert.equal(m.overall.cause, 'sender-taken');
+  assert.match(m.overall.headline, /^Another program on bitcube is using the ropes' connection/);
+  assert.match(m.overall.action, /^Ask the studio chat or Gavin to stop the other lights program \(Will's rope lights\) on bitcube/);
+  assert.equal(contactFor(m.overall.cause).name, 'Gavin');
+  const r = m.items.find((x) => x.id === 'ropes');
+  assert.match(r.summary, /another program/i);
+  for (const s of [m.overall.headline, m.overall.detail, m.overall.action, r.summary, r.detail, r.action]) assert.doesNotMatch(s ?? '', /cable|lighting switch|ceiling|10048|WinError/i, s);
+  assert.doesNotMatch(m.overall.headline, JARGON);
+  // any other sender error names which port, still with the cable advice
+  fx.status.probe.value.td.ropes.status.error = 'OSError: something else';
+  const o = run(fx);
+  assert.equal(o.overall.cause, 'sender');
+  assert.match(o.overall.headline, /LIGHTS port/);
+  assert.equal(contactFor('sender').name, 'Lilian');
+});
+
+test('fallback words read as sentences: "its page answered with an error", "its page didn\'t answer", "couldn\'t log in to bitcube" (R5 #22)', () => {
+  const yp = clone(byName['all-good']);
+  yp.status.seasons = { at: yp._scenario.now - 2000, error: 'HTTP 500' };
+  let m = run(yp);
+  assert.equal(m.overall.detail, "Its page answered with an error; the year's controls come back when it answers properly.");
+  yp.status.seasons.error = 'fetch failed';
+  m = run(yp);
+  assert.match(m.overall.detail, /^Its page didn't answer; /);
+  const row = m.items.find((x) => x.id === 'seasons');
+  assert.doesNotMatch(`${row.detail} ${m.overall.detail}`, /port|until it does/);
+  assert.match(row.detail, /its page didn't answer/);
+  const cf = clone(byName['all-good']);
+  cf.status.probe = { at: cf._scenario.now - 20_000, error: "can't reach bitcube over SSH" };
+  m = run(cf);
+  assert.equal(m.overall.cause, 'check-failed');
+  assert.match(m.overall.detail, /^The check couldn't log in to bitcube/);
+  assert.doesNotMatch(m.overall.detail, /couldn't reach bitcube/, "bitcube answers: the check reached it");
+});
+
+test('a stale full check keeps the last answer\'s verdict on the clips (greyed), and never says "posting" for an old clip (R5 #31)', () => {
+  for (const name of ['no-internet', 'gallery-cam-down', 'river-cam-stale']) {
+    const fx = clone(byName[name]);
+    const fresh = run(fx);
+    fx.status.probe.at -= 200_000; delete fx.status.probe.age_s;
+    const m = run(fx);
+    assert.equal(m.overall.cause, 'probe-stale', name);
+    const link = m.items.find((x) => x.id === 'modal link'), was = fresh.items.find((x) => x.id === 'modal link');
+    assert.equal(link.level, was.level, `${name}: clips to Dave keep the last answer's level (${was.summary})`);
+    assert.equal(link.stale, true, name);
+    for (const it of m.items) assert.doesNotMatch(`${it.summary} ${it.detail}`, /posting/i, `${name} ${it.id}: ${it.summary} / ${it.detail}`);
+  }
+  // fresh clips from an old check: not failing, and not "posting" either (only that they were fine then is known)
+  const ok = clone(byName['all-good']);
+  ok.status.probe.at -= 600_000; delete ok.status.probe.age_s;
+  const m = run(ok);
+  assert.equal(m.items.find((x) => x.id === 'modal link').level, 'ok');
+  assert.doesNotMatch(JSON.stringify(m.items), /posting/i);
+});
+
+test("the show-file switch waits while TouchDesigner is still starting after bitcube restarted (R5 #35)", () => {
+  const NOW = byName['all-good']._scenario.now;
+  const s = { ...clone(byName['all-good'].status), now: NOW };
+  s.probe.value.uptime_h = 0.05; s.probe.value.td = { ok: false, error: 'TouchDesigner is not running' };
+  let m = derive(s, NOW + 2000);
+  assert.equal(m.controls.switch.possible, false);
+  assert.equal(m.controls.switch.why, 'TouchDesigner is still starting: wait a minute');
+  // open, first check after the start (frame rate not known yet), bitcube just booted: wait too
+  s.probe.value.td = clone(byName['all-good'].status.probe.value.td); s.probe.value.td.fps = null;
+  m = derive(s, NOW + 2000);
+  assert.equal(m.controls.switch.why, 'TouchDesigner is still starting: wait a minute');
+  // long after the boot, TouchDesigner not running: the switch is the way to start it
+  s.probe.value.uptime_h = 3; s.probe.value.td = { ok: false, error: 'TouchDesigner is not running' };
+  m = derive(s, NOW + 2000);
+  assert.equal(m.controls.switch.possible, true);
+});
+
+test('model sentences carry no ages that freeze while the page ticks: clock times instead (R5 #41)', () => {
+  const AGO = /\b\d+ (?:s|min|h|days) ago\b|\bin \d+ (?:s|min|h)\b/;
+  for (const name of ['all-good', 'river-cam-stale', 'seasons-not-running', 'no-internet', 'just-booted', 'bitcube-offline']) {
+    const m = run(byName[name]);
+    // (Dave's agent's summary keeps "Last updated N ago": the Recent feed drops exactly that form, lib/history.mjs timeless())
+    for (const it of m.items) for (const k of ['summary', 'detail']) if (!(it.id === 'modal agent' && k === 'summary')) assert.doesNotMatch(it[k] ?? '', AGO, `${name} ${it.id}.${k}: ${it[k]}`);
+    for (const p of m.problems) assert.doesNotMatch(p.detail, AGO, `${name} ${p.id}: ${p.detail}`);
+  }
+  const m = run(byName['all-good']);
+  assert.match(m.items.find((x) => x.id === 'modal agent').detail, /^Last updated at \d\d:\d\d; next update due at \d\d:\d\d/);
+  assert.equal(m.items.find((x) => x.id === 'modal link').summary, 'Posting');
+  assert.match(m.items.find((x) => x.id === 'modal link').detail, /^Gallery clip at \d\d:\d\d, river clip at \d\d:\d\d/);
+  const live = run(byName['seasons-not-running']).items.find((x) => x.id === 'river camera');
+  assert.match(live.detail, /^Last frame at \d\d:\d\d/);
+});
+
+test("the boot file Start-River.cmd's default reads as the file it opens, and unlisted files never show a .toe name (R5 #19, #27)", () => {
+  const fx = clone(byName['all-good']);
+  fx.status.probe.value.boot_file = 'Start-River.cmd default';
+  let m = run(fx);
+  assert.deepEqual([m.show.boot_file.name, m.show.boot_file.kind, m.show.boot_file.label, m.show.boot_file.default], ['river-local-oct-22-seasons.toe', 'year', "the river's year", true]);
+  fx.status.probe.value.show_files = ['river-online-oct-23.toe'];
+  m = run(fx);
+  assert.equal(m.show.boot_file.kind, 'live', "without the seasons file Start-River.cmd opens the live river");
+  // an old file running is Attention with the way back (810b48e), for each of the retired names
+  for (const f of ['old-river.toe', 'river-local-oct-18.toe', 'river.toe', 'old-river-online-oct-20.toe']) {
+    const o = clone(byName['all-good']); o.status.probe.value.td.file = f; o.status.seasons = { at: o._scenario.now - 2000, error: 'fetch failed' };
+    const r = run(o);
+    assert.equal(r.overall.cause, 'old-file', f);
+    assert.equal(r.overall.level, 'warning', f);
+    assert.equal(r.show.file.label, 'an old show file', f);
+  }
+  // a file mission control doesn't list: no .toe name on the main view (the raw name stays in raw)
+  const u = clone(byName['all-good']); u.status.probe.value.td.file = 'river-local-oct-26-seasons.toe'; u.status.probe.value.boot_file = 'river-local-oct-26-seasons.toe';
+  m = run(u);
+  assert.doesNotMatch(`${m.overall.headline} ${m.overall.detail} ${m.show.file.label} ${m.show.boot_file.label} ${m.show.words}`, /\.toe|\btoe\b/);
+  for (const it of m.items) assert.doesNotMatch(`${it.summary} ${it.detail}`, /\.toe/, it.id);
+  assert.match(m.items.find((x) => x.id === 'touchdesigner').raw ?? '', /river-local-oct-26-seasons\.toe/);
+  // one meaning of "fallback": the rain the live river shows without frames
+  for (const [, f] of fixtures) for (const s of [JSON.stringify(run(f).items), JSON.stringify(run(f).show)]) for (const x of s.matchAll(/[^".]*fallback[^".]*/g)) assert.match(x[0], /rain fallback/, x[0]);
+});
+
+test("the model's own words: no raw display names on the main view (R5 #28)", () => {
+  const fx = clone(byName['all-good']);
+  fx.status.probe.value.displays = ['M14'];
+  const m = run(fx);
+  const p = m.items.find((x) => x.id === 'hub75 panels');
+  assert.doesNotMatch(`${p.summary} ${p.detail}`, /M14/);
+  assert.match(p.detail, /^bitcube sees only its own small screen/);
+  assert.match(p.raw, /M14/, 'the names go to Addresses and links');
 });

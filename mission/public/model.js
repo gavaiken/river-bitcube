@@ -48,6 +48,10 @@ export const FILES = {                          // GLOSSARY.md: the local-only f
   'river.toe': { kind: 'other', label: 'an old show file' },
 };
 const OFFERED = ['year', 'live'];               // the kinds the boot file and the show-file switch offer
+const UNLISTED = 'an unlisted show file';       // a file mission control doesn't list: its name (a .toe) stays in raw
+// probe.ps1 reports this when boot-file.txt is missing: Start-River.cmd then opens the seasons file, else the online one
+export const BOOT_DEFAULT = 'Start-River.cmd default';
+const YEAR_FILE = Object.keys(FILES).find((k) => FILES[k].kind === 'year'), LIVE_FILE = Object.keys(FILES).find((k) => FILES[k].kind === 'live');
 export const CAL_STAGE_S = { 'ropes-capture': 170, 'ropes-decode': 40, 'hub75-capture': 35, 'hub75-locate': 10 };   // calibrate.py EXPECTED_S
 export const CAL_TOTAL_S = Object.values(CAL_STAGE_S).reduce((a, b) => a + b, 0);
 export const CAL_STAGE_WORDS = { 'ropes-capture': 'photographing the ropes', 'ropes-decode': 'working out where each rope is', 'hub75-capture': 'photographing the panels', 'hub75-locate': 'finding the panels' };
@@ -70,7 +74,7 @@ export const CONTACTS = {
 };
 const CONTACT_BY_CAUSE = {
   page: 'gavin', 'bitcube-unchecked': 'gavin', 'bitcube-offline': 'gavin', 'check-failed': 'gavin', 'probe-stale': 'gavin',
-  'td-unknown': 'gavin', 'td-frozen': 'gavin', 'td-off': 'gavin', 'td-slow': 'gavin', 'year-page': 'gavin', 'sender-off': 'gavin',
+  'td-unknown': 'gavin', 'td-frozen': 'gavin', 'td-off': 'gavin', 'td-slow': 'gavin', 'year-page': 'gavin', 'sender-off': 'gavin', 'sender-taken': 'gavin',
   'link-off': 'gavin', 'link-failing': 'gavin', recorder: 'gavin', disk: 'gavin', 'modal-stale': 'gavin', 'seasons-stale': 'gavin',
   lights: 'lilian', sender: 'lilian', box: 'lilian',
   panels: 'andi', 'panels-off': 'andi', 'panels-dark': 'andi',
@@ -87,6 +91,8 @@ export function contactFor(cause) { const k = CONTACT_BY_CAUSE[cause]; return k 
 const GALLERY_ACTION = "Turn the gallery camera's power off and on again (leave its network cable out: it works on Wi-Fi), then call Will.";
 const INTERNET_ACTION = "Check the router's internet connection (the venue's staff Wi-Fi, or the wired connection) from its admin page. The show keeps running meanwhile; clips resume by themselves.";
 const DAVE_LATE_ACTION = "Tell Dave his agent has stopped updating. Nothing to do in the gallery.";
+// WinError 10048: another program on bitcube (Will's RopeLights app, or a second sender) holds the ropes' connection; no cable fixes it
+const TAKEN_ACTION = "Ask the studio chat or Gavin to stop the other lights program (Will's rope lights) on bitcube; the sender picks up by itself once it has stopped.";
 const ROPE_BOX = { 'rope box 1': ['2.0.0.10', '1–10'], 'rope box 2': ['2.0.0.11', '11–20'] };
 // name, where it is checked from, address for the details drawer
 const NAMES = {
@@ -169,18 +175,20 @@ function lineAge(line, probeTime) {
   const diff = tod(t) - tod(l);
   return diff < 0 && diff > -600 ? 0 : (diff % 86400 + 86400) % 86400;
 }
-/** mission.mjs's fetch errors in plain words (a closed port and an unreachable host both read "fetch failed"). */
+/** mission.mjs's fetch errors in plain words, as a clause with its subject (a closed port and an unreachable host both read
+ *  "fetch failed"): the river's year's page ("its page didn't answer"), or a service on the internet (remote: Dave's agent). */
 function fetchWords(e, remote = false) {
-  if (!e) return 'no answer';
-  if (/timeout|aborted/i.test(e)) return 'it did not answer in time';
-  if (/fetch failed/i.test(e)) return remote ? 'the connection failed' : 'nothing answered on its port';
-  return 'it answered with an error';   // "HTTP 500" and the like: the raw text stays in sources.*.error (Addresses and links)
+  const who = remote ? 'it' : 'its page';
+  if (!e) return `${who} gave no answer`;
+  if (/timeout|aborted/i.test(e)) return `${who} didn't answer in time`;
+  if (/fetch failed/i.test(e)) return remote ? 'the connection failed' : "its page didn't answer";
+  return `${who} answered with an error`;   // "HTTP 500" and the like: the raw text stays in sources.*.error (Addresses and links)
 }
 /** Why bitcube's full check failed (mission.mjs sshProbe), in the team's words: never SSH, the probe or an exit code. */
 function probeWords(e) {
   if (!e) return "the check didn't answer";
   if (/took too long|timeout|timed out/i.test(e)) return "bitcube didn't answer the check in time";
-  if (/can't reach bitcube|ssh/i.test(e)) return "the check couldn't reach bitcube";
+  if (/can't reach bitcube|ssh/i.test(e)) return "the check couldn't log in to bitcube";   // port 22 answers: it reached bitcube
   return "bitcube couldn't run the check";
 }
 /** One source of the snapshot: { at, value | error, age_s } -> freshness and content. */
@@ -195,6 +203,19 @@ function source(raw, name, serverNow) {
   const fs = num(r.failing_since), failing_s = error && fs != null && serverNow != null ? Math.max(0, Math.round((serverNow - fs) / 1000)) : null;
   return { present: true, ok: value != null, value, error: error ?? (value == null ? 'no answer' : null), age_s, failing_s,
            stale: age_s != null && age_s > POLL_S[name] * STALE_FACTOR };
+}
+
+/** The boot file probe.ps1 reports, in glossary words: "Start-River.cmd default" (no boot-file.txt) is the file Start-River.cmd
+ *  then opens (the river's year, else the live river); a name mission control doesn't list is "an unlisted show file". */
+function bootFile(pr) {
+  const raw = typeof pr?.boot_file === 'string' ? pr.boot_file.trim() : null;
+  if (!raw) return null;
+  if (raw === BOOT_DEFAULT) {
+    const have = Array.isArray(pr.show_files) ? pr.show_files : null;
+    const name = !have || have.includes(YEAR_FILE) || !have.includes(LIVE_FILE) ? YEAR_FILE : LIVE_FILE;
+    return { name, kind: FILES[name].kind, label: FILES[name].label, default: true, reported: raw };
+  }
+  return { name: raw, kind: FILES[raw]?.kind ?? 'other', label: FILES[raw]?.label ?? UNLISTED, default: false, reported: raw };
 }
 
 // ---- the model ----------------------------------------------------------------------------------------------
@@ -218,7 +239,7 @@ export function derive(status, nowMs) {
   const tdOff = !!tdErr && /not running/i.test(tdErr);
   const tdRestarting = !!tdErr && /restarting/i.test(tdErr);
   const restartingOn = tdRestarting ? FILES[/on (\S+)/.exec(tdErr)?.[1]]?.label ?? 'a show file' : null;
-  const file = tdOk ? FILES[td.file] ?? { kind: 'other', label: td.file } : null;
+  const file = tdOk ? FILES[td.file] ?? { kind: 'other', label: UNLISTED } : null;
   const kind = file?.kind ?? null, label = file?.label ?? null;
   // One name for the button the advice points at: the show-file control says "Restart on the river's year" when it already
   // runs, and "Switch to the river's year" when another file (or nothing known) runs. status.js labels its jump the same way.
@@ -238,6 +259,7 @@ export function derive(status, nowMs) {
   const senderErr = senderKnown && !!rs.error ? String(rs.error) : null;
   const senderOpen = senderKnown && rs.open === true && !senderErr;
   const senderOff = senderKnown && rs.active === false;
+  const senderTaken = /10048/.test(senderErr || '');   // the ropes' connection held by another program (Will's rope lights)
   const ropesDark = tdOk && (ro?.source === 'black' || rs?.source === 'black');
   const box = { 'rope box 1': dv ? dv.psac10_1 === true : null, 'rope box 2': dv ? dv.psac10_2 === true : null };
   const boxesDown = Object.keys(box).filter((k) => box[k] === false);
@@ -259,6 +281,12 @@ export function derive(status, nowMs) {
   const cal = obj(pr?.calibration), calibrating = !!cal && cal.running === true && cal.stale !== true;
   const calTotalS = calibrating && num(cal.expected_s) != null && CAL_STAGE_S[cal.stage] ? CAL_TOTAL_S / CAL_STAGE_S[cal.stage] * cal.expected_s : CAL_TOTAL_S;
   const calLeftS = calibrating ? Math.max(30, Math.round(calTotalS - (num(cal.elapsed_s) ?? 0) - (pb.age_s ?? 0))) : null;
+  // a dry run (or a decode of earlier photos) touches no lights; a full run has the ropes in patterns from start to end, and
+  // the panels in their own stages: then they are "in calibration patterns", never "showing the river" or "dark on purpose"
+  const calDry = calibrating && (cal.mode === 'dry-run' || cal.mode === 'decode-only' || cal.dry_run === true || !!cal.decode_only);
+  const calRopes = calibrating && !calDry, calPanels = calRopes && /^hub75-/.test(String(cal.stage ?? ''));
+  const calWords = calRopes ? `in calibration patterns for about ${dur(calLeftS)} more` : null;
+  const calStageWords = calibrating ? CAL_STAGE_WORDS[cal.stage] ?? 'at work' : null;
 
   // Dave's agent: a past next tick is a fault only by day (it rests overnight), measured in daytime minutes.
   const finMs = m ? Date.parse(m.finished_at) : NaN, nextMs = m && num(m.next_tick_epoch) != null ? m.next_tick_epoch * 1000 : null;
@@ -267,9 +295,11 @@ export function derive(status, nowMs) {
   const modalUnreachable = md.present && !m;
   const sinceTickS = Number.isFinite(finMs) ? (now - finMs) / 1000 : null;
 
-  // The Modal link's clips, per camera: the last good clip is the last INFO line; failures only touch the file. Their ages
-  // grow with the full check's own age, so a stale check judges no clip as failing: only that the check is old is known.
+  // The Modal link's clips, per camera: the last good clip is the last INFO line; failures only touch the file. A fresh check
+  // judges them now (their ages grow with the check's own age); a stale one as of its own time, so the last answer's verdict
+  // is kept and only greyed, never turned into "posting" by an age nobody saw.
   const probeAge = pb.age_s ?? 0, probeFresh = !pb.stale;
+  const at = (ageS) => (ageS == null ? 'an unknown time' : clockDay(now - ageS * 1000, now));   // a moment, never an age that freezes
   const clips = {};
   for (const cam of ['gallery', 'river']) {
     const l = obj(link?.[cam]);
@@ -279,9 +309,10 @@ export function derive(status, nowMs) {
     const lineA = l.last == null ? null : lineAge(l.last, pr?.time), fileA = num(l.log_age_s);
     const age = lineA == null ? null : Math.max(lineA, fileA ?? 0);
     const ageNow = age != null ? age + probeAge : null;
+    const judged = probeFresh ? ageNow : age, fileJudged = (fileA ?? 0) + (probeFresh ? probeAge : 0);
     const sinceClock = l.last ? String(l.last).slice(0, 5) : null;
-    const quiet = probeFresh && (fileA ?? 0) + probeAge > CLIP_LATE_S;   // nothing written at all: not posting
-    clips[cam] = { present: true, age_s: ageNow, since: sinceClock, failing: probeFresh && (l.last == null || ageNow == null || ageNow > CLIP_LATE_S || quiet),
+    const quiet = fileJudged > CLIP_LATE_S;   // nothing written at all: not posting
+    clips[cam] = { present: true, age_s: ageNow, since: sinceClock, failing: l.last == null || judged == null || judged > CLIP_LATE_S || quiet,
                    quiet, last: l.last ?? null };
   }
   const linkProcs = link ? num(link.processes) ?? 0 : null;
@@ -289,7 +320,7 @@ export function derive(status, nowMs) {
   const failing = ['gallery', 'river'].filter((c) => clips[c].present && clips[c].failing && !linkDown);
   const syncLine = obj(link?.sync), syncAge = syncLine?.last ? lineAge(syncLine.last, pr?.time) : null;
   const syncAgeNow = syncAge != null ? syncAge + probeAge : null;
-  const syncOld = probeFresh && syncAgeNow != null && syncAgeNow > MODAL_LATE_MIN * 60;
+  const syncOld = (probeFresh ? syncAgeNow : syncAge) != null && (probeFresh ? syncAgeNow : syncAge) > MODAL_LATE_MIN * 60;
   const recLast = rec && rec.last != null ? String(rec.last) : null;
   const recErr = !!recLast && !/\bdone\b/i.test(recLast) && /no video|connection|timed out|error|failed/i.test(recLast);
 
@@ -318,13 +349,13 @@ export function derive(status, nowMs) {
 
   const upWords = uptimeH == null ? 'a while' : dur(uptimeH * 3600);   // dur()'s form, like every other duration
   if (online === false) it('bitcube', 'down', 'Offline: not reachable from the Mac mini',
-    `The Mac mini could not connect to bitcube (checked ${dur(bc.age_s)} ago)${pb.error ? `; its full check has been failing for ${dur(pb.failing_s ?? pb.age_s)}` : ''}. The show may still be running by itself.`,
+    `The Mac mini could not connect to bitcube${pb.error ? `; its full check has been failing for ${dur(pb.failing_s ?? pb.age_s)}` : ''}. The show may still be running by itself.`,
     { source: 'bitcube', action: "Someone at Gray Area checks bitcube's power light and the router; a restart takes about a minute and it comes back by itself." });
   else if (online === true && pr) it('bitcube', 'ok', `Online; up ${upWords}${diskLow ? `, only ${diskGb} GB of disk free` : ''}`,   // the disk only when it is the reason
-    `${comingUp ? 'Restarted recently and still coming up. ' : ''}Full check ${dur(pb.age_s)} ago${diskGb != null ? `; ${diskGb} GB of disk free` : ''}.`,
+    `${comingUp ? 'Restarted recently and still coming up. ' : ''}Its full check answered${diskGb != null ? `; ${diskGb} GB of disk free` : ''}.`,
     { source: 'bitcube', raw: Array.isArray(pr.addresses) && pr.addresses.length ? `addresses: ${pr.addresses.map((a) => `${a?.nic} ${a?.ip}`).join(', ')}` : null });
   else if (online === true && pb.present) it('bitcube', 'warning', 'Reachable, but its full check failed',
-    `bitcube accepts connections, but the full check from the Mac mini failed ${dur(pb.age_s)} ago: ${probeWords(pb.error)}.`, { source: 'bitcube', raw: pb.error, action: 'Wait a minute; the check runs again by itself. If it keeps failing, ask the studio chat to look at bitcube.' });
+    `bitcube accepts connections, but the full check from the Mac mini failed: ${probeWords(pb.error)}.`, { source: 'bitcube', raw: pb.error, action: 'Wait a minute; the check runs again by itself. If it keeps failing, ask the studio chat to look at bitcube.' });
   else if (online === true) it('bitcube', 'ok', 'Reachable; full check still to come', 'bitcube answers the Mac mini; its first full check takes up to a minute.', { source: 'bitcube' });
   else unknown('bitcube', ['Not checked yet', 'Mission control has not checked bitcube yet.'], { source: 'bitcube' });
 
@@ -336,7 +367,7 @@ export function derive(status, nowMs) {
   else if (tdRestarting) it('touchdesigner', 'warning', `Restarting on ${restartingOn}`, 'The lights are dark for about a minute while it opens.', { action: 'Wait a minute and look again.', raw: tdErr });
   else if (frozen) it('touchdesigner', 'down', 'Frozen: not answering', 'TouchDesigner did not answer within 15 s, which usually means a dialog is blocking it. The lights are not being driven: the rope boxes play their own colour cycle and the panels keep their last picture.',
     { action: `Look at bitcube's screen over screen sharing and answer the dialog, or press ${YEAR_PRESS} (about a minute dark).` });
-  else if (fps == null) it('touchdesigner', 'ok', `Running ${label}; frame rate not known yet`, 'The first check after a start cannot measure the frame rate; the next one can.');
+  else if (fps == null) it('touchdesigner', 'ok', `Running ${label}; frame rate not known yet`, 'The first check after a start cannot measure the frame rate; the next one can.', { raw: `file: ${td.file}` });
   else if (slow) it('touchdesigner', 'warning', `Running slowly: ${Math.round(fps)} of 60 frames a second`,
     `${cap(label)} at ${fps} frames a second, where it should run at 60${tdErrors ? `, with ${tdErrors} errors in the file` : ''}: the river moves in jerks.`,
     { action: `Look at bitcube's screen for what is slow or erroring; if it does not recover in a few minutes, press ${YEAR_PRESS} (about a minute dark).` });
@@ -353,11 +384,11 @@ export function derive(status, nowMs) {
   else if (!se.present) unknown('seasons', ['Not checked yet', 'Mission control has not asked its page yet.'], { source: 'seasons' });
   else if (tdOffBooting || tdRestarting) it('seasons', 'warning', `Not served while TouchDesigner ${tdRestarting ? 'restarts' : 'starts'}`, 'Its page comes up with TouchDesigner, in about a minute.', { source: 'seasons' });
   else if (frozen || tdOff) it('seasons', 'down', frozen ? 'Page not answering: TouchDesigner is frozen' : 'Page not served: TouchDesigner is not running',
-    `The river's year page is served by TouchDesigner, so it ${frozen ? 'froze' : 'went'} with it (${fetchWords(se.error)}).`, { source: 'seasons' });
+    `The river's year page is served by TouchDesigner, so it ${frozen ? 'froze' : 'went'} with it.`, { source: 'seasons' });
   else if (kind === 'live') it('seasons', 'warning', 'Not running: TouchDesigner is showing the live river',
     "The live river has no year of seasons and no year page, so the year's controls are unavailable until the river's year runs.",
     { source: 'seasons', action: "Press Switch to the river's year if the year is wanted (the lights go dark for about a minute)." });
-  else if (kind === 'year') it('seasons', 'warning', 'Page not answering', `TouchDesigner runs the river's year, but its page isn't answering properly: ${fetchWords(se.error)}.`,
+  else if (kind === 'year') it('seasons', 'warning', 'Page not answering', `TouchDesigner runs the river's year, but ${fetchWords(se.error)}.`,
     { source: 'seasons', action: `Wait a minute; if it stays down, press ${YEAR_PRESS}.` });
   else if (kind === 'other') it('seasons', 'warning', `Not running: TouchDesigner is showing ${label}`, 'That show file serves no year page.',
     { source: 'seasons', action: "Press Switch to the river's year (the lights go dark for about a minute)." });
@@ -374,12 +405,14 @@ export function derive(status, nowMs) {
     `With nothing sending, the boxes ${boxesDown.length === 2 ? 'are silent too' : 'play their own colour cycle'}.`);
   else if (!senderKnown) it('ropes', 'warning', 'Sender state not reported', rs?.error ? `The sender's status could not be read: ${rs.error}` : 'This show file has no rope sender.');
   else if (senderErr || !rs.open) {
-    const why = /10049/.test(senderErr || '') ? "bitcube's LIGHTS port has no link (nothing is plugged into it)" : /10048/.test(senderErr || '') ? 'its port is taken by another program' : 'it cannot open its port on the lighting network';
+    const why = /10049/.test(senderErr || '') ? "bitcube's LIGHTS port has no link (nothing is plugged into it)" : senderTaken ? "another lights program on bitcube (Will's rope lights, or a second sender) is using the ropes' connection; the two must never run at once" : 'it cannot open its connection on the lighting network';
     const both = boxesDown.length === 2;
-    it('ropes', both ? 'down' : 'warning', both ? `Not reaching the lights: sender ${rs.retrying ? 'retrying' : 'closed'}, both boxes silent` : `Sender can't open its port${boxesDown.length ? `; ${boxWords(boxesDown[0])} silent` : ''}`,
+    it('ropes', both ? 'down' : 'warning', both ? `Not reaching the lights: sender ${rs.retrying ? 'retrying' : 'closed'}, both boxes silent` : senderTaken ? "Another program on bitcube is using the ropes' connection" : `Sender can't open its port${boxesDown.length ? `; ${boxWords(boxesDown[0])} silent` : ''}`,
       `The sender is ${rs.retrying ? 'retrying' : 'stopped'}: ${why}.${both ? ' Expected before the lights are connected; it picks up by itself once they are.' : ''}`,
-      { action: both ? "In the ceiling: plug the lighting switch into bitcube's LIGHTS port; the sender picks up by itself." : "Check the lighting switch and the cable into bitcube's LIGHTS port.", raw: senderErr });
+      { action: both ? "In the ceiling: plug the lighting switch into bitcube's LIGHTS port; the sender picks up by itself." : senderTaken ? TAKEN_ACTION : "Check the lighting switch and the cable into bitcube's LIGHTS port.", raw: senderErr });
   } else if (senderOff) it('ropes', 'warning', 'Sender switched off', 'The sender is not active, so the ropes get nothing.', { action: 'Press Ropes → On to turn it back on.' });
+  else if (calRopes && boxesDown.length < 2) it('ropes', 'warning', cap(calWords), `The gallery camera is ${calStageWords}; the ropes come back to the river by themselves when it ends.`,
+    { action: 'If the room is needed now, stop it on the Lights page: the ropes come back at once.' });
   else if (ropesDark) it('ropes', 'warning', 'Dark on purpose: sending black', 'The sender is open and sending black; both boxes stay dark instead of playing their own colour cycle. Not a fault.',
     { action: 'Press Ropes → On to show the river again; they follow within a few seconds.', raw: watts ? wattsWords : null });
   else if (boxesDown.length === 2) it('ropes', 'down', 'Both rope boxes are silent: the ropes are dark', 'The sender is open but neither box answers over the lighting network.', { action: 'Check power to the rope boxes and the lighting switch.' });
@@ -398,23 +431,25 @@ export function derive(status, nowMs) {
   const brightness = hub ? num(hub.brightness) : null;
   if (behind) unknown('hub75 panels', behind);
   else if (led == null) unknown('hub75 panels', ['Not reported by the full check', 'The full check did not list bitcube\'s displays.']);
-  else if (ledMissing) it('hub75 panels', 'down', 'No panel sender: bitcube does not see one', `bitcube sees ${realDisplays.length ? realDisplays.join(', ') : 'no display at all'}. The panels get their picture over HDMI through the panel sender; until bitcube sees it they stay dark.${boxesDown.length === 2 ? ' Expected before the lights are connected.' : ''}`,
+  else if (ledMissing) it('hub75 panels', 'down', 'No panel sender: bitcube does not see one', `bitcube sees ${realDisplays.length === 1 ? 'only its own small screen' : realDisplays.length ? `only ${realDisplays.length} other screens` : 'no display at all'}, no panel sender. The panels get their picture over HDMI through the panel sender; until bitcube sees it they stay dark.${boxesDown.length === 2 ? ' Expected before the lights are connected.' : ''}`,
     { action: "Plug the panel sender into bitcube's HDMI; bitcube then sees it.", raw: realDisplays.length ? `displays: ${realDisplays.join(', ')}` : null });   // never an empty "displays:" line
   else if (!td) unknown('hub75 panels', ['Panel sender present; picture not reported', 'The full check answered without a word about TouchDesigner, which draws the picture.']);
   else if (tdRestarting || tdOffBooting) it('hub75 panels', 'warning', `Panel sender present; dark while TouchDesigner ${tdRestarting ? 'restarts' : 'starts'}`, 'The picture comes back with TouchDesigner.');
   else if (!tdOk) it('hub75 panels', 'warning', `Panel sender present, but the picture is ${frozen ? 'frozen' : 'gone'}`, frozen ? 'TouchDesigner is frozen, so the panels keep their last picture.' : 'TouchDesigner is not running, so nothing is drawn.');
   else if (!hub) it('hub75 panels', 'warning', 'Panel sender present; this file has no panel output', 'TouchDesigner reports no panels in this show file.');
+  else if (calPanels) it('hub75 panels', 'warning', cap(calWords), `The gallery camera is ${calStageWords}; the panels come back to the river by themselves when it ends.`,
+    { action: 'If the room is needed now, stop it on the Lights page: the lights come back at once.' });
   else if (hub.output === false) it('hub75 panels', 'warning', 'Panel sender present, but the panel output is off', 'The panels are switched off in the show file.');
   else if (brightness === 0) it('hub75 panels', 'warning', "At 0 %, so they're dark", 'Someone turned the panels down to nothing.', { action: 'Raise the panels brightness below.' });
   else it('hub75 panels', 'ok', `Panel sender present, brightness ${brightness != null ? `${Math.round(brightness * 100)} %` : 'not known'}`, `${ropesDark ? 'Still showing the river while the ropes are dark. ' : ''}bitcube sees the panel sender.`, { raw: realDisplays.length ? `displays: ${realDisplays.join(', ')}` : null });
 
   const noClip = (c) => (c.since ? `no clips to Dave since ${c.since}` : 'no clips to Dave lately');
-  const clipWords = (cam) => { const c = clips[cam]; return !c.present ? '' : c.failing ? `; ${noClip(c)}` : `; clips posting (last ${dur(c.age_s)} ago)`; };
+  const clipWords = (cam) => { const c = clips[cam]; return !c.present ? '' : c.failing ? `; ${noClip(c)}` : probeFresh ? `; clips posting (last at ${at(c.age_s)})` : `; last clip at ${at(c.age_s)}`; };
   if (behind) unknown('gallery camera', behind);
   else if (!dv) unknown('gallery camera', ['Not reported by the full check', '']);
   else if (galleryDown) it('gallery camera', 'down', 'Not answering', `No answer from the camera${clipWords('gallery')}; no picture can be fetched.`,
     { action: GALLERY_ACTION });
-  else it('gallery camera', 'ok', `Reachable${clips.gallery.present && !clips.gallery.failing ? '; clips posting' : ''}`, `Answers${clipWords('gallery')}.`);
+  else it('gallery camera', 'ok', `Reachable${clips.gallery.present && !clips.gallery.failing && probeFresh ? '; clips posting' : ''}`, `Answers${clipWords('gallery')}.`);
 
   if (behind) unknown('river camera', behind);
   else if (!dv) unknown('river camera', ['Not reported by the full check', '']);
@@ -422,10 +457,10 @@ export function derive(status, nowMs) {
   else if (riverDown) it('river camera', 'down', 'Not answering: the river site is down', `The river site runs on solar power and Starlink and goes down when the battery is flat. ${kind === 'live' ? 'The show is running on the rain fallback' : "The river's year does not use it"}${clipWords('river')}.`,
     { action: 'The river site needs sun; nothing to do from here.' });
   else if (relay && relay.running === false) it('river camera', 'warning', "Reachable, but TouchDesigner isn't reading it", "The camera answers, but TouchDesigner's reader for it has stopped.");
-  else if (relay && relay.fresh) it('river camera', 'ok', `Live: fresh frames${relay.night ? ' (infrared, night)' : ''}`, `Last frame ${dur(relayAgeNow)} ago${clipWords('river')}.`, { raw: num(relay.frames) ? `${relay.frames} frames so far` : null });
+  else if (relay && relay.fresh) it('river camera', 'ok', `Live: fresh frames${relay.night ? ' (infrared, night)' : ''}`, `Last frame at ${at(relayAgeNow)}${clipWords('river')}.`, { raw: num(relay.frames) ? `${relay.frames} frames so far` : null });
   else if (relay) it('river camera', 'warning', `Answers, but no frames for ${dur(relayAgeNow)}`, `The camera accepts connections but has sent nothing for ${dur(relayAgeNow)}; the panels and ropes show the rain fallback meanwhile${clipWords('river')}.`,
     { action: "Ask Will to restart the river camera, or wait for the Starlink link to settle. If the live river isn't needed tonight, switch to the river's year, which doesn't use it." });
-  else it('river camera', 'ok', `Reachable${clips.river.present && !clips.river.failing ? '; clips posting' : ''}`, `Answers over Starlink${clipWords('river')}. The river's year does not use it; the recorder and clips to Dave do.`);
+  else it('river camera', 'ok', `Reachable${clips.river.present && !clips.river.failing && probeFresh ? '; clips posting' : ''}`, `Answers over Starlink${clipWords('river')}. The river's year does not use it; the recorder and clips to Dave do.`);
 
   if (behind) unknown('router', behind);
   else if (!dv) unknown('router', ['Not reported by the full check', '']);
@@ -439,26 +474,26 @@ export function derive(status, nowMs) {
   else it('internet', 'ok', 'bitcube reaches the internet', 'A connection out of Gray Area works.');
 
   if (!md.present) unknown('modal agent', ['Not checked yet', "Mission control has not asked Dave's agent yet."], { source: 'modal' });
-  else if (!m) it('modal agent', 'warning', 'Unreachable from the Mac mini', `Dave's agent did not answer: ${fetchWords(md.error, true)}.`, { source: 'modal', action: "Tell Dave if it stays unreachable; the room is unaffected while the river's year runs." });
+  else if (!m) it('modal agent', 'warning', 'Unreachable from the Mac mini', `The Mac mini asked Dave's agent and ${fetchWords(md.error, true)}.`, { source: 'modal', action: "Tell Dave if it stays unreachable; the room is unaffected while the river's year runs." });
   else if (m.ok === false) it('modal agent', 'warning', 'Reports a problem', "Dave's agent says something is wrong on its side.", { source: 'modal', action: 'Tell Dave.', raw: `mood ${m.mood}, tick ${m.tick}` });
   else if (modalOverdue) it('modal agent', 'warning', `Hasn't updated for ${dur(sinceTickS)}`,
     `It last updated at ${Number.isFinite(finMs) ? clockDay(finMs, now) : 'an unknown time'}. It updates every 5 minutes by day and rests overnight; it has missed ${dur(lateMin * 60)} of daytime updates, though it doesn't report a problem itself.`,
     { source: 'modal', action: DAVE_LATE_ACTION });
   else if (nextMs != null && nextMs < now) it('modal agent', 'ok', `${inRest(now) ? 'Resting overnight' : 'Update due'}; last update ${Number.isFinite(finMs) ? clockDay(finMs, now) : 'not known'}`,
     inRest(now) ? 'It rests from 23:55 to 07:00 Pacific, so a missed update is normal at this hour.' : 'An update is due; it gets 15 minutes of daytime before that counts as a fault.', { source: 'modal' });
-  else it('modal agent', 'ok', `Last updated ${dur(sinceTickS)} ago`, `${nextMs != null ? `Next update in ${dur((nextMs - now) / 1000)}` : 'Updating on schedule'}${obj(m.scene) ? `; its scene is ${m.scene.animation} / ${m.scene.palette}` : ''}.`, { source: 'modal', raw: `tick ${m.tick}, mood ${m.mood ?? 'none'}` });
+  else it('modal agent', 'ok', Number.isFinite(finMs) ? `Last updated ${dur(sinceTickS)} ago` : 'Updating on schedule', `${Number.isFinite(finMs) ? `Last updated at ${clockDay(finMs, now)}` : 'Last update time not known'}${nextMs != null ? `; next update due at ${clockDay(nextMs, now)}` : ''}${obj(m.scene) ? `; its scene is ${m.scene.animation} / ${m.scene.palette}` : ''}.`, { source: 'modal', raw: `tick ${m.tick}, mood ${m.mood ?? 'none'}` });
 
   const sinceWords = (c) => (c.since ? `since ${c.since}` : 'for a while');
   if (behind) unknown('modal link', behind);
   else if (!link) unknown('modal link', ['Not reported by the full check', '']);
   else if (linkDown) it('modal link', 'warning', comingUp ? 'Not started yet: bitcube just restarted' : 'Not running on bitcube',
-    `Nothing on bitcube is sending clips to Dave; it last posted ${dur(Math.max(...['gallery', 'river', 'sync'].map((c) => num(obj(link[c])?.log_age_s) ?? 0)) + probeAge)} ago.`,
+    `Nothing on bitcube is sending clips to Dave; it last posted at ${at(Math.max(...['gallery', 'river', 'sync'].map((c) => num(obj(link[c])?.log_age_s) ?? 0)) + probeAge)}.`,
     { action: comingUp ? 'Wait two minutes; if it is still not running after five, ask the studio chat to start it.' : 'Ask the studio chat to start it on bitcube.' });
   else if (failing.length === 2) it('modal link', 'down', `Clips failing for both cameras ${sinceWords(clips.gallery)}`, `Gallery ${sinceWords(clips.gallery)}, river ${sinceWords(clips.river)}${syncOld ? `; nothing new has come back from Dave's agent for ${dur(syncAgeNow)}` : ''}. ${internetDown ? 'Without internet nothing can be posted.' : 'Both cameras answer, so the link itself or the upload is failing.'}`);
   else if (failing.length === 1) it('modal link', 'warning', `${cap(failing[0])} clips failing ${sinceWords(clips[failing[0]])}; ${failing[0] === 'gallery' ? 'river' : 'gallery'} fine`,
     `${cap(failing[0])} clips: ${clips[failing[0]].last ? `last good one at ${clips[failing[0]].since}` : 'no good clip lately'}; the other camera posts normally.`, { raw: `${linkProcs} processes` });
   else if (modalOverdue && syncOld) it('modal link', 'warning', `Nothing new from Dave's agent for ${dur(syncAgeNow)}`, "Clips are posting fine; nothing comes back until Dave's agent changes something, and it has not.");
-  else it('modal link', 'ok', `Posting; last clip ${dur(Math.min(clips.gallery.age_s ?? Infinity, clips.river.age_s ?? Infinity))} ago`, `Gallery clip ${dur(clips.gallery.age_s)} ago, river clip ${dur(clips.river.age_s)} ago${syncAgeNow != null ? `; Dave's agent last sent something back ${dur(syncAgeNow)} ago` : ''}.`, { raw: `${linkProcs} processes` });
+  else it('modal link', 'ok', probeFresh ? 'Posting' : 'Clips fine at the last check', `Gallery clip at ${at(clips.gallery.age_s)}, river clip at ${at(clips.river.age_s)}${syncAgeNow != null ? `; Dave's agent last sent something back at ${at(syncAgeNow)}` : ''}.`, { raw: `${linkProcs} processes` });
 
   const recClips = num(rec?.clips) ?? 0, recAt = /^\d{4}-\d{2}-\d{2} (\d{2}:\d{2})/.exec(recLast || '')?.[1];
   if (behind) unknown('recorder', behind);
@@ -485,10 +520,10 @@ export function derive(status, nowMs) {
     'Wait a minute. If it stays this way, mission control needs a restart (ask the studio chat).', ['bitcube']);
   const unseen = [...BEHIND, y ? null : 'seasons', m ? null : 'modal agent'];     // what the headline leaves unknown
   if (online === false) add('bitcube-offline', 'down', 90, 'bitcube is offline: nothing behind it can be checked',
-    `The Mac mini can't reach bitcube (checked ${dur(bc.age_s)} ago${pb.error ? `; its full check has failed for ${dur(pb.failing_s ?? pb.age_s)}` : ''}). The show may still be running by itself.`,
+    `The Mac mini can't reach bitcube${pb.error ? `; its full check has failed for ${dur(pb.failing_s ?? pb.age_s)}` : ''}. The show may still be running by itself.`,
     "Someone at Gray Area checks bitcube's power light and the router; a restart takes about a minute and bitcube comes back by itself. Nothing can be done from here, and every control would fail.", ['bitcube', ...unseen]);
   else if (online === true && pb.present && !pr) add('check-failed', 'warning', 85, 'bitcube answers, but its full check failed',
-    `${cap(probeWords(pb.error))} (${dur(pb.age_s)} ago). TouchDesigner, the lights and the cameras can't be judged until it works.`, 'Wait a minute; the check runs again by itself. If it keeps failing, ask the studio chat to look at bitcube.', ['bitcube', ...unseen]);
+    `${cap(probeWords(pb.error))}${pb.failing_s != null && pb.failing_s >= 120 ? `; it has failed for ${dur(pb.failing_s)}` : ''}. TouchDesigner, the lights and the cameras can't be judged until it works.`, 'Wait a minute; the check runs again by itself. If it keeps failing, ask the studio chat to look at bitcube.', ['bitcube', ...unseen]);
   else if (!pb.present) add('not-checked', 'unknown', 70, online === true ? 'Checking: bitcube answers; everything else is not known yet' : online === null ? 'Checking: nothing is known yet' : 'Checking',
     'Mission control has just started; the full check of bitcube takes up to a minute.', 'Wait a minute. Nothing is wrong yet, and nothing is known to be right either.', unseen);
   else if (pr && pb.stale && online !== false) add('probe-stale', 'unknown', 80, `Mission control hasn't heard from bitcube for ${dur(pb.age_s)}`,
@@ -509,12 +544,15 @@ export function derive(status, nowMs) {
       ['bitcube', 'touchdesigner', tdOk ? null : 'seasons', tdOk ? null : 'ropes', tdOk ? null : 'hub75 panels', linkDown ? 'modal link' : null]);
     if (tdOk) {
       const both = boxesDown.length === 2, senderBad = senderKnown && (senderErr || !rs.open);
-      const senderWhy = /10049/.test(senderErr || '') ? "bitcube's LIGHTS port has no link" : 'the sender cannot open its port';
+      const senderWhy = /10049/.test(senderErr || '') ? "bitcube's LIGHTS port has no link" : senderTaken ? "another program on bitcube is using the ropes' connection" : "the sender can't use bitcube's LIGHTS port";
       if (both) add('lights', 'down', 70, `The lights aren't connected: neither rope box answers${ledMissing ? ' and bitcube sees no panel sender' : ''}`,
         `${senderBad ? `${cap(senderWhy)}${ledMissing ? ': expected before the lights are connected' : ''}. ` : ''}${tdWords}; the ropes${ledMissing ? ' and the panels' : ''} are dark.`,
         "In the ceiling: plug the lighting switch into bitcube's LIGHTS port and the panel sender into bitcube's HDMI. The ropes pick up by themselves; then check here that both boxes answer and bitcube sees the panel sender.",
         ['ropes', 'rope box 1', 'rope box 2', ledMissing ? 'hub75 panels' : null]);
-      else if (senderBad) add('sender', 'warning', 66, "The rope sender can't open its port: the ropes aren't getting the river", `${tdWords}, but the sender is ${rs.retrying ? 'retrying' : 'stopped'}${boxesDown.length ? `; ${boxWords(boxesDown[0])} is silent too` : '; both boxes answer'}.`,
+      else if (senderBad && senderTaken) add('sender-taken', 'warning', 66, "Another program on bitcube is using the ropes' connection: the ropes aren't getting the river",
+        `${tdWords}, but the rope sender is ${rs.retrying ? 'retrying' : 'stopped'}: another lights program (Will's rope lights, or a second sender) holds the connection, and the two must never run at once.`,
+        TAKEN_ACTION, ['ropes', ...boxesDown]);
+      else if (senderBad) add('sender', 'warning', 66, "The rope sender can't use bitcube's LIGHTS port: the ropes aren't getting the river", `${tdWords}, but the sender is ${rs.retrying ? 'retrying' : 'stopped'}${boxesDown.length ? `; ${boxWords(boxesDown[0])} is silent too` : '; both boxes answer'}.`,
         "Check the lighting switch and the cable into bitcube's LIGHTS port; the sender picks up by itself.", ['ropes', ...boxesDown]);
       else if (boxesDown.length) add('box', 'warning', 64, `${cap(boxWords(boxesDown[0]))} isn't answering: those ropes may be dark`, `${tdWords} and the sender is open, but the box does not answer.`,
         'Check power to that box and its cable to the lighting switch.', ['ropes', boxesDown[0]]);
@@ -525,9 +563,12 @@ export function derive(status, nowMs) {
       else if (hub && brightness === 0) add('panels-dark', 'warning', 58, "The panels are at 0 %, so they're dark", 'Someone turned the panels down to nothing.', 'Raise the panels brightness below.', ['hub75 panels']);
       if (slow) add('td-slow', 'warning', 60, 'TouchDesigner is running slowly: the river will look jerky', `${cap(label)} at ${fps} frames a second instead of 60${tdErrors ? `, with ${tdErrors} errors in the file` : ''}.`,
         `Look at bitcube's screen for what is slow or erroring; if it doesn't recover in a few minutes, press ${YEAR_PRESS} (about a minute dark).`, ['touchdesigner', 'ropes']);
-      if (calibrating) add('calibrating', 'warning', 61, `Calibrating the lights: the ropes are in patterns for about ${dur(calLeftS)} more`,
-        `${cal.mode === 'dry-run' ? 'A dry run: the lights do not change. ' : ''}The gallery camera is ${CAL_STAGE_WORDS[cal.stage] ?? 'at work'}; the ropes come back to the river by themselves when it ends.`,
-        "Keep people out of the camera's view. If the room is needed now, stop it on the Lights page: the ropes come back at once.", ['ropes']);
+      if (calibrating && calDry) add('calibrating', 'warning', 61, "Calibration dry run: the lights stay as they are",
+        `It walks the calibration's steps without touching the lights (${calStageWords} now) and ends by itself in about a minute.`,
+        'Nothing to do; it ends by itself. To end it now, stop it on the Lights page.', ['ropes']);
+      else if (calibrating) add('calibrating', 'warning', 61, `Calibrating the lights: the ropes are in patterns for about ${dur(calLeftS)} more`,
+        `The gallery camera is ${calStageWords}; the ropes${calPanels ? ' and the panels' : ''} come back to the river by themselves when it ends.`,
+        "Keep people out of the camera's view. If the room is needed now, stop it on the Lights page: the ropes come back at once.", ['ropes', calPanels ? 'hub75 panels' : null]);
       else if (ropesDark) add('ropes-dark', 'warning', 42, 'The ropes are dark on purpose; everything else is up',
         'Someone pressed Ropes → Dark: the sender keeps sending black, so the boxes stay dark instead of playing their own colour cycle. The panels still show the river.',
         'If the ropes should be showing the river, press Ropes → On; they follow within a few seconds. Nothing is broken.', ['ropes']);
@@ -537,7 +578,7 @@ export function derive(status, nowMs) {
       else if (kind === 'other') add('old-file', 'warning', 40, `TouchDesigner is showing ${label}, not the river's year: the year and its controls are unavailable`,
         `It is neither the river's year nor the live river.${FILES[pr.boot_file]?.kind === 'year' ? " The river's year opens at the next restart." : ''}`,
         "Press Switch to the river's year below; the lights go dark for about a minute.", ['seasons']);
-      else if (kind === 'year' && !y && se.present) add('year-page', 'warning', 46, "The river's year page isn't answering, though TouchDesigner runs it", `${cap(fetchWords(se.error))}; the year's controls are unavailable until it does.`,
+      else if (kind === 'year' && !y && se.present) add('year-page', 'warning', 46, "The river's year page isn't answering, though TouchDesigner runs it", `${cap(fetchWords(se.error))}; the year's controls come back when it answers properly.`,
         `Wait a minute; if it stays down, press ${YEAR_PRESS} (about a minute dark).`, ['seasons']);
       if (riverStale) add('river-stale', 'warning', 55, `The river camera has sent no frames for ${dur(relayAgeNow)}: the show is running on the rain fallback`,
         `The camera answers but sends nothing${clips.river.present && clips.river.failing ? `; no clips to Dave ${sinceWords(clips.river)}` : ''}.`,
@@ -568,7 +609,7 @@ export function derive(status, nowMs) {
   }
   const modalPri = kind === 'live' ? 58 : 45;   // Dave's scene is on the panels only in the live river file
   const roomWords = kind === 'live' ? ': the panels keep his last scene' : " (the room is unaffected: the river's year doesn't use its scene)";
-  if (modalUnreachable) add('modal-unreachable', 'warning', modalPri, `Dave's agent is unreachable from the Mac mini${roomWords}`, `${cap(fetchWords(md.error, true))} (checked ${dur(md.age_s)} ago).`, 'Tell Dave if it stays unreachable.', ['modal agent']);
+  if (modalUnreachable) add('modal-unreachable', 'warning', modalPri, `Dave's agent is unreachable from the Mac mini${roomWords}`, `${cap(fetchWords(md.error, true))} when the Mac mini asked.`, 'Tell Dave if it stays unreachable.', ['modal agent']);
   else if (modalOverdue) add('modal-stalled', 'warning', modalPri, `Dave's agent hasn't updated for ${dur(sinceTickS)}${roomWords}`,
     `It last updated at ${Number.isFinite(finMs) ? clockDay(finMs, now) : 'an unknown time'}. It updates every 5 minutes by day and rests overnight; it has missed ${dur(lateMin * 60)} of daytime updates.${syncOld ? ` Nothing new has come back to bitcube for ${dur(syncAgeNow)}.` : ''}`,
     DAVE_LATE_ACTION, ['modal agent', syncOld ? 'modal link' : null]);
@@ -607,22 +648,23 @@ export function derive(status, nowMs) {
   };
 
   // ---- show: what the piece is doing -----------------------------------------------------------------------------
-  const ropesState = !pr || online === false || !td ? 'unknown' : !tdOk || !senderKnown || senderErr || !rs.open || senderOff || boxesDown.length === 2 ? 'not-reaching' : ropesDark ? 'dark' : 'river';
+  const ropesState = !pr || online === false || !td ? 'unknown' : !tdOk || !senderKnown || senderErr || !rs.open || senderOff || boxesDown.length === 2 ? 'not-reaching' : calRopes ? 'calibrating' : ropesDark ? 'dark' : 'river';
   const ropesWords = { river: kind === 'live' ? (relay?.fresh ? 'the ropes show the live river' : 'the ropes show the rain fallback') : 'the ropes show the river',
-                       dark: 'the ropes are dark on purpose', 'not-reaching': 'the ropes are not getting the river', unknown: 'the ropes are not known' }[ropesState];
+                       dark: 'the ropes are dark on purpose', 'not-reaching': 'the ropes are not getting the river', unknown: 'the ropes are not known',
+                       calibrating: `the ropes are ${calWords}` }[ropesState];
   const ropesItem = items.find((x) => x.id === 'ropes');
   // The panels, the same way: a state word for the page and plain words, beside the item's summary.
   const riverWords = kind === 'live' ? (relay?.fresh ? 'the live river' : 'the rain fallback') : 'the river';
   const panelsState = !pr || online === false || led == null ? 'unknown' : ledMissing ? 'no-sender' : !td ? 'unknown'
     : tdRestarting || tdOffBooting ? 'restarting' : frozen ? 'frozen' : !tdOk ? 'gone' : !hub ? 'no-output'
-    : hub.output === false || brightness === 0 ? 'off' : 'river';
+    : calPanels ? 'calibrating' : hub.output === false || brightness === 0 ? 'off' : 'river';
   const panelsWords = { unknown: 'the panels are not known', 'no-sender': 'the panels have no sender: dark', restarting: 'the panels are dark while TouchDesigner restarts',
     frozen: 'the panels hold a frozen picture', gone: 'the panels show nothing: TouchDesigner is not running', 'no-output': 'this show file has no panel output',
-    off: 'the panels are switched off', river: `the panels show ${riverWords}${brightness != null ? ` at ${Math.round(brightness * 100)} %` : ''}` }[panelsState];
+    off: 'the panels are switched off', calibrating: `the panels are ${calWords}`, river: `the panels show ${riverWords}${brightness != null ? ` at ${Math.round(brightness * 100)} %` : ''}` }[panelsState];
   const manual = yearOk ? obj(year.manual) : null;
   const show = {
     file: tdOk ? { name: td.file, kind, label, words: `TouchDesigner is showing ${label}` } : null,
-    boot_file: typeof pr?.boot_file === 'string' ? { name: pr.boot_file, kind: FILES[pr.boot_file]?.kind ?? 'other', label: FILES[pr.boot_file]?.label ?? pr.boot_file } : null,
+    boot_file: bootFile(pr),
     show_files: (Array.isArray(pr?.show_files) ? pr.show_files : []).filter((f) => OFFERED.includes(FILES[f]?.kind)),
     season: yearOk ? year.season : null, phase: yearOk ? num(year.phase) : null, weights: yearOk ? obj(year.weights) : null,
     intensity: intensity != null ? { value: intensity, word: intensityWord(intensity), words: `${intensityWord(intensity)} (${intensity.toFixed(2)})` } : null,
@@ -656,6 +698,9 @@ export function derive(status, nowMs) {
   const cantUnknown = !pr ? (pb.present ? 'the full check of bitcube failed' : "bitcube's full check hasn't run yet") : null;   // what it would change isn't known
   const cantCal = calibrating ? 'a calibration is running: stop it on the Lights page first' : null;
   const cantOld = pr && pb.stale ? `mission control hasn't heard from bitcube for ${dur(pb.age_s)}` : null;
+  // never a second switch while TouchDesigner is opening a file: it kills the half-opened one (another minute dark), and
+  // while bitcube's own login is still opening it, a second TouchDesigner could start beside it
+  const tdBusy = tdRestarting ? 'TouchDesigner is restarting: wait a minute' : tdOffBooting || (tdStarting && booted) ? 'TouchDesigner is still starting: wait a minute' : null;
   const controls = {
     mode: ctl(cantPage ?? cantBitcube ?? cantYear, { dynamic: ctl(cantPage ?? cantBitcube ?? cantYear ?? (counter ? null : "the people counter isn't available yet")) }),
     target: ctl(cantPage ?? cantBitcube ?? cantYear),
@@ -664,7 +709,7 @@ export function derive(status, nowMs) {
     hub75: ctl(cantPage ?? cantBitcube ?? cantTd ?? cantCal),   // the camera is photographing the panels and ropes
     // never while TouchDesigner is restarting (a second switch kills the half-opened file: another minute dark), and never on
     // a full check too old to say what runs now (the buttons' labels come from it)
-    switch: ctl(cantPage ?? cantBitcube ?? cantUnknown ?? (tdRestarting ? 'TouchDesigner is restarting: wait a minute' : null) ?? cantOld ?? cantCal),
+    switch: ctl(cantPage ?? cantBitcube ?? cantUnknown ?? tdBusy ?? cantOld ?? cantCal),
     bootfile: ctl(cantPage ?? cantBitcube ?? cantUnknown),
     lightsroute: ctl(cantPage ?? cantBitcube ?? cantUnknown ?? cantOld ?? cantCal),
   };
