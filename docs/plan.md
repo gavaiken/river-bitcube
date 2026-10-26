@@ -4,6 +4,8 @@ title: Plan and open questions
 
 # Plan and open questions
 
+> **History, not the current plan (26 Oct 2026).** Where things stand now is in [`HANDOFF.md`](https://github.com/gavaiken/river-bitcube/blob/main/HANDOFF.md); the rules are in [`AGENTS.md`](https://github.com/gavaiken/river-bitcube/blob/main/AGENTS.md). Kept for its decisions (D-numbers), requirements and what happened.
+
 The shared checklist for **A River Becoming**'s show machine, bitcube. Install at Gray Area starts **Thu 22 Oct 2026**.
 
 **How we work:**

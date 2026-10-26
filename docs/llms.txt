@@ -14,10 +14,10 @@
 
 ## Working on the installation
 
-- [CLAUDE.md](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/CLAUDE.md): rules and hard-won facts for agents working on bitcube. Read first.
-- [plan.md](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/plan.md): the shared checklist, decisions and open questions.
-- [Log](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/a-river-becoming-log.md): everything done so far, session by session.
-- [Execution plan](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/execution-plan.md): lettered Claude sessions, their status and the coordination contract.
+- [AGENTS.md](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/AGENTS.md): the rules for every agent (Claude, Codex), the baton, hard-won facts. Read first.
+- [HANDOFF.md](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/HANDOFF.md): where things stand now, who worked last, what's next.
+- [shows.json](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/shows.json): every show file, its description, inputs, editors and pinned calibration.
+- History (decisions and what happened, not instructions): [execution plan](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/execution-plan.md), [plan.md](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/plan.md), [log](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/a-river-becoming-log.md).
 - [Hardware](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/a-river-becoming-hardware.md): ropes, PSAC10 boxes, rack controller, panels, cameras.
 
 ## Optional

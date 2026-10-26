@@ -3,7 +3,7 @@ rem A River Becoming: login launcher for Claude Code. Started from the Startup f
 rem Opens a terminal in C:\Users\user\River and starts Claude with a "read everything, then wait" prompt.
 set "RIVER=C:\Users\user\River"
 set "CLAUDE=C:\Users\user\.local\bin\claude.exe"
-set "PROMPT=Read %RIVER%\CLAUDE.md, then river-bitcube\CLAUDE.md, every file in river-bitcube\docs, and river-agent\CLAUDE.md and README.md. Check git status in both repos. Then give me a short summary of where things stand and wait for my next instruction. Do not change anything yet."
+set "PROMPT=Read %RIVER%\CLAUDE.md, then river-bitcube\AGENTS.md and river-bitcube\HANDOFF.md, every file in river-bitcube\docs, and river-agent\CLAUDE.md and README.md. Check git status in both repos. Then give me a short summary of where things stand and wait for my next instruction. Do not change anything yet."
 
 rem Let TouchDesigner (Start-River.cmd) and the network come up first.
 timeout /t 20 /nobreak >nul

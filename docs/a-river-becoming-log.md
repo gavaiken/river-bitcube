@@ -1,5 +1,7 @@
 # A River Becoming: running log and handoff for LLMs
 
+> **History, not the current plan (26 Oct 2026).** Where things stand now is in [`HANDOFF.md`](https://github.com/gavaiken/river-bitcube/blob/main/HANDOFF.md); the rules are in [`AGENTS.md`](https://github.com/gavaiken/river-bitcube/blob/main/AGENTS.md). Kept for its decisions (D-numbers), requirements and what happened.
+
 Running record of what Gavin and Claude have done on this project, plus how to pick up from here. **Append new sessions at the bottom (newest last). Never put passwords or tokens in this file.**
 
 Related files:
