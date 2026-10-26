@@ -112,6 +112,7 @@ test('a failure in words: a 409 reads as the server wrote it, a refusal that say
   assert.equal(failText('The ropes are unchanged', e409, '21:05'), 'The ropes are unchanged: the switch to the live river is being applied (started 21:04). Try again when it is done.');
   const e502 = Object.assign(new Error('HTTP 502'), { status: 502 });
   assert.equal(failText('The ropes are unchanged', e502, '21:05'), "The ropes are unchanged: mission control couldn't reach bitcube (21:05). Try again, or see the verdict above.");
+  assert.equal(failText('The rules are unchanged', e502, '21:05', 'What you typed is kept.'), "The rules are unchanged: mission control couldn't reach bitcube (21:05). What you typed is kept. Try again, or see the verdict above.");
   const refused = Object.assign(new Error('"quieter" must be below "busier"'), { status: 400 });
   assert.match(failText('The rules are unchanged', refused, '21:05'), /apply again \(21:05\)\.$/);
 });

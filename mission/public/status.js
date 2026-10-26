@@ -671,7 +671,7 @@ function finish(name) {
   try { c.o.onDone?.(r); } catch (e) { console.warn('onDone', e); }
 }
 /** Press → (confirm) → applying → done, or confirming until bitcube's reading shows it, or failed / unconfirmed; on the control
- *  itself, with one announcement each. o: { btn, ask, what, pending, done, fail, confirmed(model), noAnswer, unconfirmed, onDone }. */
+ *  itself, with one announcement each. o: { btn, ask, what, pending, done, fail, kept, confirmed(model), noAnswer, unconfirmed, onDone }. */
 async function runControl(name, path, body, o) {
   const c = C(name);
   if (c.asking || busy(name)) return;
@@ -709,7 +709,7 @@ async function runControl(name, path, body, o) {
   catch (e) {
     const maybe = !!(e?.maybe || (e?.noAnswer && e?.posted));
     c.s = ctlStep(c.s, { type: 'error', maybe, now: Date.now() });
-    c.text = maybe ? noAnswerText(e, o.noAnswer ?? 'the Now line shows what bitcube reports') : failText(o.fail, e, fmt.clock(Date.now()));
+    c.text = maybe ? noAnswerText(e, o.noAnswer ?? 'the Now line shows what bitcube reports') : failText(o.fail, e, fmt.clock(Date.now()), o.kept);
     announce(c.text);
     if (name === 'check') shell.setChecking(false);
     c.refreshAt = performance.now(); p.refresh();
@@ -808,7 +808,7 @@ document.addEventListener('click', async (e) => {
       if (!t.canApply) break;
       const word = M.intensityWord(t.intensity);
       runControl('target', '/api/control/target', { season: t.season, intensity: t.intensity }, { btn: b, what: `target ${t.season}, ${word}`,
-        done: `Now heading for ${t.season}, ${word}: the river travels there by hand`, fail: 'The target is unchanged; your choice is kept',
+        done: `Now heading for ${t.season}, ${word}: the river travels there by hand`, fail: 'The target is unchanged', kept: 'Your choice is kept.',
         onDone: () => { targetDraft.season = null; targetDraft.intensity = null; } });
       break;
     }
@@ -817,7 +817,7 @@ document.addEventListener('click', async (e) => {
       if (!f.canApply) break;
       const n = Object.keys(f.changed).length, sent = { ...rulesDraft };
       runControl('rules', '/api/control/rules', { rules: f.changed }, { btn: b, what: plural(n, 'rule change'), done: `Now ${plural(n, 'rule')} changed, from now on`,
-        fail: 'The rules are unchanged; what you typed is kept',
+        fail: 'The rules are unchanged', kept: 'What you typed is kept.',
         // only what was sent is cleared: a box typed into meanwhile keeps its draft
         onDone: () => { for (const [k, v] of Object.entries(sent)) if (rulesDraft[k] === v) delete rulesDraft[k]; } });
       break;

@@ -120,11 +120,11 @@ export function controlLine(c, nowMs) {
 }
 /** A refused or failed change on its control: "<fail>: <reason> (21:04). Try again, or see the verdict above." A 409 from
  *  another change in flight reads as the server wrote it, without its "wait:" ("…: the switch to the live river is being
- *  applied (started 21:04). Try again when it is done."). */
-export function failText(fail, e, clock) {
-  const why = plainError(e);
-  if (/^wait: /i.test(why)) return `${fail}: ${why.slice(6)}. Try again when it is done.`;
-  return `${fail}: ${why} (${clock}).${/try again|apply again/i.test(why) ? '' : ' Try again, or see the verdict above.'}`;
+ *  applied (started 21:04). Try again when it is done."). `kept`: a form's "What you typed is kept." after the reason. */
+export function failText(fail, e, clock, kept = '') {
+  const why = plainError(e), k = kept ? ` ${kept}` : '';
+  if (/^wait: /i.test(why)) return `${fail}: ${why.slice(6)}.${k} Try again when it is done.`;
+  return `${fail}: ${why} (${clock}).${k}${/try again|apply again/i.test(why) ? '' : ' Try again, or see the verdict above.'}`;
 }
 
 /** A press judged again and found impossible, or a confirm withdrawn: "Not sent: bitcube is offline (21:04)." (another change in
