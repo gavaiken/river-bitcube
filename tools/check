@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# The safety net before every push (AGENTS.md): run from anywhere in the repo, on a Mac, Linux, or Git Bash on bitcube.
+#   tools/check            everything below; exit 1 if anything fails
+#   CHECK_BASE=<ref>       what the show-metadata freshness check compares with (default origin/main; CI passes the push's base)
+#   PYTHON=<python>        the Python to use (default: .venv's, else python3/python; a .venv with the test requirements is
+#                          made on first run if pytest is missing)
+# Runs: the show registry check (tools/shows_check.py: schema, files and calibration pins exist, descriptions <= 100 words,
+# boot_default can boot, metadata updated with every change to a .toe or its build script), the Python tests (tools/tests,
+# tools/pixelmap/tests) and mission control's tests (cd mission && npm test). Tests that need bitcube, TouchDesigner or
+# secrets skip themselves when those aren't there.
+set -u
+cd "$(dirname "$0")/.." || exit 1
+export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+fail=0
+step() { printf '\n== %s\n' "$*"; }
+
+pick_python() {
+  if [ -n "${PYTHON:-}" ]; then echo "$PYTHON"; return; fi
+  for p in .venv/bin/python .venv/Scripts/python.exe; do [ -x "$p" ] && { echo "$p"; return; }; done
+  for p in python3 python; do command -v "$p" >/dev/null 2>&1 && { echo "$p"; return; }; done
+}
+PY=$(pick_python)
+if [ -z "$PY" ]; then echo "tools/check: no Python found"; exit 1; fi
+if ! "$PY" -c 'import pytest, numpy, PIL' >/dev/null 2>&1; then
+  if [ -z "${PYTHON:-}" ] && [ ! -e .venv ]; then
+    step "making .venv for the tests (first run)"
+    "$PY" -m venv .venv && PY=$( [ -x .venv/bin/python ] && echo .venv/bin/python || echo .venv/Scripts/python.exe ) \
+      && "$PY" -m pip install -q -r tools/pixelmap/requirements.txt || { echo "tools/check: couldn't set up .venv"; exit 1; }
+  else
+    echo "tools/check: $PY lacks pytest/numpy/pillow: pip install -r tools/pixelmap/requirements.txt"; exit 1
+  fi
+fi
+
+step "show registry (shows.json)"
+"$PY" tools/shows_check.py --base "${CHECK_BASE:-origin/main}" || fail=1
+
+step "Python tests (tools/tests, tools/pixelmap/tests)"
+"$PY" -m pytest -q tools/tests tools/pixelmap/tests || fail=1
+
+step "mission control tests (mission: npm test)"
+if command -v node >/dev/null 2>&1; then
+  if [ ! -d mission/node_modules ]; then (cd mission && npm ci --no-audit --no-fund >/dev/null) || fail=1; fi
+  log=$(mktemp)
+  if (cd mission && npm test >"$log" 2>&1); then grep -E '^ℹ (tests|pass|fail|skipped)' "$log"
+  else sed -n '/✖ failing tests:/,$p' "$log" | head -n 150; grep -E '^ℹ (tests|pass|fail)' "$log"; fail=1; fi
+  rm -f "$log"
+else
+  echo "tools/check: node isn't installed: mission control's tests did not run"; fail=1
+fi
+
+if [ "$fail" -ne 0 ]; then printf '\ntools/check: FAILED (see above). Fix it before pushing.\n'; exit 1; fi
+printf '\ntools/check: all good\n'

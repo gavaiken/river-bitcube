@@ -91,3 +91,13 @@ cal = registry.calibration_for(project.name)   # {'pixelmap': '<abs path>', 'scr
 2. Copy `td/build/build_baseline.py` to `td/build/build_<name>.py`; change its `TOE` and `require_build` names.
 3. Add an entry: `kind: "viz"`, `offered: true`, `can_boot: false`, your `build`, the calibration you want pinned, a description (≤100 words), `inputs`, `created_by`/`created`, `updated_by`/`updated`/`last_change`.
 4. Run `tools/check`, commit, push. Pull on bitcube; it then shows up in mission control's switch list.
+
+## `tools/check`
+
+Run `tools/check` before every push (Mac, Linux, or Git Bash on bitcube). It runs:
+
+- **the registry check** (`tools/shows_check.py`): the schema above; every offered `.toe`, every build script and every pinned calibration file exists; descriptions are at most 100 words; `boot_default` is an offered, can_boot show; and **metadata freshness**: if the changes since `origin/main` (plus your working tree) touch an entry's `.toe` or its build script, that entry's `last_change` must change and `updated` must not go backwards (a new entry passes);
+- the Python tests (`tools/tests`, `tools/pixelmap/tests`; a `.venv` is made on first run if pytest is missing);
+- mission control's tests (`cd mission && npm test`; `npm ci` first if `node_modules` is missing).
+
+GitHub Actions (`.github/workflows/check.yml`) runs the same on every push and pull request, comparing with the push's previous tip. Nothing in it needs bitcube or secrets.
