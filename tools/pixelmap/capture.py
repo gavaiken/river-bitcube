@@ -33,6 +33,17 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from pixelmap import decode, graycode  # noqa: E402
 
+
+# A camera's login, up to the authority's LAST @ (as calibrate.py and mission/lib/scrub.mjs): ffmpeg takes the last @ too, so an
+# @ or a quote in the password is all login.
+_CREDS = re.compile(r'([a-z][a-z0-9+.-]*://)[^\s/?#"<>]*@', re.I)
+
+
+def scrub(text):
+    """'rtsp://admin:pw@10.0.0.1/x' -> 'rtsp://***@10.0.0.1/x'."""
+    return _CREDS.sub(r'\1***@', str(text))
+
+
 REPO = Path(__file__).resolve().parents[2]
 BRIDGE = 'http://127.0.0.1:9980/exec'
 W, H = 1440, 808          # half of the gallery cam's 2880x1616
@@ -67,7 +78,7 @@ class Reader:
         """ffmpeg's messages, without the camera's login: it prints the whole RTSP address when the input fails, and
         calibrate.py keeps these lines in the progress file that mission control serves."""
         for raw in iter(self.p.stderr.readline, b''):
-            line = re.sub(r'([a-z][a-z0-9+.-]*://)[^\s/@\'"<>]+@', r'\1***@', raw.decode('utf-8', 'replace'), flags=re.I)
+            line = scrub(raw.decode('utf-8', 'replace'))
             sys.stderr.write(line)
             sys.stderr.flush()
 

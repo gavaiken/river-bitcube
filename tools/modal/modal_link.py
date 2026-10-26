@@ -39,10 +39,15 @@ RESTART_SECONDS = 15
 LOCK_PORT = 8771                         # held by the running supervisor, so a second one exits at once
 
 
+# A camera's login, up to the authority's LAST @ (as calibrate.py and mission/lib/scrub.mjs): ffmpeg takes the last @ too, so
+# an @ or a quote in the password is all login.
+_CREDS = re.compile(r'([a-z][a-z0-9+.-]*://)[^\s/?#"<>]*@', re.I)
+
+
 def mask(text):
     """Camera URLs carry the login: never let one reach a log (Dave's capture.py logs ffmpeg's full
     command line when a clip fails, and River\\logs is on the \\\\bitcube\\River share)."""
-    return re.sub(r'(rtsp://)[^@/\s]*@', r'\1***@', text)
+    return _CREDS.sub(r'\1***@', str(text))
 
 
 def secrets():
