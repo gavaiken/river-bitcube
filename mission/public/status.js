@@ -7,7 +7,7 @@
 // status-words.js, where node's tests check them.
 import * as M from '/model.js';
 import { mountShell, poll, tick, watchContact, focusKey, refocus, park, focusShown, drawn, art, fmt, confirm, sheet, api, plainError, noAnswerText, esc, goto, mark, chip, WORD, MARK,
-  NAMES_FROM_BITCUBE, sinceAgrees as sinceAgreesWith, splitHeadline, WARN_MS, LOST_MS, announce, whyText, POLL_TIMEOUT_MS } from '/ui.js';
+  NAMES_FROM_BITCUBE, sinceAgrees as sinceAgreesWith, splitHeadline, WARN_MS, LOST_MS, announce, whyText, POLL_TIMEOUT_MS, onScreen, keepInView, closedAround } from '/ui.js';
 import { rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows, bootWords, controlLine, failText, notSentText, applyingLine,
   ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash, lastDoneParts, lastDoneWhat, fromWords } from '/status-words.js';
 
@@ -112,18 +112,18 @@ function setHTML(el, html) {
   }
   // a control under the user's finger or keyboard focus keeps the focus across the re-render (found again by its data-*)
   const active = document.activeElement, had = active && active !== document.body && el.contains(active);
-  const key = had ? focusKey(active) : null, hostId = had ? active.closest('[data-ctl]')?.id ?? null : null;
+  const key = had ? focusKey(active) : null, hostEl = had ? active.closest('[data-ctl]') : null, hostId = hostEl?.id ?? null;
   el.innerHTML = html;
   el.querySelectorAll('details[data-id]').forEach((d) => { d.open = openRows.has(d.dataset.id); });
   refreshAges(el);
-  if (had) placeFocus(key, hostId, el);
+  if (had) placeFocus(key, hostId, el, hostEl?.dataset.ctl ?? null);
 }
 /** Can t hold focus where it is (enabled, drawn: not inside a closed <details>)? */
 const usable = (t) => !!t && !t.disabled && drawn(t);
 /** After a re-render: focus back on the control `key` names, or, when it is blocked now, on its host's line that says why (never an
  *  empty line, never <body>: ui.js park), remembering the control so focus comes back when it unlocks. A control not drawn yet
  *  (its row moved to a section drawn later) is found by render() once every section is drawn. */
-function placeFocus(key, hostId, root) {
+function placeFocus(key, hostId, root, name = null) {
   let t = null;
   try { t = key ? root.querySelector(key) ?? document.querySelector(key) : null; } catch { /* a stale key */ }
   if (usable(t) && focusShown(t)) return;
@@ -131,16 +131,34 @@ function placeFocus(key, hostId, root) {
   const onLine = !!key && /^#(why|st)-/.test(key);              // focus already waited on a line, for a control remembered in parked
   if (key && !onLine && host) parked = { key };
   if (host && park(host, host.id === 'ctl-check' ? document.querySelector('#band h1') : null)) return;
-  if (key) pendingFocus = key;
+  if (key || name) pendingFocus = { key, name };
+}
+/** Focus whose control's host was removed (the Season card's Switch now once the year runs: R7 #7) goes to another host of the same
+ *  control, opened where it sits (the TouchDesigner row), its line that says what is happening; else the band's headline. Never
+ *  <body>. */
+function rescueFocus(name) {
+  const a = document.activeElement;
+  if (a && a !== document.body && a.isConnected) return;
+  const hosts = name ? [...document.querySelectorAll(`[data-ctl="${CSS.escape(name)}"]`)] : [];
+  const h = hosts.find((x) => drawn(x)) ?? hosts[0] ?? null;
+  if (h) {
+    for (let d = closedAround(h); d; d = closedAround(h)) { d.open = true; if (d.dataset.id) openRows.add(d.dataset.id); }
+    const st = h.querySelector('.ctl-status');
+    if (st && st.textContent.trim() && drawn(st)) { st.focus({ preventScroll: true }); if (document.activeElement === st) return; }
+    if (park(h)) return;
+  }
+  const band = document.getElementById('band-h');
+  if (band) { band.setAttribute('tabindex', '-1'); band.focus({ preventScroll: true }); }
 }
 /** Once every section is drawn: a control whose row moved gets focus back where it is now (or the closed list it went into), and a
  *  control that unlocked takes focus back from the line it waited on, unless focus went somewhere else meanwhile. */
 function restoreFocus() {
   const a = document.activeElement, lost = !a || a === document.body || !a.isConnected;
   if (pendingFocus) {
-    const key = pendingFocus; pendingFocus = null;
-    let t = null; try { t = document.querySelector(key); } catch { /* a stale key */ }
+    const { key, name } = pendingFocus; pendingFocus = null;
+    let t = null; try { t = key ? document.querySelector(key) : null; } catch { /* a stale key */ }
     if (lost && t) { if (t.disabled || !focusShown(t)) { const h = t.closest('[data-ctl]'); if (h) { if (t.disabled && drawn(h)) parked = { key }; park(h); } } }
+    else if (lost) rescueFocus(name ?? t?.closest('[data-ctl]')?.dataset.ctl ?? null);
   }
   if (!parked) return;
   const b = document.activeElement, waiting = !b || b === document.body || b.matches('.ctl-why, .ctl-status, .ctl-h, [data-ctl], #band h1');
@@ -234,7 +252,29 @@ async function fetchStill(cam) {
 }
 
 // ---- rendering ----------------------------------------------------------------------------------------------------------
+/** What this phone is working on: the focused control (or the line focus waits on), else the status line of its own change in flight
+ *  or just ended, so a re-render that moves its row (into Not OK while TouchDesigner restarts, back to the fine list) can bring it
+ *  back into view (R7 #0, #8). */
+function workingOn() {
+  const a = document.activeElement;
+  if (a && a !== document.body && a.isConnected && a.closest('main') && !a.closest('dialog')) return { key: focusKey(a), el: a, focus: true };
+  const now = Date.now();
+  const name = Object.keys(ctl).filter((n) => busy(n) || (['done', 'failed', 'unconfirmed'].includes(ctl[n].s.state) && now - (ctl[n].s.at ?? 0) < 15_000))
+    .sort((x, y) => (ctl[y].s.at ?? 0) - (ctl[x].s.at ?? 0))[0];
+  const st = name ? statusEl(name) : null;
+  return st ? { key: st.id ? `#${CSS.escape(st.id)}` : null, el: st, focus: false, name } : null;
+}
 function render() {
+  const w = workingOn(), wasOn = !!w && onScreen(w.el);
+  renderNow();
+  if (!w || !wasOn) return;
+  // the same thing after the re-render: what has focus now (placeFocus found it again), else the line found by its id
+  let n = w.focus ? document.activeElement : null;
+  if (!n || n === document.body) { try { n = w.key ? document.querySelector(w.key) : null; } catch { n = null; } }
+  if (!n && w.name) n = statusEl(w.name);
+  keepInView(n, wasOn);
+}
+function renderNow() {
   model = p.last ? derive(p.last, p.last.now + p.elapsed()) : null;
   const m = model;
   const { withdrawn, ended } = settleControls();
@@ -656,8 +696,11 @@ function showfileCtlHTML(m, onlyKind = null, where = onlyKind ? 'year' : 'td') {
 
 /** Where focus waits for a control: its host's status line (the host the press came from). */
 function statusEl(name) {
-  const c = ctl[name];
-  return (c?.host && document.getElementById(`st-${c.host}`)) || document.querySelector(`.ctl-status[data-ctl-status="${CSS.escape(name)}"]`);
+  const c = ctl[name], own = c?.host ? document.getElementById(`st-${c.host}`) : null;
+  if (own) return own;
+  // its host is gone (the Season card's Switch now once the year runs): the same control's line where it is drawn (R7 #7)
+  const all = [...document.querySelectorAll(`.ctl-status[data-ctl-status="${CSS.escape(name)}"]`)];
+  return all.find((x) => drawn(x)) ?? all[0] ?? null;
 }
 function focusStatus(name) { const st = statusEl(name); if (st && st.isConnected) st.focus({ preventScroll: true }); }
 /** A change ended: focus that waited on its status line (or was nowhere) goes back to the button that started it, when it can
@@ -665,9 +708,10 @@ function focusStatus(name) { const st = statusEl(name); if (st && st.isConnected
 function afterEnd(name) {
   const c = ctl[name], a = document.activeElement, st = statusEl(name);
   if (!c || busy(name)) return;
-  if (!(a === st || !a || a === document.body)) return;
+  if (!(a === st || !a || a === document.body || !a.isConnected)) return;
   if (document.querySelector('dialog[open]')) return;
   if (c.key) refocus(c.key, document, st);
+  rescueFocus(name);              // never left on <body> when the button that started it is gone (R7 #7)
 }
 /** Before every render: a change confirming (or unconfirmed: a phone that slept through it, a lost answer) is done when a reading
  *  taken after it answered shows it; a done line gives way to a newer reading that no longer shows what it claims; a confirm left
@@ -807,15 +851,32 @@ function openStill() {
   sheet({ title: 'The room', body: `<img class="still-img" src="${g.url}" alt="The gallery camera's latest still"><p class="secondary muted">Taken <span data-still="gallery">${dur(stillAge('gallery'))} ago</span>, fetched through bitcube. The picture refreshes about every 30 s.</p>` });
 }
 function jump(target) {
-  if (!goto(target)) return;
+  if (!goto(target)) return false;
   const el = document.getElementById(target);
   for (let d = el?.closest('details'); d; d = d.parentElement?.closest('details')) if (d.dataset.id) openRows.add(d.dataset.id);
+  return true;
 }
-/** "Switch now": the TouchDesigner row when it is not OK, else the Season card's control, else the year's row. */
+/** "Switch now": the TouchDesigner row when it is not OK, else the Season card's control, else the year's row. Returns where. */
 function jumpSwitch() {
   for (const id of [model && item(model, 'touchdesigner')?.level !== 'ok' ? rid('touchdesigner') : null, 'switch-now', rid('seasons'), rid('touchdesigner')]) {
-    if (id && document.getElementById(id)) { jump(id); return; }
+    if (id && document.getElementById(id)) { jump(id); return id; }
   }
+  return null;
+}
+/** After a jump from the band (or a tile, or an Also item), keyboard and screen-reader focus go with it, not only the scroll (R7 #9):
+ *  the button the jump names ("Restart on the river's year") when it can be pressed, else the line that says why it can't; for a
+ *  row or a group, its summary or heading. */
+function jumpFocus(target, label = null) {
+  const el = target && document.getElementById(target);
+  if (!el) return;
+  if (label) {
+    const btn = [...el.querySelectorAll('button[data-act="switch"]')].find((x) => x.textContent.trim() === label);
+    if (btn && !btn.disabled && focusShown(btn)) return;
+    const host = (btn ?? el).closest('[data-ctl]') ?? el.querySelector('[data-ctl="switch"]');
+    if (host && park(host)) return;
+  }
+  const f = el.matches('details') ? el.querySelector(':scope > summary') : el.querySelector('details > summary, h3, h2, summary') ?? el;
+  focusShown(f);
 }
 
 // ---- events --------------------------------------------------------------------------------------------------------------
@@ -863,8 +924,8 @@ document.addEventListener('click', async (e) => {
   if (!b || b.disabled) return;
   const act = b.dataset.act, m = model;
   switch (act) {
-    case 'goto': jump(b.dataset.target); break;
-    case 'goto-switch': jumpSwitch(); break;
+    case 'goto': if (jump(b.dataset.target)) jumpFocus(b.dataset.target); break;
+    case 'goto-switch': jumpFocus(jumpSwitch(), b.textContent.trim()); break;
     case 'still': openStill(); break;
     case 'checknow': {
       const offline = !!m && item(m, 'bitcube')?.level === 'down';

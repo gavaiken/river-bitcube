@@ -436,14 +436,21 @@ export function confirm({ title, body = '', ok = 'OK', cancel = 'Not now', destr
 
 // ---- one page-level live region ---------------------------------------------------------------------------------
 /** announce(text): says it once through the page's one polite live region (status.html's #ctl-live, else #mc-live, made by
- *  mountShell): a control's applying, done, unconfirmed and failed, a stepper's new value. Never a ticking time. */
+ *  mountShell): a control's applying, done, unconfirmed and failed, a stepper's new value. Never a ticking time. Two said within
+ *  the region's short pause are said together, in order, never the first dropped ("Not sent at 22:58: …" and the Calibrate
+ *  block's new view, R7 #10). */
 export function announce(text) { say(text); }
+let sayQueue = [], sayTimer = null;
 function say(text) {
-  const l = liveRegion();
-  if (!l) return;
-  clearTimeout(announce.t);
+  const l = liveRegion(), t = String(text ?? '').trim();
+  if (!l || !t) return;
+  if (sayQueue.at(-1) !== t) sayQueue.push(t);
+  clearTimeout(sayTimer);
   l.textContent = '';                                   // the same words twice are read twice
-  announce.t = setTimeout(() => { l.textContent = String(text ?? ''); }, 60);
+  sayTimer = setTimeout(() => {
+    l.textContent = sayQueue.length === 1 ? sayQueue[0] : sayQueue.map((x) => (/[.!?:;]$/.test(x) ? x : `${x}.`)).join(' ');
+    sayQueue = []; sayTimer = null;
+  }, 60);
 }
 function liveRegion() {
   if (typeof document === 'undefined' || !document.body) return null;
@@ -702,6 +709,26 @@ export function control(target, opts = {}) {
   return { button, host, status, show, update, get state() { return s.state; }, get busy() { return ctlView(s, o.why).busy; }, get entryId() { return entryId; } };
 }
 const CTL_RESULT = new Set(['done', 'failed', 'unconfirmed']);
+
+// ---- keeping what you are working on in view -----------------------------------------------------------------------
+/** Is n on screen between the header and a fixed tab bar or composer (any part of it)? */
+export function onScreen(n) {
+  if (!(n instanceof Element) || !n.isConnected) return false;
+  const r = n.getBoundingClientRect();
+  if (!r.height && !r.width) return false;
+  const head = document.querySelector('header.top')?.getBoundingClientRect().bottom ?? 0;
+  const bars = [...document.querySelectorAll('nav.tabs, section.composer')].map((b) => b.getBoundingClientRect()).filter((b) => b.height && b.bottom >= innerHeight - 2 && b.top > innerHeight / 2);
+  const foot = bars.length ? Math.min(...bars.map((b) => b.top)) : innerHeight;
+  return r.bottom > head + 4 && r.top < foot - 4;
+}
+/** After a re-render that moved n (a row that changed group: Ropes → Dark, a restart), bring it back into view when it was in view
+ *  before and isn't now: the smallest scroll that shows it (block 'nearest', within the page's scroll-padding), never a jump to a
+ *  place the reader scrolled away from (R7 #0, #8). */
+export function keepInView(n, wasOnScreen) {
+  if (!wasOnScreen || !(n instanceof Element) || !drawn(n) || onScreen(n)) return false;
+  n.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+  return true;
+}
 
 // ---- goto: open a card's ancestors, scroll, flash -------------------------------------------------------------
 /** goto(id) opens every <details> around the element, scrolls to it and flashes it once. */
