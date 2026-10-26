@@ -106,11 +106,12 @@ export function plainError(msg) {
 }
 
 /** A control whose POST got no usable answer (none in time, one that couldn't be read, a proxy's error page): it may or
- *  may not have happened, so it never says "unchanged". `where` names where to look ("the Now line shows what bitcube reports"). */
-export function noAnswerText(e, where) {
+ *  may not have happened, so it never says "unchanged". `where` names where to look ("the Now line shows what bitcube reports").
+ *  nowMs: the time to stamp it with, the server's clock when the page knows it (R8 #35), else the phone's. */
+export function noAnswerText(e, where, nowMs = Date.now()) {
   const first = e?.unreadable ? "Mission control's answer couldn't be read" : e?.notOurs ? "Mission control didn't answer" : e?.serverMaybe ? "bitcube didn't answer in time"
     : typeof e?.waitedS === 'number' ? `No answer in ${dur(e.waitedS)}` : 'No answer in time';   // never "in a while" (R7 #2)
-  return `${first}: it may or may not have happened; ${where} (${clock(Date.now())}).`;
+  return `${first}: it may or may not have happened; ${where} (${clock(nowMs)}).`;
 }
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 /** Just enough markdown for the agent's replies: code blocks, inline code, bold, links, lists, paragraphs. */

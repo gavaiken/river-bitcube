@@ -11,7 +11,8 @@ import { mountShell, poll, tick, watchContact, focusKey, refocus, park, focusSho
 import { rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows, bootWords, controlLine, failText, notSentText, applyingLine,
   ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash, lastDoneParts, lastDoneWhat, fromWords } from '/status-words.js';
 
-const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, serverJudged, changeLabel, bandSaid } = M;
+const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, serverJudged, changeLabel, bandSaid,
+  entryIdOf, newRequestId, heldWords, MAYBE_HOLDS, confirmLimitS } = M;
 const $ = (sel, root = document) => root.querySelector(sel);
 const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
 // One name per thing (the copy rules); descriptors live on the card, never in the name.
@@ -61,6 +62,11 @@ function cap(s) { return s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice
 const nb = fmt.nb;
 const rid = (id) => 'r-' + id.replace(/\s+/g, '-');
 const elapsedS = () => (p.last ? p.elapsed() / 1000 : 0);
+/** The server's clock now (its last answer carried forward), else the phone's: every time a control line states is the server's,
+ *  so it agrees with Last done and a 409's "(started 21:04)" on a phone whose clock is off (R8 #35). */
+const serverNow = () => (p.last ? p.last.now + p.elapsed() : Date.now());
+/** "21:04" on the server's clock. */
+const sclock = (ms = serverNow()) => fmt.clock(ms, serverNow());
 const C = (name) => (ctl[name] ??= { s: ctlInit(), text: '' });
 /** A request of this control is in flight or awaiting bitcube's reading: it, its siblings and its inputs are locked. */
 const busy = (name) => !!ctl[name] && ctlView(ctl[name].s).busy;
@@ -185,7 +191,9 @@ function refreshAges(root = document) {
   });
   // another phone's change in flight (the band): "Applying: the switch to the live river · 0:23 · usually about 1 min"
   root.querySelectorAll('[data-el]').forEach((s) => {
-    const t = applyingLine({ label: s.dataset.label, expect_s: s.dataset.exp === '' ? null : Number(s.dataset.exp), phase: s.dataset.phase, source: s.dataset.source || null }, Number(s.dataset.el) + el);
+    // a maybe reads as one (R8 #17), and a start or a boot file with the sending phone's usual time (R8 #22)
+    const t = applyingLine({ label: s.dataset.label, expect_s: s.dataset.exp === '' ? null : Number(s.dataset.exp), phase: s.dataset.phase, source: s.dataset.source || null,
+                             maybe: s.dataset.maybe === '1', action: s.dataset.action || null }, Number(s.dataset.el) + el);
     if (s.textContent !== t) s.textContent = t;
   });
   // a control applying or confirming: its line ticks (m:ss) without re-rendering the control under a thumb
@@ -290,7 +298,8 @@ function renderNow() {
   // screen readers hear the level and the headline when they change, never a time (R6 #8; not even the first time, R7 #13), and
   // each change in flight from another phone or the studio chat by name and source (R7 #12): this phone's own is said on its control
   const own = ownChanges();
-  const said = m ? bandSaid(m, own) : (performance.now() - p.startedAt > LOST_MS ? "This page can't reach mission control." : '');
+  // and, once, how another phone's change ended (R8 #9)
+  const said = m ? bandSaid(m, own, serverNow()) : (performance.now() - p.startedAt > LOST_MS ? "This page can't reach mission control." : '');
   const live = $('#band-live');
   if (live && live.textContent !== said) live.textContent = said;
   $('.card.now').hidden = !m;
@@ -336,9 +345,10 @@ function bandHTML(m) {
   const also = others.length ? `<div class="also"><div class="label">Also</div>${others.map((x) =>
     `<button type="button" class="also-item lv-${x.level}" data-act="goto" data-target="g-${esc(x.id)}">${mark(x.level)}<span><span class="sr-only">${WORD[x.level]}: </span>${esc(splitHeadline(x.headline)[0])}</span><span class="chev" aria-hidden="true">›</span></button>`).join('')}</div>` : '';
   const staleNote = lostContact(m) ? '' : o.stale && lv !== 'unknown' ? `<p class="stale-note">Some of this is older than it should be: ${esc(staleWords(m))}.</p>` : '';
+  const elsewhere = othersApplying(m);
   return `<div class="chip-row">${chip(lv)}${since}</div>
     <h1 id="band-h">${esc(nb(big))}</h1>${o.cause === 'page' ? `<p class="rest">No answer for <span data-for="0" data-pre="">${dur(elapsedS())}</span></p>` : rest ? `<p class="rest">${esc(nb(cap(rest)))}</p>` : ''}
-    <p class="detail">${esc(nb(o.detail))}</p>${staleNote}${applyingHTML(m)}${checkLine(m)}${todo}${also}${lastDone()}`;   // Check now above WHAT TO DO: on the first screen even in the busiest bands
+    <p class="detail">${esc(nb(o.detail))}</p>${staleNote}${applyingHTML(elsewhere)}${checkLine(m)}${todo}${also}${lastDone(elsewhere)}`;   // Check now above WHAT TO DO: on the first screen even in the busiest bands
 }
 /** Changes in flight from another phone or the studio chat (status.applying): a quiet ticking line each, so a greyed control's
  *  "Wait: …" has its cause in view. This page's own change in flight is said on its control instead. */
@@ -348,12 +358,17 @@ function bandHTML(m) {
 function ownChanges() {
   return M.ownEntries(model, Object.entries(ctl).map(([action, c]) => ({ action, state: c.s.state, entryId: c.entryId ?? null, at: c.s.at })), Date.now());
 }
-function applyingHTML(m) {
+/** The changes in flight the band says (another phone's, the studio chat's): never this phone's own, which its control says, and none
+ *  while contact is lost. */
+function othersApplying(m) {
   // this phone's own change is said on its control only: never two states for one change (R6 #4)
   const { ownIds, ownActions } = ownChanges();
-  const others = (m.show.applying ?? []).filter((a) => !(a.id && ownIds.includes(a.id)) && !ownActions.includes(a.action));
-  if (!others.length || lostContact(m)) return '';
-  return `<div class="applying-now">${others.map((a) => `<div class="applying-line"><span class="spin" aria-hidden="true"></span><span data-el="${a.started_at != null ? Math.max(0, Math.round((p.last.now - a.started_at) / 1000)) : a.elapsed_s}" data-label="${esc(a.label)}" data-exp="${a.expect_s ?? ''}" data-phase="${esc(a.phase ?? 'applying')}" data-source="${esc(a.source ?? '')}"></span></div>`).join('')}</div>`;
+  if (lostContact(m)) return [];
+  return (m.show.applying ?? []).filter((a) => !(a.id && ownIds.includes(a.id)) && !ownActions.includes(a.action));
+}
+function applyingHTML(others) {
+  if (!others.length) return '';
+  return `<div class="applying-now">${others.map((a) => `<div class="applying-line"><span class="spin" aria-hidden="true"></span><span data-el="${a.started_at != null ? Math.max(0, Math.round((p.last.now - a.started_at) / 1000)) : a.elapsed_s}" data-label="${esc(a.label)}" data-exp="${a.expect_s ?? ''}" data-phase="${esc(a.phase ?? 'applying')}" data-source="${esc(a.source ?? '')}" data-maybe="${a.maybe ? '1' : ''}" data-action="${esc(a.action)}"></span></div>`).join('')}</div>`;
 }
 function staleWords(m) {
   const s = m.sources, out = [];
@@ -368,7 +383,13 @@ function jumpButtons(o, m) {
   const c = o.cause, b = [];
   const first = m.problems.find((x) => x.id === c)?.items?.[0];
   if (c === 'ropes-dark') b.push(['Ropes → On', 'goto', rid('ropes')]);
-  else if (['td-frozen', 'td-slow', 'td-off', 'online-file', 'old-file', 'river-stale', 'year-page'].includes(c)) b.push([M.yearPress(m.show.file?.kind), 'goto-switch', '']);   // the advice's own words
+  else if (['td-frozen', 'td-slow', 'td-off', 'online-file', 'old-file', 'river-stale', 'year-page'].includes(c)) {
+    // while a change in flight holds the switch (a restart bitcube didn't answer in time: R8 #16), the line that says so, never a
+    // live-looking button that jumps to a greyed one
+    const w = m.controls.switch?.why;
+    if (w && /^wait: /i.test(w)) return `<p class="ctl-why jump-wait">${esc(nb(whyText(w)))}</p>`;
+    b.push([M.yearPress(m.show.file?.kind), 'goto-switch', '']);   // the advice's own words
+  }
   else if (['panels-off', 'panels-dark'].includes(c)) b.push(['Panels brightness', 'goto', rid('hub75 panels')]);
   else if (['coming-up', 'not-checked'].includes(c)) b.push(['Open the studio chat', 'href', '/chat']);
   else if (['page', 'bitcube-unchecked', 'probe-stale', 'bitcube-offline', 'check-failed', 'unknown', 'td-unknown'].includes(c)) return '';
@@ -404,11 +425,14 @@ function checkLine(m) {
 /** "Last done: Ropes → Dark · 21:04 · from mission control", from the server's history (never a name); "Last sent: … · waiting
  *  for bitcube to show it" while the server is still confirming that change (its entry is in status.applying), "… didn't show it
  *  in time" when it gave up (status-words.js lastDoneParts: never "done" before the server says so, R7 #3, #16, #28). */
-function lastDone() {
+function lastDone(others = []) {
   const a = p.last?.last_action;
   if (!a || typeof a.t !== 'number') return '';
+  // while the band's applying line says this very change, the Last line would say it again: it comes back when the entry ends, as
+  // "Last done" or "Last sent … didn't show it in time" (R8 #23)
+  if (typeof a.applying_id === 'string' && others.some((x) => x.id === a.applying_id)) return '';
   // the change's one name (the same as its entry on every phone) in one form, and "from the studio chat" as every line says it (R7 #19)
-  const what = lastDoneWhat(a), when = fmt.clock(a.t);
+  const what = lastDoneWhat(a), when = fmt.clock(a.t);      // the history's own clock (the server's real one, also in fixture mode)
   const { head, tail } = lastDoneParts(a, p.last);
   return `<div class="last-done">${head}: <b>${esc(nb(what))}</b> · ${esc(when)} · ${esc(fromWords(a.source))}${esc(tail)}</div>`;
 }
@@ -628,15 +652,15 @@ function fineHTML(m) {
 function installerHTML(m) {
   const s = m.show, route = s.ropes.route, boot = s.boot_file?.name;
   const files = s.show_files.length ? s.show_files : Object.keys(FILES).slice(0, 2);
-  const lrOff = off('lightsroute'), bfOff = off('bootfile');
+  const lrOff = off('lightsroute'), bfOff = off('bootfile'), seen = nowOr(item(m, 'ropes'));
   return `<details class="card installer" data-id="installer" id="installer-card"${op('installer')}><summary><span class="tool" aria-hidden="true">🛠</span><span>Installer</span><span class="note">changes cabling and boot settings · confirms every change</span><span class="chev" aria-hidden="true">›</span></summary><div class="body">
     <div class="ctl ${whyOf('lightsroute') && !busy('lightsroute') ? 'off' : ''}" id="ctl-lightsroute" data-ctl="lightsroute"${busy('lightsroute') ? ' aria-busy="true"' : ''}><div class="ctl-h">Lighting network port on bitcube</div>${whyLine('lightsroute')}
       <div class="seg" role="group" aria-label="Lighting network port"><button type="button" id="ctl-lightsroute-direct" data-act="lightsroute" data-route="direct" class="${route === 'direct' ? 'lit' : ''}" aria-pressed="${route === 'direct'}" ${lrOff ? 'disabled' : ''}>LIGHTS port (white)</button><button type="button" id="ctl-lightsroute-router" data-act="lightsroute" data-route="router" class="${route === 'router' ? 'lit' : ''}" aria-pressed="${route === 'router'}" ${lrOff ? 'disabled' : ''}>Router port (spare)</button></div>
-      <div class="effect">Now: <b>${route === 'direct' ? "bitcube's LIGHTS port" : route === 'router' ? 'the spare router port' : 'not known'}</b>. The wrong port leaves all 20 ropes dark. Only change it after moving the cable; it asks first.</div>
+      <div class="effect">${seen.pre}: <b>${route === 'direct' ? "bitcube's LIGHTS port" : route === 'router' ? 'the spare router port' : 'not known'}</b>${seen.tail}. The wrong port leaves all 20 ropes dark. Only change it after moving the cable; it asks first.</div>
       ${statusLine('ctl-lightsroute', ['lightsroute'])}</div>
     <div class="ctl ${whyOf('bootfile') && !busy('bootfile') ? 'off' : ''}" id="ctl-bootfile" data-ctl="bootfile"${busy('bootfile') ? ' aria-busy="true"' : ''}><div class="ctl-h">Boot file: the show file that opens at boot</div>${whyLine('bootfile')}
       <div class="seg" role="group" aria-label="Boot file">${files.map((f) => `<button type="button" id="ctl-bootfile-${FILES[f]?.kind ?? 'other'}" data-act="bootfile" data-file="${esc(f)}" class="${boot === f ? 'lit' : ''}" aria-pressed="${boot === f}" ${bfOff ? 'disabled' : ''}>${esc(cap(fileLabel(f)))}</button>`).join('')}</div>
-      <div class="effect">Now: <b>${esc(bootWords(s.boot_file))}</b> opens at boot. A change takes effect at bitcube's next restart and does not change what is showing now; a show-file switch sets it too. It asks first.</div>
+      <div class="effect">${seen.pre}: <b>${esc(bootWords(s.boot_file))}</b> opens at boot${seen.tail}. A change takes effect at bitcube's next restart and does not change what is showing now; a show-file switch sets it too. It asks first.</div>
       ${statusLine('ctl-bootfile', ['bootfile'])}</div>
     <div class="links"><a class="btn" href="/lights">Calibrate the lights → Lights</a></div>
   </div></details>`;
@@ -645,7 +669,13 @@ function installerHTML(m) {
 // ---- controls: the contract's states on the thing they change (docs/mission-ui.md "Applying a change") ------------------
 /** "Not possible now: bitcube is offline." or "Wait: the switch to the live river is being applied." above the greyed control;
  *  never while its own change is in flight (its status line says that). */
-function whyLine(name, host = `ctl-${name}`) { const w = busy(name) ? null : whyOf(name); return w ? `<div class="ctl-why" id="why-${host}" tabindex="-1">${esc(whyText(w))}</div>` : ''; }
+function whyLine(name, host = `ctl-${name}`) { const w = busy(name) || ownBlock(name) ? null : whyOf(name); return w ? `<div class="ctl-why" id="why-${host}" tabindex="-1">${esc(whyText(w))}</div>` : ''; }
+/** The change that blocks this control is its own (its entry still holds the lock: bitcube didn't answer it in time): its status
+ *  line says so, never a "Wait: …" line about itself beside it (R8 #18). */
+const ownBlock = (name) => !!model && !!ctl[name]?.entryId && model.controls[name]?.by === ctl[name].entryId;
+/** A readout's lead-in: "Now" from a fresh reading; from a last answer (its item stale: an old full check, or contact lost) "Last
+ *  seen", with its age after the value, never "Now" (R8 #33). */
+const nowOr = (x) => (x?.stale ? { pre: 'Last seen', tail: ` · ${ageSpan(x.age_s)}` } : { pre: 'Now', tail: '' });
 /** One status line per control host (its id: st-<host>), for whichever of its controls is in flight or acted last. Its ticking
  *  time is filled in by refreshAges(); it is not a live region (announce() speaks for it), and focus waits on it (tabindex -1)
  *  while its button is disabled. */
@@ -657,12 +687,12 @@ function statusLine(host, names) {
   return `<div class="ctl-status ${v.cls}" id="st-${host}" data-ctl-status="${esc(name)}" tabindex="-1">${inner}</div>`;
 }
 function ropesCtlHTML(m) {
-  const r = m.show.ropes, st = r.state, o = off('ropes');
+  const r = m.show.ropes, st = r.state, o = off('ropes'), seen = nowOr(item(m, 'ropes'));
   const boxes = ['rope box 1', 'rope box 2'].map((id) => item(m, id)).filter(Boolean);
-  const watts = r.open && Array.isArray(r.watts) && r.watts.every((w) => w != null) ? `<div class="effect">Power: <b>${nb(`${r.watts.join(' + ')} W`)}</b>${r.cap ? ` of ${nb(`${r.cap} W`)} per box` : ''}.</div>` : '';
+  const watts = r.open && Array.isArray(r.watts) && r.watts.every((w) => w != null) ? `<div class="effect">Power${item(m, 'ropes')?.stale ? ' when last seen' : ''}: <b>${nb(`${r.watts.join(' + ')} W`)}</b>${r.cap ? ` of ${nb(`${r.cap} W`)} per box` : ''}.</div>` : '';
   return `<div class="ctl ${whyOf('ropes') && !busy('ropes') ? 'off' : ''}" id="ctl-ropes" data-ctl="ropes"${busy('ropes') ? ' aria-busy="true"' : ''}><div class="ctl-h">Ropes</div>${whyLine('ropes')}
     <div class="seg" role="group" aria-label="Ropes"><button type="button" id="ctl-ropes-on" data-act="ropes" data-dark="0" class="${st === 'river' ? 'lit' : ''}" aria-pressed="${st === 'river'}" ${o ? 'disabled' : ''}>On · showing the river</button><button type="button" id="ctl-ropes-dark" data-act="ropes" data-dark="1" class="${st === 'dark' ? 'lit' : ''}" aria-pressed="${st === 'dark'}" ${o ? 'disabled' : ''}>Dark</button></div>
-    <div class="effect">Now: <b>${esc(r.words)}</b>. Dark sends black to all 20 ropes; they follow within a few seconds. Dark asks first.</div>
+    <div class="effect">${seen.pre}: <b>${esc(r.words)}</b>${seen.tail}. Dark sends black to all 20 ropes; they follow within a few seconds. Dark asks first.</div>
     ${watts}
     <div class="boxes">${boxes.map((b) => `<div class="box lv-${b.level}">${mark(b.level)}<div><b>${esc(NAME[b.id])}</b> <span class="state">· ${WORD[b.level]}</span><div class="sum">${esc(nb(b.summary))}</div></div></div>`).join('')}</div>
     ${statusLine('ctl-ropes', ['ropes'])}
@@ -670,9 +700,9 @@ function ropesCtlHTML(m) {
 }
 function hubCtlHTML(m) {
   const b = m.show.panels.brightness, cur = b == null ? null : Math.round(b * 100);
-  const draft = hubDraft ?? cur, o = off('hub75');
+  const draft = hubDraft ?? cur, o = off('hub75'), seen = nowOr(item(m, 'hub75 panels'));
   return `<div class="ctl ${whyOf('hub75') && !busy('hub75') ? 'off' : ''}" id="ctl-hub75" data-ctl="hub75"${busy('hub75') ? ' aria-busy="true"' : ''}><div class="ctl-h">Panels brightness</div>${whyLine('hub75')}
-    <div class="readout">Now: <b>${cur == null ? 'not known' : nb(`${cur} %`)}</b>${cur != null && m.show.panels.state === 'no-sender' ? ' (no panel sender, so dark)' : ''}</div>
+    <div class="readout">${seen.pre}: <b>${cur == null ? 'not known' : nb(`${cur} %`)}</b>${cur != null && m.show.panels.state === 'no-sender' ? ' (no panel sender, so dark)' : ''}${seen.tail}</div>
     <div class="stepper"><button type="button" class="btn step" id="ctl-hub75-less" data-act="hub-step" data-d="-10" ${o || draft == null || draft <= 0 ? 'disabled' : ''} aria-label="Darker">−</button><output id="hub-draft" aria-label="Brightness to set, 0 to 100 %">${draft == null ? '?' : nb(`${draft} %`)}</output><button type="button" class="btn step" id="ctl-hub75-more" data-act="hub-step" data-d="10" ${o || draft == null || draft >= 100 ? 'disabled' : ''} aria-label="Brighter">+</button>
       <button type="button" class="btn primary" id="ctl-hub75-set" data-act="hub-set" ${o || draft == null || draft === cur ? 'disabled' : ''}>${draft == null ? 'Set brightness' : `Set ${nb(`${draft} %`)}`}</button>
       <button type="button" class="btn danger" id="ctl-hub75-off" data-act="hub-off" ${o || cur === 0 ? 'disabled' : ''}>Panels off</button></div>
@@ -685,15 +715,26 @@ function showfileCtlHTML(m, onlyKind = null, where = onlyKind ? 'year' : 'td') {
   const s = m.show, all = s.show_files.length ? s.show_files : Object.keys(FILES).slice(0, 2);
   // only the river's year and the live river: model.js leaves old show files out of show_files (execution plan D27)
   const files = onlyKind ? all.filter((f) => FILES[f]?.kind === onlyKind) : all;
-  const running = s.file?.name, o = off('switch'), host = `ctl-switch-${where}`;
+  const running = s.file?.name, o = off('switch'), host = `ctl-switch-${where}`, td = item(m, 'touchdesigner');
   const btns = files.map((f) => `<button type="button" id="${host}-${FILES[f]?.kind ?? 'other'}" class="btn ${f === running ? '' : 'primary'}" data-act="switch" data-file="${esc(f)}" ${o ? 'disabled' : ''}>${f === running ? `Restart on ${esc(fileLabel(f))}` : `Switch to ${esc(fileLabel(f))}`}</button>`).join('');
   return `<div class="ctl ${whyOf('switch') && !busy('switch') ? 'off' : ''}" id="${host}" data-ctl="switch"${busy('switch') ? ' aria-busy="true"' : ''}><div class="ctl-h">Show file</div>${whyLine('switch', host)}
-    <div class="readout">${s.file ? `Now showing <b>${esc(s.file.label)}</b>` : s.restart ? `Restarting on <b>${esc(s.restart.on)}</b>` : "What is showing <b>isn't known</b>"}${s.boot_file ? ` · opens at boot: ${esc(bootWords(s.boot_file))}` : ''}</div>
+    <div class="readout">${readoutWords(s, td)}</div>
     <div class="row-btns">${btns}</div>
     <div class="effect">Switching restarts TouchDesigner on that file: the lights go dark for about a minute and unsaved changes in TouchDesigner are lost. That file then also opens at boot. It asks first.</div>
     ${statusLine(host, ['switch'])}</div>`;
 }
 
+/** The Show file readout: "Now showing the river's year · opens at boot: …"; "Restarting on …" while TouchDesigner restarts (R7 #18);
+ *  "Maybe restarting on …" while a restart bitcube didn't answer in time holds the lock and TouchDesigner is seen down (R8 #16);
+ *  from a last answer "Last seen: showing … · 15 min ago", never "Now" (R8 #33). */
+function readoutWords(s, td) {
+  const boot = s.boot_file ? ` · opens at boot: ${esc(bootWords(s.boot_file))}` : '';
+  if (td?.stale && s.file) return `Last seen: showing <b>${esc(s.file.label)}</b>${boot} · ${ageSpan(td.age_s)}`;
+  if (s.file) return `Now showing <b>${esc(s.file.label)}</b>${boot}`;
+  if (s.restart) return `Restarting on <b>${esc(s.restart.on)}</b>${boot}`;
+  if (s.held) return `Maybe restarting on <b>${esc(s.held.on)}</b>: bitcube didn't answer in time${boot}`;
+  return `What is showing <b>isn't known</b>${boot}`;
+}
 /** Where focus waits for a control: its host's status line (the host the press came from). */
 function statusEl(name) {
   const c = ctl[name], own = c?.host ? document.getElementById(`st-${c.host}`) : null;
@@ -722,15 +763,26 @@ function settleControls() {
   for (const [name, c] of Object.entries(ctl)) {
     // only a reading taken after the answer can confirm the change or take a done line away
     const fresh = !!model && !lostContact(model) && p.receivedAt != null && c.refreshAt != null && p.receivedAt > c.refreshAt;
-    if (fresh && (c.s.state === 'confirming' || c.s.state === 'unconfirmed') && c.o?.serverConfirms) {
+    const waiting = c.s.state === 'confirming' || c.s.state === 'unconfirmed';
+    // an answer lost on the way back named no entry: the request id this page sent finds it (R8 #2)
+    if (fresh && waiting && !c.entryId && c.requestId) c.entryId = entryIdOf(model, c.requestId);
+    // a held change says when its lock ends by the server's own entry once it is in, so its line and every other "Wait: …" agree
+    if (c.held && c.s.state === 'unconfirmed' && model) {
+      const e = model.show.applying.find((x) => x.id === c.entryId);
+      if (e?.unlock_at != null) c.text = heldWords(c.o?.what, sclock(e.unlock_at));
+    }
+    if (fresh && waiting && (c.o?.serverConfirms || (c.s.state === 'unconfirmed' && c.entryId))) {
       // the server's verdict on this control's own entry (by id): never the reading's words, which name the same file before and
       // after a restart (R7 #6, #25). When it can't be known (no id: an answer that never came; or no list names it: over 10 min,
       // a restart of the server), a switch to another file or a boot-file change is done once a reading taken after the send
-      // shows it (c.sent, CR7 #4); a restart or a rebuild only by its own limit.
-      const v = serverJudged(model, c.entryId, c.sent);
+      // shows it (c.sent, CR7 #4); a restart or a rebuild only by its own limit. A quick change whose answer was lost (ropes,
+      // panels, the year's) is done once its entry, found by its request id, is confirmed (R8 #2)
+      const v = serverJudged(model, c.entryId, c.sent);   // c.sent: only a switch or boot-file change says what it sent
       c.judgedWall = p.receivedWall;
       if (v === 'confirmed') { c.s = ctlStep(c.s, { type: 'model', confirmed: true, now }); finish(name); ended.push(name); }
       else if (v === 'expired' && c.s.state === 'confirming') { c.s = ctlStep(c.s, { type: 'expired', now }); unconfirm(name); ended.push(name); }
+      // one that may or may not have happened, which the server then gave up on: bitcube didn't show it (said once)
+      else if (v === 'expired' && !c.saidExpired) { c.saidExpired = true; unconfirm(name); ended.push(name); }
     } else if (fresh && (c.s.state === 'confirming' || c.s.state === 'unconfirmed') && typeof c.o?.confirmed === 'function') {
       let yes = false;
       try { yes = !!c.o.confirmed(model); } catch (e) { console.warn('confirmed', e); }
@@ -747,7 +799,7 @@ function settleControls() {
       const next = ctlStep(c.s, { type: 'why', why: w, now });
       if (next.effect === 'withdraw') {
         const a = c.asking; c.asking = null;
-        c.s = next; c.text = notSentText(w, fmt.clock(now));
+        c.s = next; c.text = notSentText(w, sclock());
         announce(c.text);
         a.close();
         withdrawn.push(name);
@@ -777,14 +829,14 @@ function tickControls() {
  *  …" (R6 #16), said once. */
 function unconfirm(name) {
   const c = ctl[name];
-  c.text = unconfirmedWords(c.o?.what, fmt.clock(c.s.sentAt ?? Date.now()), c.o?.unconfirmed ?? 'look at the Now line, or call Gavin');
+  c.text = unconfirmedWords(c.o?.what, sclock(c.sentServer ?? serverNow()), c.o?.unconfirmed ?? 'look at the Now line, or call Gavin');
   announce(c.text);
 }
-/** Done: "<done> · 21:04", said once; the form's draft cleared. */
+/** Done: "<done> · 21:04" (the server's clock), said once; the form's draft cleared. */
 function finish(name) {
   const c = ctl[name], r = c.result;
   const d = typeof c.o.done === 'function' ? c.o.done(r) : c.o.done;
-  c.text = `${d} · ${fmt.clock(Date.now())}${r?.fixture ? ' (fixture mode: nothing really changed)' : ''}`;
+  c.text = `${d} · ${sclock()}${r?.fixture ? ' (fixture mode: nothing really changed)' : ''}`;
   announce(c.text);
   try { c.o.onDone?.(r); } catch (e) { console.warn('onDone', e); }
 }
@@ -807,15 +859,17 @@ async function runControl(name, path, body, o) {
     // judged again now it is answered: a control that became impossible meanwhile sends nothing
     model = p.last ? derive(p.last, p.last.now + p.elapsed()) : null;
     next = ctlStep(c.s, { type: yes ? 'yes' : 'no', why: whyOf(name), now: Date.now() });
-    if (next.notSent) { c.s = next; c.text = notSentText(next.notSent, fmt.clock(Date.now())); announce(c.text); render(); focusStatus(name); return; }
+    if (next.notSent) { c.s = next; c.text = notSentText(next.notSent, sclock()); announce(c.text); render(); focusStatus(name); return; }
   }
   if (next.effect !== 'send') { c.s = next; render(); return; }
   // applying: the control, its siblings and its inputs locked; focus waits on its status line
   // what was sent, and when on the server's clock, for when the server's verdict can't be known (CR7 #4)
   let sent = null;
   try { sent = typeof o.sent === 'function' ? { ...o.sent(model), sentAt: p.last ? p.last.now + p.elapsed() : null } : null; } catch { sent = null; }
-  Object.assign(c, { s: next, text: '', o: { holds: o.confirmed, ...o }, result: null, refreshAt: null, judgedWall: null, entryId: null, sent, expectS: EXPECT_S[name] ?? null,
-    usual: name === 'bootfile' ? BOOT_USUAL : null, applyText: o.pending ?? M.applyingText(o.what) });
+  // the page's own id for this press, sent with it: a page whose answer is lost still finds its entry and verdict by it (R8 #2)
+  const requestId = name === 'check' ? null : newRequestId();
+  Object.assign(c, { s: next, text: '', o: { holds: o.confirmed, ...o }, result: null, refreshAt: null, judgedWall: null, entryId: null, requestId, saidExpired: false, held: false, sent,
+    sentServer: serverNow(), expectS: EXPECT_S[name] ?? null, usual: name === 'bootfile' ? BOOT_USUAL : null, applyText: o.pending ?? M.applyingText(o.what) });
   for (const other of SHARE[name] ?? []) if (ctl[other] && !busy(other)) ctl[other] = { s: ctlInit(), text: '' };
   const a = document.activeElement, idle = !a || a === document.body, here = !!(a && c.host && document.getElementById(c.host)?.contains(a));
   announce(c.applyText.replace(/…$/, ''));     // said once, never with a ticking time
@@ -826,12 +880,17 @@ async function runControl(name, path, body, o) {
   // shows on this page within a second, not at the next poll
   setTimeout(() => p.refresh(), 300);
   let r;
-  try { r = await api(path, body); }
+  try { r = await api(path, requestId ? { ...body, request_id: requestId } : body); }
   catch (e) {
     c.entryId = typeof e?.applyingId === 'string' ? e.applyingId : null;   // a maybe answer still names its entry
     const maybe = !!(e?.maybe || (e?.noAnswer && e?.posted));
     c.s = ctlStep(c.s, { type: 'error', maybe, now: Date.now() });
-    c.text = maybe ? noAnswerText(e, o.noAnswer ?? 'the Now line shows what bitcube reports') : failText(o.fail, e, fmt.clock(Date.now()), o.kept);
+    // bitcube didn't answer a change whose lock holds (the server keeps its entry to its limit): one state on the control, when
+    // the buttons unlock, never a "Wait: …" about itself above it (R8 #18)
+    const held = maybe && e?.serverMaybe && c.entryId && MAYBE_HOLDS.includes(name);
+    c.held = !!held;
+    c.text = held ? heldWords(o.what, sclock(serverNow() + confirmLimitS(EXPECT_S[name]) * 1000))
+      : maybe ? noAnswerText(e, o.noAnswer ?? 'the Now line shows what bitcube reports', serverNow()) : failText(o.fail, e, sclock(), o.kept);
     announce(c.text);
     if (name === 'check') shell.setChecking(false);
     c.refreshAt = performance.now(); p.refresh();

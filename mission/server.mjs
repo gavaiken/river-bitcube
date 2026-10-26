@@ -423,7 +423,8 @@ const server = createServer(async (req, res) => {
     if (path === '/map/system.html') return send(res, 302, '', 'text/plain', { location: 'https://gavaiken.github.io/river-bitcube/system/system.html' });
 
     // studio chat
-    if (path === '/api/chat/history') return send(res, 200, { events: studio.history(Number(url.searchParams.get('limit') || 500)), status: studio.status() });
+    // now: the server's clock, so a page counts a running request's time from its start on that clock (R8 #35)
+    if (path === '/api/chat/history') return send(res, 200, { events: studio.history(Number(url.searchParams.get('limit') || 500)), status: studio.status(), now: Date.now() });
     if (path === '/api/chat/events') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
       const push = (type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);

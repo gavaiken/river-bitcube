@@ -2,7 +2,7 @@
 // turns the chat's events (GET /api/chat/history, the SSE /api/chat/events) into one card per request, pairs replies with
 // their request by id, and keeps the pinned status bar and the composer. Server API unchanged: history, events, send, stop.
 import { mountShell, tick, art, fmt, control, confirm, api, esc, md, chip, mark, plainError, noAnswerText, WARN_MS, LOST_MS, poll } from '/ui.js';
-import { TZ, applyingWords, derive, entryWords, entrySaid, entriesAt } from '/model.js';
+import { TZ, applyingWords, derive, entryWords, entrySaid, entriesAt, endedSaid } from '/model.js';
 import { stateOf as judge, stepWords, stepsToggle, excerpt } from '/chat-words.js';
 
 const $ = (id) => document.getElementById(id);
@@ -20,6 +20,8 @@ const S = {
   statusWall: 0,            // Date.now() the status arrived
   startedAt: new Map(),     // id → { at: performance.now(), wall: Date.now() } when it started (for the m:ss; see runS)
   lastEventT: null,         // the newest event's t (server clock)
+  skew: null,               // the server's clock minus this phone's (ms), from the history's now and every ping: a request's
+                            // m:ss counts from its start on the server's clock, never the phone's (R8 #35)
   lostAt: null,             // performance.now() the stream dropped, or null
   lastEventAt: null,        // { at: performance.now(), wall: Date.now() } of the stream's last event (chat, status or ping)
   everOpen: false,
@@ -57,7 +59,7 @@ function take(e) {
   if (!r) { r = { id, t: e.t, text: '', steps: [], texts: [], notices: [], orphan: true }; S.reqs.set(id, r); S.order.push(id); }
   S.dirty.add(id);
   switch (e.kind) {
-    case 'started': r.started = e.t; r.startedArrivedAt = performance.now(); if (!S.startedAt.has(id)) { const ago = Math.max(0, Date.now() - e.t); S.startedAt.set(id, { at: performance.now() - ago, wall: Date.now() - ago }); } break;
+    case 'started': r.started = e.t; r.startedArrivedAt = performance.now(); if (!S.startedAt.has(id)) { const ago = Math.max(0, Date.now() + (S.skew ?? 0) - e.t); S.startedAt.set(id, { at: performance.now() - ago, wall: Date.now() - ago }); } break;
     case 'activity': r.steps.push({ t: e.t, ...stepWords(e) }); break;   // { text, title, act }: the team's words, the raw line for the tooltip
     case 'text': if (e.text) r.texts.push(e.text); break;
     case 'notice': r.notices.push(e.text ?? ''); break;
@@ -197,7 +199,8 @@ function renderPinned() {
   // screen readers hear the bar's state word when it changes, never its ticking m:ss (chat.html #pin-live)
   const said = lost ? 'Reconnecting to mission control' : !st ? (performance.now() - pageStart > LOST_MS ? "This page can't reach mission control" : '') : st.running ? `Working on: ${excerpt(st.current?.text, 60)}` : st.queue?.length ? `${st.queue.length} waiting` : 'Ready';
   // and each change being applied, by name and source, said when it begins or moves on, never with its time (R7 #5)
-  const sayAll = [said, ...(lost ? [] : applyingNow().map(entrySaid))].filter(Boolean).join('. ').replace(/\.\./g, '.');
+  // and, once, how another phone's change ended (R8 #9)
+  const sayAll = [said, ...(lost ? [] : applyingNow().map(entrySaid)), ...(lost ? [] : endedNow())].filter(Boolean).join('. ').replace(/\.\./g, '.');
   const live = $('pin-live');
   if (live && live.textContent !== sayAll) live.textContent = sayAll;
   const q = st?.queue?.length ?? 0;
@@ -289,17 +292,28 @@ new ResizeObserver(() => { for (const el of [document.querySelector('main.chat')
 // Status's band and Lights' state line do; nothing while this page has no contact with mission control.
 const applyingPoll = poll('/api/status', { every: 5000, onData: () => paintApplying(), onError: () => paintApplying() });
 let applyingKey = '';
-let applyingMemo = { at: null, list: [] };   // the model, derived once per status answer (keyed on when it arrived), never once a second (CR7 #13)
+let applyingMemo = { at: null, list: [], m: null };   // the model, derived once per status answer (keyed on when it arrived), never once a second (CR7 #13)
 function applyingNow() {
   const p = applyingPoll;
   if (!p.last || p.elapsed() > LOST_MS) return [];
   const serverNow = p.last.now + p.elapsed();
-  if (applyingMemo.at !== p.receivedAt) {
-    let list = [];
-    try { list = derive(p.last, serverNow).show.applying ?? []; } catch { list = []; }
-    applyingMemo = { at: p.receivedAt, list };
-  }
+  memoApplying(serverNow);
   return entriesAt(applyingMemo.list, serverNow);   // the tick moves only the m:ss
+}
+function memoApplying(serverNow) {
+  const p = applyingPoll;
+  if (applyingMemo.at === p.receivedAt) return;
+  let m = null;
+  try { m = derive(p.last, serverNow); } catch { m = null; }
+  applyingMemo = { at: p.receivedAt, list: m?.show.applying ?? [], m };
+}
+/** How a change from a phone ended, said once by the bar's region (the chat has no change of its own here: every one is another's). */
+function endedNow() {
+  const p = applyingPoll;
+  if (!p.last || p.elapsed() > LOST_MS) return [];
+  const serverNow = p.last.now + p.elapsed();
+  memoApplying(serverNow);
+  return applyingMemo.m ? endedSaid(applyingMemo.m, {}, serverNow) : [];
 }
 function paintApplying() {
   const host = $('chat-applying'), list = applyingNow();
@@ -330,6 +344,7 @@ function setStatus(st) {
 }
 async function fetchHistory() {
   const h = await api('/api/chat/history?limit=500');
+  if (typeof h.now === 'number') S.skew = h.now - Date.now();     // before the events: a running request's m:ss counts from the server's clock
   const fresh = [];
   for (const e of h.events ?? []) if (take(e)) fresh.push(e);
   if (h.status) setStatus(h.status);
@@ -357,7 +372,7 @@ function connect() {
     let e; try { e = JSON.parse(m.data); } catch { return; }
     if (take(e)) layout();
   });
-  es.addEventListener('ping', () => heard());
+  es.addEventListener('ping', (m) => { heard(); try { const t = JSON.parse(m.data)?.t; if (typeof t === 'number') S.skew = t - Date.now(); } catch { /* a ping without its time */ } });
   es.addEventListener('status', (m) => {
     heard();
     let st; try { st = JSON.parse(m.data); } catch { return; }

@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -228,3 +228,44 @@ test('R8 #9: another phone\'s change that ended is said once by the band\'s regi
   assert.equal(bandSaid(m, {}), bandSaid(m, {}, null), 'without the server\'s clock: nothing extra');
 });
 
+
+test('R8 #18: this page\'s own change that bitcube didn\'t answer in time says once when the buttons unlock, never a Wait line about itself', async () => {
+  const { heldWords, MAYBE_HOLDS } = await import('../public/model.js');
+  const { MAYBE_HOLDS: SERVER_HOLDS } = await import('../lib/applying.mjs');
+  assert.equal(SERVER_HOLDS, MAYBE_HOLDS, 'one table for the server and the pages');
+  assert.equal(heldWords('the switch to the live river', '21:07'), 'The switch to the live river got no answer from bitcube in time: it may or may not have happened; the buttons unlock when bitcube shows it, or by 21:07.');
+  const st = readFileSync(new URL('../public/status.js', import.meta.url), 'utf8'), ui = readFileSync(new URL('../public/ui.js', import.meta.url), 'utf8');
+  assert.match(st, /const w = busy\(name\) \|\| ownBlock\(name\) \? null : whyOf\(name\)/, 'Status: no "Wait: …" about its own change');
+  assert.match(st, /model\.controls\[name\]\?\.by === ctl\[name\]\.entryId/);
+  assert.match(ui, /o\.whyBy === entryId\) \|\| o\.whyOwn === true/, 'control(): the same, and for a sibling on the page (Dry run under Start)');
+});
+
+test('R8 #2: every page sends its own request id with a control and finds a lost answer\'s entry by it', () => {
+  const st = readFileSync(new URL('../public/status.js', import.meta.url), 'utf8'), ui = readFileSync(new URL('../public/ui.js', import.meta.url), 'utf8');
+  const lights = readFileSync(new URL('../public/lights.js', import.meta.url), 'utf8');
+  assert.match(st, /api\(path, requestId \? \{ \.\.\.body, request_id: requestId \} : body\)/);
+  assert.match(st, /c\.entryId = entryIdOf\(model, c\.requestId\)/);
+  assert.match(ui, /o\.run\?\.\(\{ requestId \}\)/);
+  assert.match(ui, /entryId = entryIdOf\(n\.model, requestId\)/);
+  assert.equal((lights.match(/request_id: requestId/g) ?? []).length, 2, 'Lights: a start (or dry run) and a rebuild send theirs');
+});
+
+test('R8 #16, #17, #22, #23, #33, #35: Status wires them: the band line\'s maybe and action, the Wait line for a locked jump, the Last line once, past readouts, the server\'s clock', () => {
+  const st = readFileSync(new URL('../public/status.js', import.meta.url), 'utf8');
+  assert.match(st, /data-maybe="\$\{a\.maybe \? '1' : ''\}" data-action="\$\{esc\(a\.action\)\}"/);
+  assert.match(st, /maybe: s\.dataset\.maybe === '1', action: s\.dataset\.action \|\| null/);
+  assert.match(st, /class="ctl-why jump-wait"/);
+  assert.match(st, /others\.some\(\(x\) => x\.id === a\.applying_id\)\) return ''/);
+  assert.match(st, /Last seen: showing <b>/);
+  assert.match(st, /Maybe restarting on <b>/);
+  assert.doesNotMatch(st.replace(/fmt\.clock\(a\.t\)/, ''), /fmt\.clock\(Date\.now\(\)\)/, 'no control line stamped with the phone\'s clock');
+  const chat = readFileSync(new URL('../public/chat.js', import.meta.url), 'utf8');
+  assert.match(chat, /Date\.now\(\) \+ \(S\.skew \?\? 0\) - e\.t/, 'the chat counts a request from its start on the server\'s clock');
+});
+
+test('every page script parses (a slip in a page file breaks the whole page, and no other test loads it)', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { readdirSync } = await import('node:fs');
+  const dir = fileURLToPath(new URL('../public/', import.meta.url));
+  for (const f of readdirSync(dir).filter((x) => x.endsWith('.js'))) execFileSync(process.execPath, ['--check', join(dir, f)], { stdio: 'pipe' });
+});

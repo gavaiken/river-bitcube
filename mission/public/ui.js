@@ -37,7 +37,7 @@
 // poll at once; after a theme change, 'mc:theme' (detail: 'auto' | 'light' | 'dark').
 import { api as rawApi, esc, md, plainError, noAnswerText, POLL_TIMEOUT_MS } from '/app.js';
 import { dur as modelDur, CONTACTS, TZ, ctlInit, ctlStep, ctlView, applyingWords, applyingText, confirmingWords, CONFIRMING_SAID, unconfirmedWords,
-  notSentWords, failWords, EXPECT_S, serverJudged } from '/model.js';
+  notSentWords, failWords, EXPECT_S, serverJudged, entryIdOf, newRequestId, heldWords, confirmLimitS } from '/model.js';
 
 export { esc, md, plainError, noAnswerText };
 
@@ -186,6 +186,9 @@ export function tick(fn) {
  *  it arrived, so a page renders derive(p.last, p.last.now + (performance.now() - p.receivedAt)). 401 → /login. */
 export { POLL_TIMEOUT_MS };          // a request that hangs this long counts as a failure (a phone's handover, a lock mid-fetch): app.js
 const lastStatus = { j: null, wall: null };   // the newest /api/status any poll() on this page received, and when (Date.now())
+/** The server's clock now (the newest status answer carried forward), else the phone's: a control's times are the server's, so they
+ *  agree with Last done and a 409's "(started 21:04)" on a phone whose clock is off (R8 #35). */
+export function serverNow() { return lastStatus.j?.now != null && lastStatus.wall != null ? lastStatus.j.now + Math.max(0, Date.now() - lastStatus.wall) : Date.now(); }
 export function poll(url, { every = 5000, onData, onError, timeout = POLL_TIMEOUT_MS } = {}) {
   const h = { last: null, receivedAt: null, receivedWall: null, failedSince: null, startedAt: performance.now(), stop, refresh: () => once(true), elapsed };
   let timer = null, ctrl = null, stopped = false;
@@ -474,8 +477,12 @@ export function whyText(why) {
  *    label, kind ('primary' | 'danger' | 'plain'), before (one line of effect: HTML string or Node, under the eyebrow)
  *    why        the model's reason it can't run now: blocked, "Not possible now: <why>." above the greyed button (a
  *               "wait: <label> is being applied" reads "Wait: …"); an open confirm is withdrawn with "Not sent: <why>"
+ *    whyBy      the id of the entry `why` waits for (model controls.<name>.by): when it is this control's own, no "Wait: …"
+ *               line about itself (its status line says it: R8 #18); whyOwn: true when it is a sibling's on this page (Lights'
+ *               Dry run under its own Start), the same
  *    confirm    a confirm() spec (or a function returning one), asked first; focus starts on the safe button
- *    run()      async: POSTs via api() and returns the answer (ok: false or a throw is a failure)
+ *    run({ requestId })  async: POSTs via api() and returns the answer (ok: false or a throw is a failure); requestId: this press's
+ *               own id, to send as the body's request_id, so a lost answer's entry is still found (R8 #2)
  *    pending | what   the applying line: `pending` as written, else "Applying: <what>…" (default "Sending to bitcube…"); `what`
  *               (team words: "the rebuild of the river's year") also names the change when it goes unconfirmed
  *    expectS    the change's usual seconds (model.js EXPECT_S): over 20, the applying line shows m:ss and "usually about N" from
@@ -538,7 +545,8 @@ export function control(target, opts = {}) {
   if (ident && !status.hasAttribute('data-ctl-status')) status.setAttribute('data-ctl-status', ident);
   button._mcStatus = status;     // refocus() and the sheet: where focus goes when this button is disabled under it
   const box = host.closest('.ctl') ?? (host.classList.contains('ctl') ? host : null);
-  let s = ctlInit(o.why), text = '', applyText = null, result = null, asking = null, untick = null, judgedAt = null, parked = false, entryId = null, sent = null;
+  let s = ctlInit(o.why), text = '', applyText = null, result = null, asking = null, untick = null, judgedAt = null, parked = false, entryId = null, sent = null,
+    requestId = null, saidExpired = false, sentServer = null, held = false;
   const now = () => Date.now();
   const elapsedS = () => (s.sentAt == null ? 0 : (now() - s.sentAt) / 1000);
   const lockEls = () => { const l = typeof o.lock === 'function' ? o.lock() : o.lock; return l ? Array.from(l instanceof Element ? [l] : l).filter((x) => x instanceof Element) : []; };
@@ -554,7 +562,9 @@ export function control(target, opts = {}) {
     else if (beforeEl.innerHTML !== (o.before || '')) beforeEl.innerHTML = o.before || '';
     beforeEl.hidden = !o.before;
     // while its own change is applying the model may already say "wait: <its own change>": the applying line says it
-    const w = o.why && !v.busy ? whyText(o.why) : '';
+    // nor a "Wait: …" about this control's own change, whose lock still holds after bitcube didn't answer it (R8 #18)
+    const own = (!!entryId && !!o.whyBy && o.whyBy === entryId) || o.whyOwn === true;
+    const w = o.why && !v.busy && !own ? whyText(o.why) : '';
     if (whyEl.textContent !== w) whyEl.textContent = w;
     whyEl.hidden = !w;
     // what had focus and is disabled now (the button, a sibling, a locked input: another phone's change arrived, or this one
@@ -607,7 +617,7 @@ export function control(target, opts = {}) {
     const was = s.state, idle = !document.activeElement || document.activeElement === document.body;
     const focusHere = host.contains(document.activeElement) || (idle && next.state === 'applying');
     s = next;
-    const clockNow = fmt.clock(now());
+    const clockNow = fmt.clock(serverNow(), serverNow());
     // a control no longer on the page (its block moved on: the run's view replaced Start) says nothing: the new view speaks
     const announce = (t) => { if (host.isConnected) say(t); };
     if (s.state === 'applying' && was !== 'applying') { text = ''; judgedAt = null; announce(String(applyText ?? o.pending ?? (o.what ? applyingText(o.what) : 'Sending to bitcube…')).replace(/…$/, '')); }
@@ -618,7 +628,7 @@ export function control(target, opts = {}) {
       announce(text);
       try { o.onDone?.(result); } catch (e) { console.warn('onDone', e); }
     } else if (s.state === 'unconfirmed' && was !== 'unconfirmed') {
-      text = words ?? unconfirmedWords(o.what, fmt.clock(s.sentAt ?? now()), o.unconfirmed ?? 'look at the Now line, or call Gavin');   // names what was sent (R6 #16)
+      text = words ?? unconfirmedWords(o.what, fmt.clock(sentServer ?? serverNow(), serverNow()), o.unconfirmed ?? 'look at the Now line, or call Gavin');   // names what was sent (R6 #16)
       announce(text);
     } else if (s.state === 'failed') { text = words ?? text; announce(text); }
     ticking(s.state === 'applying' || s.state === 'confirming');
@@ -632,14 +642,15 @@ export function control(target, opts = {}) {
     else if (document.activeElement === status) button.focus({ preventScroll: true });
   }
   /** The failure in model.js's words, the same as Status's; this page has no verdict of its own, so it points at Status. */
-  const failText = (e) => failWords(o.fail, plainError(e), fmt.clock(now()), { tail: 'Try again, or check Status.' });
+  const failText = (e) => failWords(o.fail, plainError(e), fmt.clock(serverNow(), serverNow()), { tail: 'Try again, or check Status.' });
   async function send(next) {
-    applyText = null; entryId = null;
+    applyText = null; entryId = null; saidExpired = false; held = false; sentServer = serverNow();
+    requestId = newRequestId();          // this press's own id, sent with it (R8 #2)
     // what was sent, and when on the server's clock (its last answer carried forward), for when its verdict can't be known (CR7 #4)
     try { sent = typeof o.sent === 'function' ? { ...o.sent(), sentAt: lastStatus.j?.now != null ? lastStatus.j.now + Math.max(0, Date.now() - lastStatus.wall) : null } : null; } catch { sent = null; }
     go(next);
     try {
-      const r = await o.run?.();
+      const r = await o.run?.({ requestId });
       if (typeof r?.applying_id === 'string') entryId = r.applying_id;
       if (r && r.ok === false && r.maybe === true) throw Object.assign(new Error(r.error || "bitcube didn't answer in time"), { status: 200, maybe: true, posted: true, serverMaybe: true });
       if (r && r.ok === false) throw Object.assign(new Error(r.error || "bitcube didn't answer"), { status: 200 });
@@ -648,7 +659,10 @@ export function control(target, opts = {}) {
       if (typeof e?.applyingId === 'string') entryId = e.applyingId;     // a maybe answer still names its entry
       const maybe = !!(e?.maybe || (e?.noAnswer && e?.posted));
       try { o.onFail?.(e); } catch (x) { console.warn('onFail', x); }
-      return go(ctlStep(s, { type: 'error', maybe, now: now() }), maybe ? noAnswerText(e, o.noAnswer ?? 'the page shows what bitcube reports') : failText(e));
+      // bitcube didn't answer a change whose lock holds (its entry stays to its limit): one state, when the buttons unlock (R8 #18)
+      held = !!(maybe && e?.serverMaybe && entryId && o.serverConfirms);
+      return go(ctlStep(s, { type: 'error', maybe, now: now() }), held ? heldWords(o.what, fmt.clock(serverNow() + confirmLimitS(o.expectS) * 1000, serverNow()))
+        : maybe ? noAnswerText(e, o.noAnswer ?? 'the page shows what bitcube reports', serverNow()) : failText(e));
     }
     try { o.onSent?.(result); } catch (e) { console.warn('onSent', e); }
     go(ctlStep(s, { type: 'ok', confirmed: typeof o.confirmed === 'function' || o.serverConfirms ? false : null, now: now() }));
@@ -673,13 +687,29 @@ export function control(target, opts = {}) {
   function update(n = {}) {
     const { readAt, ...rest } = n;
     Object.assign(o, rest);
-    if ('model' in n && (s.state === 'confirming' || s.state === 'unconfirmed') && o.serverConfirms && (entryId || sent)) {
+    const waiting = s.state === 'confirming' || s.state === 'unconfirmed';
+    // an answer lost on the way back named no entry: the request id this press sent finds it (R8 #2)
+    if ('model' in n && waiting && !entryId && requestId) entryId = entryIdOf(n.model, requestId);
+    // a held change says when its lock ends by the server's own entry once it is in, so its line and every "Wait: …" agree
+    if ('model' in n && held && s.state === 'unconfirmed') {
+      const e = n.model?.show?.applying?.find((x) => x.id === entryId);
+      if (e?.unlock_at != null) text = heldWords(o.what, fmt.clock(e.unlock_at, serverNow()));
+    }
+    if ('model' in n && waiting && ((o.serverConfirms && (entryId || sent)) || (s.state === 'unconfirmed' && entryId))) {
       // the server's verdict on this control's own entry, by its id: confirmed (done), expired (unconfirmed now), else waiting;
       // when it can't be known, a reading taken after the send that shows it (CR7 #4)
-      const v = serverJudged(n.model, entryId, sent);
+      const v = serverJudged(n.model, entryId, sent);     // sent: only a control that says what it sent (o.sent)
       judgedAt = typeof readAt === 'number' ? readAt : now();
       if (v === 'confirmed') return go(ctlStep(s, { type: 'model', confirmed: true, now: now() }));
       if (v === 'expired' && s.state === 'confirming') return go(ctlStep(s, { type: 'expired', now: now() }));
+      // one that may or may not have happened, which the server then gave up on: bitcube didn't show it (said once)
+      if (v === 'expired' && !saidExpired) {
+        saidExpired = true;
+        text = unconfirmedWords(o.what, fmt.clock(sentServer ?? serverNow(), serverNow()), o.unconfirmed ?? 'look at the Now line, or call Gavin');
+        if (host.isConnected) say(text);
+        paint();
+        return;
+      }
     } else if ('model' in n && (s.state === 'confirming' || s.state === 'unconfirmed') && typeof o.confirmed === 'function') {
       let yes = false;
       try { yes = !!o.confirmed(n.model, { sentAt: s.sentAt, answeredAt: s.answeredAt, result }); } catch (e) { console.warn('confirmed', e); }

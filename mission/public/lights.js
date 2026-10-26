@@ -7,7 +7,7 @@
 import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark, plainError, DOC_LINKS, splitHeadline, announce, goto,
   WARN_MS, LOST_MS, POLL_TIMEOUT_MS } from '/ui.js';
 import { fetchTimed } from '/app.js';
-import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, EXPECT_S, ownEntries } from '/model.js';
+import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, EXPECT_S, ownEntries, endedSaid, START_USUAL } from '/model.js';
 import { uprightsFromAtlas } from '/screens.js';
 import { calChecklist, ROOM_CHECK, startWhy, dryWhy, calView, rebuiltFor, runNote, nextLine, captureWhen, driftWords, resultWords,
   mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT, calRead, calLeft, changeSince, stateLevel, applyingNow, stateLive, CAL_COPY, runFine,
@@ -22,8 +22,6 @@ const OLD_RUN_S = 15 * 60;                // a run that ended this long before t
 const STAGE_WORDS = { ...Object.fromEntries(Object.entries(CAL_STAGE_WORDS).map(([k, v]) => [k, v[0].toUpperCase() + v.slice(1)])), done: 'Done' };
 const STAGE_ORDER = ['ropes-capture', 'ropes-decode', 'hub75-capture', 'hub75-locate', 'done'];
 const YEAR_FILE = Object.keys(FILES).find((f) => FILES[f].kind === 'year');
-/** A calibration start's confirming line: the server holds it as 'starting' until the run's first progress shows (about a minute at most). */
-const START_USUAL = 'a run usually shows within a minute';
 const $ = (sel) => document.querySelector(sel);
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s ?? '');
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch { /* fine */ } } };
@@ -122,9 +120,11 @@ function renderStateLine() {
   const nx = lost ? null : nextLine(m, from, splitHeadline);
   put('state-next', nx ? `${nx.text ? `<span>${esc(fmt.nb(nx.text))}</span> ` : ''}<a href="${nx.href}"${nx.href.startsWith('#') ? ' data-jump="calibrate"' : ''}>${esc(nx.link)}</a>` : '');
   // the band's quiet line for a change in flight from another phone or the chat (this page's own is said on its control)
-  const lines = lost ? [] : applyingNow(m, ownChanges());
+  const own = ownChanges(), lines = lost ? [] : applyingNow(m, own);
   paintApplying(lines);
-  sayState(stateLive({ words, lost, stale, applying: lines }));
+  // and, once, how another phone's change ended (R8 #9)
+  const ended = lost || !status.last ? [] : endedSaid(m, { ownIds: own.ids }, status.last.now + status.elapsed());
+  sayState(stateLive({ words, lost, stale, applying: lines, ended }));
 }
 /** Screen readers hear the state line's words when they change, never a ticking time (lights.html #state-live; lights-words
  *  stateLive drops "for about 40 s more" and the changes' m:ss). */
@@ -843,15 +843,18 @@ function paintCal(view, p) {
         <li class="you"><span class="mk" aria-hidden="true">·</span><span>${esc(ROOM_CHECK)}</span></li>`;
     const ul = $('#cal-checks');
     if (ul && S.html['cal-checks'] !== lis) { S.html['cal-checks'] = lis; ul.innerHTML = lis; }
-    setWhy(S.calCtl.start, startWhy(m)); setWhy(S.calCtl.dry, dryWhy(m));
+    setWhy(S.calCtl.start, startWhy(m), m?.controls.calibrate.by); setWhy(S.calCtl.dry, dryWhy(m), m?.controls.calibrate.dry?.by);
   }
   if (view === 'run') { paintRun(p); tickCalibrate(); }
-  if (view === 'done') setWhy(S.calCtl.rebuild, m ? m.controls.rebuild.why : NO_CONTACT);   // confirming ends on the server's verdict (judgeControls)
+  if (view === 'done') setWhy(S.calCtl.rebuild, m ? m.controls.rebuild.why : NO_CONTACT, m?.controls.rebuild.by);   // confirming ends on the server's verdict (judgeControls)
 }
-/** A control's reason, given only when it changed (paint is cheap, but every repaint rewrites its words). */
-function setWhy(c, why) {
+/** A control's reason, given only when it changed (paint is cheap, but every repaint rewrites its words); by: the entry it waits
+ *  for, so a control whose own change holds the lock says it once, never "Wait: …" about itself too (R8 #18). */
+function setWhy(c, why, by = null) {
   if (!c?.button.isConnected) return;
-  if (c._why !== why) { c._why = why; c.update({ why }); }
+  // a sibling's own change on this page (Start's, under Dry run) is said by that control, never as a Wait line here too
+  const own = !!by && S.ownIds.includes(by);
+  if (c._why !== why || c._by !== (by ?? null) || c._own !== own) { c._why = why; c._by = by ?? null; c._own = own; c.update({ why, whyBy: by ?? null, whyOwn: own }); }
 }
 /** Leaving a view: a confirm its controls still hold open (Start, Dry run, Rebuild) is withdrawn, so a press on it can't send
  *  anything for a block that is gone; a control already sending is left to finish. */
@@ -900,9 +903,9 @@ function tickCalibrate() {
 /** POST a start; a refusal's reason without its "calibration can't start" (the control frames it), every field of the original
  *  error kept so the control says the right thing (maybe, serverMaybe, unreadable, notOurs, noAnswer, applyingId: "bitcube
  *  didn't answer in time", never "No answer in a while" after an answer that came at once: R7 #2). */
-function startRun(dry_run) {
+function startRun(dry_run, requestId = null) {
   S.cal.pending = true;
-  return api('/api/control/calibrate', { action: 'start', dry_run: !!dry_run }).catch((e) => {
+  return api('/api/control/calibrate', { action: 'start', dry_run: !!dry_run, ...(requestId ? { request_id: requestId } : {}) }).catch((e) => {
     const reason = String(e.message || e).replace(/:\s*calibration can't start$/i, '');
     const out = new Error(/^[A-Z][a-z]/.test(reason) && !/^TouchDesigner/.test(reason) ? reason[0].toLowerCase() + reason.slice(1) : reason);
     for (const k of Object.keys(e)) out[k] = e[k];
@@ -926,12 +929,12 @@ function mountStart(m) {
   const start = control($('#cal-start'), { label: 'Calibrate the lights', kind: 'primary', why: startWhy(m), siblings: pair,
     before: 'Starts the real run: patterns on the ropes for about five minutes, then a new LED map to look at before anything changes. Asks first.',
     confirm: { title: 'Start calibration?', body: "The ropes go into patterns now, for about five minutes, and the show stops meanwhile. Keep people out of the camera's view.", ok: 'Start', cancel: 'Not now', destructive: true },
-    ...CAL_CTL.start, expectS: EXPECT_S.calibrate, usual: START_USUAL, run: () => startRun(false), done: 'Calibration started', fail: "Calibration didn't start",
+    ...CAL_CTL.start, expectS: EXPECT_S.calibrate, usual: START_USUAL, run: ({ requestId } = {}) => startRun(false, requestId), done: 'Calibration started', fail: "Calibration didn't start",
     noAnswer: 'this block shows the run if it started', unconfirmed: 'this block shows the run if it starts; if none does, try again or call Gavin',
     serverConfirms: true, onSent: afterStart, onFail: () => pollCal() });
   const dry = control($('#cal-dry'), { label: 'Dry run: the lights stay as they are', kind: 'plain', why: dryWhy(m), siblings: pair,
     before: 'Walks the same steps without touching the lights or the camera, about a minute: a check that bitcube can run one.',
-    ...CAL_CTL.dry, expectS: EXPECT_S.calibrate, usual: START_USUAL, run: () => startRun(true), done: 'Dry run started', fail: "The dry run didn't start",
+    ...CAL_CTL.dry, expectS: EXPECT_S.calibrate, usual: START_USUAL, run: ({ requestId } = {}) => startRun(true, requestId), done: 'Dry run started', fail: "The dry run didn't start",
     noAnswer: 'this block shows the run if it started', unconfirmed: 'this block shows the run if it starts; if none does, try again or call Gavin',
     serverConfirms: true, onSent: afterStart, onFail: () => pollCal() });
   pair.push(start.button, dry.button);
@@ -958,7 +961,7 @@ function mountRebuild(p) {
   const c = control($('#cal-rebuild'), { label: "Use this map: rebuild the river's year", kind: 'primary', why: S.m ? S.m.controls.rebuild.why : NO_CONTACT, siblings: keep,
     before: `Bakes the new LED map (${esc(captureWhen(p.result?.capture, p.result?.map).words)}) into the river's year and restarts TouchDesigner on it: about a minute dark. Asks first.`,
     confirm: { title: "Rebuild the river's year with this map?", body: "Bakes the new LED map into the river's year and restarts TouchDesigner on it: about a minute dark.", ok: 'Rebuild', cancel: 'Not now', destructive: true },
-    ...CAL_CTL.rebuild, expectS: EXPECT_S.rebuild, run: () => api('/api/control/rebuild', { file: YEAR_FILE }), serverConfirms: true,
+    ...CAL_CTL.rebuild, expectS: EXPECT_S.rebuild, run: ({ requestId } = {}) => api('/api/control/rebuild', { file: YEAR_FILE, ...(requestId ? { request_id: requestId } : {}) }), serverConfirms: true,
     done: "The river's year uses the new map", fail: "The river's year is unchanged",
     noAnswer: 'this card says "Map in use" if it did',
     unconfirmed: "mission control hasn't confirmed which map the river's year uses; call Gavin",

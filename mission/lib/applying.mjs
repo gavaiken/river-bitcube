@@ -36,7 +36,7 @@
 //                                              the one that sent it) sees the server's verdict, and another phone can say how a
 //                                              change it watched ended (R8 #9)
 // Only the actions in BLOCKS are recorded or checked (a calibration only for its start: Stop must always get through).
-import { TZ, EXPECT_S, APPLY_BLOCKS as BLOCKS, confirmLimitS, changeLabel, FILES, dryStart, waitWords } from '../public/model.js';
+import { TZ, EXPECT_S, APPLY_BLOCKS as BLOCKS, confirmLimitS, changeLabel, FILES, dryStart, waitWords, MAYBE_HOLDS } from '../public/model.js';
 
 /** What an action in flight blocks (mission-ui.md "What blocks what"): one table for the server and the pages, model.js
  *  APPLY_BLOCKS. A boot-file change also keeps a calibration from starting, so the pages grey Calibrate exactly when the server
@@ -51,7 +51,7 @@ export { EXPECT_S };   // one table for the server and the pages: public/model.j
 export const CONFIRMED_BY_READING = ['switch', 'rebuild', 'bootfile', 'lightsroute'];
 /** A maybe (bitcube didn't answer in time) keeps its lock only for a change that could still be under way on bitcube and must not
  *  be run twice; a quick one (ropes, panels, the year's controls) is no lock: the next reading says what happened. */
-export const MAYBE_HOLDS = ['switch', 'rebuild', 'bootfile', 'lightsroute', 'calibrate'];
+export { MAYBE_HOLDS };   // one table for the server and the pages: public/model.js
 /** The actions whose entry names the show file they act on (any other `file` in a request is not ours to repeat). */
 const FILE_ACTIONS = ['switch', 'rebuild', 'bootfile'];
 export const SOURCES = ['mission control', 'studio chat'];

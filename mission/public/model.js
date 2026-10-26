@@ -1128,6 +1128,15 @@ export function serverJudged(m, id, sent = null) {
   if (v) return v;
   return sent && readingShows(m, sent) ? 'confirmed' : null;
 }
+/** A change bitcube didn't answer in time keeps its lock (on the server and every page) only when it could still be under way on
+ *  bitcube and must not be run twice (lib/applying.mjs reads this table). */
+export const MAYBE_HOLDS = ['switch', 'rebuild', 'bootfile', 'lightsroute', 'calibrate'];
+/** This page's own change that bitcube didn't answer in time while its lock holds (R8 #18), said once on its control in place of a
+ *  "Wait: …" line about itself: "The switch to the live river got no answer from bitcube in time: it may or may not have happened;
+ *  the buttons unlock when bitcube shows it, or by 21:07." */
+export function heldWords(what, unlockAt) {
+  return `${cap(String(what ?? 'the change'))} got no answer from bitcube in time: it may or may not have happened; the buttons unlock when bitcube shows it${unlockAt ? `, or by ${unlockAt}` : ''}.`;
+}
 /** A change no reading showed in time, naming what was sent: "The switch to the live river was sent at 21:13, but bitcube doesn't
  *  show it yet: look at the Now line, or call Gavin." (what: the change in team words, or null for "Sent at 21:13, …"). */
 export function unconfirmedWords(what, at, where = 'look at the Now line, or call Gavin') {

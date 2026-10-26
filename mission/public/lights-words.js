@@ -174,11 +174,12 @@ export function calNewer(status, p) {
  *  shared with Status's band region). */
 export { untimed };
 /** What the state line's hidden polite region says: its words without a ticking time, and each change in flight by name, so
- *  a screen reader hears it again only when the state changes, never at every poll of a calibration (R6 #8). */
-export function stateLive({ words, lost = false, stale = false, applying = [] }) {
+ *  a screen reader hears it again only when the state changes, never at every poll of a calibration (R6 #8); then, once, how
+ *  another phone's change ended (ended: model.js endedSaid, R8 #9). */
+export function stateLive({ words, lost = false, stale = false, applying = [], ended = [] }) {
   const w = untimed(words);
   const head = lost ? `No contact with mission control. ${w}` : stale ? `Last seen: ${w}` : w;
-  return [head, ...(lost ? [] : applying.map((a) => a.said ?? `Applying: ${a.label}.`))].join(' ');
+  return [head, ...(lost ? [] : applying.map((a) => a.said ?? `Applying: ${a.label}.`)), ...(lost ? [] : ended)].join(' ');
 }
 
 // ---- the Calibrate block's own words ------------------------------------------------------------------------------

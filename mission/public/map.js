@@ -72,8 +72,13 @@ const notice = contactNotice();
 
 // ---- words -------------------------------------------------------------------------------------------------
 /** The pill on a link: the spec's words ("no answer", "no frames", "no internet", "not driven", "picture frozen",
- *  "sending black", "clips failing", "sync quiet", "not known"), from the link's own item. */
+ *  "sending black", "clips failing", "sync quiet", "not known"), from the link's own item; from a last answer (the item is stale:
+ *  an old full check, contact lost) with "· last answer", as the boxes say it, never "running" as if now (R8 #33). */
 function linkWord(link, it, m) {
+  const w = linkWordNow(link, it, m);
+  return it?.stale && w !== 'not known' ? `${w} · last answer` : w;
+}
+function linkWordNow(link, it, m) {
   if (!it || it.level === 'unknown') return 'not known';
   const L = it.level, s = it.summary ?? '';
   switch (link.item) {
@@ -251,17 +256,29 @@ function drawLinks() {
     }
     const d = vertical ? `M${x1},${y1} C${x1},${(y1 + y2) / 2} ${x2},${(y1 + y2) / 2} ${x2},${y2}` : `M${x1},${y1} C${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}`;
     out += `<path class="lk lv-${lvl} ${stale ? 'stale' : ''}" d="${d}" marker-end="url(#arrow-${lvl})"/>`;
-    pills.push({ lvl, stale, x: (x1 + x2) / 2, y: (y1 + y2) / 2, text: m ? linkWord(l, it, m) : 'not known' });
+    pills.push({ lvl, stale, x: (x1 + x2) / 2, y: (y1 + y2) / 2, text: m ? linkWord(l, it, m) : 'not known', short: m ? linkWordNow(l, it, m) : 'not known' });
   }
-  for (const q of pills) out += `<g class="pill lv-${q.lvl} ${q.stale ? 'stale' : ''}"><rect rx="10"/><text x="${q.x}" y="${q.y}" text-anchor="middle" dominant-baseline="central">${esc(q.text)}</text></g>`;
+  for (const q of pills) out += `<g class="pill lv-${q.lvl} ${q.stale ? 'stale' : ''}"><title>${esc(q.text)}</title><rect rx="10"/><text x="${q.x}" y="${q.y}" text-anchor="middle" dominant-baseline="central">${esc(q.text)}</text></g>`;
   svg.innerHTML = out;
-  for (const g of svg.querySelectorAll('g.pill')) {
+  const gs = [...svg.querySelectorAll('g.pill')];
+  const place = (g) => {
     const t = g.querySelector('text'), r = g.querySelector('rect'), bb = t.getBBox();
     let x = bb.x - 8;
     if (x < 0) { t.setAttribute('x', +t.getAttribute('x') - x); x = 0; }
     if (x + bb.width + 16 > W) { t.setAttribute('x', +t.getAttribute('x') - (x + bb.width + 16 - W)); x = W - bb.width - 16; }
     r.setAttribute('x', x); r.setAttribute('y', bb.y - 4); r.setAttribute('width', bb.width + 16); r.setAttribute('height', bb.height + 8);
-  }
+    return { x, y: bb.y - 4, w: bb.width + 16, h: bb.height + 8 };
+  };
+  const boxes = gs.map(place);
+  // a pill from a last answer says so ("running · last answer", R8 #33) where it fits; pills that would overlap side by side on a
+  // narrow phone keep their short word (grey, its title and the links list still say "last answer")
+  const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  gs.forEach((g, i) => {
+    if (pills[i].text === pills[i].short || !boxes.some((b, j) => j !== i && hit(boxes[i], b))) return;
+    const t = g.querySelector('text');
+    t.textContent = pills[i].short; t.setAttribute('x', pills[i].x);
+    place(g);
+  });
 }
 addEventListener('resize', () => requestAnimationFrame(drawLinks));
 
