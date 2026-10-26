@@ -82,3 +82,12 @@ test('CR9 #3: code that opens a state file to read is a look; only its own open(
     [`node -e "require('fs').writeFileSync('C:/Users/user/River/boot-file.txt', 'x')"`, 'changed the boot file'],
   ]) assert.deepEqual(await stepOf(cmd), [words, true], cmd);
 });
+
+// ---- #14: mysql's password is -p, never its port -P ----------------------------------------------------------------------------
+
+test("CR9 #14: mysql's -P<port> is no password: only a lower-case -p<pw> is masked, here and in probe.ps1", async () => {
+  const { scrubCreds } = await import('../lib/scrub.mjs');
+  for (const line of ['mysql -h db -P3306 -u root river', 'mysqldump -P 3306 river', 'mariadb -P3307 -u x']) assert.equal(scrubCreds(line), line, line);
+  assert.equal(scrubCreds('mysql -u root -P3306 -pNOT-A-REAL-PW river'), 'mysql -u root -P3306 -p*** river');
+  assert.match(src('../../tools/mission/probe.ps1'), /^\$CRED_MYSQL = '[^\n]*\(\?-i:-p\)/m, 'the same case rule on bitcube');
+});

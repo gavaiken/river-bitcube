@@ -56,10 +56,11 @@ const BEARER = String.raw`(\bBearer\s+)([A-Za-z0-9._~+/=-]{12,})`;
 const USER = String.raw`((?:^|[\s"'\\/])(?:curl|wget|https?|xh)(?:\.exe)?\s(?:[^\n;&|]*?[\s"'])?(?:-u|--user)(?:[\s=]+|(?=[^\s=-]))[^\s:"'*]+:)([^\s"']+)`;
 const FLAG = String.raw`((?:^|\s)--?(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|pass|token|secret|api[_-]?key)\s+)(?![-*])([^\s"']+)`;
 const SSHPASS = String.raw`(\bsshpass\s+-p\s*)([^\s"']+)`;
-/** R9 #37: mysql's password attached to -p (with a space it is a database name, and it asks); the Wi-Fi key the router keeps
+/** R9 #37: mysql's password attached to -p (with a space it is a database name, and it asks; -P is its port, so -p is matched by
+ *  its case, CR9 #14); the Wi-Fi key the router keeps
  *  (uci set ….key=, "option key" in its config); "key" as a JSON key (the router's answers carry the Wi-Fi key that way); a bare
  *  Anthropic token (sk-ant-…), wherever it stands. */
-const MYSQL = String.raw`(\b(?:mysql|mysqldump|mysqladmin|mariadb)(?:\.exe)?\s(?:[^\n;&|]*?\s)?-p)([^\s"'-][^\s"']*)`;
+const MYSQL = String.raw`(\b(?:mysql|mysqldump|mysqladmin|mariadb)(?:\.exe)?\s(?:[^\n;&|]*?\s)?(?-i:-p))([^\s"'-][^\s"']*)`;
 const UCI = String.raw`(\buci\s+(?:-\w+\s+)*(?:set|add_list)\s+[^\s=]*\.key=["']?|\boption\s+key\s+["']?)([^\s"']+)`;
 const KEYJSON = String.raw`((?<![\w-])["']key["']\s*:\s*["'])([^"']*)`;
 const SKANT = String.raw`(\bsk-ant-)([A-Za-z0-9_-]{8,})`;
