@@ -1,0 +1,25 @@
+{
+  "shows": [
+    {
+      "file": "river-fixture-fireflies.toe",
+      "title": "Fireflies (test viz)",
+      "kind": "viz",
+      "offered": true,
+      "build": "td/build/build_baseline.py",
+      "calibration": {
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",
+        "screens": "tools/pixelmap/screens-2026-10-23.json"
+      },
+      "description": "A fixture only: points of light drift up the ropes and gather where people stand, and the screens show the river slowed right down.",
+      "inputs": [
+        "river camera (recorded clip as fallback)",
+        "gallery camera"
+      ],
+      "created_by": "will",
+      "created": "2026-10-26",
+      "updated_by": "will",
+      "updated": "2026-10-26",
+      "last_change": "Slower drift; fewer lights at once"
+    }
+  ]
+}

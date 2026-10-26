@@ -404,7 +404,7 @@ test('describeEvent: one plain sentence for every kind, in glossary words', () =
   assert.equal(act('hub75', { brightness: 0.5 }), 'Set the panel brightness to 50 % from mission control');
   assert.equal(act('switch', { file: LIVE }, { source: 'studio chat' }), `Switched TouchDesigner to ${LIVE_LABEL} from the studio chat`);
   assert.equal(act('switch', { file: 'river-oct-30.toe' }), 'Switched TouchDesigner to the show file river-oct-30 from mission control');
-  assert.equal(act('bootfile', { file: 'river-local-oct-22-seasons.toe' }), "Set the boot file to the river's year from mission control");
+  assert.equal(act('bootfile', { file: 'river-local-oct-22-seasons.toe' }), "Set the default to the river's year from mission control");
   assert.equal(act('lightsroute', { route: 'router' }), 'Moved the lighting network to the spare router port from mission control');
   assert.equal(act('lightsroute', { route: 'direct' }), "Moved the lighting network to bitcube's LIGHTS port from mission control");
   assert.equal(act('calibrate', { action: 'start', dry_run: true }), 'Started a dry run from mission control');

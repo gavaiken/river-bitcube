@@ -19,6 +19,17 @@ const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
 const SEASONS_FILE = 'river-local-oct-22-seasons.toe';
 const ONLINE_FILE = 'river-online-oct-23.toe';            // the current online file (23 Oct: four screens, the 23 Oct rope map)
 const SHOW_FILES = [SEASONS_FILE, ONLINE_FILE];             // what probe.ps1 offers; retired files are old-… (D27)
+// A test visualization (kind viz), added on top of the repo's shows.json by _shows.extra.json, which the fixture server and the
+// tests read (model.js registryPaths; test/run.mjs). Never in the real shows.json.
+export const VIZ_FILE = 'river-fixture-fireflies.toe';
+const TEMPLATE_FILE = 'river-baseline-template.toe';
+export const VIZ_ENTRY = {
+  file: VIZ_FILE, title: 'Fireflies (test viz)', kind: 'viz', offered: true, build: 'td/build/build_baseline.py',
+  calibration: { pixelmap: 'tools/pixelmap/pixelmap-2026-10-23.json', screens: 'tools/pixelmap/screens-2026-10-23.json' },
+  description: 'A fixture only: points of light drift up the ropes and gather where people stand, and the screens show the river slowed right down.',
+  inputs: ['river camera (recorded clip as fallback)', 'gallery camera'],
+  created_by: 'will', created: '2026-10-26', updated_by: 'will', updated: '2026-10-26', last_change: 'Slower drift; fewer lights at once',
+};
 const RULES = recorded.seasons.value.rules;            // the defaults, as served by the control page
 const ADDRESSES = recorded.probe.value.addresses;      // bitcube's addresses at Gray Area
 const SCENE_COLORS = recorded.modal.value.scene.colors;
@@ -326,6 +337,23 @@ const SCENARIOS = {
     },
   },
 
+  'viz-running': {
+    title: 'A new visualization is showing (chosen on purpose)',
+    description: `Someone switched TouchDesigner to a show from the registry that is neither the river's year nor the live river: ${VIZ_FILE}, a visualization (kind viz) made from the baseline template. It serves no year page (port 9981 refuses: "fetch failed", devices.seasons_page false, td.seasons null) and drives the ropes and the panels as every show does. The river's year is still the default (the boot file), so a restart brings it back. Everything else is up.`,
+    expect: { headline: 'Everything is up: Fireflies (test viz) is showing; lights and cameras fine', severity: 'ok',
+      items: items({ touchdesigner: 'ok: the test viz at 60 fps', seasons: "ok: not used (this show has no year)", ropes: 'ok: showing the viz, sender open, 140 + 150 W' }),
+      action: "Nothing to do. To go back, press Back to default (the river's year) under What's showing." },
+    build: () => {
+      const st = base();
+      st.seasons = err(SEASONS_AT, 'fetch failed');
+      st.probe.value.show_files = [...SHOW_FILES, TEMPLATE_FILE, VIZ_FILE];
+      st.probe.value.td = td({ file: VIZ_FILE, fps: 60.0, ropes: { active: true, source: 'canvas', box_watts_cap: 600, status: sender({ watts: [140, 150], seq: 92 }) },
+                               seasons: null, river_cam: relay() });
+      st.probe.value.devices.seasons_page = false;
+      return { status: st, ...CAMS_GOOD };
+    },
+  },
+
   'no-internet': {
     title: 'No internet at Gray Area',
     description: 'bitcube can\'t open connections to the internet (1.1.1.1:443 fails) while the install router answers: the router\'s uplink (the venue\'s staff Wi-Fi) has dropped. bitcube\'s existing Tailscale tunnel to the mini still carries traffic, so the mini can still probe it. Dave\'s agent is fine as seen from the mini, but the Modal link on bitcube can\'t upload: its last successful clips (the last INFO lines) are from 02:38, 20 minutes ago, and every clip since has failed with an ERROR line, so the log files are still fresh; the sync has logged nothing since its last update. The river camera (via Starlink and Will\'s tailnet) is unreachable, and the recorder\'s current run can\'t connect. The show is unaffected: the seasons file needs no network.',
@@ -357,5 +385,6 @@ export function buildAll() {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const all = buildAll();
   for (const [name, fixture] of Object.entries(all)) writeFileSync(join(DIR, `${name}.json`), JSON.stringify(fixture, null, 2) + '\n');
+  writeFileSync(join(DIR, '_shows.extra.json'), JSON.stringify({ shows: [VIZ_ENTRY] }, null, 2) + '\n');
   console.log(`wrote ${Object.keys(all).length} fixtures to ${DIR}`);
 }

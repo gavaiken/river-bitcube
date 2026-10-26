@@ -138,7 +138,7 @@ test('R8 #19, #28: Recent says a switch, rebuild, boot-file change or start was 
   h.action({ action: 'bootfile', body: { file: LIVE }, ok: false, maybe: true, source: 'mission control', applying_id: 'ax.4' });
   assert.match(describeEvent(h.recent({ kinds: 'action', limit: 1 })[0]), /no answer in time, waiting for bitcube to show whether it happened$/);   // R9 #21
   h.observe({ ...payload({ t }), confirmed: [{ id: 'ax.4', action: 'bootfile', at: t }] });
-  assert.equal(describeEvent(h.recent({ kinds: 'action', limit: 1 })[0]), "Set the boot file to the live river from mission control (bitcube showed it, though it didn't answer in time)");
+  assert.equal(describeEvent(h.recent({ kinds: 'action', limit: 1 })[0]), "Set the default to the live river from mission control (bitcube showed it, though it didn't answer in time)");
 });
 
 test('R8 #2, #30: over HTTP, a request id rides on the entry and its verdict; the socket\'s status names ids and verdicts', async (t) => {
@@ -212,20 +212,20 @@ test('R8 #17: every "Wait: …" for a change bitcube didn\'t answer in time says
 test('R8 #22: another phone says the same usual time as the sending phone for a calibration start and a boot-file change', () => {
   const c = { action: 'calibrate', label: 'the calibration start', phase: 'confirming', expect_s: 10 };
   assert.equal(entryWords(c, 15), 'Waiting for bitcube to show the calibration start · 0:15 · a run usually shows within a minute');
-  assert.equal(entryWords({ ...c, action: 'bootfile', label: 'the change of the boot file to the live river', expect_s: 15 }, 43), "Waiting for bitcube to show the change of the boot file to the live river · 0:43 · bitcube's full check shows it within a minute");
+  assert.equal(entryWords({ ...c, action: 'bootfile', label: 'the change of the default to the live river', expect_s: 15 }, 43), "Waiting for bitcube to show the change of the default to the live river · 0:43 · bitcube's full check shows it within a minute");
   assert.equal(entryWords({ ...c, phase: 'applying' }, 3), 'Applying: the calibration start · 0:03 · usually a few seconds', 'while its request is in flight, as before');
 });
 
 test('R8 #9: another phone\'s change that ended is said once by the band\'s region: done, or not shown in time; never this phone\'s own', () => {
   const t = T0;
-  const st = payload({ t, extra: { confirmed: [{ id: 'ax.1', action: 'bootfile', label: 'the change of the boot file to the live river', source: 'studio chat', at: t - 5000 },
+  const st = payload({ t, extra: { confirmed: [{ id: 'ax.1', action: 'bootfile', label: 'the change of the default to the live river', source: 'studio chat', at: t - 5000 },
                                                 { id: 'ax.2', action: 'ropes', label: 'the change of the ropes to dark', source: 'mission control', at: t - 4000 }],
                                     expired: [{ id: 'ax.3', action: 'switch', label: 'the switch to the live river', source: 'mission control', at: t - 2000 }] } });
   const m = derive(st, t);
-  assert.deepEqual(endedSaid(m, {}, t), ['Done: the change of the boot file to the live river, from the studio chat.', "The switch to the live river, from another phone: bitcube didn't show it in time."]);   // R10 #9
+  assert.deepEqual(endedSaid(m, {}, t), ['Done: the change of the default to the live river, from the studio chat.', "The switch to the live river, from another phone: bitcube didn't show it in time."]);   // R10 #9
   // R9 #5: how a change ended is said once beside the band's words (model.js endedOnce), never part of them
   assert.doesNotMatch(bandSaid(m, {}), /Done:|didn't show it in time/);
-  assert.deepEqual(endedSaid(m, { ownIds: ['ax.3'] }, t), ['Done: the change of the boot file to the live river, from the studio chat.'], 'this phone\'s own is said on its control');
+  assert.deepEqual(endedSaid(m, { ownIds: ['ax.3'] }, t), ['Done: the change of the default to the live river, from the studio chat.'], 'this phone\'s own is said on its control');
   assert.deepEqual(endedSaid(m, {}, t + ENDED_SAID_S * 1000 + 5000), [], 'said once, then gone');
   assert.deepEqual(endedSaid(m, {}, null), [], 'without the server\'s clock: nothing');
 });

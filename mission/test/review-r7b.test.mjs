@@ -150,7 +150,7 @@ test('R7 #19: one name per change, made in one place and the same on every phone
     ['hub75', { brightness: 0.9 }, 'the change of the panels to 90 %'], ['hub75', { brightness: 0 }, 'the change of the panels to 0 %'],
     ['mode', { mode: 'manual' }, 'the change of the mode to Manual'], ['target', { season: 'summer', intensity: 0.7 }, 'the change of the target to summer, strong'],
     ['rules', { rules: { cycle_seconds: 300 } }, 'the change of 1 rule'], ['rules', { rules: { a: 1, b: 2 } }, 'the change of 2 rules'], ['rules-reset', {}, 'the reset of the rules'],
-    ['bootfile', { file: YEAR }, "the change of the boot file to the river's year"], ['lightsroute', { route: 'router' }, 'the change of the lighting port to the spare router port'],
+    ['bootfile', { file: YEAR }, "the change of the default to the river's year"], ['lightsroute', { route: 'router' }, 'the change of the lighting port to the spare router port'],
     ['switch', { file: LIVE }, 'the switch to the live river'], ['rebuild', { file: YEAR }, "the rebuild of the river's year"],
     ['calibrate', { action: 'start' }, 'the calibration start'], ['calibrate', { action: 'start', dry_run: true }, 'the dry run start'],
   ];
@@ -212,15 +212,15 @@ test('R7 #12, #13: the hidden band region says the headline without its times, a
   const cal = { running: true, stage: 'ropes-capture', mode: 'full', started: t / 1000 - 10, updated: t / 1000, elapsed_s: 10, expected_s: 170, read_age_s: 0 };
   const m = derive(payload({ t, calibration: cal }), t);
   assert.equal(bandSaid(m), 'Attention. Calibrating the lights: the ropes are in patterns.');
-  const boot = { id: 'a.9', action: 'bootfile', label: "the change of the boot file to the river's year", phase: 'applying', source: 'studio chat', started_at: t - 4000, expect_s: 15, blocks: ['bootfile'] };
+  const boot = { id: 'a.9', action: 'bootfile', label: "the change of the default to the river's year", phase: 'applying', source: 'studio chat', started_at: t - 4000, expect_s: 15, blocks: ['bootfile'] };
   const m2 = derive({ ...payload({ t }), applying: [boot] }, t);
-  assert.equal(entrySaid(m2.show.applying[0]), "Applying: the change of the boot file to the river's year, from the studio chat.");
+  assert.equal(entrySaid(m2.show.applying[0]), "Applying: the change of the default to the river's year, from the studio chat.");
   const head = `${{ ok: 'OK', warning: 'Attention', unknown: 'Unknown', down: 'Down' }[m2.overall.level]}. ${m2.overall.headline}.`;
-  assert.equal(bandSaid(m2), `${head} Applying: the change of the boot file to the river's year, from the studio chat.`);
+  assert.equal(bandSaid(m2), `${head} Applying: the change of the default to the river's year, from the studio chat.`);
   // this phone's own change is said on its control only
   assert.equal(bandSaid(m2, { ownIds: ['a.9'] }), head);
-  assert.equal(entrySaid({ ...m2.show.applying[0], phase: 'confirming', source: 'mission control' }), "Waiting for bitcube to show the change of the boot file to the river's year, from another phone.");   // R10 #9
-  assert.equal(entrySaid({ ...m2.show.applying[0], maybe: true }), "No answer in time for the change of the boot file to the river's year: waiting for bitcube to show whether it happened, from the studio chat.");
+  assert.equal(entrySaid({ ...m2.show.applying[0], phase: 'confirming', source: 'mission control' }), "Waiting for bitcube to show the change of the default to the river's year, from another phone.");   // R10 #9
+  assert.equal(entrySaid({ ...m2.show.applying[0], maybe: true }), "No answer in time for the change of the default to the river's year: waiting for bitcube to show whether it happened, from the studio chat.");
 });
 
 test('R7 #29: the Calibrate checklist from an old full check, or with contact lost, is never a green ✓ and says "when last seen"', async () => {

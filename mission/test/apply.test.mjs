@@ -48,8 +48,8 @@ test('what blocks what: a ropes change blocks the ropes, and what would block it
   let m = run([{ id: 'r', action: 'ropes', label: 'a ropes change', started_at: NOW - 1000, expect_s: 10, blocks: ['ropes'] }]);
   for (const k of ['ropes', 'switch', 'calibrate', 'rebuild']) assert.equal(m.controls[k].why, 'wait: a ropes change is being applied', k);
   for (const k of ['hub75', 'mode']) assert.equal(m.controls[k].possible, true, k);
-  m = run([{ id: 'b', action: 'bootfile', label: 'the change of the boot file', started_at: NOW - 1000, expect_s: 30 }]);
-  for (const k of ['switch', 'rebuild', 'bootfile', 'calibrate']) assert.equal(m.controls[k].why, 'wait: the change of the boot file is being applied', k);
+  m = run([{ id: 'b', action: 'bootfile', label: 'the change of the default', started_at: NOW - 1000, expect_s: 30 }]);
+  for (const k of ['switch', 'rebuild', 'bootfile', 'calibrate']) assert.equal(m.controls[k].why, 'wait: the change of the default is being applied', k);
   for (const k of ['ropes', 'hub75', 'mode', 'rules']) assert.equal(m.controls[k].possible, true, k);
   m = run([{ id: 'l', action: 'lightsroute', started_at: NOW - 1000, expect_s: 30 }]);
   for (const k of ['ropes', 'hub75', 'lightsroute', 'calibrate', 'switch', 'rebuild']) assert.equal(m.controls[k].why, 'wait: the change of the lighting port is being applied', k);
@@ -292,8 +292,8 @@ test('R6 #1 #12 #17: one set of words on every page: a short change past its usu
 });
 
 test('R6 #16 #4: an unconfirmed change names what was sent; a withdrawn confirm is said in the past tense', () => {
-  assert.equal(unconfirmedWords('the change of the boot file to the live river', '21:13', 'look at the Now line, or call Gavin'),
-    "The change of the boot file to the live river was sent at 21:13, but bitcube didn't show it in time: look at the Now line, or call Gavin.");
+  assert.equal(unconfirmedWords('the change of the default to the live river', '21:13', 'look at the Now line, or call Gavin'),
+    "The change of the default to the live river was sent at 21:13, but bitcube didn't show it in time: look at the Now line, or call Gavin.");
   assert.equal(unconfirmedWords(null, '21:13', 'look at the Now line, or call Gavin'), "Sent at 21:13, but bitcube didn't show it in time: look at the Now line, or call Gavin.");
   assert.equal(notSentWords("wait: the restart on the river's year is being applied", '21:17'), "Not sent at 21:17: the restart on the river's year was being applied. Press again when it is done.");
   assert.equal(notSentWords('bitcube is offline', '21:04'), 'Not sent at 21:04: bitcube is offline.');

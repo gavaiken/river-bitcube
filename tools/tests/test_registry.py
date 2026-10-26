@@ -59,11 +59,9 @@ def test_require_build_refuses_a_file_the_script_does_not_build(tmp_path):
         registry.require_build('river-x.toe', 'td/build/build_y.py', repo)
 
 
-def test_offered_and_bootable(tmp_path):
-    repo = make_repo(tmp_path, [show('a.toe', offered=True, can_boot=True), show('b.toe', offered=True, can_boot=False),
-                                show('c.toe', offered=False, can_boot=True)])
+def test_offered(tmp_path):
+    repo = make_repo(tmp_path, [show('a.toe', offered=True), show('b.toe', offered=True), show('c.toe', offered=False)])
     assert registry.offered(repo) == ['a.toe', 'b.toe']
-    assert registry.bootable(repo) == ['a.toe']
 
 
 def test_every_show_in_the_real_registry_resolves_its_pins():

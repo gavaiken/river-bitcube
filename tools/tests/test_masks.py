@@ -64,7 +64,7 @@ def test_probe_masks_log_lines_before_it_cuts_them():
 
 def test_probe_reports_the_boot_file_start_river_would_open():
     """boot_file is the show file Start-River.cmd opens, never 'Start-River.cmd default' (review round 5, finding 19): both work it
-    out with the same code, tools/shows.ps1 (boot-file.txt's offered, can_boot show, else shows.json's boot_default)."""
+    out with the same code, tools/shows.ps1 (boot-file.txt's listed show, else shows.json's boot_default)."""
     src = PROBE.read_text(encoding='utf-8')
     cmd = (TOOLS.parent / 'Start-River.cmd').read_text(encoding='utf-8')
     shows = (TOOLS / 'shows.ps1').read_text(encoding='utf-8')

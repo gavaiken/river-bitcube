@@ -80,7 +80,7 @@ test('R9 #5: Lights\' state line and the chat bar stand for their words and say 
 
 test('R9 #6, #31: a phone\'s earlier change stays its own after the same control is used again: by its id and by the request id it sent', () => {
   const t = T0 + 10_000;
-  const boot = (id, rid, file, at) => ({ id, request_id: rid, action: 'bootfile', label: `the change of the boot file to ${file === LIVE ? 'the live river' : "the river's year"}`, file, source: 'mission control', at });
+  const boot = (id, rid, file, at) => ({ id, request_id: rid, action: 'bootfile', label: `the change of the default to ${file === LIVE ? 'the live river' : "the river's year"}`, file, source: 'mission control', at });
   const m = derive(payload({ t, applying: [{ ...boot('b.2', 'r2', YEAR), phase: 'applying', started_at: t - 1000, expect_s: 15 }],
     extra: { confirmed: [boot('b.1', 'r1', LIVE, t - 3000), boot('b.9', 'r9', LIVE, t - 2000)] } }), t);
   const mem = ownMemory();
@@ -92,7 +92,7 @@ test('R9 #6, #31: a phone\'s earlier change stays its own after the same control
   assert.ok(!own.ownIds.includes('b.9'), 'another phone\'s is not');
   const say = endedOnce();
   say(derive(payload({ t: T0 }), T0), {}, T0);
-  assert.deepEqual(say(m, own, t), ['Done: the change of the boot file to the live river, from another phone.'], 'only the other phone\'s ending is said');
+  assert.deepEqual(say(m, own, t), ['Done: the change of the default to the live river, from another phone.'], 'only the other phone\'s ending is said');
   for (let i = 0; i < 30; i++) mem.request(`x${i}`);
   assert.equal(mem.mine.requestIds.length, 20, 'the newest 20 are kept');
   assert.match(page('status.js'), /M\.ownEntries\(model, [^\n]*mine\.mine\)/);
@@ -331,12 +331,12 @@ test('R9 #20: in Recent the verdict is its own line at its own time, after "Aske
   assert.deepEqual(lines, ["bitcube showed the restart on the river's year", 'Turned the ropes dark from mission control', "Asked to restart TouchDesigner on the river's year from mission control"],
     'newest first: the verdict above the request; a quick change\'s verdict is no line of its own');
   t += 1000;
-  h.action({ action: 'bootfile', body: { file: LIVE }, ok: true, source: 'studio chat', label: 'the change of the boot file to the live river', applying_id: 'ax.3' });
+  h.action({ action: 'bootfile', body: { file: LIVE }, ok: true, source: 'studio chat', label: 'the change of the default to the live river', applying_id: 'ax.3' });
   t += 200_000;
   h.judge({ expired: [{ id: 'ax.3' }] }, t);
-  assert.deepEqual(feed(h.recent({ limit: 2 })).map((e) => e.words), ["bitcube didn't show the change of the boot file to the live river in time", 'Asked to set the boot file to the live river from the studio chat']);
+  assert.deepEqual(feed(h.recent({ limit: 2 })).map((e) => e.words), ["bitcube didn't show the change of the default to the live river in time", 'Asked to set the default to the live river from the studio chat']);
   // the last action (Last done, the socket) keeps one line with its verdict in it
-  assert.equal(describeEvent(h.summary(t).last_action), "Asked to set the boot file to the live river from the studio chat, but bitcube didn't show it in time");
+  assert.equal(describeEvent(h.summary(t).last_action), "Asked to set the default to the live river from the studio chat, but bitcube didn't show it in time");
   assert.equal(describeEvent(h.recent({ kinds: 'action', limit: 3 })[2]), "Restarted TouchDesigner on the river's year from mission control", 'asked for actions alone: folded, as before');
 });
 
@@ -354,7 +354,7 @@ test('R9 #21: a change bitcube didn\'t answer in time reads "Asked to …" until
   h.action({ action: 'bootfile', body: { file: LIVE }, ok: false, maybe: true, source: 'mission control', applying_id: 'ax.2' });
   t += 200_000;
   h.judge({ expired: [{ id: 'ax.2' }] }, t);
-  assert.equal(one(), "Asked to set the boot file to the live river from mission control: no answer in time, and bitcube didn't show it");
+  assert.equal(one(), "Asked to set the default to the live river from mission control: no answer in time, and bitcube didn't show it");
   // one that can never get a verdict (no entry): sent, and nobody knows
   assert.equal(describeEvent(h.action({ action: 'switch', body: { file: LIVE }, ok: false, maybe: true })), 'Sent the switch to the live river from mission control: no answer in time, so it may or may not have happened');
 });

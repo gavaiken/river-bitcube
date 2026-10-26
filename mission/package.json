@@ -5,7 +5,7 @@
   "description": "Mission control and the studio chat for A River Becoming (docs/mission-plan.md).",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test test/"
+    "test": "node test/run.mjs"
   },
   "engines": { "node": ">=22" },
   "dependencies": {

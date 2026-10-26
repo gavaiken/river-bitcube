@@ -60,6 +60,7 @@ mode (`MISSION_FIXTURES=<dir>`) serves `status`, `cameras` and `camera_age_s`; r
 | `nothing-known-yet` | the server just started: `status` holds only `bitcube`; no stills | unknown: checking |
 | `lights-not-connected` | the real 03:00 payload nearly verbatim: boxes unreachable, sender `OSError 10049` and retrying, `displays ["\u0000"]`, river cam down, manual summer 0.39, Modal scene from last night, recorder `"Error ope"` | down: lights not connected (expected before the lift) |
 | `seasons-not-running` | TD runs `river-online-oct-20.toe`: seasons `fetch failed` (connection refused), `td.seasons` null, live river relay fresh, boot file still the seasons file | warning: the year and its controls unavailable |
+| `viz-running` | TD runs `river-fixture-fireflies.toe`, a test visualization (kind viz) that only `_shows.extra.json` adds to the show registry (`npm test` and fixture mode read it; never in the real `shows.json`); no year page; the default is still the river's year | ok: a listed show, chosen on purpose; Back to default offered |
 | `no-internet` | `devices.internet` false, router true; Modal fine from the mini; uploads failing since 02:38; river cam unreachable | warning: show runs, cameras can't reach Dave |
 
 ## How to use `expect`

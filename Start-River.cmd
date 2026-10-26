@@ -5,8 +5,8 @@ rem Opens a show file in this folder with TouchDesigner (2025.33230 installed at
 rem opens TouchDesigner empty.
 set "TD=C:\Program Files\Derivative\TouchDesigner\bin\TouchDesigner.exe"
 rem Which file: tools\shows.ps1 reads the show registry (shows.json, docs\shows.md). With an argument (a switch), that file
-rem if the registry offers it. Otherwise the boot file: ..\boot-file.txt when it names an offered, can_boot show (mission
-rem control sets it), else shows.json's boot_default. A switch never changes the boot file.
+rem if the registry offers it. Otherwise the boot file: ..\boot-file.txt when it names a listed show that exists (mission
+rem control's "Set as default" writes it), else shows.json's boot_default. A switch never changes the boot file.
 set "TOE="
 set "OPENARG="
 if not "%~1"=="" set "OPENARG=-Open %~1"

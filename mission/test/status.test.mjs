@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { derive, ctlInit, ctlStep, BOOT_USUAL } from '../public/model.js';
-import { ruleLabel, ruleRange, ruleError, rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows, bootWords, controlLine,
+import { ruleLabel, ruleRange, ruleError, rulesForm, targetForm, modeEffect, switchWords, defaultWords, showCardHTML, firstSentence, kindWords, switchShows, bootShows, bootWords, controlLine,
   failText, notSentText, applyingLine, ropesTile, panelsTile, stillDue, rowFromHash, ROPES_STATE, PANELS_STATE } from '../public/status-words.js';
 
 const fx = (n) => JSON.parse(readFileSync(new URL(`./fixtures/${n}.json`, import.meta.url), 'utf8'));
@@ -70,22 +70,27 @@ test("the mode's effect line takes Automatic's pace from the year-length rule", 
   assert.match(modeEffect(null), /^Automatic turns the year by itself\. /);
 });
 
-test('the switch says it also changes the boot file, in the confirm and the result, only when it does (R5 #36)', () => {
+test('a switch never changes the default (the boot file), and says so; Set as default is its own question', () => {
   const YEAR = 'river-local-oct-22-seasons.toe', LIVE = 'river-online-oct-23.toe';
   const yearBoot = { name: YEAR, label: "the river's year", default: true };
   let w = switchWords(LIVE, YEAR, yearBoot);
   assert.equal(w.title, 'Switch to the live river now?');
   assert.equal(w.ok, 'Switch to the live river');
   assert.match(w.body, /the lights go dark for about a minute/);
-  assert.match(w.body, /The live river also opens at boot from now on/);
-  assert.equal(w.done, 'Now showing the live river; it also opens at boot from now on');
+  assert.match(w.body, /The default stays the river's year: it opens when bitcube restarts\./);
+  assert.doesNotMatch(w.body, /also opens at boot|boot file changes/);
+  assert.equal(w.done, 'Now showing the live river');
   assert.equal(w.what, 'the switch to the live river');
-  // a restart on the boot file changes nothing at boot: it doesn't say so
+  assert.equal('setsBoot' in w, false);
+  // a switch back to the default: nothing to say about the default
   w = switchWords(YEAR, YEAR, yearBoot);
-  assert.deepEqual([w.verb, w.setsBoot, w.done, w.what], ['Restart on', false, "Now showing the river's year", "the restart on the river's year"]);
-  assert.doesNotMatch(w.body, /boot/);
-  // the boot file not known: it says so (probe.ps1 writes it either way)
-  assert.equal(switchWords(YEAR, LIVE, null).setsBoot, true);
+  assert.deepEqual([w.verb, w.done, w.what], ['Restart on', "Now showing the river's year", "the restart on the river's year"]);
+  assert.doesNotMatch(w.body, /default|boot/);
+  assert.doesNotMatch(switchWords(YEAR, LIVE, null).body, /default|boot/, 'the default not known: nothing said about it');
+  // Set as default: its own confirm, in "default" words
+  const d = defaultWords(LIVE);
+  assert.deepEqual([d.title, d.body, d.ok, d.what, d.done], ['Make the live river the default?', "The live river will open when bitcube restarts. What's showing now doesn't change.",
+    'Set as default', 'the change of the default to the live river', 'Now the live river is the default: it opens when bitcube restarts']);
   const m = run(fx('all-good'));
   assert.equal(switchShows(m, YEAR), true);
   assert.equal(switchShows(m, LIVE), false);

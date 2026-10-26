@@ -82,7 +82,3 @@ def offered(repo=None):
     """Show files mission control may switch to, in registry order."""
     return [s['file'] for s in load(repo).get('shows', []) if s.get('offered')]
 
-
-def bootable(repo=None):
-    """Show files that may be the boot file: offered and can_boot."""
-    return [s['file'] for s in load(repo).get('shows', []) if s.get('offered') and s.get('can_boot')]

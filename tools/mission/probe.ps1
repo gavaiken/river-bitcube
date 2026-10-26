@@ -1,8 +1,8 @@
 # Mission control's status probe for bitcube (docs/mission-plan.md). Read-only unless -Action is given.
 # Prints ONE line of JSON. Run from the Mac mini as:  ssh bitcube powershell -NoProfile -ExecutionPolicy Bypass
 #   -File C:\Users\user\River\river-bitcube\tools\mission\probe.ps1 [-Action ropes -Dark] [-Action hub75 -Brightness 0.6]
-#   [-Action bootfile -BootFile river-local-oct-22-seasons.toe]   which show file opens at boot (offered, can_boot shows only:
-#                                                                shows.json; writes River\boot-file.txt)
+#   [-Action bootfile -BootFile river-local-oct-22-seasons.toe]   which show file opens at boot ("Set as default": any offered
+#                                                                show in shows.json; writes River\boot-file.txt)
 #   [-Action switch -BootFile river-online-oct-23.toe]            restart TouchDesigner on any offered show now (~1 min dark);
 #                                                                the boot file stays as it is
 #   [-Action lightsroute -LightsRoute direct|router]             which port carries the lighting network (D25, S31)
@@ -67,14 +67,12 @@ function Mask-Creds([string]$s) {
     return ($s -replace $CRED_TOKEN, '$1***')
 }
 
-# The show registry (shows.json, docs/shows.md; tools/shows.ps1): what may be switched to (offered), what may boot (can_boot),
+# The show registry (shows.json, docs/shows.md; tools/shows.ps1): what may be switched to or set as default (offered),
 # and what a rebuild may bake (role year: the river's year, through its own build script). Retired files aren't listed.
 . (Join-Path $repo 'tools\shows.ps1')
 $reg = Get-ShowRegistry
 if (-not $reg) { $out.registry_error = 'shows.json is missing or unreadable' }
 $out.show_files = @(Get-OfferedShows $reg)                       # offered and present: mission control's switch list
-$BOOTABLE = @(Get-BootableShows $reg)                            # offered, can_boot and present: the boot-file choices
-$out.bootable_files = $BOOTABLE
 $REBUILD = @($(if ($reg) { $reg.shows | Where-Object { $_.role -eq 'year' -and $_.build -and ($out.show_files -contains $_.file) } }))
 $REBUILD_FILES = @($REBUILD | ForEach-Object { [string]$_.file })
 $tdPs1 = Join-Path $repo 'tools\td.ps1'
@@ -126,9 +124,8 @@ if ($Action -eq 'rebuild') {
     $Action = $(if ($out.saved) { 'switch' } else { 'status' })     # saved: restart on the file, the existing switch path
 }
 if ($Action -in 'bootfile', 'switch') {
-    # A switch opens the file now and leaves the boot file alone; only bootfile writes boot-file.txt, and only for a can_boot show.
+    # A switch opens the file now and leaves the boot file alone; only bootfile ("Set as default") writes boot-file.txt.
     if ($out.show_files -notcontains $BootFile) { $out.ok = $false; $out.error = "no show file $BootFile on bitcube"; $Action = 'status' }
-    elseif ($Action -eq 'bootfile' -and $BOOTABLE -notcontains $BootFile) { $out.ok = $false; $out.error = "$BootFile can't be the boot file (can_boot is false in shows.json)"; $Action = 'status' }
     elseif ($Action -eq 'bootfile') { Set-Content -Path (Join-Path $river 'boot-file.txt') -Value $BootFile -Encoding ascii }
 }
 if ($Action -eq 'switch') {
@@ -171,7 +168,7 @@ $out.td = $td
 if ($Action -in 'ropes', 'hub75', 'test' -and $td -and $td.ok -eq $false) { $out.ok = $false; $out.error = "$($td.error)" }
 
 # Boot file: the show file Start-River.cmd opens at the next start, worked out as it does (tools/shows.ps1 Resolve-BootFile):
-# boot-file.txt's file when it names an offered, can_boot show that exists (mission control sets it; the last such line wins),
+# boot-file.txt's file when it names a listed show that exists (mission control sets it; the last such line wins),
 # else shows.json's boot_default. boot_file_chosen says whether boot-file.txt chose it; boot_file is null when there is no
 # show file at all (TouchDesigner would open empty).
 $bootPick = Resolve-BootFile $reg

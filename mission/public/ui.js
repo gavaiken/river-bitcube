@@ -510,7 +510,7 @@ export function setLive(region, words, { once = [] } = {}) {
   const queued = speech.queue.find((x) => x.region === region);
   if (!head && !lines.length && !extra.length) { speech.queue = speech.queue.filter((x) => x !== queued); if (region.textContent) region.textContent = ''; return; }   // emptied silently
   const news = liveNews(prev, { head, lines });
-  // how a change ended is said before what is new: "Done: the change of the boot file to the live river. Applying: … the river's
+  // how a change ended is said before what is new: "Done: the change of the default to the live river. Applying: … the river's
   // year." never the new one first, which makes the ended one sound like it (R10 #21)
   if (queued) {
     // not said yet: what it says once (and the new once lines), then what of it still stands, then what is new

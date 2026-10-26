@@ -47,8 +47,9 @@ def test_files_build_scripts_and_pins_must_exist_but_an_unoffered_file_may_be_mi
     assert problems(lambda r: r['shows'][0]['calibration'].update(screens=None)) == [], 'screens may be null'
 
 
-def test_boot_default_must_be_an_offered_can_boot_show():
-    assert any('boot_default' in p for p in problems(lambda r: r.update(boot_default='river-baseline-template.toe')))
+def test_boot_default_must_be_an_offered_show():
+    assert problems(lambda r: r.update(boot_default='river-baseline-template.toe')) == [], 'any offered show may be the default'
+    assert any('boot_default' in p for p in problems(lambda r: r['shows'][0].update(offered=False)))
     assert any('boot_default' in p for p in problems(lambda r: r.update(boot_default='nope.toe')))
 
 

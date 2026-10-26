@@ -41,10 +41,11 @@ export function calBlocked(action, cal) {
   if (!CAL_BLOCKED.includes(action) || cal?.running !== true || cal.stale === true || calNoLights(cal)) return null;   // model.js: one rule
   return Object.assign(new Error(CAL_RUNNING), { status: 409 });
 }
-// Show files, from the show registry (shows.json, docs/shows.md, read by model.js): a switch may open any offered show; only an
-// offered show with can_boot may be the boot file (a switch never changes the boot file). Retired files (old-…, D27) aren't listed.
+// Show files, from the show registry (shows.json, docs/shows.md, read by model.js): a switch may open any offered show, and any
+// offered show may be set as the default (the boot file: its own action; a switch never changes it). Retired files (old-…, D27)
+// aren't listed.
 export const SWITCH_FILES = Object.keys(FILES).filter((f) => FILES[f].offered);
-export const BOOT_FILES = Object.keys(FILES).filter((f) => FILES[f].can_boot);
+export const BOOT_FILES = SWITCH_FILES;
 // The only show file a rebuild may bake its pinned LED map into: the river's year (shows.json role year; its build script refuses any other).
 export const REBUILD_FILES = SWITCH_FILES.filter((f) => FILES[f].kind === 'year');
 export const MODES = ['automatic', 'dynamic', 'manual'];
@@ -465,7 +466,6 @@ export function planControl(action, body = {}) {
     }
     case 'bootfile': case 'switch': {
       if (!SWITCH_FILES.includes(body.file)) throw bad('unknown show file');
-      if (action === 'bootfile' && !BOOT_FILES.includes(body.file)) throw bad(`${FILES[body.file].label} can't be the boot file (shows.json: can_boot is false)`);
       // a registry name is checked above; the pattern keeps anything odd off probe.ps1's command line all the same
       if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.toe$/.test(body.file)) throw bad('unknown show file');
       return { kind: 'probe', args: `-Action ${action} -BootFile ${body.file}` };

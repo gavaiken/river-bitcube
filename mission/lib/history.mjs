@@ -622,7 +622,7 @@ export function actionPhrase(ev) {
     // a switch to the file TouchDesigner was running is the button's "Restart on …" (its label says so, model.js changeLabel)
     case 'switch': return /^the restart on /.test(String(ev.label ?? '')) ? ['Restarted', 'restart', `TouchDesigner on ${fileLabel(b.file)}`]
       : ['Switched', 'switch', `TouchDesigner to ${fileLabel(b.file)}`];
-    case 'bootfile': return ['Set', 'set', `the boot file to ${fileLabel(b.file)}`];
+    case 'bootfile': return ['Set', 'set', `the default to ${fileLabel(b.file)}`];
     case 'lightsroute': return ['Moved', 'move', `the lighting network to ${b.route === 'router' ? 'the spare router port' : "bitcube's LIGHTS port"}`];
     case 'check': return ['Ran', 'run', 'the full check of bitcube'];
     case 'rebuild': return ['Rebuilt', 'rebuild', `${fileLabel(b.file)} with the new LED map`];

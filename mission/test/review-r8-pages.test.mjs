@@ -48,7 +48,7 @@ test('R8 #20: no change\'s name reads as a clause ("the ropes change to dark is 
   assert.equal(changeLabel('mode', { mode: 'manual' }), 'the change of the mode to Manual');
   assert.equal(changeLabel('target', { season: 'summer', intensity: 0.7 }), 'the change of the target to summer, strong');
   assert.equal(changeLabel('rules-reset'), 'the reset of the rules');
-  assert.equal(changeLabel('bootfile', { file: LIVE }), 'the change of the boot file to the live river');
+  assert.equal(changeLabel('bootfile', { file: LIVE }), 'the change of the default to the live river');
   assert.equal(changeLabel('calibrate', { action: 'start' }), 'the calibration start');
   assert.equal(changeLabel('calibrate', { action: 'start', dry_run: true }), 'the dry run start');
   assert.equal(waitWords(changeLabel('ropes', { dark: true })), 'wait: the change of the ropes to dark is being applied');

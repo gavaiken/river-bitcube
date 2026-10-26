@@ -186,8 +186,8 @@ test('what blocks what: a boot-file change, a lighting port change, and two phon
   const m = new Mission({ seasonsUrl: 'http://127.0.0.1:9', probe: async (_h, args) => { const a = /-Action (\w+)/.exec(args ?? '')?.[1]; if (a && gates[a]) return gates[a].gate; return { ok: true, td: { ok: true } }; } });
   gates.bootfile = gated();
   const bf = m.control('bootfile', { file: LIVE });
-  assert.deepEqual(m.snapshot().applying.map((e) => [e.label, e.blocks]), [['the change of the boot file to the live river', ['switch', 'rebuild', 'bootfile', 'calibrate']]]);
-  for (const [a, b] of [['switch', { file: LIVE }], ['rebuild', { file: YEAR }], ['bootfile', { file: YEAR }]]) await assert.rejects(m.control(a, b), (e) => e.status === 409 && /^wait: the change of the boot file to the live river is being applied/.test(e.message), a);
+  assert.deepEqual(m.snapshot().applying.map((e) => [e.label, e.blocks]), [['the change of the default to the live river', ['switch', 'rebuild', 'bootfile', 'calibrate']]]);
+  for (const [a, b] of [['switch', { file: LIVE }], ['rebuild', { file: YEAR }], ['bootfile', { file: YEAR }]]) await assert.rejects(m.control(a, b), (e) => e.status === 409 && /^wait: the change of the default to the live river is being applied/.test(e.message), a);
   assert.equal((await m.control('ropes', { dark: false })).ok, true, 'the ropes are not held up by it');
   gates.bootfile.release({ ok: true, boot_file: LIVE }); await bf;     // as probe.ps1, the answer reads the boot file back (R8 #32)
   gates.lightsroute = gated();

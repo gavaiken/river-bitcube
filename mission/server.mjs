@@ -76,7 +76,7 @@ import { describeTool } from './lib/steps.mjs';
 import { SelfUpdate } from './lib/update.mjs';
 import { Zipper } from './lib/zip.mjs';
 import { scrubCreds } from './lib/scrub.mjs';
-import { CONTACTS, derive, calDryRun } from './public/model.js';
+import { CONTACTS, derive, calDryRun, REGISTRY } from './public/model.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const env = process.env;
@@ -107,7 +107,6 @@ const BOOT_TREE = missionTree();
 // The show registry (shows.json at the repo root) is mission control's input too (model.js reads it at load): a change there
 // restarts it as new mission/ code does.
 const codeTree = () => { const t = missionTree(); return t && `${t} ${git('rev-parse', 'HEAD:shows.json') ?? '-'}`; };
-const SHOWS_FILE = env.MISSION_SHOWS_FILE || join(HERE, '..', 'shows.json');
 // GET /version (no login): so a push can be confirmed from outside once the live site restarts on it. Only this leaves the box.
 const COMMIT = git('rev-parse', 'HEAD');
 const VERSION = { commit: COMMIT, short: COMMIT && COMMIT.slice(0, 7), mission_tree: BOOT_TREE, started: new Date().toISOString(),
@@ -434,7 +433,8 @@ const server = createServer(async (req, res) => {
     }
     if (path === '/healthz') return send(res, 200, { ok: true });
     // the show registry, for model.js in the pages (public, as in the repo: no data beyond what GitHub shows)
-    if (path === '/shows.json' && req.method === 'GET') return existsSync(SHOWS_FILE) ? sendFile(req, res, SHOWS_FILE, 'application/json') : send(res, 404, { error: 'no shows.json' });
+    // (what model.js read at start: shows.json, plus a fixture-mode test viz; a change to shows.json restarts the server)
+    if (path === '/shows.json' && req.method === 'GET') return REGISTRY ? send(res, 200, REGISTRY, 'application/json', { 'cache-control': 'no-cache' }) : send(res, 404, { error: 'no shows.json' });
     if (path === '/version') return send(res, 200, VERSION);
 
     const cookies = parseCookies(req.headers.cookie);

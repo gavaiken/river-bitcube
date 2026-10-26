@@ -296,7 +296,7 @@ test('CR9 #9, #19: a history read back from its file indexes its actions and ver
   a.judge({ expired: [{ id: 'c.1' }] }, t);
   const b = new History({ file, now: () => t + 1000 });
   assert.deepEqual(feed(b.recent()).filter((l) => l.applying_id === 'c.1').map((l) => l.words),
-    ["bitcube didn't show the change of the boot file to the live river in time", 'Asked to set the boot file to the live river from the studio chat']);
+    ["bitcube didn't show the change of the default to the live river in time", 'Asked to set the default to the live river from the studio chat']);
 });
 
 // ---- #10: a press the server's verdict ends while its POST is on the way still settles its page ---------------------------------

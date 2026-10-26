@@ -8,7 +8,6 @@
       "role": "year",
       "kind": "show",
       "offered": true,
-      "can_boot": true,
       "build": "td/build/build_seasons_local.py",
       "calibration": {
         "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",
@@ -32,7 +31,6 @@
       "role": "live",
       "kind": "show",
       "offered": true,
-      "can_boot": true,
       "build": "td/build/build_river_local.py",
       "calibration": {
         "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",
@@ -55,7 +53,6 @@
       "title": "Baseline template",
       "kind": "template",
       "offered": true,
-      "can_boot": false,
       "build": "td/build/build_baseline.py",
       "calibration": {
         "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",

@@ -1,9 +1,9 @@
 // The Status page's words and form rules, pure (no DOM), so node's tests check them (test/status.test.mjs): the forms
-// (Rules, Target), what a control's status line says in each state, the show-file switch's words (it also sets the boot
-// file: probe.ps1 writes boot-file.txt for a switch), the tiles' state words, the band's line for a change in flight from
+// (Rules, Target), what a control's status line says in each state, the show-file switch's and Set as default's words, the
+// preview card of a show (shows.json), the tiles' state words, the band's line for a change in flight from
 // another phone, and when the room's still is due again. status.js lays them out. Relative imports: in the browser these are
 // the same /model.js and /app.js every page loads.
-import { seasonPace, FILES, applyingWords, confirmingWords, entryWords, failWords, notSentWords, LONG_CHANGE_S, changeLabel, awaited, NOT_RECEIVED, elapsedClock } from './model.js';
+import { seasonPace, FILES, showCard, applyingWords, confirmingWords, entryWords, failWords, notSentWords, LONG_CHANGE_S, changeLabel, awaited, NOT_RECEIVED, elapsedClock } from './model.js';
 import { plainError } from './app.js';
 
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s ?? '');
@@ -80,28 +80,67 @@ export function modeEffect(rules) {
   return `Automatic turns the year by itself${pace ? `, ${pace}` : ''}. Dynamic lets the people in the room steer it. Manual takes over by hand: the river travels forward to your target.`;
 }
 
-// ---- the show file: a switch also sets the boot file (probe.ps1 writes boot-file.txt for 'switch') -----------------------
-/** Everything the show-file switch says, for a press on `file` while `running` runs and `boot` (model show.boot_file) opens at
- *  boot: the button's own verb, the confirm, the applying words and the result. It says the boot file changes only when it
- *  does (the boot file is another file, or not known). */
+// ---- the show file: a switch never changes the default (the boot file); Set as default is its own action ---------------
+/** Everything the show-file switch says, for a press on `file` while `running` runs and `boot` (model show.boot_file) is the
+ *  default (what opens when bitcube restarts): the button's own verb, the confirm, the applying words and the result. A switch
+ *  leaves the default alone (probe.ps1 writes boot-file.txt only for Set as default), and says so. */
 export function switchWords(file, running, boot) {
   const label = fileLabel(file), restart = file === running;
   const verb = restart ? 'Restart on' : 'Switch to';
-  const setsBoot = boot?.name !== file;
+  const stays = boot?.name && boot.name !== file ? ` The default stays ${boot.label}: it opens when bitcube restarts.` : '';
   return {
-    verb, setsBoot,
+    verb,
     title: `${verb} ${label} now?`,
-    body: `Restarts TouchDesigner on ${label}: the lights go dark for about a minute, and unsaved changes in TouchDesigner are lost.${setsBoot ? ` ${cap(label)} also opens at boot from now on (the boot file changes too).` : ''}`,
+    body: `Restarts TouchDesigner on ${label}: the lights go dark for about a minute, and unsaved changes in TouchDesigner are lost.${stays}`,
     ok: `${verb} ${label}`,
     what: restart ? `the restart on ${label}` : `the switch to ${label}`,
-    done: `Now showing ${label}${setsBoot ? '; it also opens at boot from now on' : ''}`,
+    done: `Now showing ${label}`,
   };
+}
+/** Set as default (the boot file): its confirm, applying words and result, by the show's words in a sentence (its label). */
+export function defaultWords(file) {
+  const label = fileLabel(file);
+  return {
+    title: `Make ${label} the default?`,
+    body: `${cap(label)} will open when bitcube restarts. What's showing now doesn't change.`,
+    ok: 'Set as default', cancel: 'Leave it',
+    what: changeLabel('bootfile', { file }),
+    done: `Now ${label} is the default: it opens when bitcube restarts`,
+  };
+}
+const escH = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const KIND_WORDS = { show: 'Show', template: 'Template', viz: 'Visualization' };
+/** A show's kind in words: "Show", "Template", "Visualization". */
+export const kindWords = (k) => KIND_WORDS[k] ?? 'Show file';
+/** The first sentence of a description (the What's showing card's one line). */
+export function firstSentence(d) {
+  const t = String(d ?? '').trim();
+  const m = /^.*?[.!?](?=\s|$)/.exec(t);
+  return m ? m[0] : t;
+}
+/** "gavin, 26 Oct": who and when, in the card's words. */
+function whoWhen(who, when) {
+  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(when ?? '');
+  const date = d ? `${Number(d[3])} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(d[2]) - 1]} ${d[1]}` : when;
+  return [who ? cap(who) : null, date].filter(Boolean).join(', ') || 'not known';
+}
+/** The preview card for a show (docs/shows.md): title and kind, Showing / Default marks, description, inputs, who made it,
+ *  who edited it last and when, the last change. HTML; every value escaped. `showing`: it runs now; `isDefault`: it is the
+ *  default (opens when bitcube restarts). */
+export function showCardHTML(file, { showing = false, isDefault = false } = {}) {
+  const c = showCard(file);
+  if (!c) return `<div class="show-card"><p>${escH(cap(fileLabel(file)))}: this show file isn't in the show registry.</p></div>`;
+  const tags = [showing ? '<span class="tag on">Showing</span>' : '', isDefault ? '<span class="tag def">Default</span>' : ''].join('');
+  const row = (k, v) => `<div class="kv"><dt>${k}</dt><dd>${v}</dd></div>`;
+  return `<div class="show-card" data-file="${escH(file)}"><div class="show-card-h"><b>${escH(c.title)}</b><span class="kind">${escH(kindWords(c.kind))}</span>${tags}</div>
+    <p class="desc">${escH(c.description ?? 'No description yet.')}</p>
+    <dl>${row('Inputs', c.inputs.length ? escH(c.inputs.join(' · ')) : 'none listed')}${row('Made by', escH(whoWhen(c.created_by, c.created)))}${row('Last edited by', escH(whoWhen(c.updated_by, c.updated)))}${row('Last change', escH(c.last_change ?? 'not recorded'))}${row('Default', isDefault ? 'Yes: it opens when bitcube restarts' : 'No')}</dl></div>`;
 }
 /** bitcube's reading shows the switch: TouchDesigner answers, on the chosen file. */
 export const switchShows = (m, file) => !!m?.show?.file && m.show.file.name === file;
-/** bitcube's reading shows the boot file change. */
+/** bitcube's reading shows the default (boot file) change. */
 export const bootShows = (m, file) => m?.show?.boot_file?.name === file;
-/** "opens at boot: the river's year (by default)". */
+/** "the river's year (by default)": the default, and whether boot-file.txt chose it or shows.json's boot_default did. */
 export function bootWords(boot) { return boot ? `${boot.label}${boot.default ? ' (by default)' : ''}` : 'not known'; }
 
 // ---- a control's status line, in each of the contract's states ---------------------------------------------------------

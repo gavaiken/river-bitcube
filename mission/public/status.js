@@ -9,7 +9,7 @@ import * as M from '/model.js';
 import { mountShell, poll, tick, watchContact, focusKey, refocus, park, focusShown, drawn, art, fmt, confirm, sheet, api, plainError, noAnswerText, esc, goto, mark, chip, WORD, MARK,
   NAMES_FROM_BITCUBE, sinceAgrees as sinceAgreesWith, splitHeadline, WARN_MS, LOST_MS, announce, setLive, whyText, POLL_TIMEOUT_MS, onScreen, keepInView, placeOf, bringIntoView, closedAround, morph,
   serverNow, serverClock, sclock } from '/ui.js';
-import { rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows, bootWords, controlLine, failText, notSentText, applyingLine,
+import { rulesForm, targetForm, modeEffect, switchWords, defaultWords, showCardHTML, kindWords, firstSentence, switchShows, bootShows, bootWords, controlLine, failText, notSentText, applyingLine,
   ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash, lastDoneParts, lastDoneWhat, fromWords } from '/status-words.js';
 
 const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, changeLabel, bandParts,
@@ -82,6 +82,10 @@ const off = (name) => !!whyOf(name) || busy(name);
 const op = (id) => (openRows.has(id) ? ' open' : '');   // rendered into the markup: a replaced section keeps its height
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const fileLabel = (f) => FILES[f]?.label ?? f;
+/** A show file's part of an element id: its role for the river's year and the live river (year, live), else its name. */
+const fileId = (f) => (FILES[f]?.kind === 'year' || FILES[f]?.kind === 'live' ? FILES[f].kind : String(f).replace(/\.toe$/i, '').replace(/[^a-z0-9-]/gi, '-'));
+/** A show's title (its preview card's), for the What's showing card and the show list. */
+const showTitle = (f) => M.showCard(f)?.title ?? cap(fileLabel(f));
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const item = (m, id) => m.items.find((x) => x.id === id);
 /** Contact with mission control is lost (the model's 'page' problem, whatever else outranks it in the headline). */
@@ -316,6 +320,8 @@ function renderNow() {
   const said = m ? bandParts(m, own) : (performance.now() - p.startedAt > LOST_MS ? "This page can't reach mission control." : '');
   const once = m && !lostContact(m) ? endedNews(m, own, serverNow()) : [];
   setLive($('#band-live'), said, { once });   // through the page's one queue: never in the same moment as the page's region (R8 #11)
+  $('#showing').hidden = !m;
+  setHTML($('#showing'), m ? showingHTML(m) : '');
   $('.card.now').hidden = !m;
   setHTML($('#now-head'), m ? nowHTML(m) : '');
   setHTML($('#now-steer'), m ? steerHTML(m) : '');
@@ -468,18 +474,16 @@ function nowHTML(m) {
       <div class="strip"><span class="w"></span><span class="sp"></span><span class="su"></span><span class="au"></span><span class="marker" style="left:${pos.toFixed(1)}%"></span></div>
       <div class="strip-labels">${SEASONS.map((x) => `<span class="${x === s.season ? 'on' : ''}">${x}</span>`).join('')}</div>
       ${s.intensity ? `<div class="intensity"><span class="lbl">Intensity</span><span class="int-bar">${INTENSITY.map((_, i) => `<i class="${i < lit ? 'on' : ''}"></i>`).join('')}</span><b>${esc(s.intensity.word)}</b></div>` : ''}`;
-  } else if (s.file?.kind === 'live' || s.file?.kind === 'other') {
-    head = `<div class="season-row"><div class="season-word muted">${s.file.kind === 'live' ? 'The live river' : cap(s.file.label)}, not the river's year</div></div>
-      <div class="strip dim"><span class="w"></span><span class="sp"></span><span class="su"></span><span class="au"></span></div>
-      <div class="strip-labels">${SEASONS.map((x) => `<span>${x}</span>`).join('')}</div>
-      <div class="intensity"><span class="lbl">The river</span><b>${esc(cap(s.river.words))}</b></div>
-      <div class="switch-host" id="switch-now">${showfileCtlHTML(m, 'year', 'now')}</div>`;
-  } else {
+  } else if (s.file?.kind === 'year') {
     const why = item(m, 'seasons')?.summary ?? 'not known';
     head = `<div class="season-row"><div class="season-word muted">Season not known</div></div>
       <div class="strip dim"><span class="w"></span><span class="sp"></span><span class="su"></span><span class="au"></span></div>
       <div class="strip-labels">${SEASONS.map((x) => `<span>${x}</span>`).join('')}</div>
       <div class="intensity"><b>${esc(why)}</b></div>`;
+  } else {
+    // any other show (the live river, the template, a new visualization), or nothing known: no seasons, the same tiles and still
+    const why = s.file ? null : item(m, 'touchdesigner')?.summary ?? 'not known';
+    head = `<div class="generic-row"><span class="lbl">The ropes and panels</span>${s.file?.kind === 'live' ? `<b>${esc(cap(s.river.words))}</b>` : why ? `<b>${esc(why)}</b>` : ''}</div>`;
   }
   return head + `<div class="tiles">${ropesTile(m)}${panelsTile(m)}${roomHTML(m)}</div>`;
 }
@@ -668,9 +672,79 @@ function fineHTML(m) {
       <span class="fine-names">${esc(ok.slice(0, 4).map((x) => NAME[x.id]).join(', '))}${ok.length > 4 ? '…' : ''}</span><span class="chev" aria-hidden="true">›</span></summary>
     <div class="fine-list">${ok.map((x) => rowHTML(x, m)).join('')}${muted.map((x) => `<div class="muted-row"><span class="mk lv-unknown" aria-hidden="true">·</span><div><div class="name">${esc(NAME[x.id])}</div><div class="sum">${esc(x.summary)}</div></div></div>`).join('')}</div></details>`;
 }
+/** What's showing (Status, under the verdict): the running show's title and one line, Change (the list of offered shows, each
+ *  with its preview card: Switch, Set as default) and Back to default when another show runs. The default is the boot file:
+ *  what opens when bitcube restarts; a switch never changes it. */
+function showingHTML(m) {
+  const s = m.show, boot = s.boot_file?.name ?? null, running = s.file?.name ?? null, td = item(m, 'touchdesigner');
+  const card = running ? M.showCard(running) : null;
+  const head = s.file ? `<b>${esc(showTitle(running))}</b>${card ? `<span class="kind">${esc(kindWords(card.kind))}</span>` : ''}${running === boot ? '<span class="tag def">Default</span>' : ''}`
+    : s.restart ? `Restarting on <b>${esc(s.restart.on)}</b>` : s.held ? `Maybe restarting on <b>${esc(s.held.on)}</b>` : '<b>Not known</b>';
+  const stale = td?.stale && s.file ? ` <span class="muted">· last seen ${ageSpan(td.age_s)}</span>` : '';
+  const line = card?.description ? firstSentence(card.description) : s.file ? '' : (td?.summary ?? '');
+  const o = off('switch');
+  const back = s.back_to_boot ? `<button type="button" class="btn" id="ctl-showing-back" data-act="switch" data-file="${esc(s.back_to_boot.file)}" data-back="1" ${o ? 'disabled' : ''}>Back to default</button>` : '';
+  return `<div class="ctl ${whyOf('switch') && !busy('switch') ? 'off' : ''}" id="ctl-showing" data-ctl="switch"${busy('switch') || busy('bootfile') ? ' aria-busy="true"' : ''}>
+    <div class="eyebrow">What's showing</div>${whyLine('switch', 'ctl-showing')}
+    <div class="showing-h">${head}${stale}</div>
+    ${line ? `<p class="showing-desc">${esc(line)}</p>` : ''}
+    <div class="row-btns"><button type="button" class="btn primary" id="ctl-showing-change" data-act="show-list" ${s.show_files.length ? '' : 'disabled'}>Change</button>${back}</div>
+    <div class="effect">Default: <b>${esc(bootWords(s.boot_file))}</b>, what opens when bitcube restarts. Switching never changes it.</div>
+    ${statusLine('ctl-showing', ['switch', 'bootfile'])}</div>`;
+}
+/** Change: every offered show (shows.json), its kind, and which is showing and which is the default; a tap opens its card. */
+function openShowList() {
+  const s = model?.show;
+  if (!s) return;
+  const boot = s.boot_file?.name, running = s.file?.name;
+  const rows = s.show_files.map((f) => `<button type="button" class="show-row" id="show-row-${esc(fileId(f))}" data-act="show-card" data-file="${esc(f)}"><span class="t">${esc(showTitle(f))}</span><span class="kind">${esc(kindWords(M.showCard(f)?.kind))}</span>${f === running ? '<span class="tag on">Showing</span>' : ''}${f === boot ? '<span class="tag def">Default</span>' : ''}<span class="chev" aria-hidden="true">›</span></button>`).join('');
+  sheet({ title: "Change what's showing", body: `<p>Pick a show to see what it does before switching to it.</p><div class="show-list">${rows || '<p>No shows offered.</p>'}</div>` });
+}
+/** A show's preview card, before anything is sent: Switch to it (the card is the question: the lights go dark for about a
+ *  minute), Set as default (its own confirm), back to the list. */
+function openShowCard(f) {
+  const s = model?.show;
+  if (!s) return;
+  const running = s.file?.name, boot = s.boot_file?.name, host = () => $('#ctl-showing-change');
+  const sw = switchWords(f, running, s.boot_file);
+  const swWhy = busy('switch') ? 'a show-file switch is being applied' : whyOf('switch');
+  const dfWhy = f === boot ? null : busy('bootfile') ? 'a change of the default is being applied' : whyOf('bootfile');
+  const notes = [swWhy ? `<p class="ctl-why">${esc(whyText(swWhy))}</p>` : '',
+                 f !== boot && dfWhy && dfWhy !== swWhy ? `<p class="ctl-why">Set as default: ${esc(whyText(dfWhy))}</p>` : ''].join('');
+  const acts = [];
+  if (!swWhy) acts.push({ label: sw.ok, kind: 'primary', onClick: () => { setTimeout(() => switchTo(f, host(), { asked: true })); } });
+  if (f !== boot && !dfWhy) acts.push({ label: 'Set as default', kind: 'plain', onClick: () => { setTimeout(() => setDefault(f, host())); } });
+  acts.push({ label: 'Back to the list', kind: 'plain', onClick: () => { setTimeout(openShowList); } });
+  acts.push({ label: 'Close', kind: 'plain' });
+  sheet({ title: showTitle(f), body: `${showCardHTML(f, { showing: f === running, isDefault: f === boot })}<p class="effect">${esc(sw.body)}</p>${notes}`, actions: acts });
+}
+/** The question a switch asks: its words with the show's preview card above them. */
+function switchAsk(f) {
+  const x = switchWords(f, model?.show.file?.name, model?.show.boot_file);
+  const body = document.createElement('div');
+  body.innerHTML = `${showCardHTML(f, { showing: f === model?.show.file?.name, isDefault: f === model?.show.boot_file?.name })}<p>${esc(x.body)}</p>`;
+  return { title: x.title, body, ok: x.ok, cancel: 'Leave it' };
+}
+/** A switch to `f` from button `b`: asks first with the preview card, unless the card was the question (asked). */
+function switchTo(f, b, { asked = false } = {}) {
+  const w = switchWords(f, model?.show.file?.name, model?.show.boot_file);   // the button's own words
+  runControl('switch', '/api/control/switch', { file: f }, { btn: b, ask: asked ? null : () => switchAsk(f),
+    askChanged: M.CHANGED_MEANWHILE,
+    what: w.what, done: w.done, fail: 'The show file is unchanged', serverConfirms: true, holds: (mm) => switchShows(mm, f),
+    sent: (mm) => ({ action: 'switch', file: f, before: mm?.show.file?.name ?? null }),
+    noAnswer: 'the Now line shows what bitcube reports', unconfirmed: 'look at the Now line, or call Gavin' });
+}
+/** Set as default: `f` opens when bitcube restarts (writes boot-file.txt); what's showing now doesn't change. Asks first. */
+function setDefault(f, b) {
+  const w = defaultWords(f);
+  runControl('bootfile', '/api/control/bootfile', { file: f }, { btn: b, ask: { title: w.title, body: w.body, ok: w.ok, cancel: w.cancel, destructive: false },
+    what: w.what, done: w.done, fail: 'The default is unchanged', serverConfirms: true, holds: (mm) => bootShows(mm, f),
+    sent: (mm) => ({ action: 'bootfile', file: f, before: mm?.show.boot_file?.name ?? null }),
+    noAnswer: 'the Default line shows what bitcube reports' });
+}
 function installerHTML(m) {
   const s = m.show, route = s.ropes.route, boot = s.boot_file?.name;
-  const files = s.show_files.length ? s.show_files : Object.keys(FILES).slice(0, 2);
+  const files = s.show_files;
   const lrOff = off('lightsroute'), bfOff = off('bootfile'), seen = nowOr(item(m, 'ropes'));
   return `<details class="card installer" data-id="installer" id="installer-card"${op('installer')}><summary><span class="tool" aria-hidden="true">🛠</span><span>Installer</span><span class="note">changes cabling and boot settings · asks first</span><span class="chev" aria-hidden="true">›</span></summary><div class="body">
     <div class="ctl ${whyOf('lightsroute') && !busy('lightsroute') ? 'off' : ''}" id="ctl-lightsroute" data-ctl="lightsroute"${busy('lightsroute') ? ' aria-busy="true"' : ''}><div class="ctl-h">Lighting network port on bitcube</div>${whyLine('lightsroute')}
@@ -680,9 +754,9 @@ function installerHTML(m) {
         ? `${seen.pre}: <b>${esc(s.ropes.route_note)}</b>${seen.tail}. The wrong port leaves all 20 ropes dark. It asks first.`
         : `${seen.pre}: <b>${esc(s.ropes.route_words ?? 'not known')}</b>${seen.tail}. The wrong port leaves all 20 ropes dark. Only change it after moving the cable; it asks first.`}</div>
       ${statusLine('ctl-lightsroute', ['lightsroute'])}</div>
-    <div class="ctl ${whyOf('bootfile') && !busy('bootfile') ? 'off' : ''}" id="ctl-bootfile" data-ctl="bootfile"${busy('bootfile') ? ' aria-busy="true"' : ''}><div class="ctl-h">Boot file: the show file that opens at boot</div>${whyLine('bootfile')}
-      <div class="seg" role="group" aria-label="Boot file">${files.map((f) => `<button type="button" id="ctl-bootfile-${FILES[f]?.kind ?? 'other'}" data-act="bootfile" data-file="${esc(f)}" class="${boot === f ? 'lit' : ''}" aria-pressed="${boot === f}" ${bfOff ? 'disabled' : ''}>${esc(cap(fileLabel(f)))}</button>`).join('')}</div>
-      <div class="effect">${seen.pre}: <b>${esc(bootWords(s.boot_file))}</b> opens at boot${seen.tail}. A change takes effect at bitcube's next restart and does not change what is showing now; a show-file switch sets it too. It asks first.</div>
+    <div class="ctl ${whyOf('bootfile') && !busy('bootfile') ? 'off' : ''}" id="ctl-bootfile" data-ctl="bootfile"${busy('bootfile') ? ' aria-busy="true"' : ''}><div class="ctl-h">Default: the show that opens when bitcube restarts</div>${whyLine('bootfile')}
+      <div class="seg" role="group" aria-label="Default">${files.map((f) => `<button type="button" id="ctl-bootfile-${esc(fileId(f))}" data-act="bootfile" data-file="${esc(f)}" class="${boot === f ? 'lit' : ''}" aria-pressed="${boot === f}" ${bfOff ? 'disabled' : ''}>${esc(showTitle(f))}</button>`).join('')}</div>
+      <div class="effect">${seen.pre}: <b>${esc(bootWords(s.boot_file))}</b> is the default${seen.tail}. A change takes effect at bitcube's next restart and does not change what is showing now; a switch never changes it. It asks first.</div>
       ${statusLine('ctl-bootfile', ['bootfile'])}</div>
     <div class="links"><a class="btn" href="/lights">Calibrate the lights → Lights</a></div>
   </div></details>`;
@@ -732,29 +806,29 @@ function hubCtlHTML(m) {
     <div class="effect">A change shows on the panels within a few seconds. Panels off sets ${nb('0 %')} and asks first.</div>
     ${statusLine('ctl-hub75', ['hub75'])}</div>`;
 }
-/** The show-file control: every file (the TouchDesigner row: where 'td'), or only the files of one kind (the Season card and
- *  the year's row: the river's year). A switch also sets the boot file (probe.ps1 writes boot-file.txt), and says so. */
+/** The show-file control: every offered show (the TouchDesigner row: where 'td'), or only the files of one kind (the year's row:
+ *  the river's year). The same switch as What's showing; it never changes the default (the boot file). */
 function showfileCtlHTML(m, onlyKind = null, where = onlyKind ? 'year' : 'td', { noWait = false } = {}) {
-  const s = m.show, all = s.show_files.length ? s.show_files : Object.keys(FILES).slice(0, 2);
+  const s = m.show, all = s.show_files;
   // only the river's year and the live river: model.js leaves old show files out of show_files (execution plan D27)
   const files = onlyKind ? all.filter((f) => FILES[f]?.kind === onlyKind) : all;
   // while TouchDesigner restarts on a file someone chose (not a maybe: its advice says "press Switch to …"), the button keeps the
   // name that was pressed, "Restart on the river's year", never "Switch to …" under its own line (R8 #10)
   const restartOn = s.restart ? Object.keys(FILES).find((f) => FILES[f].label === s.restart.on) ?? null : null;
   const running = s.file?.name ?? restartOn, o = off('switch'), host = `ctl-switch-${where}`, td = item(m, 'touchdesigner');
-  const btns = files.map((f) => `<button type="button" id="${host}-${FILES[f]?.kind ?? 'other'}" class="btn ${f === running ? '' : 'primary'}" data-act="switch" data-file="${esc(f)}" ${o ? 'disabled' : ''}>${f === running ? `Restart on ${esc(fileLabel(f))}` : `Switch to ${esc(fileLabel(f))}`}</button>`).join('');
+  const btns = files.map((f) => `<button type="button" id="${host}-${esc(fileId(f))}" class="btn ${f === running ? '' : 'primary'}" data-act="switch" data-file="${esc(f)}" ${o ? 'disabled' : ''}>${f === running ? `Restart on ${esc(fileLabel(f))}` : `Switch to ${esc(fileLabel(f))}`}</button>`).join('');
   return `<div class="ctl ${whyOf('switch') && !busy('switch') ? 'off' : ''}" id="${host}" data-ctl="switch"${busy('switch') ? ' aria-busy="true"' : ''}><div class="ctl-h">Show file</div>${noWait ? '' : whyLine('switch', host)}
     <div class="readout">${readoutWords(s, td)}</div>
     <div class="row-btns">${btns}</div>
-    <div class="effect">Switching restarts TouchDesigner on that file: the lights go dark for about a minute and unsaved changes in TouchDesigner are lost. That file then also opens at boot. It asks first.</div>
+    <div class="effect">Switching restarts TouchDesigner on that file: the lights go dark for about a minute and unsaved changes in TouchDesigner are lost. The default doesn't change. It asks first, with the show's card.</div>
     ${statusLine(host, ['switch'])}</div>`;
 }
 
-/** The Show file readout: "Now showing the river's year · opens at boot: …"; "Restarting on …" while TouchDesigner restarts (R7 #18);
+/** The Show file readout: "Now showing the river's year · default: …"; "Restarting on …" while TouchDesigner restarts (R7 #18);
  *  "Maybe restarting on …" while a restart bitcube didn't answer in time holds the lock and TouchDesigner is seen down (R8 #16, R10 #16);
  *  from a last answer "Last seen: showing … · 15 min ago", never "Now" (R8 #33). */
 function readoutWords(s, td) {
-  const boot = s.boot_file ? ` · opens at boot: ${esc(bootWords(s.boot_file))}` : '';
+  const boot = s.boot_file ? ` · default: ${esc(bootWords(s.boot_file))}` : '';
   if (td?.stale && s.file) return `Last seen: showing <b>${esc(s.file.label)}</b>${boot} · ${ageSpan(td.age_s)}`;
   if (s.file) return `Now showing <b>${esc(s.file.label)}</b>${boot}`;
   if (s.restart) return `Restarting on <b>${esc(s.restart.on)}</b>${boot}`;
@@ -918,7 +992,7 @@ function tickControls() {
   }
   if (changed) render();
 }
-/** Unconfirmed: it names what was sent, "The change of the boot file to the live river was sent at 21:13, but bitcube doesn't show
+/** Unconfirmed: it names what was sent, "The change of the default to the live river was sent at 21:13, but bitcube doesn't show
  *  it yet: …" (R6 #16), said once. */
 function unconfirm(name) {
   const c = ctl[name];
@@ -1041,9 +1115,9 @@ function jump(target) {
   for (let d = el?.closest('details'); d; d = d.parentElement?.closest('details')) if (d.dataset.id) openRows.add(d.dataset.id);
   return true;
 }
-/** "Switch now": the TouchDesigner row when it is not OK, else the Season card's control, else the year's row. Returns where. */
+/** "Switch now": the TouchDesigner row when it is not OK, else What's showing, else the year's row. Returns where. */
 function jumpSwitch() {
-  for (const id of [model && item(model, 'touchdesigner')?.level !== 'ok' ? rid('touchdesigner') : null, 'switch-now', rid('seasons'), rid('touchdesigner')]) {
+  for (const id of [model && item(model, 'touchdesigner')?.level !== 'ok' ? rid('touchdesigner') : null, 'ctl-showing', rid('seasons'), rid('touchdesigner')]) {
     if (id && document.getElementById(id)) { jump(id); return id; }
   }
   return null;
@@ -1170,23 +1244,10 @@ document.addEventListener('click', async (e) => {
     }
     case 'rules-reset': runControl('rules-reset', '/api/control/rules-reset', {}, { btn: b, ask: { title: 'Reset every rule to its default?', body: 'All the numbers go back to their defaults from now on. The river itself does not move.', ok: 'Reset all', cancel: 'Keep them' },
       what: changeLabel('rules-reset'), done: 'Every rule is back at its default, from now on', fail: 'The rules are unchanged', noAnswer: 'the boxes show the values bitcube has', onDone: () => { for (const k of Object.keys(rulesDraft)) delete rulesDraft[k]; } }); break;
-    case 'switch': {
-      const f = b.dataset.file, w = switchWords(f, m?.show.file?.name, m?.show.boot_file);   // the button's own words
-      runControl('switch', '/api/control/switch', { file: f }, { btn: b, ask: () => { const x = switchWords(f, model?.show.file?.name, model?.show.boot_file); return { title: x.title, body: x.body, ok: x.ok, cancel: 'Leave it' }; },
-        askChanged: M.CHANGED_MEANWHILE,
-        what: w.what, done: w.done, fail: 'The show file is unchanged', serverConfirms: true, holds: (mm) => switchShows(mm, f),
-        sent: (mm) => ({ action: 'switch', file: f, before: mm?.show.file?.name ?? null }),
-        noAnswer: 'the Now line shows what bitcube reports', unconfirmed: 'look at the Now line, or call Gavin' });
-      break;
-    }
-    case 'bootfile': {
-      const f = b.dataset.file, label = fileLabel(f);
-      runControl('bootfile', '/api/control/bootfile', { file: f }, { btn: b, ask: { title: `Open ${label} at boot?`, body: 'From the next restart of bitcube, TouchDesigner opens this file. What is showing now does not change.', ok: 'Change the boot file', cancel: 'Leave it' },
-        what: changeLabel('bootfile', { file: f }), done: `Now ${label} opens at boot, from bitcube's next restart`, fail: 'The boot file is unchanged', serverConfirms: true, holds: (mm) => bootShows(mm, f),
-        sent: (mm) => ({ action: 'bootfile', file: f, before: mm?.show.boot_file?.name ?? null }),
-        noAnswer: 'the Now line shows what bitcube reports' });
-      break;
-    }
+    case 'switch': switchTo(b.dataset.file, b); break;
+    case 'bootfile': setDefault(b.dataset.file, b); break;
+    case 'show-list': openShowList(); break;
+    case 'show-card': openShowCard(b.dataset.file); break;
     case 'lightsroute': {
       const route = b.dataset.route, where = route === 'direct' ? "bitcube's LIGHTS port" : 'the spare router port';
       runControl('lightsroute', '/api/control/lightsroute', { route }, { btn: b, ask: { title: route === 'direct' ? "Use bitcube's LIGHTS port?" : 'Use the spare router port?', body: 'Moves the lighting network to that port. If the lighting switch is plugged into the other one, all 20 ropes go dark until it is moved back.', ok: 'Change the port', cancel: 'Leave it' },

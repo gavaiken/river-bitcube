@@ -44,15 +44,25 @@ async function loadRegistry() {
   const ok = (r) => (r && typeof r === 'object' && Array.isArray(r.shows) ? r : null);
   try {
     if (typeof window === 'undefined' && typeof process !== 'undefined') {
-      const { readFileSync } = await import('node:fs');
-      const path = process.env.MISSION_SHOWS_FILE || new URL('../../shows.json', import.meta.url);
-      return ok(JSON.parse(readFileSync(path, 'utf8')));
+      const { readFileSync, existsSync } = await import('node:fs');
+      const { main, extra } = registryPaths(process.env, existsSync);
+      const reg = ok(JSON.parse(readFileSync(main, 'utf8')));
+      if (reg && extra) reg.shows = [...reg.shows, ...JSON.parse(readFileSync(extra, 'utf8')).shows];
+      return reg;
     }
     const r = await fetch('/shows.json', { cache: 'no-cache' });
     return r.ok ? ok(await r.json()) : null;
   } catch { return null; }
 }
-/** Every show file mission control can name: { kind, label, offered, can_boot, show }. kind is the show's role for the page's
+/** Where the server (and model.js under node) reads the registry: main is MISSION_SHOWS_FILE, else shows.json at the repo
+ *  root; extra, shows added on top for tests and fixture mode (a test visualization: test/fixtures/build.mjs), is
+ *  MISSION_SHOWS_EXTRA, else in fixture mode the fixtures' _shows.extra.json, else none. The server serves the result. */
+export function registryPaths(env, exists) {
+  const main = env.MISSION_SHOWS_FILE || new URL('../../shows.json', import.meta.url);
+  const fx = env.MISSION_FIXTURES ? `${env.MISSION_FIXTURES.replace(/\/+$/, '')}/_shows.extra.json` : null;
+  return { main, extra: env.MISSION_SHOWS_EXTRA || (fx && exists(fx) ? fx : null) };
+}
+/** Every show file mission control can name: { kind, label, offered, show }. kind is the show's role for the page's
  *  verdicts ('year': the river's year, serves the year page; 'live': the live river and Dave's agent; 'other': anything else, a
  *  new visualization too); label its words in a sentence ("the river's year"; GLOSSARY.md); show its registry entry (the preview
  *  card's facts). Retired show files (execution plan D27: old-..., and the names before the rename) are never offered. */
@@ -60,15 +70,15 @@ export const FILES = {};
 for (const sh of REGISTRY?.shows ?? []) {
   if (!sh || typeof sh.file !== 'string') continue;
   FILES[sh.file] = { kind: sh.role === 'year' || sh.role === 'live' ? sh.role : 'other', label: String(sh.label || sh.title || sh.file.replace(/\.toe$/i, '')),
-                     offered: sh.offered === true, can_boot: sh.offered === true && sh.can_boot === true, show: sh };
+                     offered: sh.offered === true, show: sh };
 }
 for (const old of ['old-river-online-oct-20.toe', 'old-river.toe', 'river-online-oct-20.toe', 'river-local-oct-18.toe', 'river.toe']) {
-  FILES[old] ??= { kind: 'other', label: 'an old show file', offered: false, can_boot: false, show: null };
+  FILES[old] ??= { kind: 'other', label: 'an old show file', offered: false, show: null };
 }
 const UNLISTED = 'an unlisted show file';       // a file mission control doesn't list: its name (a .toe) stays in raw
 // probe.ps1 reports this when boot-file.txt is missing: Start-River.cmd then opens the seasons file, else the online one
 export const BOOT_DEFAULT = 'Start-River.cmd default';
-/** shows.json's boot_default: the file Start-River.cmd opens when boot-file.txt names no can_boot show. */
+/** shows.json's boot_default: the file Start-River.cmd opens when boot-file.txt names no listed show. */
 export const BOOT_DEFAULT_FILE = typeof REGISTRY?.boot_default === 'string' ? REGISTRY.boot_default : null;
 const YEAR_FILE = Object.keys(FILES).find((k) => FILES[k].kind === 'year'), LIVE_FILE = Object.keys(FILES).find((k) => FILES[k].kind === 'live');
 /** The preview card for a show file, before anyone switches to it (docs/mission-ui.md "Show file"): its registry facts in
@@ -80,7 +90,7 @@ export function showCard(file) {
   return { file, label: f.label, title: str(sh.title) ?? f.label, kind: str(sh.kind), description: str(sh.description),
            inputs: Array.isArray(sh.inputs) ? sh.inputs.filter((x) => typeof x === 'string' && x.trim()) : [],
            created_by: str(sh.created_by), created: str(sh.created), updated_by: str(sh.updated_by), updated: str(sh.updated),
-           last_change: str(sh.last_change), can_boot: f.can_boot, boot_default: file === BOOT_DEFAULT_FILE };
+           last_change: str(sh.last_change) };
 }
 export const CAL_STAGE_S = { 'ropes-capture': 170, 'ropes-decode': 40, 'hub75-capture': 35, 'hub75-locate': 10 };   // calibrate.py EXPECTED_S
 export const CAL_TOTAL_S = Object.values(CAL_STAGE_S).reduce((a, b) => a + b, 0);
@@ -129,7 +139,7 @@ export const awaited = (action, body) => typeof action === 'string' && Object.ha
 export const dryStart = (action, body) => action === 'calibrate' && !!body && typeof body === 'object' && body.action === 'start'
   && (body.dry_run === true || (typeof body.decode_only === 'string' && body.decode_only !== ''));
 /** The team's words for a change in flight when the server's entry has no label of its own (an older server). */
-export const APPLY_LABEL = { switch: 'a show-file switch', rebuild: "the rebuild of the river's year", bootfile: 'the change of the boot file', lightsroute: 'the change of the lighting port',
+export const APPLY_LABEL = { switch: 'a show-file switch', rebuild: "the rebuild of the river's year", bootfile: 'the change of the default', lightsroute: 'the change of the lighting port',
   ropes: 'the change of the ropes', hub75: 'the change of the panels', mode: 'the change of the mode', target: 'the change of the target', rules: 'the change of the rules',
   'rules-reset': 'the reset of the rules', calibrate: 'the calibration start', test: 'the test pattern' };
 /** One name per change (R7 #19), made here for the server's entries (lib/applying.mjs), this phone's own applying
@@ -145,7 +155,7 @@ export function changeLabel(action, body = {}, { running = null } = {}) {
   switch (action) {
     case 'switch': return f && f === running ? `the restart on ${fl}` : `the switch to ${fl}`;
     case 'rebuild': return `the rebuild of ${fl}`;
-    case 'bootfile': return f ? `the change of the boot file to ${fl}` : 'the change of the boot file';
+    case 'bootfile': return f ? `the change of the default to ${fl}` : 'the change of the default';
     case 'lightsroute': return b.route === 'direct' ? "the change of the lighting port to bitcube's LIGHTS port" : b.route === 'router' ? 'the change of the lighting port to the spare router port' : 'the change of the lighting port';
     case 'ropes': return b.dark === true ? 'the change of the ropes to dark' : 'the change of the ropes to the river';   // as planControl: only a real true goes dark
     case 'test': return b.on === true ? 'the test pattern start' : 'the test pattern stop';   // as planControl: only a real true starts it
@@ -466,6 +476,8 @@ export function derive(status, nowMs) {
   const restartingOn = !tdRestarting ? null : byEntry ? FILES[restartBy.file ?? YEAR_FILE]?.label ?? 'a show file' : FILES[/on (\S+)/.exec(tdErr)?.[1]]?.label ?? 'a show file';
   const file = tdOk ? FILES[td.file] ?? { kind: 'other', label: UNLISTED } : null;
   const kind = file?.kind ?? null, label = file?.label ?? null;
+  // a show the registry offers that is neither the year nor the live river (a new visualization, the template): not a fault
+  const listedShow = kind === 'other' && file?.offered === true;
   // One name for the button the advice points at: the show-file control says "Restart on the river's year" when it already
   // runs, and "Switch to the river's year" when another file (or nothing known) runs. status.js labels its jump the same way.
   const YEAR_PRESS = yearPress(kind);
@@ -629,6 +641,9 @@ export function derive(status, nowMs) {
     { source: 'seasons', action: "Press Switch to the river's year if the year is wanted (the lights go dark for about a minute)." });
   else if (kind === 'year') it('seasons', 'warning', 'Page not answering', `TouchDesigner runs the river's year, but ${fetchWords(se.error)}.`,
     { source: 'seasons', action: `Wait a minute; if it stays down, press ${YEAR_PRESS}.` });
+  // a show from the registry (a new visualization, the template): chosen on purpose; it simply has no year
+  else if (listedShow) it('seasons', 'ok', `Not used: ${label} has no year`, "This show has no year of seasons and no year page; the river's year controls come back when it runs.",
+    { source: 'seasons' });
   else if (kind === 'other') it('seasons', 'warning', `Not running: TouchDesigner is showing ${label}`, 'That show file serves no year page.',
     { source: 'seasons', action: "Press Switch to the river's year (the lights go dark for about a minute)." });
   else it('seasons', 'warning', 'Page not answering', `${cap(fetchWords(se.error))}; waiting for the full check of bitcube to say why.`, { source: 'seasons' });
@@ -828,7 +843,7 @@ export function derive(status, nowMs) {
       if (kind === 'live') add('online-file', 'warning', 40, "TouchDesigner is showing the live river, not the river's year: the year and its controls are unavailable",
         `The live river has no year of seasons and no year page.${FILES[pr.boot_file]?.kind === 'year' ? " The river's year opens at the next restart." : ''}`,
         "If nobody chose this on purpose, press Switch to the river's year below; the lights go dark for about a minute. If the live river is wanted tonight, leave it.", ['seasons']);
-      else if (kind === 'other') add('old-file', 'warning', 40, `TouchDesigner is showing ${label}, not the river's year: the year and its controls are unavailable`,
+      else if (kind === 'other' && !listedShow) add('old-file', 'warning', 40, `TouchDesigner is showing ${label}, not the river's year: the year and its controls are unavailable`,
         `It is neither the river's year nor the live river.${FILES[pr.boot_file]?.kind === 'year' ? " The river's year opens at the next restart." : ''}`,
         "Press Switch to the river's year below; the lights go dark for about a minute.", ['seasons']);
       else if (kind === 'year' && !y && se.present) add('year-page', 'warning', 46, "The river's year page isn't answering, though TouchDesigner runs it", `${cap(fetchWords(se.error))}; the year's controls come back when it answers properly.`,
@@ -918,6 +933,7 @@ export function derive(status, nowMs) {
 
   const top = P[0] ?? null;
   const okHeadline = kind === 'live' ? 'Everything is up: the live river is showing; lights and cameras fine'
+    : listedShow ? `Everything is up: ${label} is showing; lights and cameras fine`
     : yearOk ? `Everything is up: the river's year is in ${year.season}; lights and cameras fine` : 'Everything is up';
   const overall = {
     level: top?.level ?? 'ok',
@@ -971,9 +987,8 @@ export function derive(status, nowMs) {
   const show = {
     file: tdOk ? { name: td.file, kind, label, words: `TouchDesigner is showing ${label}` } : null,
     boot_file: bootNow,
-    // the files a switch offers (shows.json offered, and on bitcube), and the ones that may be the boot file (can_boot too)
+    // the files a switch or "Set as default" offers (shows.json offered, and on bitcube)
     show_files: showFiles,
-    bootable_files: showFiles.filter((f) => FILES[f].can_boot),
     // one tap back to what opens at boot, when something else is showing (and the boot file is one a switch may open)
     back_to_boot: backToBoot,
     season: yearOk ? year.season : null, phase: yearOk ? num(year.phase) : null, weights: yearOk ? obj(year.weights) : null,
@@ -1233,7 +1248,7 @@ export const ENDED_SAID_S = 30;
  *  port change, a calibration's start, or one bitcube didn't answer in time): the ones a band showed as applying. */
 const endedAwaited = (e) => e.maybe || Object.hasOwn(AWAITED, e.action);   // an entry is a calibration's start (AWAITED)
 /** How another phone's (or the studio chat's) change ended, within ENDED_SAID_S after it did: [{ id, label, at, said }], said "Done:
- *  the change of the boot file to the live river, from the studio chat." or "The change of the boot file to the live river: bitcube
+ *  the change of the default to the live river, from the studio chat." or "The change of the default to the live river: bitcube
  *  didn't show it in time." (R8 #9). own: { ownIds } (ownEntries): this phone's own change is said on its control. nowMs: the
  *  server's clock. A page says each once, by its id (endedOnce, R9 #5). */
 export function endedEntries(m, { ownIds = [], skip = null } = {}, nowMs = null) {

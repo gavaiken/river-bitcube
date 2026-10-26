@@ -117,3 +117,30 @@ details.fine > summary .mk { flex: none; }
 
 /* ---- footer ---- */
 footer.foot .fine-print { margin-top: 4px; }
+
+/* ---- What's showing (under the verdict): the running show, Change, Back to default; the show list and card in a sheet ---- */
+.showing > .ctl { border: 0; padding: 0; background: none; gap: 4px; }
+.showing .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.showing .showing-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; font-size: 22px; line-height: 1.2; margin: 4px 0 2px; overflow-wrap: anywhere; }
+.showing .showing-desc { margin: 2px 0 8px; color: var(--muted); font-size: 15px; line-height: 1.35; }
+.showing .row-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.kind { font-size: 13px; font-weight: 700; color: var(--muted); }
+.tag { display: inline-block; font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); line-height: 1.4; }
+.tag.on { color: var(--ok-text); border-color: currentColor; }
+.tag.def { color: var(--text); }
+.show-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.show-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-height: 48px; width: 100%; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-solid); color: var(--text); font: inherit; cursor: pointer; }
+.show-row { flex-wrap: nowrap; }
+.show-row .t { font-weight: 750; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.show-row .kind, .show-row .tag { flex: 0 0 auto; }
+.show-row .chev { color: var(--muted); }
+.show-card { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 4px 0 8px; }
+.show-card-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; font-size: 18px; overflow-wrap: anywhere; }
+.show-card .desc { margin: 6px 0; line-height: 1.4; }
+.show-card dl { margin: 0; display: grid; gap: 4px; }
+.show-card .kv { display: grid; grid-template-columns: minmax(7.5em, auto) 1fr; gap: 8px; font-size: 14px; }
+.show-card dt { color: var(--muted); font-weight: 650; }
+.show-card dd { margin: 0; overflow-wrap: anywhere; }
+.generic-row { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin-bottom: 8px; }
+.generic-row .lbl { color: var(--muted); font-weight: 600; }
+@media (max-width: 380px) { .show-card .kv { grid-template-columns: 1fr; gap: 0; } }

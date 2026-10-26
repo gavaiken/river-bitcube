@@ -5,7 +5,7 @@
 - schema: every field there, of the right type; kind show|template|viz; dates YYYY-MM-DD; file names unique
 - files: every offered entry's .toe exists; every entry's build script and pinned calibration files exist
 - description: at most 100 words
-- boot_default: an offered, can_boot entry
+- boot_default: an offered entry
 - freshness: when the changes since --base (default origin/main; plus the working tree) touch an entry's .toe or its build
   script, that entry's last_change must differ from the base's, and its updated date must not go backwards. A new entry passes.
   With no usable base (a fresh clone, a first push) the freshness check is skipped and says so.
@@ -44,7 +44,7 @@ def check_registry(reg, repo=REPO):
         for k in REQUIRED_STR:
             if not isinstance(s.get(k), str) or not s[k].strip():
                 out.append(f'{where}: {k} must be a non-empty string')
-        for k in ('offered', 'can_boot'):
+        for k in ('offered',):
             if not isinstance(s.get(k), bool):
                 out.append(f'{where}: {k} must be true or false')
         f = s.get('file')
@@ -95,8 +95,8 @@ def check_registry(reg, repo=REPO):
     entry = next((s for s in reg['shows'] if isinstance(s, dict) and s.get('file') == bd), None)
     if not entry:
         out.append(f'boot_default {bd!r} is not a listed show')
-    elif not (entry.get('offered') is True and entry.get('can_boot') is True):
-        out.append(f'boot_default {bd} must be offered and can_boot')
+    elif entry.get('offered') is not True:
+        out.append(f'boot_default {bd} must be offered')
     return out
 
 
