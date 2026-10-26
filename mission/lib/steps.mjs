@@ -91,8 +91,13 @@ const writesState = (part) => writeTargets(part).some(inState);
 /** Code that writes a state file (a python or node one-liner: open(…'w'), write_text, WriteAllText, writeFileSync): a change too (R9 #38). */
 const STATE_NAMES = String.raw`(?:boot-file\.txt|calibration\.cancel|presence\.json)`;
 const STATE_CODE = new RegExp(String.raw`${STATE_NAMES}[\s\S]*?(?:,\s*['"][wax]\+?b?['"]|\.write_text\s*\(|\.write_bytes\s*\()|(?:write_text|WriteAllText|writeFileSync|writeFile)\s*\([^)]*${STATE_NAMES}`, 'i');
-/** A POST to the river's year's own page (:9981): around mission control's mode, target and rules lock (R9 #38). */
-const POST_YEAR = /\bcurl\b[^;&|\n]*(?:-X\s*POST|--request\s+POST|\s-d\b|\s--data(?:-\w+)?\b|\s-F\b)[^;&|\n]*:9981\b|\bcurl\b[^;&|\n]*:9981\b[^;&|\n]*(?:-X\s*POST|--request\s+POST|\s-d\b|\s--data(?:-\w+)?\b|\s-F\b)|Invoke-(?:RestMethod|WebRequest)\b[^;&|\n]*-Method\s+['"]?Post\b[^;&|\n]*9981|Invoke-(?:RestMethod|WebRequest)\b[^;&|\n]*9981[^;&|\n]*-Method\s+['"]?Post\b/i;
+/** A POST to the river's year's own page (:9981): around mission control's mode, target and rules lock (R9 #38). curl's flags by
+ *  their case (CR9 #2): -d, --data…, -F, --form, --json, -X POST (alone or in a cluster: -sd, -XPOST) send a body; -f (fail) and
+ *  -D (dump headers) do not, and -G or --get sends -d as a query (a GET). PowerShell's -Method Post in any case. */
+const CURL_POSTS = String.raw`(?-i:\s(?:-[A-Za-z]*(?:[dF]|X\s*POST\b)|--request(?:\s+|=)POST\b|--data(?:-[a-z]+)?\b|--form(?:-string)?\b|--json\b))`;
+const CURL_GET = String.raw`(?-i:\s(?:-[A-Za-z]*G|--get\b))`;
+const POST_YEAR = new RegExp(String.raw`\bcurl(?:\.exe)?\b(?![^;&|\n]*${CURL_GET})(?=[^;&|\n]*:9981\b)(?=[^;&|\n]*${CURL_POSTS})`
+  + String.raw`|Invoke-(?:RestMethod|WebRequest)\b(?=[^;&|\n]*-Method\s+['"]?Post\b)(?=[^;&|\n]*:9981\b)`, 'i');
 /** Direct changes that read like checks, each with its words (R9 #38): the lighting port's own script, Will's rope lights and any
  *  scheduled task, TouchDesigner's launcher, bitcube's restart or shutdown and its network adapters, a POST to the year's page, the
  *  router's settings and its services, and a bridge call into the year's own setters. */

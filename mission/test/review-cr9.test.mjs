@@ -47,3 +47,20 @@ test('CR9 #1: reading, grepping or printing a script or a cmdlet by name is a lo
     [`${B} "cmd /c C:\\Users\\user\\River\\river-bitcube\\Start-River.cmd"`, 'started TouchDesigner'],
   ]) assert.deepEqual(await stepOf(cmd), [words, true], cmd);
 });
+
+// ---- #2: a POST to the year's page by its own flags, case and all ---------------------------------------------------------------
+
+test("CR9 #2: only a POST to the year's page is a change to it: curl's -f (fail) and -D (dump headers) are no -F or -d, and -G sends -d as a GET", async () => {
+  for (const cmd of ['curl -s -f http://bitcube:9981/state', 'curl -sf http://100.73.68.60:9981/state', 'curl -s -D - http://bitcube:9981/state',
+    'curl -fsSL http://bitcube:9981/state', 'curl -G -d mode=manual http://bitcube:9981/state', 'curl -X GET http://bitcube:9981/state',
+    'curl -s -X POST http://bitcube:8770/x -d 1 ; curl -sf http://bitcube:9981/state']) {
+    assert.equal((await stepOf(cmd))[1], false, cmd);
+  }
+  for (const cmd of ['curl -X POST http://100.73.68.60:9981/mode -d \'{"mode":"manual"}\'', 'curl -s -d \'{"mode":"manual"}\' http://bitcube:9981/mode',
+    'curl -sd mode=manual http://bitcube:9981/mode', 'curl -F mode=manual http://bitcube:9981/mode', 'curl --data-raw x http://bitcube:9981/rules',
+    'curl --json \'{"a":1}\' http://bitcube:9981/rules', 'curl -XPOST http://bitcube:9981/rules/reset', 'curl --request POST http://bitcube:9981/rules/reset',
+    `${B} "Invoke-RestMethod -Method Post -Uri http://localhost:9981/target -Body x"`]) {
+    assert.deepEqual(await stepOf(cmd), ["changed the river's year", true], cmd);
+  }
+});
+
