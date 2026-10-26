@@ -165,3 +165,34 @@ test('CR9 #13: in an object, "key" is masked only as a Wi-Fi key (beside an ssid
   // the names that are always a login stay so, a number too (a numeric secret)
   assert.deepEqual(scrubCreds({ SSHPASS: F, db_pass: F, password: 42, api_key: F }), { SSHPASS: '***', db_pass: '***', password: '***', api_key: '***' });
 });
+
+// ---- #6: a lost switch to another file ends done when a later full check shows it ----------------------------------------------
+
+function payload({ t, td, uptime_h = 30, applying = [], extra = {} } = {}) {
+  return { now: t, bitcube: { ok: true, at: t, value: { online: true } }, seasons: { ok: true, at: t, value: { season: 'winter', mode: 'automatic', intensity: 0.2, presence: { available: false } } },
+    modal: { ok: true, at: t, value: { ok: true, tick: 1, next_tick_epoch: t / 1000 + 200, finished_at: new Date(t - 60_000).toISOString() } },
+    probe: { ok: true, at: t, value: { ok: true, uptime_h, time: '2026-10-25T21:04:00', boot_file: YEAR, show_files: [YEAR, LIVE], displays: ['M14', 'LED 1920X1080'],
+      devices: { psac10_1: true, psac10_2: true, gallery_cam: true, river_cam: true, router: true, internet: true },
+      modal_link: { processes: 8, gallery: { log_age_s: 1, last: '21:03:59 INFO ok' }, river: { log_age_s: 4, last: '21:03:56 INFO ok' }, sync: { log_age_s: 57, last: '21:03:03 INFO ok' } },
+      recorder: { clips: 14, last: '2026-10-25 21:00:41 done' },
+      td: td ?? { ok: true, file: YEAR, fps: 60, errors: 0, ropes: { source: 'canvas', status: { open: true, active: true, watts: [100, 100] } }, hub75: { brightness: 1, output: true } } } },
+    applying, ...extra };
+}
+
+test("CR9 #6: a switch whose answer was lost, its entry known to no list, is done once a full check taken after it shows TouchDesigner on that file", async () => {
+  const { derive, ownVerdict } = await import('../public/model.js');
+  const t = T0 + 120_000;
+  const live = derive(payload({ t, td: { ok: true, file: LIVE, fps: 60, errors: 0 } }), t);
+  const lost = { state: 'unconfirmed', lost: true, held: false, entryId: null, requestId: 'rlost1', serverConfirms: true };
+  const sent = { action: 'switch', file: LIVE, before: YEAR, sentAt: T0 };
+  assert.equal(ownVerdict(live, { ...lost, sent }).step, 'done', 'CR7 #4: the reading shows it');
+  assert.equal(ownVerdict(live, { ...lost, sent }).judged, true);
+  // never from a reading taken before the send, a restart (the same file) or a rebuild: no reading can tell
+  assert.equal(ownVerdict(live, { ...lost, sent: { ...sent, sentAt: t + 1000 } }).step, null);
+  assert.equal(ownVerdict(derive(payload({ t, td: { ok: true, file: YEAR, fps: 60, errors: 0 } }), t), { ...lost, sent: { ...sent, file: YEAR } }).step, null);
+  assert.equal(ownVerdict(live, { ...lost, sent: { ...sent, action: 'rebuild' } }).step, null);
+  // a boot-file change the same way
+  const boot = derive(payload({ t, extra: {} }), t);
+  boot.show.boot_file = { name: LIVE };
+  assert.equal(ownVerdict(boot, { ...lost, sent: { action: 'bootfile', file: LIVE, before: YEAR, sentAt: T0 } }).step, 'done');
+});

@@ -1275,8 +1275,10 @@ export function ownVerdict(m, c = {}) {
   const holds = !!pend && pend.maybe === true && pend.phase === 'confirming' && MAYBE_HOLDS.includes(pend.action);
   // its answer still on the way (R9 #1), or lost on the network (R9 #29: lost, never a server's maybe): its entry, found by the request
   // id it sent, says where it is: confirmed (done), given up (unconfirmed), answered and waiting for bitcube (confirming), or held
+  // one lost with no entry any list names (its request id aged out, a restart of the server) still ends done when a reading taken
+  // after it shows it (serverJudged's readingShows, CR7 #4: CR9 #6); one in flight waits for its answer or its entry
   if (flying || (state === 'unconfirmed' && c?.lost && !c?.held)) {
-    const v = !entryId ? null : flying ? entryVerdict(m, entryId) : serverJudged(m, entryId, c?.sent ?? null);
+    const v = flying ? (entryId ? entryVerdict(m, entryId) : null) : serverJudged(m, entryId, c?.sent ?? null);
     const step = v === 'confirmed' ? 'done' : v === 'expired' ? (flying ? 'expired' : c?.saidExpired ? null : 'gave-up')
       : v === 'pending' && holds ? 'held' : v === 'pending' && !pend.maybe && (!flying || pend.phase === 'confirming') ? 'confirming' : null;
     return { entryId, unlockAt: step === 'held' ? num(pend.unlock_at) : null, judged: !!step, step };
