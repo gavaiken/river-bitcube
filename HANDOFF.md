@@ -2,10 +2,10 @@
 
 The baton. **Read this first, every session; rewrite it before you stop** (rules: [`AGENTS.md`](AGENTS.md) "Start here"). Keep it to one screen: the current state, not a history. History goes in `docs/sessions/<name>.md`.
 
-- **Holder:** Gavin (coordinator session on the Mac mini, with two helper agents)
+- **Holder:** nobody: free for Will
 - **Where:** repo only (bitcube is free; the boot file is running)
-- **Updated:** 2026-10-26 14:20 PT
-- **Next holder:** Will, once the "Ready for Will" list below is all ✅
+- **Updated:** 2026-10-26 14:42 PT
+- **Next holder:** Will (Codex). **Ready for Will.**
 
 ## The show right now
 - At Gray Area. bitcube boots **the river's year** (`river-local-oct-22-seasons.toe`); **the live river** (`river-online-oct-23.toe`) is the other show file mission control offers.
@@ -13,20 +13,22 @@ The baton. **Read this first, every session; rewrite it before you stop** (rules
 - Mission control v2 is live (round 10 merged; open minor items in [`docs/mission-known-issues.md`](docs/mission-known-issues.md)).
 - Checkpoint `checkpoint-2026-10-26` taken (tags in both repos, bitcube and mini archives): [`docs/checkpoints.md`](docs/checkpoints.md).
 
-## In progress (Gavin, 26 Oct): getting ready for Will
+## Done (Gavin, 26 Oct): ready for Will
 | | Piece | Who |
 |---|---|---|
 | ✅ | Checkpoint | coordinator |
 | ✅ | `AGENTS.md` (one rulebook for Claude and Codex), this baton, the old plans marked as history, studio agent follows the baton | coordinator |
-| ⏳ | `shows.json` registry (every show file's description, inputs, editors, pinned calibration); `Start-River.cmd`, mission control and the build scripts read it | helper (repo) |
-| ⏳ | Calibration pinned per show, never "newest map wins" | helper (repo) |
-| ⏳ | `tools/check` + GitHub Actions (tests, registry, metadata freshness) | helper (repo) |
-| ⏳ | Mission control: a card describing a show before you switch to it, and "Back to boot file" | helper (repo) |
-| ✅ | Baseline template `river-baseline-template.toe`: river cam (recorded clip as fallback) + gallery cam in, river on the screens and down the ropes. Verified on the lights 14:05–14:07; [page](docs/files/river-baseline-template.md). Waits for its `shows.json` entry to be selectable | helper (bitcube) |
-| ⬜ | Gavin switches to the template on his phone, reads its card, switches back; `tools/check` green → kickoff prompt to Will | Gavin |
+| ✅ | `shows.json` registry (every show file's description, inputs, editors, pinned calibration); `Start-River.cmd`, mission control and the build scripts read it | helper (repo) |
+| ✅ | Calibration pinned per show, never "newest map wins" | helper (repo) |
+| ✅ | `tools/check` + GitHub Actions (tests, registry, metadata freshness) | helper (repo) |
+| ✅ | Mission control: "What's showing" card (Change → preview card → Switch; Back to default; Set as default, any show); seasons panel only while the river's year runs | helper (repo) |
+| ✅ | Baseline template `river-baseline-template.toe`: river cam (recorded clip as fallback) + gallery cam in, river on the screens and down the ropes. Verified on the lights 14:05–14:07; [page](docs/files/river-baseline-template.md). Offered in mission control | helper (bitcube) |
+| ✅ | Verified 14:37–14:40: bitcube pulled; `shows.ps1`/`probe.ps1` list the three offered shows; switch to the template and back via `probe.ps1`, default unchanged; `tools/check` green, CI green, mission control on 7886e79 | coordinator |
+| ⬜ | Gavin's phone test (optional): Change → Baseline → read card → Switch → Back to default | Gavin |
 
-## Ready for Will when
-All rows above are ✅. Then Will's first session: `git pull`, read `AGENTS.md` and this file, take the baton, make his first viz from the template.
+## Will's first session
+ Will's first session: `git pull`, read `AGENTS.md` and this file, take the baton, make his first viz from the template.
 
 ## Open questions
-- None blocking.
+- Running **the live river** still shows as a warning on Status ("not the river's year"); a viz running shows OK. Gavin to decide if the live river should be OK too.
+- A switch restarts TouchDesigner, so the river's year comes back with its own saved state (after the 14:40 test it was in winter; it had been set by hand to summer at 14:12).
