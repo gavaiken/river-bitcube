@@ -193,3 +193,43 @@ test('CR7 #14: the feed drops a line said twice at one moment with a set, keepin
   assert.equal(feed(many).length, 50_000);
   assert.ok(performance.now() - t0 < 1000, `${Math.round(performance.now() - t0)} ms`);
 });
+
+// ---- the chat's step lines -----------------------------------------------------------------------------------------------
+test('CR7 #9: a bridge call that changes a parameter by .expr, .mode, .bindExpr or setattr( is an acting line too', async () => {
+  const { describeTool } = await import('../lib/steps.mjs');
+  const bash = (command, description = '') => describeTool({ name: 'Bash', input: { description, command } });
+  const td = (py) => `ssh bitcube powershell -File C:\\x\\tools\\td.ps1 "${py}"`;
+  for (const py of ["op('/project1/ropes').par.Source.expr = 'black'", "op('/project1/ropes').par.Source.mode=ParMode.CONSTANT",
+                    "op('/project1/ropes').par.Source.bindExpr = ''", "p = op('/project1/ropes').par.Source; p.expr = 'x'",
+                    "for p in op('/project1/ropes').pars('Source'): p.bindExpr = ''", "setattr(op('/project1/ropes').par, 'Source', 'black')",
+                    "op('/project1/ropes').par.Source.val='black'"]) {
+    const s = bash(td(py), 'Check the ropes');
+    assert.deepEqual([s.text, s.acting], ['changed the ropes', true], py);
+  }
+  // reads stay reads: a comparison, an eval, getattr
+  for (const py of ["print(op('/project1/ropes').par.Source.expr)", "op('/project1/ropes').par.Source.mode == ParMode.EXPRESSION",
+                    "getattr(op('/project1/ropes').par, 'Source').eval()", "op('/project1/ropes').par.Source.expr != ''"]) {
+    const s = bash(td(py), 'Check the ropes');
+    assert.deepEqual([s.text, s.acting], ['checked the ropes', false], py);
+  }
+});
+
+test('CR7 #15: 2>&1, >&2 and &> are redirections, not command separators', async () => {
+  const { describeTool, commandParts } = await import('../lib/steps.mjs');
+  assert.deepEqual(commandParts('a 2>&1 | b'), ['a 2>&1', 'b']);
+  assert.deepEqual(commandParts('a &> f; b &>> g'), ['a &> f', 'b &>> g']);
+  assert.deepEqual(commandParts('a >&2 && b & c || d'), ['a >&2', 'b', 'c', 'd']);
+  assert.deepEqual(commandParts('a 1>&2 2>&1 |& b'), ['a 1>&2 2>&1', 'b']);
+  assert.deepEqual(commandParts(`x '{"a":"b & c"}' && y "2>&1; z"`), [`x '{"a":"b & c"}'`, 'y "2>&1; z"']);
+  const bash = (command, description = '') => describeTool({ name: 'Bash', input: { description, command } });
+  // a status read through mission control with its errors redirected stays one look, never a change "around" mission control
+  for (const cmd of ['node mission/bin/mc.mjs status 2>&1 | head -20', 'node mission/bin/mc.mjs status &> /tmp/x.json', 'node mission/bin/mc.mjs status >&2']) {
+    assert.deepEqual([bash(cmd, 'Look').text, bash(cmd, 'Look').acting], ['looked at what mission control shows', false], cmd);
+  }
+  // a change asked of mission control with its output redirected is that change, through mission control
+  const s = bash(`node mission/bin/mc.mjs ropes '{"dark":true}' 2>&1`, 'Ropes dark');
+  assert.deepEqual([s.text, s.acting], ['asked mission control to turn the ropes dark', true]);
+  // a real & still separates: a look chained to a change made directly on bitcube says so
+  const d = bash('node mission/bin/mc.mjs status 2>&1 & ssh bitcube "powershell -File C:\\x\\probe.ps1 -Action ropes -Dark" 2>&1', 'Look');
+  assert.match(d.text, /^changed the ropes on bitcube directly, not through mission control$/);
+});
