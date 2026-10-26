@@ -85,9 +85,9 @@ def probe_mask():
     body = src[src.index('function Mask-Creds'):]
     body = body[:body.index('\n}\n')]
     steps = re.findall(r"-replace \$(CRED_\w+), '([^']*)'", body)
-    assert [name for name, _ in steps] == ['CRED_URL', 'CRED_QUOTED', 'CRED_ESCAPED', 'CRED_BARE_JSON', 'CRED_BARE',
+    assert [name for name, _ in steps] == ['CRED_URL', 'CRED_SMB', 'CRED_QUOTED', 'CRED_ESCAPED', 'CRED_BARE_JSON', 'CRED_BARE',
                                            'CRED_AUTH', 'CRED_BEARER', 'CRED_USER', 'CRED_FLAG', 'CRED_SSHPASS',
-                                           'CRED_MYSQL', 'CRED_UCI', 'CRED_SKANT'], steps
+                                           'CRED_MYSQL', 'CRED_UCI', 'CRED_SKANT', 'CRED_LOGIN', 'CRED_TOKEN'], steps
     compiled = [(re.compile(pats[name], re.I), re.sub(r'\$(\d+)', r'\\g<\1>', repl)) for name, repl in steps]
 
     def mask(s):
@@ -157,6 +157,20 @@ PROBE_CASES = CASES + [
     # CR9 #14: mysql's port is -P, its password -p: only the lower case is masked (case-sensitive inside -replace)
     ('mysql -h db -P3306 -u root -phunter2 river', 'mysql -h db -P3306 -u root -p*** river'),
     ('mysqldump -P3306 river', 'mysqldump -P3306 river'),
+    # R10 #35: a URL login whose scheme follows digits or a dash (read from the start of its run, in linear time)
+    ('x=1rtsp://admin:hunter2@cam/x', 'x=1rtsp://***@cam/x'),
+    ('curl -s x curl -u admin:hunter2 y', 'curl -s x curl -u admin:*** y'),
+    # R10 #38: a Wi-Fi psk, an SMB login, uci batch, mysql's quoted -p, Windows and wpa_cli logins, tokens known by their prefix
+    ('psk=hunter2 {"psk":"hunter2","ssid":"gray-river"}', 'psk=*** {"psk":"***","ssid":"gray-river"}'),
+    ('mount_smbfs //user:hunter2@bitcube/River /tmp/r', 'mount_smbfs //user:***@bitcube/River /tmp/r'),
+    ('smbclient //bitcube/River -U user%hunter2', 'smbclient //bitcube/River -U user%***'),
+    ('uci batch <<EOF\nset wireless.default_radio0.key=hunter2\ncommit wireless', 'uci batch <<EOF\nset wireless.default_radio0.key=***\ncommit wireless'),
+    ("mysql -u root -p'hunter2' db", 'mysql -u root -p*** db'),
+    ('schtasks /create /tn s /ru user /rp hunter2 /it', 'schtasks /create /tn s /ru user /rp *** /it'),
+    ("ConvertTo-SecureString 'hunter2' -AsPlainText", "ConvertTo-SecureString '***' -AsPlainText"),
+    ('wpa_cli set_network 0 psk "hunter2 x"', 'wpa_cli set_network 0 psk "***"'),
+    (f'TS_AUTHKEY=tskey-auth-{FAKE} tskey-auth-{FAKE} Cookie: mc=hunter2hunter2hunter2', 'TS_AUTHKEY=*** tskey-*** Cookie: mc=***'),
+    ('encryption psk2; mount //bitcube/River /mnt; a basic check', 'encryption psk2; mount //bitcube/River /mnt; a basic check'),
 ]
 
 
@@ -169,3 +183,14 @@ def test_probe_masks_logins_in_urls_json_and_queries(line, want):
     assert FAKE not in got and 'hunter2' not in got and 'cd"' not in got
     if want.startswith('{"') and want.endswith('}'):
         json.loads(got)
+
+
+@pytest.mark.parametrize('shape', ['a', 'a-', 'pass', 'curl ', 'mysql -x ', '//a:', 'smbclient -U ', 'x://'])
+def test_probe_masks_a_long_line_in_linear_time(shape):
+    """A 20,000-character line of one shape is masked at once (R10 #35): no pattern rescans a run from every place inside it."""
+    import time
+    mask = probe_mask()
+    line = shape * (20_000 // len(shape))
+    t = time.perf_counter()
+    mask(line)
+    assert time.perf_counter() - t < 1.0, shape

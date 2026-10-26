@@ -76,14 +76,15 @@ test('CR7 #3: a quoted value is masked to its own closing quote, past an escaped
 test('CR7 #1: probe.ps1 Mask-Creds masks with the very patterns scrubCreds uses, in the same order (tools/tests/test_masks.py runs them)', () => {
   const src = readFileSync(new URL('../../tools/mission/probe.ps1', import.meta.url), 'utf8');
   const ps = Object.fromEntries([...src.matchAll(/^\$(CRED_\w+) = '((?:[^']|'')*)'$/gm)].map((m) => [m[1], m[2].replace(/''/g, "'")]));
-  assert.deepEqual(ps, { CRED_URL: PATTERNS.CREDS, CRED_QUOTED: PATTERNS.QUOTED, CRED_ESCAPED: PATTERNS.ESCAPED, CRED_BARE_JSON: PATTERNS.BARE_JSON, CRED_BARE: PATTERNS.BARE,
+  assert.deepEqual(ps, { CRED_URL: PATTERNS.CREDS, CRED_SMB: PATTERNS.SMB, CRED_QUOTED: PATTERNS.QUOTED, CRED_ESCAPED: PATTERNS.ESCAPED, CRED_BARE_JSON: PATTERNS.BARE_JSON, CRED_BARE: PATTERNS.BARE,
                          CRED_AUTH: PATTERNS.AUTH, CRED_BEARER: PATTERNS.BEARER, CRED_USER: PATTERNS.USER, CRED_FLAG: PATTERNS.FLAG, CRED_SSHPASS: PATTERNS.SSHPASS,   // R8 #38
-                         CRED_MYSQL: PATTERNS.MYSQL, CRED_UCI: PATTERNS.UCI, CRED_SKANT: PATTERNS.SKANT });   // R9 #37 ("key" is one of the names: CR9 #12)
+                         CRED_MYSQL: PATTERNS.MYSQL, CRED_UCI: PATTERNS.UCI, CRED_SKANT: PATTERNS.SKANT,      // R9 #37 ("key" is one of the names: CR9 #12)
+                         CRED_LOGIN: PATTERNS.LOGIN, CRED_TOKEN: PATTERNS.TOKEN });                                                             // R10 #38
   const fn = src.slice(src.indexOf('function Mask-Creds'), src.indexOf('\n}\n', src.indexOf('function Mask-Creds')));
   assert.deepEqual([...fn.matchAll(/-replace \$(CRED_\w+), '([^']*)'/g)].map((m) => `${m[1]} ${m[2]}`),
-    ['CRED_URL $1***@', 'CRED_QUOTED $1$2***$4', 'CRED_ESCAPED $1$2***$5', 'CRED_BARE_JSON $1$2***$2', 'CRED_BARE $1***',
+    ['CRED_URL $1***@', 'CRED_SMB $1***@', 'CRED_QUOTED $1$2***$4', 'CRED_ESCAPED $1$2***$5', 'CRED_BARE_JSON $1$2***$2', 'CRED_BARE $1***',
      'CRED_AUTH $1***', 'CRED_BEARER $1***', 'CRED_USER $1***', 'CRED_FLAG $1***', 'CRED_SSHPASS $1***',
-     'CRED_MYSQL $1***', 'CRED_UCI $1***', 'CRED_SKANT $1***']);
+     'CRED_MYSQL $1***', 'CRED_UCI $1***', 'CRED_SKANT $1***', 'CRED_LOGIN $1***', 'CRED_TOKEN $1***']);
 });
 
 // ---- dry and decode-only starts --------------------------------------------------------------------------------------

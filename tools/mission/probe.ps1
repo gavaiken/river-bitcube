@@ -26,22 +26,26 @@ $out = [ordered]@{ ok = $true; time = (Get-Date).ToString('s') }
 # header, Bearer, curl -u user:pw, --password pw, sshpass -p pw (R8 #38).
 # The very patterns of mission/lib/scrub.mjs PATTERNS (mission/test/review-cr7.test.mjs compares them; tools/tests/test_masks.py
 # runs them): change both together.
-$CRED_URL = '([a-z][a-z0-9+.-]*:\/\/)[^\s/?#"<>]*@'
-$CRED_QUOTED = '((?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])pass|sshpass|pass(?==)|key(?=\\?["'']\s*:\s*\\?["''])|\\?["''](?:user(?:name)?|login|usr)\\?["'']\s*:\s*(?:\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']|[\w.@-]+)\s*,\s*\\?["'']pass(?=\\?["'']\s*:)|pass(?=\\?["'']\s*:\s*\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']\s*,\s*\\?["''](?:user(?:name)?|login|usr)\\?["'']))(?![\w-])(?:\\?["''])?\s*[:=]\s*)(["''])((?:\\(?:[\s\S]|$)|(?!\2)[^\\])*)(\2|$)'
-$CRED_ESCAPED = '((?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])pass|sshpass|pass(?==)|key(?=\\?["'']\s*:\s*\\?["''])|\\?["''](?:user(?:name)?|login|usr)\\?["'']\s*:\s*(?:\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']|[\w.@-]+)\s*,\s*\\?["'']pass(?=\\?["'']\s*:)|pass(?=\\?["'']\s*:\s*\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']\s*,\s*\\?["''](?:user(?:name)?|login|usr)\\?["'']))(?![\w-])(?:\\?["''])?\s*[:=]\s*)(\\(["'']))((?:\\\\\\\\|\\\\\\\3|\\(?:\\\\)?(?!\\|\3)[\s\S]|\\\\(?!\\|\3)|(?!\3)[^\\]|\\+$)*)(\\\3|$)'
-$CRED_BARE_JSON = '((?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])pass|sshpass|pass(?==)|key(?=\\?["'']\s*:\s*\\?["''])|\\?["''](?:user(?:name)?|login|usr)\\?["'']\s*:\s*(?:\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']|[\w.@-]+)\s*,\s*\\?["'']pass(?=\\?["'']\s*:)|pass(?=\\?["'']\s*:\s*\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']\s*,\s*\\?["''](?:user(?:name)?|login|usr)\\?["'']))(?![\w-])(\\?["''])\s*:\s*)(?!\\?["''])(?!(?:null|true|false)(?![^\s"''&,;}\]]))([{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\])*[}\]])*[}\]])*[}\]])*[}\]]|[{\[][^\r\n]*|[^\s"''&,;}\]]+)'
-$CRED_BARE = '((?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])pass|sshpass|pass(?==)|key(?=\\?["'']\s*:\s*\\?["''])|\\?["''](?:user(?:name)?|login|usr)\\?["'']\s*:\s*(?:\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']|[\w.@-]+)\s*,\s*\\?["'']pass(?=\\?["'']\s*:)|pass(?=\\?["'']\s*:\s*\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']\s*,\s*\\?["''](?:user(?:name)?|login|usr)\\?["'']))(?![\w-])(?:\\?["''])?\s*[:=]\s*)(?!\\?["''])(?!(?:null|true|false)(?![^\s"''&,;}\]]))([{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\])*[}\]])*[}\]])*[}\]])*[}\]]|[{\[][^\r\n]*|[^\s"''&,;}\]]+)'
+$CRED_URL = '(?<![a-z0-9+.-])([0-9+.-]*[a-z][a-z0-9+.-]*:\/\/)[^\s/?#"<>]*@'
+$CRED_SMB = '((?<![:\w/])\/\/[^\s/@:"''<>]+:)[^\s/"''<>]*@'
+$CRED_QUOTED = '((?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key|psk|(?:wpa|wep|auth)[_-]?key|pw)|(?:[\w-]*[_-])pass|sshpass|pass(?==)|key(?=\\?["'']\s*:\s*\\?["''])|\\?["''](?:user(?:name)?|login|usr)\\?["'']\s*:\s*(?:\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']|[\w.@-]+)\s*,\s*\\?["'']pass(?=\\?["'']\s*:)|pass(?=\\?["'']\s*:\s*\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']\s*,\s*\\?["''](?:user(?:name)?|login|usr)\\?["'']))(?![\w-])(?:\\?["''])?\s*[:=]\s*)(["''])((?:\\(?:[\s\S]|$)|(?!\2)[^\\])*)(\2|$)'
+$CRED_ESCAPED = '((?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key|psk|(?:wpa|wep|auth)[_-]?key|pw)|(?:[\w-]*[_-])pass|sshpass|pass(?==)|key(?=\\?["'']\s*:\s*\\?["''])|\\?["''](?:user(?:name)?|login|usr)\\?["'']\s*:\s*(?:\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']|[\w.@-]+)\s*,\s*\\?["'']pass(?=\\?["'']\s*:)|pass(?=\\?["'']\s*:\s*\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']\s*,\s*\\?["''](?:user(?:name)?|login|usr)\\?["'']))(?![\w-])(?:\\?["''])?\s*[:=]\s*)(\\(["'']))((?:\\\\\\\\|\\\\\\\3|\\(?:\\\\)?(?!\\|\3)[\s\S]|\\\\(?!\\|\3)|(?!\3)[^\\]|\\+$)*)(\\\3|$)'
+$CRED_BARE_JSON = '((?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key|psk|(?:wpa|wep|auth)[_-]?key|pw)|(?:[\w-]*[_-])pass|sshpass|pass(?==)|key(?=\\?["'']\s*:\s*\\?["''])|\\?["''](?:user(?:name)?|login|usr)\\?["'']\s*:\s*(?:\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']|[\w.@-]+)\s*,\s*\\?["'']pass(?=\\?["'']\s*:)|pass(?=\\?["'']\s*:\s*\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']\s*,\s*\\?["''](?:user(?:name)?|login|usr)\\?["'']))(?![\w-])(\\?["''])\s*:\s*)(?!\\?["''])(?!(?:null|true|false)(?![^\s"''&,;}\]]))([{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\])*[}\]])*[}\]])*[}\]])*[}\]]|[{\[][^\r\n]*|[^\s"''&,;}\]]+)'
+$CRED_BARE = '((?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key|psk|(?:wpa|wep|auth)[_-]?key|pw)|(?:[\w-]*[_-])pass|sshpass|pass(?==)|key(?=\\?["'']\s*:\s*\\?["''])|\\?["''](?:user(?:name)?|login|usr)\\?["'']\s*:\s*(?:\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']|[\w.@-]+)\s*,\s*\\?["'']pass(?=\\?["'']\s*:)|pass(?=\\?["'']\s*:\s*\\?["''](?:\\[\s\S]|[^"''\\\r\n])*?\\?["'']\s*,\s*\\?["''](?:user(?:name)?|login|usr)\\?["'']))(?![\w-])(?:\\?["''])?\s*[:=]\s*)(?!\\?["''])(?!(?:null|true|false)(?![^\s"''&,;}\]]))([{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\])*[}\]])*[}\]])*[}\]])*[}\]]|[{\[][^\r\n]*|[^\s"''&,;}\]]+)'
 $CRED_AUTH = '(\bAuthorization\s*[:=]\s*["'']?(?:(?:Bearer|Basic|Token|Digest)\s+)?)([^\s"'',;]+)'
 $CRED_BEARER = '(\bBearer\s+)([A-Za-z0-9._~+/=-]{12,})'
-$CRED_USER = '((?:^|[\s"''\\/])(?:curl|wget|https?|xh)(?:\.exe)?\s(?:[^\n;&|]*?[\s"''])?(?:-u|--user)(?:[\s=]+|(?=[^\s=-]))[^\s:"''*]+:)([^\s"'']+)'
-$CRED_FLAG = '((?:^|\s)--?(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|pass|token|secret|api[_-]?key)\s+)(?![-*])([^\s"'']+)'
+$CRED_USER = '((?:^|[\s"''\\/])(?:curl|wget|https?|xh)(?:\.exe)?\s(?:(?:(?![\s"''\\/](?:curl|wget|https?|xh)(?:\.exe)?\s)[^\n;&|])*?[\s"''])?(?:-u|--user)(?:[\s=]+|(?=[^\s=-]))[^\s:"''*]+:)([^\s"'']+)'
+$CRED_FLAG = '((?:^|\s)--?(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|pass|token|secret|api[_-]?key|auth[_-]?key|psk)\s+)(?![-*])([^\s"'']+)'
 $CRED_SSHPASS = '(\bsshpass\s+-p\s*)([^\s"'']+)'
-$CRED_MYSQL = '(\b(?:mysql|mysqldump|mysqladmin|mariadb)(?:\.exe)?\s(?:[^\n;&|]*?\s)?(?-i:-p))([^\s"''-][^\s"'']*)'
+$CRED_MYSQL = '(\b(?:mysql|mysqldump|mysqladmin|mariadb)(?:\.exe)?\s(?:(?:(?!\b(?:mysql|mysqldump|mysqladmin|mariadb)(?:\.exe)?\s)[^\n;&|])*?\s)?(?-i:-p))(''[^''\r\n]*''|"[^"\r\n]*"|[^\s"''-][^\s"'']*)'
 $CRED_UCI = '((?<=[\w\]@-])\.key[1-4]?=["'']?|\boption\s+key[1-4]?\s+["'']?)((?<='')(?:[^''\r\n]|''\\'''')*|(?<=")[^"\r\n]*|(?<![''"])[^\s"'']+)'
 $CRED_SKANT = '(\bsk-ant-)([A-Za-z0-9_-]{8,})'
+$CRED_LOGIN = '((?-i:\s-U)\s*[^\s%"'']+%|(?<=\s)\/rp\s+|(?<=\s)\/user:[^\s"'']+\s+(?![\/-])|\bConvertTo-SecureString\s+(?:-String\s+)?["'']?|\bset_network\s+\S+\s+(?:psk|password|sae_password|wep_key[0-3])\s+["'']?)((?<='')[^''\r\n]*|(?<=")[^"\r\n]*|(?<![''"])[^\s"'']+)'
+$CRED_TOKEN = '(\b(?:gh[pousr]_|github_pat_|tskey-|mc=)|\bBasic\s+(?=[A-Za-z0-9+/]*[0-9+/=]))([A-Za-z0-9_+/-]{16,}={0,2})'
 function Mask-Creds([string]$s) {
     if ($null -eq $s) { return $null }
     $s = $s -replace $CRED_URL, '$1***@'
+    $s = $s -replace $CRED_SMB, '$1***@'
     $s = $s -replace $CRED_QUOTED, '$1$2***$4'
     $s = $s -replace $CRED_ESCAPED, '$1$2***$5'
     $s = $s -replace $CRED_BARE_JSON, '$1$2***$2'
@@ -53,7 +57,9 @@ function Mask-Creds([string]$s) {
     $s = $s -replace $CRED_SSHPASS, '$1***'
     $s = $s -replace $CRED_MYSQL, '$1***'
     $s = $s -replace $CRED_UCI, '$1***'
-    return ($s -replace $CRED_SKANT, '$1***')
+    $s = $s -replace $CRED_SKANT, '$1***'
+    $s = $s -replace $CRED_LOGIN, '$1***'
+    return ($s -replace $CRED_TOKEN, '$1***')
 }
 
 $BOOT_FILES = @('river-local-oct-22-seasons.toe', 'river-online-oct-23.toe')   # retired show files start with old- (D27): never offered
