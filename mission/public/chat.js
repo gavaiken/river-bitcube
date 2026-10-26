@@ -2,7 +2,7 @@
 // turns the chat's events (GET /api/chat/history, the SSE /api/chat/events) into one card per request, pairs replies with
 // their request by id, and keeps the pinned status bar and the composer. Server API unchanged: history, events, send, stop.
 import { mountShell, tick, art, fmt, control, confirm, api, esc, md, chip, mark, plainError, noAnswerText, WARN_MS, LOST_MS } from '/ui.js';
-import { TZ } from '/model.js';
+import { TZ, applyingWords } from '/model.js';
 import { stateOf as judge, stepWords, stepsToggle, excerpt } from '/chat-words.js';
 
 const $ = (id) => document.getElementById(id);
@@ -224,10 +224,20 @@ $('stop-status').replaceWith($('stop-host').querySelector('.ctl-status'));
 
 // ---- the composer: send; Return makes a new line on touch -------------------------------------------------------------
 const text = $('text'), sendBtn = $('send'), sendStatus = $('send-status');
+const SEND_USUAL_S = 10;                // a send usually answers within a few seconds; past this its line shows m:ss (R6 #1)
+let sendClock = null;                   // { msg, at, wall, untick } while "Sending…" ticks
 function sendShow(state, msg = '') {
+  sendClock?.untick(); sendClock = null;
   sendStatus.className = `ctl-status ${state === 'before' ? '' : state}`;
-  sendStatus.innerHTML = state === 'before' ? '' : `${state === 'pending' ? '<span class="spin" aria-hidden="true"></span>' : ''}<span>${esc(msg)}</span>`;
+  sendStatus.innerHTML = state === 'before' ? '' : `${state === 'pending' ? '<span class="spin" aria-hidden="true"></span>' : ''}<span class="t">${esc(msg)}</span>`;
   sendBtn.disabled = state === 'pending' || !text.value.trim();
+  if (state === 'pending' && msg === 'Sending…') {
+    // the same words as every change in flight (model.js): "Sending · 0:12 · usually a few seconds" once it runs long; the line
+    // is not live, so its ticking time is never read out
+    const c = { at: performance.now(), wall: Date.now() };
+    c.untick = tick(() => { const t = sendStatus.querySelector('.t'), w = applyingWords(msg, runS(c), SEND_USUAL_S); if (t && t.textContent !== w) t.textContent = w; });
+    sendClock = c;
+  }
 }
 function autogrow() { text.style.height = 'auto'; text.style.height = `${Math.min(160, Math.max(48, text.scrollHeight))}px`; }
 let sending = false;
@@ -238,11 +248,15 @@ async function send() {
   sendShow('pending', 'Sending…');
   try {
     const r = await api('/api/chat/send', { text: t });
-    S.pendingSend = r?.id ?? null;
     text.value = ''; autogrow();
-    sendShow('pending', 'Sent; waiting for it to show up…');
+    // the stream can bring the request before its POST answers: then it has already shown up, and nothing is waited for (R6 #11)
+    if (r?.id != null && S.reqs.has(r.id)) { S.pendingSend = null; sendShow('before'); }
+    else {
+      S.pendingSend = r?.id ?? null;
+      sendShow('pending', 'Sent; waiting for it to show up…');
+      setTimeout(() => { if (S.pendingSend === r?.id) { S.pendingSend = null; sendShow('before'); } }, 6000);
+    }
     if (r?.status) setStatus(r.status);
-    setTimeout(() => { if (S.pendingSend === r?.id) { S.pendingSend = null; sendShow('before'); } }, 6000);
     text.focus({ preventScroll: true });
   } catch (e) {
     // no usable answer (none in time, one that couldn't be read, a proxy's error page): it may or may not have been sent
