@@ -1,7 +1,7 @@
 // Studio chat v2 (docs/mission-ui.md, "Studio chat"). The shell (header, tab bar, menu, art) comes from ui.js; this file
 // turns the chat's events (GET /api/chat/history, the SSE /api/chat/events) into one card per request, pairs replies with
 // their request by id, and keeps the pinned status bar and the composer. Server API unchanged: history, events, send, stop.
-import { mountShell, tick, art, fmt, control, confirm, api, esc, md, chip, mark, plainError, WARN_MS, LOST_MS } from '/ui.js';
+import { mountShell, tick, art, fmt, control, confirm, api, esc, md, chip, mark, plainError, noAnswerText, WARN_MS, LOST_MS } from '/ui.js';
 import { TZ } from '/model.js';
 import { stateOf as judge, stepWords, stepsToggle, excerpt } from '/chat-words.js';
 
@@ -245,8 +245,9 @@ async function send() {
     setTimeout(() => { if (S.pendingSend === r?.id) { S.pendingSend = null; sendShow('before'); } }, 6000);
     text.focus({ preventScroll: true });
   } catch (e) {
-    sendShow('failed', e?.noAnswer
-      ? `No answer in ${fmt.dur(e.waitedS)}: it may or may not have been sent; look for it above before sending again (${fmt.clock(Date.now())}). Your message is still in the box.`
+    // no usable answer (none in time, one that couldn't be read, a proxy's error page): it may or may not have been sent
+    sendShow('failed', e?.noAnswer || e?.unreadable || e?.notOurs
+      ? `${noAnswerText(e, 'look for it above before sending again')} Your message is still in the box.`
       : `Not sent: ${plainError(e)} (${fmt.clock(Date.now())}). Your message is still in the box.`);
   } finally { sending = false; if (sendStatus.className.includes('failed')) sendBtn.disabled = !text.value.trim(); }
 }
