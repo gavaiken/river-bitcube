@@ -264,14 +264,14 @@ function probeWords(e) {
 /** One source of the snapshot: { at, value | error, age_s } -> freshness and content. */
 function source(raw, name, serverNow) {
   const r = obj(raw);
-  if (!r) return { present: false, ok: false, value: null, error: null, age_s: null, failing_s: null, stale: false };
+  if (!r) return { present: false, ok: false, value: null, error: null, at: null, age_s: null, failing_s: null, stale: false };
   const at = num(r.at);
   const age_s = serverNow != null && at != null ? Math.max(0, Math.round((serverNow - at) / 1000)) : num(r.age_s);   // the server's clock, never the phone's
   const error = typeof r.error === 'string' && r.error ? r.error : null;
   const value = error ? null : r.value ?? null;
   // a failing source keeps the time of its first failure in a row (mission.mjs failing_since): "failing for 52 min"
   const fs = num(r.failing_since), failing_s = error && fs != null && serverNow != null ? Math.max(0, Math.round((serverNow - fs) / 1000)) : null;
-  return { present: true, ok: value != null, value, error: error ?? (value == null ? 'no answer' : null), age_s, failing_s,
+  return { present: true, ok: value != null, value, error: error ?? (value == null ? 'no answer' : null), at, age_s, failing_s,
            stale: age_s != null && age_s > POLL_S[name] * STALE_FACTOR };
 }
 
@@ -856,7 +856,8 @@ export function derive(status, nowMs) {
   };
 
   const sources = {};
-  for (const k of Object.keys(S)) sources[k] = { present: S[k].present, ok: S[k].ok, error: S[k].error, age_s: S[k].age_s, failing_s: S[k].failing_s, stale: S[k].stale };
+  // at: when that source's reading was taken, on the server's clock (ms): a page judges its own change only by a reading after it
+  for (const k of Object.keys(S)) sources[k] = { present: S[k].present, ok: S[k].ok, error: S[k].error, at: S[k].at, age_s: S[k].age_s, failing_s: S[k].failing_s, stale: S[k].stale };
   return { overall, problems: P.map(({ pri, fromProbe: _f, ...p }) => p), show, items, controls, sources };
 }
 
@@ -1008,6 +1009,25 @@ export function entryVerdict(m, id) {
   if ((m.show.confirmed ?? []).some((e) => e.id === id)) return 'confirmed';
   if ((m.show.expired ?? []).some((e) => e.id === id)) return 'expired';
   return null;
+}
+/** When the server's verdict on a page's own change can't be known (no id: its answer was lost; or no list names it: it aged out
+ *  after 10 min, or the server restarted), whether bitcube's reading shows it anyway (CR7 #4). sent: { action, file, before (the
+ *  file running, or the boot file, when it was sent), sentAt (the server's clock, ms) }. A switch to a file other than the one
+ *  running then, once a full check taken after the send shows TouchDesigner answering on that file; a boot-file change to another
+ *  boot file, once one shows it. A restart (the same file) or a rebuild: no reading can tell, so never. */
+export function readingShows(m, sent) {
+  const o = obj(sent), at = num(m?.sources?.probe?.at), t = num(o?.sentAt);
+  if (!o || !m?.show || typeof o.file !== 'string' || o.file === o.before || at == null || t == null || at <= t) return false;
+  if (o.action === 'switch') return m.show.file?.name === o.file;
+  if (o.action === 'bootfile') return m.show.boot_file?.name === o.file;
+  return false;
+}
+/** A page's own change, judged: the server's verdict by its entry's id (entryVerdict: 'pending', 'confirmed', 'expired'), or, when
+ *  that can't be known, 'confirmed' when bitcube's reading shows it (readingShows), else null (waiting; its own limit applies). */
+export function serverJudged(m, id, sent = null) {
+  const v = entryVerdict(m, id);
+  if (v) return v;
+  return sent && readingShows(m, sent) ? 'confirmed' : null;
 }
 /** A change no reading showed in time, naming what was sent: "The switch to the live river was sent at 21:13, but bitcube doesn't
  *  show it yet: look at the Now line, or call Gavin." (what: the change in team words, or null for "Sent at 21:13, …"). */

@@ -288,3 +288,52 @@ test('CR7 #5: Last done uses the kept verdict; with none known, a switch, rebuil
   assert.equal(lastDoneParts({ action: 'check', body: {}, ok: true }, none).head, 'Last done');
   assert.equal(lastDoneParts({ ...sw, ok: false, applying_id: undefined, note: 'bitcube did not answer' }, none).head, 'Last tried');
 });
+
+// ---- a page's own change when the server's verdict can't be known -------------------------------------------------------
+test('CR7 #4: with no verdict to go on, a switch to another file or a boot-file change ends done once a reading taken after the send shows it', async () => {
+  const { derive, serverJudged } = await import('../public/model.js');
+  const sent = T0 - 30_000;
+  const onLive = { ok: true, file: LIVE, fps: 60, errors: 0, ropes: { source: 'canvas', status: { open: true, active: true, watts: [100, 100] } }, hub75: { brightness: 1, output: true } };
+  const reading = (td, { probeAt = T0 - 5000, boot = YEAR, ...extra } = {}) => {
+    const p = payload({ t: T0, td, probeAt });
+    p.probe.value.boot_file = boot;
+    return derive({ ...p, ...extra }, T0);
+  };
+  const sw = { action: 'switch', file: LIVE, before: YEAR, sentAt: sent };
+  // no id (the answer was lost), or an id no list names (aged out after 10 min, the server restarted): the reading decides
+  for (const id of [null, 'ax.gone']) {
+    assert.equal(serverJudged(reading(onLive), id, sw), 'confirmed', String(id));
+    assert.equal(serverJudged(reading(null), id, sw), null, 'TouchDesigner still on the old file');
+    assert.equal(serverJudged(reading(onLive, { probeAt: sent - 1000 }), id, sw), null, 'a reading from before the send says nothing');
+    assert.equal(serverJudged(reading({ ok: false, error: 'not running' }), id, sw), null, 'not answering yet');
+  }
+  // a restart (the same file) or a rebuild: no reading can tell, so it stays as it is
+  assert.equal(serverJudged(reading(null), null, { action: 'switch', file: YEAR, before: YEAR, sentAt: sent }), null);
+  assert.equal(serverJudged(reading(null), null, { action: 'rebuild', file: YEAR, before: YEAR, sentAt: sent }), null);
+  assert.equal(serverJudged(reading(onLive), null, { action: 'switch', file: LIVE, before: LIVE, sentAt: sent }), null);
+  // a boot-file change to another boot file: from boot_file, the same way
+  const bf = { action: 'bootfile', file: LIVE, before: YEAR, sentAt: sent };
+  assert.equal(serverJudged(reading(null, { boot: LIVE }), null, bf), 'confirmed');
+  assert.equal(serverJudged(reading(null, { boot: YEAR }), null, bf), null);
+  assert.equal(serverJudged(reading(null, { boot: LIVE, probeAt: sent - 1 }), null, bf), null);
+  assert.equal(serverJudged(reading(null, { boot: LIVE }), null, { ...bf, before: LIVE }), null, 'the same boot file: nothing to tell');
+  // the server's own verdict always comes first: pending waits, expired is expired, even when the reading shows the file
+  const listed = (k) => ({ [k]: [{ id: 'ax.1', action: 'switch', label: 'the switch to the live river', file: LIVE, phase: 'confirming', started_at: sent, at: T0 - 1000, expect_s: 60, blocks: ['switch'] }] });
+  assert.equal(serverJudged(reading(onLive, listed('applying')), 'ax.1', sw), 'pending');
+  assert.equal(serverJudged(reading(onLive, listed('expired')), 'ax.1', sw), 'expired');
+  assert.equal(serverJudged(reading(null, listed('confirmed')), 'ax.1', sw), 'confirmed');
+  // without a fallback (Lights' rebuild and start), only the verdict
+  assert.equal(serverJudged(reading(onLive), null, null), null);
+  // the model carries each source's reading time on the server's clock
+  assert.equal(reading(onLive).sources.probe.at, T0 - 5000);
+});
+
+test('CR7 #4: Status and ui.js control() judge their own change by serverJudged, with what was sent (a switch, a boot-file change)', () => {
+  const st = readFileSync(new URL('../public/status.js', import.meta.url), 'utf8'), ui = readFileSync(new URL('../public/ui.js', import.meta.url), 'utf8');
+  assert.match(st, /serverJudged\(model, c\.entryId, c\.sent\)/);
+  assert.match(st, /sent: \(mm\) => \(\{ action: 'switch', file: f, before: mm\?\.show\.file\?\.name \?\? null \}\)/);
+  assert.match(st, /sent: \(mm\) => \(\{ action: 'bootfile', file: f, before: mm\?\.show\.boot_file\?\.name \?\? null \}\)/);
+  assert.match(st, /sentAt: p\.last \? p\.last\.now \+ p\.elapsed\(\) : null/, 'the send on the server\'s clock');
+  assert.match(ui, /serverJudged\(n\.model, entryId, sent\)/);
+  assert.doesNotMatch(st + ui, /entryVerdict\(/, 'never the verdict alone');
+});

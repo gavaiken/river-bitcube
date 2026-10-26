@@ -11,7 +11,7 @@ import { mountShell, poll, tick, watchContact, focusKey, refocus, park, focusSho
 import { rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows, bootWords, controlLine, failText, notSentText, applyingLine,
   ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash, lastDoneParts, lastDoneWhat, fromWords } from '/status-words.js';
 
-const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, entryVerdict, changeLabel, bandSaid } = M;
+const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, serverJudged, changeLabel, bandSaid } = M;
 const $ = (sel, root = document) => root.querySelector(sel);
 const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
 // One name per thing (the copy rules); descriptors live on the card, never in the name.
@@ -724,8 +724,10 @@ function settleControls() {
     const fresh = !!model && !lostContact(model) && p.receivedAt != null && c.refreshAt != null && p.receivedAt > c.refreshAt;
     if (fresh && (c.s.state === 'confirming' || c.s.state === 'unconfirmed') && c.o?.serverConfirms) {
       // the server's verdict on this control's own entry (by id): never the reading's words, which name the same file before and
-      // after a restart (R7 #6, #25). No id (an answer that never came): only its own limit ends it.
-      const v = entryVerdict(model, c.entryId);
+      // after a restart (R7 #6, #25). When it can't be known (no id: an answer that never came; or no list names it: over 10 min,
+      // a restart of the server), a switch to another file or a boot-file change is done once a reading taken after the send
+      // shows it (c.sent, CR7 #4); a restart or a rebuild only by its own limit.
+      const v = serverJudged(model, c.entryId, c.sent);
       c.judgedWall = p.receivedWall;
       if (v === 'confirmed') { c.s = ctlStep(c.s, { type: 'model', confirmed: true, now }); finish(name); ended.push(name); }
       else if (v === 'expired' && c.s.state === 'confirming') { c.s = ctlStep(c.s, { type: 'expired', now }); unconfirm(name); ended.push(name); }
@@ -809,7 +811,10 @@ async function runControl(name, path, body, o) {
   }
   if (next.effect !== 'send') { c.s = next; render(); return; }
   // applying: the control, its siblings and its inputs locked; focus waits on its status line
-  Object.assign(c, { s: next, text: '', o: { holds: o.confirmed, ...o }, result: null, refreshAt: null, judgedWall: null, entryId: null, expectS: EXPECT_S[name] ?? null,
+  // what was sent, and when on the server's clock, for when the server's verdict can't be known (CR7 #4)
+  let sent = null;
+  try { sent = typeof o.sent === 'function' ? { ...o.sent(model), sentAt: p.last ? p.last.now + p.elapsed() : null } : null; } catch { sent = null; }
+  Object.assign(c, { s: next, text: '', o: { holds: o.confirmed, ...o }, result: null, refreshAt: null, judgedWall: null, entryId: null, sent, expectS: EXPECT_S[name] ?? null,
     usual: name === 'bootfile' ? BOOT_USUAL : null, applyText: o.pending ?? M.applyingText(o.what) });
   for (const other of SHARE[name] ?? []) if (ctl[other] && !busy(other)) ctl[other] = { s: ctlInit(), text: '' };
   const a = document.activeElement, idle = !a || a === document.body, here = !!(a && c.host && document.getElementById(c.host)?.contains(a));
@@ -980,6 +985,7 @@ document.addEventListener('click', async (e) => {
       const f = b.dataset.file, w = switchWords(f, m?.show.file?.name, m?.show.boot_file);   // the button's own words
       runControl('switch', '/api/control/switch', { file: f }, { btn: b, ask: () => { const x = switchWords(f, model?.show.file?.name, model?.show.boot_file); return { title: x.title, body: x.body, ok: x.ok, cancel: 'Leave it' }; },
         what: w.what, done: w.done, fail: 'The show file is unchanged', serverConfirms: true, holds: (mm) => switchShows(mm, f),
+        sent: (mm) => ({ action: 'switch', file: f, before: mm?.show.file?.name ?? null }),
         noAnswer: 'the Now line shows what bitcube reports', unconfirmed: 'look at the Now line, or call Gavin' });
       break;
     }
@@ -987,6 +993,7 @@ document.addEventListener('click', async (e) => {
       const f = b.dataset.file, label = fileLabel(f);
       runControl('bootfile', '/api/control/bootfile', { file: f }, { btn: b, ask: { title: `Open ${label} at boot?`, body: 'From the next restart of bitcube, TouchDesigner opens this file. What is showing now does not change.', ok: 'Change the boot file', cancel: 'Leave it' },
         what: changeLabel('bootfile', { file: f }), done: `Now ${label} opens at boot, from bitcube's next restart`, fail: 'The boot file is unchanged', serverConfirms: true, holds: (mm) => bootShows(mm, f),
+        sent: (mm) => ({ action: 'bootfile', file: f, before: mm?.show.boot_file?.name ?? null }),
         noAnswer: 'the Now line shows what bitcube reports' });
       break;
     }
