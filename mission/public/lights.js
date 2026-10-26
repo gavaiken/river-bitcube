@@ -146,13 +146,20 @@ async function loadMap() {
   } finally { S.map.fetching = false; S.map.triedAt = performance.now(); }
   render();
 }
-/** Ask for the LED map again while it hasn't loaded: on a good /api/status answer (at most every 10 s), every 30 s, and when
- *  the tab comes back. A page that couldn't read it never says there is none. */
+/** Ask for the LED map again while the last ask failed: on a good /api/status answer (at most every 10 s), every 30 s, and when
+ *  the tab comes back. A page that couldn't read it never says there is none. A calibration's newer map than the one shown
+ *  (mission control serves bitcube's once its full check names it) is asked for on the 30 s timer only: it is a big answer. */
 function retryMap(force) {
-  if (S.map.map || S.map.fetching || (!S.map.error && S.map.loaded)) return;
-  if (!S.map.loaded && !force) return;                          // the first ask is still out (it has its own time limit)
+  if (S.map.fetching || !S.map.loaded) return;                  // the first ask is still out (it has its own time limit)
+  const failed = !!S.map.error, newer = newerMap();
+  if (!failed && !(newer && force)) return;
   if (!force && S.map.triedAt != null && performance.now() - S.map.triedAt < MAP_RETRY_MIN_MS) return;
   loadMap();
+}
+/** A finished calibration wrote a newer map than the one on the page. */
+function newerMap() {
+  const p = S.cal.p, map = S.map.map;
+  return !!(map && p && !p.running && p.ok === true && p.result && !p.result.dry_run && p.result.map && p.result.map > (map.file ?? ''));
 }
 /** A map error in the team's words: never a file name or a parser's message (the raw text stays in the server's answer). */
 function mapError(raw) {
@@ -633,10 +640,10 @@ function renderProvenance() {
   const screensWords = sc ? ` · screens from ${scWhen.words}${est ? ` (${quads.length - est} located, ${est} estimated)` : ''}` : quads.length ? ' · screen 1 from the map' : '';
   put('prov-words', esc(fmt.nb(`Map made ${when.words} at ${fromHere ? 'Gray Area' : 'Agape'} · ${found} of ${N_ROPES} ropes${moved}${screensWords}`)));
   // amber when it doesn't match: made at another site, or a calibration since then wrote a newer map
-  const p = S.cal.p, newer = p && !p.running && p.ok === true && p.result && !p.result.dry_run && p.result.map && p.result.map > (map.file ?? '');
+  const p = S.cal.p, newer = newerMap();
   let w = '';
   if (!fromHere) w = `This map was made at Agape; it doesn't match the gallery camera here. Calibrate to make a new one.`;
-  else if (newer) w = `A calibration made a newer map (${captureWhen(p.result.capture, p.result.map).words}) than the one shown here; this page asks for it again at its next check, or reload the page.`;
+  else if (newer) w = `A calibration made a newer map (${captureWhen(p.result.capture, p.result.map).words}) than the one shown here; this page asks for it again by itself, or reload the page.`;
   else if (drift != null && drift >= DRIFT_FINE_PX) w = `The camera moved ${Math.round(drift)} px during the capture: the dots may sit off the ropes. Calibrate again with the camera fixed.`;
   warn.hidden = !w;
   if (w) warn.innerHTML = `${mark('warning')}<span>${esc(w)}</span>`;
