@@ -58,7 +58,7 @@ proj = op('/project1')
 # ---- strip everything that isn't the template (the file starts as a Save As of a show file) ------------------------
 KEEP = {'inputs', 'viz', 'outputs', 'ropes', 'panels', 'README'}
 for o in list(proj.children):
-    if o.name in KEEP:
+    if not o.valid or o.name in KEEP:           # destroying one op can take another with it (dmxout1's table)
         continue
     try:
         if o.name == 'river_local':
@@ -182,7 +182,7 @@ res(clipfit, FIELD_W, FIELD_H)
 sw = get(switchTOP, 'river_select', 450, 75)
 wire(sw, [camfit, clipfit])
 # The online show file's staleness rule: river_cam.fresh() = a frame in the last 10 s (STALE_SECONDS).
-sw.par.index.expr = (f"1 if parent().par.Forceclip or not op('river_cam_mod').module.fresh('river', 'sub') else 0{T}")
+sw.par.index.expr = f"(1 if parent().par.Forceclip or not op('river_cam_mod').module.fresh('river', 'sub') else 0){T}"
 river = get(nullTOP, 'river', 600, 75)
 river.inputConnectors[0].connect(sw)
 river.viewer = True
