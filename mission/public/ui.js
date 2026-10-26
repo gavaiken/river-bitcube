@@ -414,6 +414,9 @@ export function sheet({ title, body = '', actions = null, onClose = null, focus 
       // ended) can't hold focus: its status line takes it, never <body>, also when the opener has no data-* identity.
       const st = opener instanceof Element && opener._mcStatus?.isConnected ? opener._mcStatus : null;
       if (!(opener instanceof Element && opener.isConnected) || opener.disabled) { if (!refocus(openerKey, document, st) && !(st && focusEl(st))) park(opener instanceof Element ? opener.closest('.ctl, [data-ctl], .ctl-host') : null); }
+      // and what takes focus is on screen: a confirmed change's status line, never under the tab bar (landscape, 200 % zoom: R8 #3)
+      const a = document.activeElement;
+      if (a && a !== document.body && a.closest('main')) bringIntoView(a);
     }
     onClose?.();
   }
@@ -685,6 +688,8 @@ export function control(target, opts = {}) {
     if (!focusHere || (sheetUp && !sheetUp.contains(host))) return;
     if (button.disabled) focusEl(status);
     else if (document.activeElement === status) button.focus({ preventScroll: true });
+    // a press: its status line is on screen, whatever the zoom or the phone's way up (R8 #3)
+    if (s.state === 'applying' && was !== 'applying') bringIntoView(status);
   }
   /** The failure in model.js's words, the same as Status's; this page has no verdict of its own, so it points at Status. */
   const failText = (e) => failWords(o.fail, plainError(e), fmt.clock(serverNow(), serverNow()), { tail: 'Try again, or check Status.' });
@@ -789,28 +794,89 @@ export function control(target, opts = {}) {
   }
   paint();
   return { button, host, status, show, update, get state() { return s.state; }, get busy() { return ctlView(s, o.why).busy; }, get entryId() { return entryId; },
-           get at() { return s.at; } };
+           get at() { return s.at; }, get text() { return text; } };
 }
 const CTL_RESULT = new Set(['done', 'failed', 'unconfirmed']);
 
+// ---- the box being typed in is never re-created ----------------------------------------------------------------------
+/** Replaces el's content with html but keeps `keep` (the box being typed in) and every element around it in place, so its value,
+ *  its caret and its focus stay while everything else is drawn anew (R8 #29: a re-render while you type never turns "150" into
+ *  "015"). The elements on its path take the new markup's attributes (a box's typed value is its own: the value attribute never
+ *  changes it). The path is matched by tag, id and data-* identity; false (nothing changed) when the new markup doesn't hold the
+ *  same box on the same path, and the caller draws it as before. */
+export function morphKeeping(el, html, keep) {
+  if (!(el instanceof Element) || !(keep instanceof Element) || !el.contains(keep) || el === keep) return false;
+  const t = document.createElement('template');
+  t.innerHTML = html;
+  const path = [];
+  for (let n = keep; n && n !== el; n = n.parentElement) path.unshift(n);
+  const ids = [...KEY_ATTRS, 'data-rule', 'data-ctl'], first = (x) => x.classList[0] ?? null;
+  const same = (a, b) => a.tagName === b.tagName && (a.id || null) === (b.id || null) && ids.every((k) => a.getAttribute(k) === b.getAttribute(k)) && first(a) === first(b);
+  // the new markup's path, level by level: the one child of each that matches the old path's element
+  const npath = [];
+  let np = t.content;
+  for (const o of path) {
+    const hit = [...np.children].filter((c) => same(c, o));
+    if (hit.length !== 1) return false;
+    npath.push(hit[0]); np = hit[0];
+  }
+  let parent = el;
+  for (let i = 0; i < path.length; i++) {
+    const o = path[i], n = npath[i], kids = [...(i ? npath[i - 1] : t.content).childNodes], at = kids.indexOf(n);
+    for (const k of [...parent.childNodes]) if (k !== o) k.remove();
+    for (const k of kids.slice(0, at)) parent.insertBefore(k, o);
+    for (const k of kids.slice(at + 1)) parent.append(k);
+    for (const a of [...o.attributes]) if (!n.hasAttribute(a.name)) o.removeAttribute(a.name);
+    for (const a of [...n.attributes]) if (o.getAttribute(a.name) !== a.value) o.setAttribute(a.name, a.value);
+    parent = o;
+  }
+  return true;
+}
+
 // ---- keeping what you are working on in view -----------------------------------------------------------------------
-/** Is n on screen between the header and a fixed tab bar or composer (any part of it)? */
-export function onScreen(n) {
+/** The part of the window the page shows: between the sticky header and a fixed tab bar or composer at the bottom (their real
+ *  heights: the header wraps at 200 % zoom, a landscape phone's bars are lower). { top, bottom } in viewport px. */
+function shownBand() {
+  const head = document.querySelector('header.top')?.getBoundingClientRect().bottom ?? 0;
+  const bars = [...document.querySelectorAll('nav.tabs, section.composer')].map((b) => b.getBoundingClientRect()).filter((b) => b.height && b.bottom >= innerHeight - 2 && b.top > innerHeight / 2);
+  return { top: Math.max(0, head), bottom: bars.length ? Math.min(...bars.map((b) => b.top)) : innerHeight };
+}
+/** Is n on screen between the header and a fixed tab bar or composer (any part of it; whole: all of it)? */
+export function onScreen(n, { whole = false } = {}) {
   if (!(n instanceof Element) || !n.isConnected) return false;
   const r = n.getBoundingClientRect();
   if (!r.height && !r.width) return false;
-  const head = document.querySelector('header.top')?.getBoundingClientRect().bottom ?? 0;
-  const bars = [...document.querySelectorAll('nav.tabs, section.composer')].map((b) => b.getBoundingClientRect()).filter((b) => b.height && b.bottom >= innerHeight - 2 && b.top > innerHeight / 2);
-  const foot = bars.length ? Math.min(...bars.map((b) => b.top)) : innerHeight;
-  return r.bottom > head + 4 && r.top < foot - 4;
+  const b = shownBand();
+  return whole ? r.top >= b.top - 1 && r.bottom <= b.bottom + 1 : r.bottom > b.top + 4 && r.top < b.bottom - 4;
 }
-/** After a re-render that moved n (a row that changed group: Ropes → Dark, a restart), bring it back into view when it was in view
- *  before and isn't now: the smallest scroll that shows it (block 'nearest', within the page's scroll-padding), never a jump to a
- *  place the reader scrolled away from (R7 #0, #8). */
-export function keepInView(n, wasOnScreen) {
-  if (!wasOnScreen || !(n instanceof Element) || !drawn(n) || onScreen(n)) return false;
-  n.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+/** The smallest scroll that shows all of n between the header and the bars at the bottom (its top first when it is taller than
+ *  that); nothing when it is shown already. */
+export function bringIntoView(n) {
+  if (!(n instanceof Element) || !drawn(n) || onScreen(n, { whole: true })) return false;
+  const r = n.getBoundingClientRect(), b = shownBand(), pad = 8;
+  const dy = r.top < b.top + pad || r.height > b.bottom - b.top - 2 * pad ? r.top - (b.top + pad) : r.bottom - (b.bottom - pad);
+  if (Math.abs(dy) < 1) return false;
+  scrollBy({ top: dy, behavior: 'auto' });
   return true;
+}
+/** Where n is now, for keepInView: { on (any part on screen), top, height }. */
+export function placeOf(n) {
+  if (!(n instanceof Element) || !n.isConnected) return null;
+  const r = n.getBoundingClientRect();
+  return { on: onScreen(n), top: r.top, height: r.height };
+}
+/** After a re-render that moved n or changed its size (a row that changed group: Ropes → Dark, a restart; a status line that grew
+ *  a line), bring all of it back into view when it was on screen before and isn't wholly now: the smallest scroll that shows it,
+ *  never a jump to a place the reader scrolled away from (R7 #0, #8), and nothing when it stayed where it was (the reader's own
+ *  scroll is theirs). In landscape and at 200 % zoom too (R8 #3): the bars' real heights, not the tokens'. before: placeOf(n)
+ *  taken before the re-render (true: it was on screen, moved). */
+export function keepInView(n, before) {
+  const b = before === true ? { on: true, top: NaN, height: NaN } : before;
+  if (!b?.on || !(n instanceof Element) || !drawn(n)) return false;
+  const r = n.getBoundingClientRect();
+  const moved = !(Math.abs(r.top - b.top) <= 2 && Math.abs(r.height - b.height) <= 2);
+  if (!moved || onScreen(n, { whole: true })) return false;
+  return bringIntoView(n);
 }
 
 // ---- goto: open a card's ancestors, scroll, flash -------------------------------------------------------------
@@ -939,6 +1005,8 @@ export function mountShell({ page = 'status', title = '' } = {}) {
   placeTabs(); wide.addEventListener('change', placeTabs);
   dialog();
   liveRegion();                 // made before anything is said into it, so the first announcement is heard
+  // the header's real height (it wraps at 200 % zoom) for the page's scroll padding: a jump or a tab never lands under it (R8 #3)
+  if (typeof ResizeObserver === 'function') new ResizeObserver(() => document.documentElement.style.setProperty('--header-real', `${header.offsetHeight}px`)).observe(header);
   const fresh = header.querySelector('#mc-fresh');
   const st = { ageMs: null, setAt: null, stale: null, checking: false, waitingSince: null };
   const shell = {

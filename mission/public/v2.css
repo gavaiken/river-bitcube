@@ -97,9 +97,9 @@ small { font-size: 14px; }
 .sec .sub { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 14px; }
 .lnk { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; }   /* a standalone link: a 44 px target */
 .state { font-size: 16px; font-weight: 700; color: var(--lv-text); }                       /* a state word, 16 px, never tinted smaller */
-[id] { scroll-margin-top: calc(var(--header-h) + 12px); }
+[id] { scroll-margin-top: calc(var(--header-real, var(--header-h)) + 12px); }
 /* tabbing never leaves the focused control under the sticky header or the fixed tab bar */
-html { scroll-padding-top: calc(var(--header-h) + 8px); scroll-padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px); }
+html { scroll-padding-top: calc(var(--header-real, var(--header-h)) + 8px); scroll-padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px); }
 /* read by screen readers only (the live regions that carry a level word and a headline, never a ticking age) */
 .sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
 .flash { animation: flash 1.6s ease-out 1; }

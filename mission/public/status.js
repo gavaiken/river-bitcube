@@ -7,7 +7,7 @@
 // status-words.js, where node's tests check them.
 import * as M from '/model.js';
 import { mountShell, poll, tick, watchContact, focusKey, refocus, park, focusShown, drawn, art, fmt, confirm, sheet, api, plainError, noAnswerText, esc, goto, mark, chip, WORD, MARK,
-  NAMES_FROM_BITCUBE, sinceAgrees as sinceAgreesWith, splitHeadline, WARN_MS, LOST_MS, announce, setLive, whyText, POLL_TIMEOUT_MS, onScreen, keepInView, closedAround } from '/ui.js';
+  NAMES_FROM_BITCUBE, sinceAgrees as sinceAgreesWith, splitHeadline, WARN_MS, LOST_MS, announce, setLive, whyText, POLL_TIMEOUT_MS, onScreen, keepInView, placeOf, bringIntoView, closedAround, morphKeeping } from '/ui.js';
 import { rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows, bootWords, controlLine, failText, notSentText, applyingLine,
   ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash, lastDoneParts, lastDoneWhat, fromWords } from '/status-words.js';
 
@@ -119,10 +119,12 @@ function setHTML(el, html) {
   // a control under the user's finger or keyboard focus keeps the focus across the re-render (found again by its data-*)
   const active = document.activeElement, had = active && active !== document.body && el.contains(active);
   const key = had ? focusKey(active) : null, hostEl = had ? active.closest('[data-ctl]') : null, hostId = hostEl?.id ?? null;
-  el.innerHTML = html;
+  // the box being typed in (a rule's) stays itself, with its caret: everything around it is drawn anew (R8 #29)
+  const typing = had && active.matches('input:not([type=button]):not([type=checkbox]):not([type=radio]), textarea');
+  if (!(typing && morphKeeping(el, html, active))) el.innerHTML = html;
   el.querySelectorAll('details[data-id]').forEach((d) => { d.open = openRows.has(d.dataset.id); });
   refreshAges(el);
-  if (had) placeFocus(key, hostId, el, hostEl?.dataset.ctl ?? null);
+  if (had && !(typing && document.activeElement === active && usable(active))) placeFocus(key, hostId, el, hostEl?.dataset.ctl ?? null);
 }
 /** Can t hold focus where it is (enabled, drawn: not inside a closed <details>)? */
 const usable = (t) => !!t && !t.disabled && drawn(t);
@@ -135,6 +137,11 @@ function placeFocus(key, hostId, root, name = null) {
   if (usable(t) && focusShown(t)) return;
   const host = (hostId && document.getElementById(hostId)) || t?.closest('[data-ctl]') || null;
   const onLine = !!key && /^#(why|st)-/.test(key);              // focus already waited on a line, for a control remembered in parked
+  // the line it waited on went because the control unlocked: straight back to the control, never a stop on its heading first (R8 #12)
+  if (onLine && parked) {
+    let pt = null; try { pt = root.querySelector(parked.key) ?? document.querySelector(parked.key); } catch { /* a stale key */ }
+    if (usable(pt) && focusShown(pt)) { parked = null; return; }
+  }
   if (key && !onLine && host) parked = { key };
   if (host && park(host, host.id === 'ctl-check' ? document.querySelector('#band h1') : null)) return;
   if (key || name) pendingFocus = { key, name };
@@ -260,27 +267,29 @@ async function fetchStill(cam) {
 }
 
 // ---- rendering ----------------------------------------------------------------------------------------------------------
-/** What this phone is working on: the focused control (or the line focus waits on), else the status line of its own change in flight
- *  or just ended, so a re-render that moves its row (into Not OK while TouchDesigner restarts, back to the fine list) can bring it
- *  back into view (R7 #0, #8). */
+/** What this phone is working on: the status line of its own change in flight or just ended (the line that changes: applying,
+ *  confirming, done), while focus is on that control or nowhere, so a re-render that moves its row (into Not OK while TouchDesigner
+ *  restarts, back to the fine list) or grows the line brings all of it back into view, never only the button focus went back to
+ *  (R7 #0, #8; landscape and 200 % zoom, R8 #3); else the focused control (or the line focus waits on). */
 function workingOn() {
   const a = document.activeElement;
-  if (a && a !== document.body && a.isConnected && a.closest('main') && !a.closest('dialog')) return { key: focusKey(a), el: a, focus: true };
+  const focused = a && a !== document.body && a.isConnected && a.closest('main') && !a.closest('dialog') ? a : null;
   const now = Date.now();
   const name = Object.keys(ctl).filter((n) => busy(n) || (['done', 'failed', 'unconfirmed'].includes(ctl[n].s.state) && now - (ctl[n].s.at ?? 0) < 15_000))
     .sort((x, y) => (ctl[y].s.at ?? 0) - (ctl[x].s.at ?? 0))[0];
   const st = name ? statusEl(name) : null;
-  return st ? { key: st.id ? `#${CSS.escape(st.id)}` : null, el: st, focus: false, name } : null;
+  if (st && (!focused || st.closest('[data-ctl]')?.contains(focused))) return { key: st.id ? `#${CSS.escape(st.id)}` : null, el: st, focus: false, name };
+  return focused ? { key: focusKey(focused), el: focused, focus: true } : null;
 }
 function render() {
-  const w = workingOn(), wasOn = !!w && onScreen(w.el);
+  const w = workingOn(), before = w ? placeOf(w.el) : null;
   renderNow();
-  if (!w || !wasOn) return;
+  if (!w || !before?.on) return;
   // the same thing after the re-render: what has focus now (placeFocus found it again), else the line found by its id
   let n = w.focus ? document.activeElement : null;
   if (!n || n === document.body) { try { n = w.key ? document.querySelector(w.key) : null; } catch { n = null; } }
   if (!n && w.name) n = statusEl(w.name);
-  keepInView(n, wasOn);
+  keepInView(n, before);
 }
 function renderNow() {
   model = p.last ? derive(p.last, p.last.now + p.elapsed()) : null;
@@ -381,7 +390,8 @@ function staleWords(m) {
 function jumpButtons(o, m) {
   const c = o.cause, b = [];
   const first = m.problems.find((x) => x.id === c)?.items?.[0];
-  if (c === 'ropes-dark') b.push(['Ropes → On', 'goto', rid('ropes')]);
+  // the button the jump names takes focus when it can be pressed (R8 #13): data-focus, the first of its selectors that can
+  if (c === 'ropes-dark') b.push(['Ropes → On', 'goto', rid('ropes'), '#ctl-ropes-on']);
   else if (['td-frozen', 'td-slow', 'td-off', 'online-file', 'old-file', 'river-stale', 'year-page'].includes(c)) {
     // while a change in flight holds the switch (a restart bitcube didn't answer in time: R8 #16), the line that says so, never a
     // live-looking button that jumps to a greyed one
@@ -389,15 +399,15 @@ function jumpButtons(o, m) {
     if (w && /^wait: /i.test(w)) return `<p class="ctl-why jump-wait">${esc(nb(whyText(w)))}</p>`;
     b.push([M.yearPress(m.show.file?.kind), 'goto-switch', '']);   // the advice's own words
   }
-  else if (['panels-off', 'panels-dark'].includes(c)) b.push(['Panels brightness', 'goto', rid('hub75 panels')]);
+  else if (['panels-off', 'panels-dark'].includes(c)) b.push(['Panels brightness', 'goto', rid('hub75 panels'), '#ctl-hub75-set, #ctl-hub75-more']);
   else if (['coming-up', 'not-checked'].includes(c)) b.push(['Open the studio chat', 'href', '/chat']);
   else if (['page', 'bitcube-unchecked', 'probe-stale', 'bitcube-offline', 'check-failed', 'unknown', 'td-unknown'].includes(c)) return '';
-  else if (c === 'calibrating') b.push(['Open Lights', 'href', '/lights']);
+  else if (c === 'calibrating') b.push(['Open Lights', 'href', '/lights#calibrate']);   // the block with Stop in view (R8 #6)
   else if (c === 'sender' || c === 'sender-taken') b.push(['Open Ropes →', 'goto', rid('ropes')]);   // the sender's words and both boxes
   else if (first && m.items.some((x) => x.id === first && x.level !== 'ok')) b.push([`Open ${NAME[first] ?? first} →`, 'goto', rid(first)]);   // the named card, opened (R6 #5)
   if (!b.length) return '';
-  return `<div class="row-btns">${b.map(([l, act, t]) => act === 'href' ? `<a class="btn primary" href="${esc(t)}">${esc(l)}</a>`
-    : `<button type="button" class="btn primary" data-act="${act}" data-target="${esc(t)}">${esc(l)}</button>`).join('')}</div>`;
+  return `<div class="row-btns">${b.map(([l, act, t, f]) => act === 'href' ? `<a class="btn primary" href="${esc(t)}">${esc(l)}</a>`
+    : `<button type="button" class="btn primary" data-act="${act}" data-target="${esc(t)}"${f ? ` data-focus="${esc(f)}"` : ''}>${esc(l)}</button>`).join('')}</div>`;
 }
 /** "Call Lilian (the lights and the rigging)", a tel: link when the number is known; Colin asks; nobody yet waits. */
 function callLine(cause, m = model) {
@@ -714,7 +724,10 @@ function showfileCtlHTML(m, onlyKind = null, where = onlyKind ? 'year' : 'td') {
   const s = m.show, all = s.show_files.length ? s.show_files : Object.keys(FILES).slice(0, 2);
   // only the river's year and the live river: model.js leaves old show files out of show_files (execution plan D27)
   const files = onlyKind ? all.filter((f) => FILES[f]?.kind === onlyKind) : all;
-  const running = s.file?.name, o = off('switch'), host = `ctl-switch-${where}`, td = item(m, 'touchdesigner');
+  // while TouchDesigner restarts on a file someone chose (not a maybe: its advice says "press Switch to …"), the button keeps the
+  // name that was pressed, "Restart on the river's year", never "Switch to …" under its own line (R8 #10)
+  const restartOn = s.restart ? Object.keys(FILES).find((f) => FILES[f].label === s.restart.on) ?? null : null;
+  const running = s.file?.name ?? restartOn, o = off('switch'), host = `ctl-switch-${where}`, td = item(m, 'touchdesigner');
   const btns = files.map((f) => `<button type="button" id="${host}-${FILES[f]?.kind ?? 'other'}" class="btn ${f === running ? '' : 'primary'}" data-act="switch" data-file="${esc(f)}" ${o ? 'disabled' : ''}>${f === running ? `Restart on ${esc(fileLabel(f))}` : `Switch to ${esc(fileLabel(f))}`}</button>`).join('');
   return `<div class="ctl ${whyOf('switch') && !busy('switch') ? 'off' : ''}" id="${host}" data-ctl="switch"${busy('switch') ? ' aria-busy="true"' : ''}><div class="ctl-h">Show file</div>${whyLine('switch', host)}
     <div class="readout">${readoutWords(s, td)}</div>
@@ -874,7 +887,9 @@ async function runControl(name, path, body, o) {
   announce(c.applyText.replace(/…$/, ''));     // said once, never with a ticking time
   if (name === 'check') shell.setChecking(true);
   render();
-  if (idle || here) focusStatus(name);
+  // focus waits on its status line, and that line is on screen, whatever the zoom or the phone's way up (R8 #3); a confirmed one
+  // gets the same from the sheet's close
+  if (idle || here) { focusStatus(name); bringIntoView(statusEl(name)); }
   // the server records the change as it arrives: ask for the status at once, so the lock (and "Wait: …" on what it blocks)
   // shows on this page within a second, not at the next poll
   setTimeout(() => p.refresh(), 300);
@@ -927,15 +942,24 @@ function jumpSwitch() {
   return null;
 }
 /** After a jump from the band (or a tile, or an Also item), keyboard and screen-reader focus go with it, not only the scroll (R7 #9):
- *  the button the jump names ("Restart on the river's year") when it can be pressed, else the line that says why it can't; for a
- *  row or a group, its summary or heading. */
-function jumpFocus(target, label = null) {
+ *  the button the jump names ("Restart on the river's year", "Ropes → On": On, "Panels brightness": Set, else Brighter) when it can
+ *  be pressed, else the line that says why it can't (R8 #13); for a row or a group, its summary or heading. label: the switch's
+ *  own words; sel: the named control's selectors, in order. */
+function jumpFocus(target, label = null, sel = null) {
   const el = target && document.getElementById(target);
   if (!el) return;
   if (label) {
     const btn = [...el.querySelectorAll('button[data-act="switch"]')].find((x) => x.textContent.trim() === label);
     if (btn && !btn.disabled && focusShown(btn)) return;
     const host = (btn ?? el).closest('[data-ctl]') ?? el.querySelector('[data-ctl="switch"]');
+    if (host && park(host)) return;
+  }
+  if (sel) {
+    const btns = sel.split(',').map((s) => el.querySelector(s.trim())).filter(Boolean);
+    const can = btns.find((x) => !x.disabled && drawn(x));
+    // on screen too, once the jump's own scroll has ended (a smooth one is never cut short)
+    if (can && focusShown(can)) { setTimeout(() => { if (document.activeElement === can) bringIntoView(can); }, reduced() ? 0 : 700); return; }
+    const host = btns[0]?.closest('[data-ctl]');
     if (host && park(host)) return;
   }
   const f = el.matches('details') ? el.querySelector(':scope > summary') : el.querySelector('details > summary, h3, h2, summary') ?? el;
@@ -987,7 +1011,7 @@ document.addEventListener('click', async (e) => {
   if (!b || b.disabled) return;
   const act = b.dataset.act, m = model;
   switch (act) {
-    case 'goto': if (jump(b.dataset.target)) jumpFocus(b.dataset.target); break;
+    case 'goto': if (jump(b.dataset.target)) jumpFocus(b.dataset.target, null, b.dataset.focus ?? null); break;
     case 'goto-switch': jumpFocus(jumpSwitch(), b.textContent.trim()); break;
     case 'still': openStill(); break;
     case 'checknow': {

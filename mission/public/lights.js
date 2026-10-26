@@ -4,7 +4,7 @@
 // TouchDesigner is sending (GET /api/lights), and runs the Calibrate block from GET /api/calibration. Its controls (Calibrate,
 // Dry run, Stop, Use this map) follow the contract in "Applying a change" through ui.js control(). Every fetch has a time
 // limit, and what couldn't be read is asked for again by itself. Plain ES module, no build step, no framework.
-import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark, plainError, DOC_LINKS, splitHeadline, announce, setLive, goto,
+import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark, plainError, DOC_LINKS, splitHeadline, announce, unannounce, setLive, goto, bringIntoView,
   WARN_MS, LOST_MS, POLL_TIMEOUT_MS } from '/ui.js';
 import { fetchTimed } from '/app.js';
 import { derive, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, EXPECT_S, ownEntries, endedSaid, START_USUAL } from '/model.js';
@@ -51,7 +51,7 @@ const S = {
 
 const shell = mountShell({ page: 'lights', title: 'Lights' });
 const status = poll('/api/status', { every: 5000,
-  onData: () => { shell.setAge(0); shell.setStale(null); S.m = model(); render(); judgeControls(); watchCalibration(); watchRebuilds(); retryMap(false); },
+  onData: () => { shell.setAge(0); shell.setStale(null); S.m = model(); render(); judgeControls(); watchCalibration(); watchRebuilds(); retryMap(false); calArrival(); },
   onError: () => { S.m = model(); render(); } });   // before any answer, watchContact's header says "No answer yet · N s"
 /** The model, with the calibration from a newer progress read when that shows the run ended (the status's copy can be up to a
  *  poll behind): Rebuild on a run's result is never blocked by the run that just ended (R7 #31). */
@@ -173,6 +173,7 @@ async function loadMap() {
     S.map = { ...S.map, error: plainError(e), loaded: true };
   } finally { S.map.fetching = false; S.map.triedAt = performance.now(); }
   render();
+  calArrival(true);   // the map above drew: the Calibrate block a link brought you to stays where it was put
 }
 /** Ask for the LED map again while the last ask failed: on a good /api/status answer (at most every 10 s), every 30 s, and when
  *  the tab comes back. A page that couldn't read it never says there is none. A calibration's newer map than the one shown
@@ -710,6 +711,23 @@ async function pollCal() {
   watchCalibration();
   renderCalibrate(); renderProvenance();
   S.cal.announceOk = true;   // from now on a new view is announced (not the one the page opened on)
+  calArrival();
+}
+/** Status's band links here during a calibration (/lights#calibrate): once the block knows the run and the status has answered, the
+ *  Calibrate block opens and comes into view with Stop on screen, and focus goes to Stop (else the block's Start or heading), never
+ *  the top of the page 4 screens above it (R8 #6). The map loading above it later puts it back, until the reader moves. */
+const calLink = { wanted: location.hash === '#calibrate', done: false, at: 0, moved: false };
+for (const ev of ['wheel', 'touchmove', 'keydown']) addEventListener(ev, () => { calLink.moved = true; }, { passive: true, once: true });
+function calArrival(again = false) {
+  if (!calLink.wanted || !S.m || S.cal.heardAt == null) return;
+  if (again ? !calLink.done || calLink.moved || performance.now() - calLink.at > 15_000 : calLink.done) return;
+  const d = $('#calibrate');
+  if (!d) return;
+  d.open = true;
+  d.scrollIntoView({ block: 'start', behavior: 'auto' });
+  const stop = S.calCtl.stop?.button, target = stop?.isConnected && !stop.disabled ? stop : calFocusTarget();
+  if (target) { bringIntoView(target); if (!again) target.focus({ preventScroll: true }); }
+  if (!again) { calLink.done = true; calLink.at = performance.now(); }
 }
 /** Poll every 5 s while a run is on (ours, or one the model reports from bitcube's full check) or while this phone's rebuild
  *  waits for the map in use to show. */
@@ -757,6 +775,9 @@ function renderCalibrate() {
   const { view, key, dry } = v;
   if (S.html['cal-body'] !== key) {
     const first = S.html['cal-body'] == null;
+    // a control whose change just ended and made this view (Rebuild → "Map in use", Stop → "Stopped"): the new view's first line
+    // says it, so its own done isn't said too, in the same breath (R8 #12)
+    if (!first) for (const c of Object.values(S.calCtl)) if (c?.state === 'done' && Date.now() - (c.at ?? 0) < 2000) unannounce(c.text);
     leaveCalView(view, dry);
     const had = !first && body.contains(document.activeElement);
     S.html['cal-body'] = key; S.html['cal-checks'] = null; S.html['cal-stages'] = null;
@@ -857,10 +878,11 @@ function setWhy(c, why, by = null) {
   if (c._why !== why || c._by !== (by ?? null) || c._own !== own) { c._why = why; c._by = by ?? null; c._own = own; c.update({ why, whyBy: by ?? null, whyOwn: own }); }
 }
 /** Leaving a view: a confirm its controls still hold open (Start, Dry run, Rebuild) is withdrawn, so a press on it can't send
- *  anything for a block that is gone; a control already sending is left to finish. */
+ *  anything for a block that is gone; a control already sending is left to finish, and one that isn't asking anything is left as
+ *  it is (a done Rebuild never says "Not possible now: …", nor takes focus there, on its way out: R8 #12). */
 function leaveCalView(next, dry = false) {
   const why = next === 'run' ? (dry ? 'a dry run started meanwhile' : 'a calibration started meanwhile') : next === 'lost' ? 'bitcube went offline during the run' : 'the calibration changed meanwhile';
-  for (const c of Object.values(S.calCtl)) if (c && !c.busy) c.update({ why });
+  for (const c of Object.values(S.calCtl)) if (c?.state === 'confirm') c.update({ why });
   S.calCtl = {};
 }
 /** The run's progress, painted in place (the stage words, the bar, "Pass A: pattern 12 of 29 · 1 pattern photographed again"). */
