@@ -63,9 +63,13 @@ const THINGS = [
 ];
 const FALLBACK_VERB = { stop: 'stopped', kill: 'stopped', disable: 'switched off', start: 'started', enable: 'switched on', restart: 'restarted',
   reload: 'restarted', reboot: 'restarted', move: 'moved', aim: 'moved', pan: 'moved', tilt: 'moved', calibrate: 'calibrated', cancel: 'stopped' };
+/** A direct change whose own words are known whatever else the command holds: stopping a run by its cancel file (calibrate.py's
+ *  check_cancel), the boot file written by hand (R8 #37). */
+const DIRECT_FIRST = [[/\bcalibration\.cancel\b/i, 'stopped the calibration'], [/\bboot-file\.txt\b/i, 'changed the boot file']];
 /** An acting line that can't be shown as it is: what it did to what ("stopped a scheduled task on bitcube", "changed the ropes"). */
 function actingFallback(verb, ...texts) {
   const t = texts.map((x) => String(x ?? '')).join(' ');
+  if (!verb) { const first = DIRECT_FIRST.find(([re]) => re.test(t)); if (first) return first[1]; }
   const thing = THINGS.find(([re]) => re.test(t))?.[1] ?? 'something on bitcube';
   return `${FALLBACK_VERB[verb] ?? 'changed'} ${thing}`;
 }
@@ -73,7 +77,16 @@ function actingFallback(verb, ...texts) {
 // A TouchDesigner bridge call that assigns a parameter (td.ps1 "op('/project1/ropes').par.Source='black'") changes the show too,
 // though it looks like a read (R7 #35): by its value, or its expression, mode or bind (.par.X.expr =, p.mode =, p.bindExpr =), or
 // setattr( (CR7 #9); a comparison (==, !=) or a read is not one
-const CHANGE_CMD = /-Action\s+(ropes|hub75|switch|bootfile|lightsroute|rebuild|calibrate|mode|target|rules)\b|\/api\/control\/|Restart-Computer|Stop-Process|Start-Process|taskkill|\bkill\b|schtasks\s+\/(run|end|change)|ptz\.py\s+\w+\s+(?!presets)|td_save|calibrate\.ps1\s+-Action\s+(start|cancel)|td\.ps1\b.*(?:\.par\.\w+(?:\.\w+)?\s*=(?!=)|\.(?:val|expr|mode|bindExpr)\s*=(?!=)|\bsetattr\s*\()/i;
+// R8 #37: also a write into River\ (Set-Content, Out-File, New-Item, Remove-Item, Copy-Item, Move-Item, a > redirect: the boot file,
+// calibration.cancel, which stops a run), a build script run inside the show (td.ps1 -File), and an operator switched off or
+// recooked through the bridge (.bypass =, .allowCooking =, .cook(, .store()
+const WRITE_CMD = String.raw`(?:Set-Content|Add-Content|Out-File|New-Item|Remove-Item|Copy-Item|Move-Item|Rename-Item|Clear-Content|\bdel\b|\bcopy\b|\bmove\b|\bren\b)[^;&|\n]*`;
+const CHANGE_CMD = new RegExp(String.raw`-Action\s+(ropes|hub75|switch|bootfile|lightsroute|rebuild|calibrate|mode|target|rules)\b|\/api\/control\/|Restart-Computer|Stop-Process|Start-Process|taskkill|\bkill\b|schtasks\s+\/(run|end|change)|ptz\.py\s+\w+\s+(?!presets)|td_save|calibrate\.ps1\s+-Action\s+(start|cancel)`
+  + String.raw`|td\.ps1\b[\s\S]*?(?:\.par\.\w+(?:\.\w+)?\s*=(?!=)|\.(?:val|expr|mode|bindExpr|bypass|allowCooking|lock|display|render)\s*=(?!=)|\bsetattr\s*\(|\.(?:cook|store|unstore|destroy|copy|create)\s*\(|\s-File\b)`
+  + String.raw`|${WRITE_CMD}\bRiver[\\/]|>{1,2}\s*["']?[^\s"';&|]*\bRiver[\\/]|(?:${WRITE_CMD}|>{1,2}\s*["']?[^\s"';&|]*)(?:calibration\.cancel|boot-file\.txt)`, 'i');
+/** A local script run after a look through mission control ("mc.mjs status && bash /tmp/x.sh"): what it does can't be told from
+ *  here, but it goes around mission control's locks, so the step says so (R8 #37). */
+const SCRIPT_RUN = /^(?:(?:bash|sh|zsh|source)\s+(?!-c\b)\S|\.\s+\S|\.?\/\S+\.(?:sh|py|mjs|js)\b|(?:python3?|node|pwsh|powershell)\s+(?:-\w+\s+)*\S+\.(?:py|sh|mjs|js|ps1)\b)/i;
 /** node mission/bin/mc.mjs <action> ['<body>']: a change asked of mission control (or its status read). An action can hold
  *  digits (hub75: R7 #22). */
 const MC = /\bmc\.mjs\s+([a-z0-9-]+)(?:\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)"))?/g;
@@ -82,7 +95,7 @@ const MC_ONE = new RegExp(MC.source);
 const DIRECT_WORDS = { ropes: 'changed the ropes', hub75: 'changed the panels', switch: "switched TouchDesigner's show file", bootfile: 'changed the boot file',
   lightsroute: 'moved the lighting port', rebuild: "rebuilt the river's year", mode: "changed the river's year", target: "changed the river's year",
   rules: "changed the river's year", calibrate: 'started a calibration', start: 'started a calibration', cancel: 'stopped the calibration' };
-const directWords = (part) => DIRECT_WORDS[/-Action\s+([a-z0-9]+)/i.exec(part)?.[1]?.toLowerCase()] ?? actingFallback(null, part);
+const directWords = (part) => DIRECT_WORDS[/-Action\s+([a-z0-9]+)/i.exec(part)?.[1]?.toLowerCase()] ?? DIRECT_FIRST.find(([re]) => re.test(part))?.[1] ?? actingFallback(null, part);
 /** One command line's commands: split at ;, &&, ||, |, |&, & and new lines outside quotes (a JSON body's "a; b" is not two); the &
  *  of a redirection (2>&1, >&2, &>, &>>) is not a separator (CR7 #15). */
 export function commandParts(command) {
@@ -220,6 +233,7 @@ function bashLine(description, command) {
   // switch"): the change, and that it went around mission control's locks, never "looked at what mission control shows" (R7 #34)
   const ps = commandParts(command), viaMc = ps.filter((x) => MC_ONE.test(x)), direct = ps.filter((x) => !MC_ONE.test(x) && CHANGE_CMD.test(x));
   if (viaMc.length && direct.length) return { text: clip(`${directWords(direct[0])} on bitcube directly, not through mission control`, TEXT_MAX), acting: true };
+  if (viaMc.length && ps.some((x) => !MC_ONE.test(x) && SCRIPT_RUN.test(x))) return { text: 'ran a script, not through mission control', acting: true };
   const mc = viaMc.length ? mcLine(viaMc.join('\n')) : null;
   if (mc) return mc;
   const desc = String(description ?? '').replace(/\s+/g, ' ').trim().replace(/[.\s]+$/, '');

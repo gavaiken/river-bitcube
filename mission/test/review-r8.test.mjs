@@ -312,3 +312,49 @@ test('R8 #25: after a restart, a deliberate state reads as itself ("The ropes ar
   assert.equal(words({ kind: 'item', id: 'modal link', from: 'warning', to: 'warning', summary: 'Gallery clips failing since 02:43; river fine', still: true }), 'Clips to Dave still needs attention: gallery clips failing since 02:43; river fine');
   assert.equal(words({ kind: 'item', id: 'gallery camera', from: 'down', to: 'down', summary: 'Not answering', still: true }), 'The gallery camera is still down: not answering');
 });
+
+test('R8 #38: the credential mask catches prefixed keys and the common login forms, and still spares input_tokens', async () => {
+  const { scrubCreds } = await import('../lib/scrub.mjs');
+  const S = 'NOTREALhunter2r8';
+  for (const [raw, want] of [
+    [`{"cam_password":"${S}"}`, '{"cam_password":"***"}'],
+    [`{"admin_password": "${S}", "user": "admin"}`, '{"admin_password": "***", "user": "admin"}'],
+    [`CAM_PASSWORD=${S} python tools/cameras/ptz.py gallery Left 0.2`, 'CAM_PASSWORD=*** python tools/cameras/ptz.py gallery Left 0.2'],
+    [`export CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-${S}`, 'export CLAUDE_CODE_OAUTH_TOKEN=***'],
+    [`curl -H "X-Auth-Token: ${S}" https://h/x`, 'curl -H "X-Auth-Token: ***" https://h/x'],
+    [`{"access_token":"${S}","refresh_token":"${S}2","expires_in":3600}`, '{"access_token":"***","refresh_token":"***","expires_in":3600}'],
+    [`curl -u admin:${S} https://192.168.9.76/cgi-bin/api.cgi`, 'curl -u admin:*** https://192.168.9.76/cgi-bin/api.cgi'],
+    [`curl --user admin:${S} x`, 'curl --user admin:*** x'],
+    [`curl -H 'Authorization: Bearer sk-ant-${S}' x`, "curl -H 'Authorization: Bearer ***' x"],
+    [`Authorization: Basic YWRtaW46${S}==`, 'Authorization: Basic ***'],
+    [`sshpass -p ${S} ssh root@100.127.193.8`, 'sshpass -p *** ssh root@100.127.193.8'],
+    [`python ptz.py --password ${S} --user admin`, 'python ptz.py --password *** --user admin'],
+    [`{"api_key":"${S}","apiKey":"${S}"}`, '{"api_key":"***","apiKey":"***"}'],
+    ['"input_tokens": 1234, "max_tokens": 9, the passwords file, secret_ref: x, pwd; ls', '"input_tokens": 1234, "max_tokens": 9, the passwords file, secret_ref: x, pwd; ls'],
+  ]) {
+    const got = scrubCreds(raw);
+    assert.equal(got, want, raw);
+    assert.doesNotMatch(got, /hunter2/, raw);
+  }
+  // an object's key with a prefix is masked whatever it holds, as the exact keys are
+  assert.deepEqual(scrubCreds({ cam_password: 'x', access_token: { a: 1 }, input_tokens: 5, refresh_token: null }), { cam_password: '***', access_token: '***', input_tokens: 5, refresh_token: null });
+});
+
+test('R8 #37: step lines read the remaining direct changes as changes (calibration.cancel, a write into River\\, td.ps1 -File, .bypass, a script run after a look)', async () => {
+  const { describeTool } = await import('../lib/steps.mjs');
+  const b = (command, description) => { const d = describeTool({ name: 'Bash', input: { command, description } }); return [d.text, d.acting]; };
+  assert.deepEqual(b('ssh bitcube "Set-Content C:\\Users\\user\\River\\calibration.cancel 1"', 'Look at the calibration'), ['stopped the calibration', true]);
+  assert.deepEqual(b('ssh bitcube "echo x > C:\\Users\\user\\River\\calibration.cancel"', 'Look at the calibration'), ['stopped the calibration', true]);
+  assert.deepEqual(b('node mission/bin/mc.mjs status && ssh bitcube "Set-Content C:\\Users\\user\\River\\calibration.cancel 1"', 'Look at the calibration'),
+    ['stopped the calibration on bitcube directly, not through mission control', true]);
+  assert.deepEqual(b('ssh bitcube "Set-Content C:\\Users\\user\\River\\boot-file.txt river-online-oct-23.toe"', 'Check bitcube'), ['changed the boot file', true]);
+  assert.deepEqual(b('ssh bitcube powershell -File tools/td.ps1 "op(\'/project1/panels\').bypass = True"', 'Check the panels'), ['changed the panels', true]);
+  assert.deepEqual(b('ssh bitcube powershell -File tools/td.ps1 -File td/build/build_ropes.py', 'Check the ropes build'), ['changed the ropes', true]);
+  assert.deepEqual(b('node mission/bin/mc.mjs status && bash /tmp/x.sh', 'Look'), ['ran a script, not through mission control', true]);
+  // reads stay reads
+  assert.deepEqual(b('ssh bitcube "Get-Content C:\\Users\\user\\River\\boot-file.txt"', 'Check the boot file'), ['checked the boot file', false]);
+  assert.deepEqual(b('ssh bitcube "Test-Path C:\\Users\\user\\River\\calibration.cancel"', 'Check the calibration'), ['checked the calibration', false]);
+  assert.deepEqual(b('ssh bitcube powershell -File tools/td.ps1 "op(\'/project1/panels\').bypass"', 'Check the panels'), ['checked the panels', false]);
+  assert.deepEqual(b('ssh bitcube powershell -File tools/td.ps1 -Screenshot /project1/seasons/screens_preview', 'Take a screenshot of the panels'), ["took a picture of the screen of the panels", false]);
+  assert.deepEqual(b('node mission/bin/mc.mjs status 2>&1 | head -40', 'Look'), ['looked at what mission control shows', false]);
+});

@@ -21,21 +21,33 @@ $out = [ordered]@{ ok = $true; time = (Get-Date).ToString('s') }
 # @ too), and masked BEFORE a line is cut, or a cut between two @ leaves a tail nobody can recognise as a login. The camera's own
 # HTTP API takes it as a JSON field or a query ("password":"...", ?password=...) and answers its token as one ({"Token":{"name":
 # "..."}}): those values are masked too, as scrubCreds does: a quoted value to its own closing quote, past an escaped quote inside
-# it; an object or array whole; a bare value in JSON text as "***" so the JSON stays JSON; null, true and false left alone.
+# it; an object or array whole; a bare value in JSON text as "***" so the JSON stays JSON; null, true and false left alone. A key
+# with a prefix too (cam_password, access_token, X-Auth-Token, *_TOKEN=), and a command line's login forms: an Authorization
+# header, Bearer, curl -u user:pw, --password pw, sshpass -p pw (R8 #38).
 # The very patterns of mission/lib/scrub.mjs PATTERNS (mission/test/review-cr7.test.mjs compares them; tools/tests/test_masks.py
 # runs them): change both together.
 $CRED_URL = '([a-z][a-z0-9+.-]*:\/\/)[^\s/?#"<>]*@'
-$CRED_QUOTED = '((?<![\w-])(?:password|passwd|pwd|token|secret)(?![\w-])(?:\\?["''])?\s*[:=]\s*)(["''])((?:\\(?:[\s\S]|$)|(?!\2)[^\\])*)(\2|$)'
-$CRED_ESCAPED = '((?<![\w-])(?:password|passwd|pwd|token|secret)(?![\w-])(?:\\?["''])?\s*[:=]\s*)(\\(["'']))((?:\\\\\\\\|\\\\\\\3|\\(?:\\\\)?(?!\\|\3)[\s\S]|\\\\(?!\\|\3)|(?!\3)[^\\]|\\+$)*)(\\\3|$)'
-$CRED_BARE_JSON = '((?<![\w-])(?:password|passwd|pwd|token|secret)(?![\w-])(\\?["''])\s*:\s*)(?!\\?["''])(?!(?:null|true|false)(?![^\s"''&,;}\]]))([{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\])*[}\]])*[}\]])*[}\]])*[}\]]|[{\[][^\r\n]*|[^\s"''&,;}\]]+)'
-$CRED_BARE = '((?<![\w-])(?:password|passwd|pwd|token|secret)(?![\w-])(?:\\?["''])?\s*[:=]\s*)(?!\\?["''])(?!(?:null|true|false)(?![^\s"''&,;}\]]))([{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\])*[}\]])*[}\]])*[}\]])*[}\]]|[{\[][^\r\n]*|[^\s"''&,;}\]]+)'
+$CRED_QUOTED = '((?<![\w-])(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)(?![\w-])(?:\\?["''])?\s*[:=]\s*)(["''])((?:\\(?:[\s\S]|$)|(?!\2)[^\\])*)(\2|$)'
+$CRED_ESCAPED = '((?<![\w-])(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)(?![\w-])(?:\\?["''])?\s*[:=]\s*)(\\(["'']))((?:\\\\\\\\|\\\\\\\3|\\(?:\\\\)?(?!\\|\3)[\s\S]|\\\\(?!\\|\3)|(?!\3)[^\\]|\\+$)*)(\\\3|$)'
+$CRED_BARE_JSON = '((?<![\w-])(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)(?![\w-])(\\?["''])\s*:\s*)(?!\\?["''])(?!(?:null|true|false)(?![^\s"''&,;}\]]))([{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\])*[}\]])*[}\]])*[}\]])*[}\]]|[{\[][^\r\n]*|[^\s"''&,;}\]]+)'
+$CRED_BARE = '((?<![\w-])(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)(?![\w-])(?:\\?["''])?\s*[:=]\s*)(?!\\?["''])(?!(?:null|true|false)(?![^\s"''&,;}\]]))([{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\])*[}\]])*[}\]])*[}\]])*[}\]]|[{\[][^\r\n]*|[^\s"''&,;}\]]+)'
+$CRED_AUTH = '(\bAuthorization\s*[:=]\s*["'']?(?:(?:Bearer|Basic|Token|Digest)\s+)?)([^\s"'',;]+)'
+$CRED_BEARER = '(\bBearer\s+)([A-Za-z0-9._~+/=-]{12,})'
+$CRED_USER = '((?:^|[\s"''])(?:-u|--user)[\s=]+[^\s:"''*]+:)([^\s"'']+)'
+$CRED_FLAG = '((?:^|\s)--?(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)\s+)(?![-*])([^\s"'']+)'
+$CRED_SSHPASS = '(\bsshpass\s+-p\s*)([^\s"'']+)'
 function Mask-Creds([string]$s) {
     if ($null -eq $s) { return $null }
     $s = $s -replace $CRED_URL, '$1***@'
     $s = $s -replace $CRED_QUOTED, '$1$2***$4'
     $s = $s -replace $CRED_ESCAPED, '$1$2***$5'
     $s = $s -replace $CRED_BARE_JSON, '$1$2***$2'
-    return ($s -replace $CRED_BARE, '$1***')
+    $s = $s -replace $CRED_BARE, '$1***'
+    $s = $s -replace $CRED_AUTH, '$1***'
+    $s = $s -replace $CRED_BEARER, '$1***'
+    $s = $s -replace $CRED_USER, '$1***'
+    $s = $s -replace $CRED_FLAG, '$1***'
+    return ($s -replace $CRED_SSHPASS, '$1***')
 }
 
 $BOOT_FILES = @('river-local-oct-22-seasons.toe', 'river-online-oct-23.toe')   # retired show files start with old- (D27): never offered

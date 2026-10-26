@@ -85,7 +85,8 @@ def probe_mask():
     body = src[src.index('function Mask-Creds'):]
     body = body[:body.index('\n}\n')]
     steps = re.findall(r"-replace \$(CRED_\w+), '([^']*)'", body)
-    assert [name for name, _ in steps] == ['CRED_URL', 'CRED_QUOTED', 'CRED_ESCAPED', 'CRED_BARE_JSON', 'CRED_BARE'], steps
+    assert [name for name, _ in steps] == ['CRED_URL', 'CRED_QUOTED', 'CRED_ESCAPED', 'CRED_BARE_JSON', 'CRED_BARE',
+                                           'CRED_AUTH', 'CRED_BEARER', 'CRED_USER', 'CRED_FLAG', 'CRED_SSHPASS'], steps
     compiled = [(re.compile(pats[name], re.I), re.sub(r'\$(\d+)', r'\\g<\1>', repl)) for name, repl in steps]
 
     def mask(s):
@@ -115,6 +116,15 @@ PROBE_CASES = CASES + [
     ('{"password":"ab\\\\","user":"admin"}', '{"password":"***","user":"admin"}'),
     ('"{\\"password\\":\\"ab\\\\\\"cd\\\\\\\\\\",\\"user\\":\\"admin\\"}"', '"{\\"password\\":\\"***\\",\\"user\\":\\"admin\\"}"'),
     ('{"password":"hunter2', '{"password":"***'),
+    # R8 #38: a key with a prefix, and a command line's login forms; input_tokens and the like still spared
+    ('{"cam_password":"hunter2"} CAM_PASSWORD=hunter2 python x', '{"cam_password":"***"} CAM_PASSWORD=*** python x'),
+    (f'export CLAUDE_CODE_OAUTH_TOKEN={FAKE}; curl -H "X-Auth-Token: {FAKE}"', 'export CLAUDE_CODE_OAUTH_TOKEN=***; curl -H "X-Auth-Token: ***"'),
+    (f'{{"access_token":"{FAKE}","expires_in":3600}}', '{"access_token":"***","expires_in":3600}'),
+    ('curl -u admin:hunter2 https://h/x', 'curl -u admin:*** https://h/x'),
+    (f"curl -H 'Authorization: Bearer {FAKE}' x", "curl -H 'Authorization: Bearer ***' x"),
+    ('sshpass -p hunter2 ssh root@h', 'sshpass -p *** ssh root@h'),
+    ('ptz.py --password hunter2 --user admin', 'ptz.py --password *** --user admin'),
+    ('"input_tokens": 1234 max_tokens secret_ref: x', '"input_tokens": 1234 max_tokens secret_ref: x'),
 ]
 
 
