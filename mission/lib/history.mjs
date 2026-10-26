@@ -150,7 +150,7 @@ export class History {
         // for a cause the restart doesn't touch (a camera, the internet): one of TouchDesigner's own pieces still not OK after it is a
         // new instance, its since starting again, as its row's does (R7 #4, CR7 #8)
         const br = this.state.overall?.before_restart, items = m.problems.find((x) => x.id === cause)?.items ?? [];
-        const back = !!br && !stale && !RESTARTISH.includes(cause) && br.level === o.level && br.cause === cause && t - br.at <= RESTART_MARK_MS
+        const back = !!br && !stale && cause != null && o.level !== 'ok' && !RESTARTISH.includes(cause) && br.level === o.level && br.cause === cause && t - br.at <= RESTART_MARK_MS
           && !items.some((id) => RESTARTED_PIECES.includes(id));
         rec({ kind: 'overall', level: o.level, cause, headline: o.headline, stale, lost: stale ? lostWho(m) : null, from: prev, ...(blind && !stale ? { gap: true } : {}), ...(back ? { back: true } : {}) });
       }
@@ -332,9 +332,11 @@ export class History {
         const blindNow = !!ev.stale || BLIND.includes(ev.cause);
         const longGap = !!p && ev.gap === true && typeof p.blind_since === 'number' && ev.t - p.blind_since > UNSEEN_GAP_MS;
         // what a restart interrupted (R8 #5): remembered as TouchDesigner starts restarting, kept through coming up, and restored
-        // (its since too) when the same verdict is back after it; anything else ends it
+        // (its since too) when the same verdict is back after it; anything else ends it. Only a fault (not OK, a cause): OK after a
+        // restart is OK since the restart, never "as before" with its since from before it, which would hide the restart (CR8 #8)
         const br0 = p?.before_restart ?? null;
-        const before = ev.cause === 'td-restarting' ? br0 ?? (p && !RESTARTISH.includes(p.cause) ? { level: p.level, cause: p.cause, t: p.t, at_least: p.at_least, at: ev.t } : null)
+        const fault = !!p && p.level !== 'ok' && p.cause != null && !RESTARTISH.includes(p.cause);
+        const before = ev.cause === 'td-restarting' ? br0 ?? (fault ? { level: p.level, cause: p.cause, t: p.t, at_least: p.at_least, at: ev.t } : null)
           : ev.cause === 'coming-up' || ev.stale ? br0 : null;
         const base = ev.back === true && br0 ? { level: br0.level, cause: br0.cause, t: br0.t, at_least: br0.at_least }
           : known && !same ? { level: ev.level, cause: ev.cause ?? null, t: ev.t, at_least: ev.from == null || ev.gap === true }

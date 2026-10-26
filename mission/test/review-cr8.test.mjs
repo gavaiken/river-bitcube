@@ -19,6 +19,10 @@ function payload({ t, td, applying = [], extra = {} } = {}) {
     modal: { ok: true, at: t, value: { ok: true, tick: 1, next_tick_epoch: t / 1000 + 200, finished_at: new Date(t - 60_000).toISOString() } },
     probe: { ok: true, at: t, value: { ok: true, uptime_h: 30, time: '2026-10-25T21:04:00', boot_file: YEAR, show_files: [YEAR, LIVE], displays: ['M14', 'LED 1920X1080'],
       devices: { psac10_1: true, psac10_2: true, gallery_cam: true, river_cam: true, router: true, internet: true },
+      modal_link: { processes: 8, gallery: { log_age_s: 1, last: '21:03:59 INFO    gallery/video -> media/gallery/video/2026-10-23T09-58-32-197Z.mp4 (50 KB)' },
+                    river: { log_age_s: 4, last: '21:03:56 INFO    river/video -> media/river/video/2026-10-23T09-58-29-197Z.mp4 (63 KB)' },
+                    sync: { log_age_s: 57, last: '21:03:03 INFO    sync: updated status.json (611 bytes)' } },
+      recorder: { clips: 14, last: '2026-10-25 21:00:41 done' },
       td: td ?? { ok: true, file: YEAR, fps: 60, errors: 0, ropes: { source: 'canvas', status: { open: true, active: true, watts: [100, 100] } }, hub75: { brightness: 1, output: true } } } },
     applying, ...extra };
 }
@@ -132,4 +136,34 @@ test('CR8 #7: Recent says "Asked to …" only while the change can still get a v
   t += 3600e3;
   assert.equal(words()['ax.3'], 'Turned the ropes dark from mission control');
   assert.match(words()['ax.4'], /may or may not have happened$/);
+});
+
+// ---- #8: a restart from OK is a restart, never "as before" -----------------------------------------------------------------------
+
+test('CR8 #8: OK, a restart, then OK again: the OK after it starts its own since and is no "as before"; a fault the restart doesn\'t touch still is', async () => {
+  const { feed } = await import('../lib/history.mjs');
+  const RESTART = (t) => [{ id: 'ax.8', action: 'switch', label: "the restart on the river's year", file: YEAR, source: 'mission control', phase: 'confirming', started_at: t - 3000, answered_at: t - 1000, expect_s: 60, blocks: ['ropes', 'hub75', 'switch'] }];
+  let t = T0;
+  const h = new History({ file: null, now: () => t });
+  h.observe(payload({ t })); t += 18 * 60_000; h.observe(payload({ t }));
+  assert.equal(h.since('overall', t).level, 'ok');
+  const n = h.events.length;
+  for (const td of [{ ok: false, error: 'not running' }, { ok: false, error: 'not answering' }]) { t += 5000; h.observe(payload({ t, td, applying: RESTART(t) })); }
+  assert.equal(h.state.overall.cause, 'td-restarting');
+  assert.equal(h.state.overall.before_restart, null, 'nothing to restore: OK is no fault the restart interrupted');
+  t += 30_000; h.observe(payload({ t }));
+  const back = t;
+  t += 33_000;
+  const s = h.since('overall', t);
+  assert.deepEqual([s.level, s.since], ['ok', back], 'OK since the restart ended, never since before it');
+  const ev = h.events.slice(n).filter((e) => e.kind === 'overall').at(-1);
+  assert.equal(ev.back, undefined);
+  assert.doesNotMatch(feed([ev])[0].words, /as before/);
+  // a camera down across the restart still keeps its since (R8 #5)
+  const camDown = (extra = {}) => { const p = payload({ t, ...extra }); p.probe.value.devices.gallery_cam = false; return p; };
+  t += 5000; h.observe(camDown()); const began = h.since('overall', t).since;
+  t += 10 * 60_000; h.observe(camDown());
+  t += 5000; h.observe(camDown({ td: { ok: false, error: 'not running' }, applying: RESTART(t) }));
+  t += 30_000; h.observe(camDown());
+  assert.deepEqual([h.since('overall', t).cause, h.since('overall', t).since], ['gallery-cam', began]);
 });
