@@ -1,8 +1,8 @@
 // Studio chat v2 (docs/mission-ui.md, "Studio chat"). The shell (header, tab bar, menu, art) comes from ui.js; this file
 // turns the chat's events (GET /api/chat/history, the SSE /api/chat/events) into one card per request, pairs replies with
 // their request by id, and keeps the pinned status bar and the composer. Server API unchanged: history, events, send, stop.
-import { mountShell, tick, art, fmt, control, confirm, api, esc, md, chip, mark, plainError, noAnswerText, WARN_MS, LOST_MS } from '/ui.js';
-import { TZ, applyingWords } from '/model.js';
+import { mountShell, tick, art, fmt, control, confirm, api, esc, md, chip, mark, plainError, noAnswerText, WARN_MS, LOST_MS, poll } from '/ui.js';
+import { TZ, applyingWords, derive, entryWords, entrySaid } from '/model.js';
 import { stateOf as judge, stepWords, stepsToggle, excerpt } from '/chat-words.js';
 
 const $ = (id) => document.getElementById(id);
@@ -196,8 +196,10 @@ function renderPinned() {
   if (pinText.innerHTML !== html) pinText.innerHTML = html;
   // screen readers hear the bar's state word when it changes, never its ticking m:ss (chat.html #pin-live)
   const said = lost ? 'Reconnecting to mission control' : !st ? (performance.now() - pageStart > LOST_MS ? "This page can't reach mission control" : '') : st.running ? `Working on: ${excerpt(st.current?.text, 60)}` : st.queue?.length ? `${st.queue.length} waiting` : 'Ready';
+  // and each change being applied, by name and source, said when it begins or moves on, never with its time (R7 #5)
+  const sayAll = [said, ...(lost ? [] : applyingNow().map(entrySaid))].filter(Boolean).join('. ').replace(/\.\./g, '.');
   const live = $('pin-live');
-  if (live && live.textContent !== said) live.textContent = said;
+  if (live && live.textContent !== sayAll) live.textContent = sayAll;
   const q = st?.queue?.length ?? 0;
   const label = q ? 'Stop, and clear the queue' : 'Stop';
   const busy = !!(st?.running || q);
@@ -278,7 +280,31 @@ autogrow();
 
 // the composer's height sets the room the thread leaves at the bottom
 const composer = $('composer');
-new ResizeObserver(() => document.querySelector('main.chat').style.setProperty('--composer-h', `${composer.offsetHeight}px`)).observe(composer);
+// (and the page's scroll padding: a focused link is scrolled out from under it, R7 #11)
+new ResizeObserver(() => { for (const el of [document.querySelector('main.chat'), document.documentElement]) el.style.setProperty('--composer-h', `${composer.offsetHeight}px`); }).observe(composer);
+
+// ---- a change being applied anywhere: the band's quiet line over the pinned bar (R7 #5) ---------------------------------------
+// The chat is where a teammate asks for the next change, so it says what is being applied now, from a phone or from the chat's own
+// agent ("Waiting for bitcube to show the restart on the river's year · from the studio chat · 0:07 · usually about 1 min"), as
+// Status's band and Lights' state line do; nothing while this page has no contact with mission control.
+const applyingPoll = poll('/api/status', { every: 5000, onData: () => paintApplying(), onError: () => paintApplying() });
+let applyingKey = '';
+function applyingNow() {
+  const p = applyingPoll;
+  if (!p.last || p.elapsed() > LOST_MS) return [];
+  try { return derive(p.last, p.last.now + p.elapsed()).show.applying ?? []; } catch { return []; }
+}
+function paintApplying() {
+  const host = $('chat-applying'), list = applyingNow();
+  const k = list.map((a) => `${a.id ?? a.action}|${a.phase}|${a.maybe}`).join('\n');
+  if (k !== applyingKey) {
+    applyingKey = k;
+    host.innerHTML = list.map(() => '<div class="applying-line"><span class="spin" aria-hidden="true"></span><span class="t"></span></div>').join('');
+    renderPinned();                    // the bar's hidden region says them too (once, without their times)
+  }
+  host.querySelectorAll('.t').forEach((t, i) => { const w = fmt.nb(entryWords(list[i], list[i].elapsed_s)); if (t.textContent !== w) t.textContent = w; });
+}
+tick(paintApplying);
 
 // ---- status, history, the stream --------------------------------------------------------------------------------------
 function setStatus(st) {

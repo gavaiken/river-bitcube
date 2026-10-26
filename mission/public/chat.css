@@ -60,6 +60,18 @@ details.more .steps { padding: 0 4px 6px; }
 .outcome a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; }
 .notice { font-size: 14px; color: var(--muted); font-style: italic; }
 
+/* a change being applied anywhere (a phone, the chat's own agent): the band's quiet line, above the pinned bar (R7 #5) */
+.applying-now { display: grid; gap: 4px; }
+.applying-now:empty { display: none; }
+.applying-line { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; font-weight: 600; color: var(--muted); line-height: 1.35; overflow-wrap: break-word; }
+.applying-line .spin { width: 14px; height: 14px; margin-top: 2px; flex: none; }
+/* tabbing through the thread never leaves a stop under the fixed composer (R7 #11): the page's scroll padding counts it (its
+   height, --composer-h, is measured by chat.js), as it counts the tab bar */
+html:has(main.chat) { scroll-padding-bottom: calc(var(--composer-h, 160px) + var(--tabbar-h) + env(safe-area-inset-bottom) + 8px); }
+@media (min-width: 900px) { html:has(main.chat) { scroll-padding-bottom: calc(var(--composer-h, 160px) + env(safe-area-inset-bottom) + 8px); } }
+@media (max-height: 640px) and (max-width: 899px) { html:has(.compose textarea:focus) { scroll-padding-bottom: calc(var(--composer-h, 160px) + env(safe-area-inset-bottom) + 8px); } }
+@media (max-width: 300px) { html:has(main.chat) { scroll-padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px); } }
+
 /* the composer: fixed above the tab bar, the pinned status bar on top */
 .composer {
   position: fixed; left: 0; right: 0; z-index: 4;
