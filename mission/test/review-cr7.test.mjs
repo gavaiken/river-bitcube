@@ -395,3 +395,38 @@ test('CR7 #11: a timed fetch\'s limit is from the start unless it is the idle ki
   globalThis.fetch = slowFetch(250, [250, 700]);
   await assert.rejects(fetchTimed('/x', undefined, 400, { idle: true }), (e) => e.noAnswer === true);
 });
+
+// ---- gzip without blocking the server ----------------------------------------------------------------------------------------
+test('CR7 #12: a static file is gzipped once per ETag, and a big answer off the event loop (the same content once)', async () => {
+  const { Zipper, SMALL } = await import('../lib/zip.mjs');
+  const { gunzipSync } = await import('node:zlib');
+  const z = new Zipper();
+  // a static file: once per key (its path and ETag); the second time from the cache, at once
+  const file = Buffer.from('x'.repeat(5000));
+  const a = await z.zip(file, '/model.js|W/"1-2"');
+  const b = z.zip(file, '/model.js|W/"1-2"');
+  assert.ok(Buffer.isBuffer(b) && b === a, 'the cached bytes, not a promise');
+  assert.equal(gunzipSync(a).toString(), file.toString());
+  assert.notEqual(await z.zip(Buffer.from('y'.repeat(5000)), '/model.js|W/"1-3"'), a, 'a new ETag is compressed again');
+  // a small answer: at once (gzipSync of a few KB is well under a millisecond)
+  assert.ok(Buffer.isBuffer(z.zip('{"a":1}'.repeat(100))));
+  // a big answer (the LED map, 481 KB): a promise, compressed off the event loop ...
+  const big = JSON.stringify({ points: Array.from({ length: 20_000 }, (_, i) => ({ rope: i % 20, px: i, u: Math.sin(i), v: Math.cos(i) })) });
+  assert.ok(Buffer.byteLength(big) > SMALL);
+  const p = z.zip(big);
+  assert.ok(p instanceof Promise, 'never gzipSync on a big answer');
+  const zb = await p;
+  assert.equal(gunzipSync(zb).toString(), big);
+  // ... and the same content again (the next phone asking for the map) from the cache, at once
+  assert.equal(z.zip(String(big)), zb);
+  // the caches stay small
+  for (let i = 0; i < 300; i++) await z.zip(file, `/f${i}|e`);
+  for (let i = 0; i < 10; i++) await z.zip(big + ' '.repeat(i));
+  assert.ok(z.files.size <= 64 && z.bodies.length <= 4, `${z.files.size} ${z.bodies.length}`);
+});
+
+test('CR7 #12: the server gzips through the Zipper, never gzipSync in send()', () => {
+  const src = readFileSync(new URL('../server.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /gzipSync/);
+  assert.match(src, /zipper\.zip\(/);
+});

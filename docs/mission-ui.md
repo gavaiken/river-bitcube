@@ -191,7 +191,7 @@ The server takes a started calibration's state from Lights' own answer at once (
 
 **Requests never hang the page**: every fetch (status, calibration progress, the LED map, stills, frames) has a time limit; a page that couldn't read something asks again on its own (the next good answer, or every 30 s) and says "hasn't loaded yet", never "there is none".
 
-**Slow links** (R7 #1): text answers are gzipped when the request accepts it (the LED map 481 → 39 KB, model.js 100 → 33 KB, `/api/status` 6 → 2 KB); the page files and the pages revalidate (`ETag`, `Last-Modified`, `cache-control: no-cache`: a 304 when unchanged, never to someone logged out), so a tab switch downloads only what changed; every API answer stays `no-store`. At 400 kbps with 400 ms of latency the first verdict shows in about 4 s and the LED map in about 5 s.
+**Slow links** (R7 #1): text answers are gzipped when the request accepts it (the LED map 481 → 39 KB, model.js 100 → 33 KB, `/api/status` 6 → 2 KB); the page files and the pages revalidate (`ETag`, `Last-Modified`, `cache-control: no-cache`: a 304 when unchanged, never to someone logged out), so a tab switch downloads only what changed; every API answer stays `no-store`. Compressing never holds the server up (`lib/zip.mjs`, CR7 #12): a page file is gzipped once per ETag, a big answer (the LED map) off the event loop and once per content, a small one at once. At 400 kbps with 400 ms of latency the first verdict shows in about 4 s and the LED map in about 5 s.
 
 ## Page specs
 
