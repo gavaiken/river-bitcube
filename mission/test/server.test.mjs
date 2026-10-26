@@ -279,7 +279,8 @@ test('the v2 routes on the real fixtures: lights, pixelmap, calibration (scripte
   const words = hist.events.map((e) => e.words);
   assert.ok(words.includes('Ran the full check of bitcube from mission control'), words);
   assert.ok(words.includes("Rebuilt the river's year with the new LED map from mission control"), words);
-  assert.ok(words.includes('Started a calibration from mission control') && words.includes('Stopped the calibration from mission control'), words);
+  // the Stop above stopped the dry run: it is named so (R8 #21)
+  assert.ok(words.includes('Started a calibration from mission control') && words.includes('Stopped the dry run from mission control'), words.join(' | '));
   assert.ok(words.some((w) => /Tried to start a calibration from mission control, but/.test(w)), words);   // "already running" is an answer, not a refusal
   assert.equal(hist.events.filter((e) => e.action === 'check').length, 1);
   assert.equal(hist.events.filter((e) => e.action === 'rebuild').length, 1);

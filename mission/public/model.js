@@ -69,32 +69,36 @@ export const APPLY_BLOCKS = {
 export const dryStart = (action, body) => action === 'calibrate' && !!body && typeof body === 'object' && body.action === 'start'
   && (body.dry_run === true || (typeof body.decode_only === 'string' && body.decode_only !== ''));
 /** The team's words for a change in flight when the server's entry has no label of its own (an older server). */
-export const APPLY_LABEL = { switch: 'a show-file switch', rebuild: "the rebuild of the river's year", bootfile: 'the boot file change', lightsroute: 'the lighting port change',
-  ropes: 'the ropes change', hub75: 'the panels change', mode: 'the mode change', target: 'the target change', rules: 'the rules change', 'rules-reset': 'the rules reset', calibrate: 'the start of a calibration' };
+export const APPLY_LABEL = { switch: 'a show-file switch', rebuild: "the rebuild of the river's year", bootfile: 'the change of the boot file', lightsroute: 'the change of the lighting port',
+  ropes: 'the change of the ropes', hub75: 'the change of the panels', mode: 'the change of the mode', target: 'the change of the target', rules: 'the change of the rules',
+  'rules-reset': 'the reset of the rules', calibrate: 'the calibration start' };
 /** One name per change (R7 #19), made here for the server's entries (lib/applying.mjs), this phone's own applying
  *  line, every other phone's band, Last done and the unconfirmed line: a noun phrase that names what it changes to, and reads in
- *  every frame ("Applying: …", "Wait: … is being applied.", "Waiting for bitcube to show …", "… was sent at 21:04"). `running`:
- *  the show file TouchDesigner runs now, so a switch to it is the button's "the restart on …". */
+ *  every frame ("Applying: …", "Wait: … is being applied.", "Waiting for bitcube to show …", "Last done: …", "… was sent at
+ *  21:04"). Never one that reads as a clause ("the ropes change to dark is being applied", "Last done: the rules reset") nor as no
+ *  one talks ("the stop of the calibration"): "the change of the ropes to dark", "the reset of the rules", "the calibration stop"
+ *  (R8 #20); a dry run's stop by its own name, from the run the server held (R8 #21). `running`: the show file TouchDesigner runs
+ *  now, so a switch to it is the button's "the restart on …". */
 export function changeLabel(action, body = {}, { running = null } = {}) {
   const b = obj(body) ?? {}, f = typeof b.file === 'string' ? b.file : null, fl = FILES[f]?.label ?? 'a show file';
   const x = num(typeof b.brightness === 'string' ? Number(b.brightness) : b.brightness);
   switch (action) {
     case 'switch': return f && f === running ? `the restart on ${fl}` : `the switch to ${fl}`;
     case 'rebuild': return `the rebuild of ${fl}`;
-    case 'bootfile': return f ? `the boot file change to ${fl}` : 'the boot file change';
-    case 'lightsroute': return b.route === 'direct' ? "the lighting port change to bitcube's LIGHTS port" : b.route === 'router' ? 'the lighting port change to the spare router port' : 'the lighting port change';
-    case 'ropes': return b.dark === true ? 'the ropes change to dark' : 'the ropes change to the river';   // as planControl: only a real true goes dark
-    case 'hub75': return x != null ? `the panels change to ${Math.round(Math.min(1, Math.max(0, x)) * 100)} %` : 'the panels change';
-    case 'mode': return typeof b.mode === 'string' && b.mode ? `the mode change to ${cap(b.mode)}` : 'the mode change';
+    case 'bootfile': return f ? `the change of the boot file to ${fl}` : 'the change of the boot file';
+    case 'lightsroute': return b.route === 'direct' ? "the change of the lighting port to bitcube's LIGHTS port" : b.route === 'router' ? 'the change of the lighting port to the spare router port' : 'the change of the lighting port';
+    case 'ropes': return b.dark === true ? 'the change of the ropes to dark' : 'the change of the ropes to the river';   // as planControl: only a real true goes dark
+    case 'hub75': return x != null ? `the change of the panels to ${Math.round(Math.min(1, Math.max(0, x)) * 100)} %` : 'the change of the panels';
+    case 'mode': return typeof b.mode === 'string' && b.mode ? `the change of the mode to ${cap(b.mode)}` : 'the change of the mode';
     case 'target': {
       const i = num(typeof b.intensity === 'string' && b.intensity !== '' ? Number(b.intensity) : b.intensity), w = i != null ? intensityWord(Math.min(1, Math.max(0, i))) : null;
       const to = [typeof b.season === 'string' ? b.season : null, w].filter(Boolean).join(', ');
-      return to ? `the target change to ${to}` : 'the target change';
+      return to ? `the change of the target to ${to}` : 'the change of the target';
     }
-    case 'rules': { const n = Object.keys(obj(b.rules) ?? {}).length; return n ? `the change of ${n} rule${n === 1 ? '' : 's'}` : 'the rules change'; }
-    case 'rules-reset': return 'the rules reset';
-    case 'calibrate': return b.action === 'cancel' ? 'the stop of the calibration' : b.action === 'status' ? 'a look at the calibration'
-      : b.dry_run === true ? 'the start of a dry run' : 'the start of a calibration';
+    case 'rules': { const n = Object.keys(obj(b.rules) ?? {}).length; return n ? `the change of ${n} rule${n === 1 ? '' : 's'}` : 'the change of the rules'; }
+    case 'rules-reset': return 'the reset of the rules';
+    case 'calibrate': return b.action === 'cancel' ? (b.dry_run === true ? 'the dry run stop' : 'the calibration stop') : b.action === 'status' ? 'a look at the calibration'
+      : b.dry_run === true ? 'the dry run start' : 'the calibration start';
     case 'check': return 'the full check of bitcube';
     default: return 'a change';
   }

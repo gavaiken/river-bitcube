@@ -538,8 +538,8 @@ export function actionPhrase(ev) {
     case 'lightsroute': return ['Moved', 'move', `the lighting network to ${b.route === 'router' ? 'the spare router port' : "bitcube's LIGHTS port"}`];
     case 'check': return ['Ran', 'run', 'the full check of bitcube'];
     case 'rebuild': return ['Rebuilt', 'rebuild', `${fileLabel(b.file)} with the new LED map`];
-    // Stop, as the page's button says it; a dry run by its own name (R7 #19, #20)
-    case 'calibrate': return b.action === 'cancel' ? ['Stopped', 'stop', 'the calibration'] : b.action === 'status' ? ['Checked', 'check', 'the calibration']
+    // Stop, as the page's button says it; a dry run by its own name, its Stop too (R7 #19, #20, R8 #21: the server records which run it stopped)
+    case 'calibrate': return b.action === 'cancel' ? ['Stopped', 'stop', b.dry_run === true ? 'the dry run' : 'the calibration'] : b.action === 'status' ? ['Checked', 'check', 'the calibration']
       : ['Started', 'start', b.dry_run === true ? 'a dry run' : `a calibration${b.decode_only ? ' from earlier photos' : ''}`];   // as planCalibrate
     default: return ['Used', 'use', `the "${ev.action ?? 'unknown'}" control`];
   }

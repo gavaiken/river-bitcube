@@ -22,7 +22,7 @@ test('derive serves the server\'s verdicts (status.confirmed, status.expired); e
                  expired: [{ id: 'ax.5', action: 'bootfile', file: LIVE, started_at: NOW - 200_000, at: NOW - 30_000, maybe: true }] });
   // R8 #2, #9: each also carries its request id, its label (an older server: the action's words) and source, and whether it was a maybe
   assert.deepEqual(m.show.confirmed, [{ id: 'ax.3', request_id: null, action: 'switch', file: YEAR, label: 'a show-file switch', source: null, maybe: false, at: NOW - 300_000 }]);
-  assert.deepEqual(m.show.expired, [{ id: 'ax.5', request_id: null, action: 'bootfile', file: LIVE, label: 'the boot file change', source: null, maybe: true, at: NOW - 30_000 }]);
+  assert.deepEqual(m.show.expired, [{ id: 'ax.5', request_id: null, action: 'bootfile', file: LIVE, label: 'the change of the boot file', source: null, maybe: true, at: NOW - 30_000 }]);
   assert.equal(entryVerdict(m, 'ax.3'), 'confirmed');
   assert.equal(entryVerdict(m, 'ax.5'), 'expired');
   assert.equal(entryVerdict(m, 'ax.7'), 'pending', 'still in status.applying: the server is still confirming it');

@@ -51,8 +51,8 @@ test('a dry run (no lights, no camera, nothing on TouchDesigner) is stopped only
   assert.equal(dryWhy(model('all-good', (s) => s, 40_000)), "this page can't reach mission control");
   const sw = (s) => { s.applying = [{ id: 'a1', action: 'rebuild', label: "the rebuild of the river's year", started_at: s.now - 5000, expect_s: 150, blocks: ['calibrate', 'rebuild'] }]; return s; };
   assert.equal(dryWhy(model('all-good', sw)), null, 'a rebuild in flight touches nothing a dry run does (CR7 #7)');
-  const st = (s) => { s.applying = [{ id: 'a2', action: 'calibrate', label: 'the start of a calibration', started_at: s.now - 5000, expect_s: 10, blocks: ['calibrate', 'ropes'] }]; return s; };
-  assert.equal(dryWhy(model('all-good', st)), 'wait: the start of a calibration is being applied');
+  const st = (s) => { s.applying = [{ id: 'a2', action: 'calibrate', label: 'the calibration start', started_at: s.now - 5000, expect_s: 10, blocks: ['calibrate', 'ropes'] }]; return s; };
+  assert.equal(dryWhy(model('all-good', st)), 'wait: the calibration start is being applied');
   const cal = (s) => { s.probe.value.calibration = { running: true, mode: 'dry-run', dry_run: true, stage: 'ropes-capture', expected_s: 2, elapsed_s: 1 }; return s; };
   assert.equal(dryWhy(model('all-good', cal)), 'a dry run is already running');
 });
@@ -295,11 +295,11 @@ test('R6 #22, #24: Calibrate says the ropes go back to what they showed before, 
 
 test('R6: Lights\' controls take ui.js\'s words for applying ("Applying: <what>…"), never their own', () => {
   for (const [k, c] of Object.entries(CAL_CTL)) {
-    // Stop is no change anyone else sees: "Stopping the calibration…", never "Applying: the stop of the calibration…" (R7 #19)
+    // Stop is no change anyone else sees: "Stopping the calibration…", never "Applying: the calibration stop…" (R7 #19)
     if (/^stop/.test(k)) assert.match(c.pending, /^Stopping the (calibration|dry run)…$/, k); else assert.equal(c.pending, undefined, k);
     assert.match(c.what, /^(the|a) [a-z]/, k);
   }
-  assert.equal(CAL_CTL.start.what, 'the start of a calibration');   // lib/applying.mjs's label: one name on every phone
-  assert.equal(CAL_CTL.dry.what, 'the start of a dry run');
+  assert.equal(CAL_CTL.start.what, 'the calibration start');   // lib/applying.mjs's label: one name on every phone
+  assert.equal(CAL_CTL.dry.what, 'the dry run start');
   assert.equal(CAL_CTL.rebuild.what, "the rebuild of the river's year");
 });

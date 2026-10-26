@@ -134,7 +134,7 @@ test('CR7 #7: a dry or decode-only start waits only for another calibration star
     for (const b of [DRY, DECODE]) assert.notEqual(a.conflict('calibrate', b), null, JSON.stringify(first));
     await assert.rejects(a.run('calibrate', DRY, async () => ({ ok: true })), (e) => e.status === 409);
     const m = derive(statusAt(T0, { applying: a.list(all._scenario.now) }), all._scenario.now + 1000);
-    assert.match(dryWhy(m), /^wait: the start of a (calibration|dry run) is being applied$/, JSON.stringify(first));
+    assert.match(dryWhy(m), /^wait: the (calibration|dry run) start is being applied$/, JSON.stringify(first));
     release({ ok: true, calibration: { running: true } }); await p;
   }
 });
@@ -344,12 +344,12 @@ test('CR7 #10: this phone\'s own change still in status.applying is its own whil
   const { derive, ownEntries, bandSaid } = await import('../public/model.js');
   const now = T0;
   const entry = (id, action, startedAgoS, label) => ({ id, action, label, phase: 'confirming', source: 'mission control', started_at: all._scenario.now - startedAgoS * 1000, expect_s: 60, blocks: [action] });
-  const m = derive(statusAt(T0, { applying: [entry('ax.1', 'switch', 70, 'the switch to the live river'), entry('ax.2', 'ropes', 5, 'the ropes change to dark')] }), all._scenario.now);
+  const m = derive(statusAt(T0, { applying: [entry('ax.1', 'switch', 70, 'the switch to the live river'), entry('ax.2', 'ropes', 5, 'the change of the ropes to dark')] }), all._scenario.now);
   // the switch timed out on this phone 10 s ago (no answer: no id) and the server still holds its entry: this phone's own
   const own = ownEntries(m, [{ action: 'switch', state: 'unconfirmed', entryId: null, at: now - 10_000 }], now);
   assert.deepEqual(own, { ownIds: ['ax.1'], ownActions: [] });
   assert.doesNotMatch(bandSaid(m, own), /switch to the live river/);
-  assert.match(bandSaid(m, own), /ropes change to dark/, 'another phone\'s change is still said');
+  assert.match(bandSaid(m, own), /change of the ropes to dark/, 'another phone\'s change is still said');
   // an entry begun after this phone gave up is another phone's change of the same thing
   assert.deepEqual(ownEntries(m, [{ action: 'ropes', state: 'unconfirmed', entryId: null, at: now - 60_000 }], now), { ownIds: [], ownActions: [] });
   // applying or confirming without an id: by its action, as before

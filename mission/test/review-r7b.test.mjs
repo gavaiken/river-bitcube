@@ -146,24 +146,24 @@ test('R7 #19: one name per change, made in one place and the same on every phone
   const { lastDoneWhat } = await import('../public/status-words.js');
   const { describeEvent } = await import('../lib/history.mjs');
   const cases = [
-    ['ropes', { dark: true }, 'the ropes change to dark'], ['ropes', { dark: false }, 'the ropes change to the river'],
-    ['hub75', { brightness: 0.9 }, 'the panels change to 90 %'], ['hub75', { brightness: 0 }, 'the panels change to 0 %'],
-    ['mode', { mode: 'manual' }, 'the mode change to Manual'], ['target', { season: 'summer', intensity: 0.7 }, 'the target change to summer, strong'],
-    ['rules', { rules: { cycle_seconds: 300 } }, 'the change of 1 rule'], ['rules', { rules: { a: 1, b: 2 } }, 'the change of 2 rules'], ['rules-reset', {}, 'the rules reset'],
-    ['bootfile', { file: YEAR }, "the boot file change to the river's year"], ['lightsroute', { route: 'router' }, 'the lighting port change to the spare router port'],
+    ['ropes', { dark: true }, 'the change of the ropes to dark'], ['ropes', { dark: false }, 'the change of the ropes to the river'],
+    ['hub75', { brightness: 0.9 }, 'the change of the panels to 90 %'], ['hub75', { brightness: 0 }, 'the change of the panels to 0 %'],
+    ['mode', { mode: 'manual' }, 'the change of the mode to Manual'], ['target', { season: 'summer', intensity: 0.7 }, 'the change of the target to summer, strong'],
+    ['rules', { rules: { cycle_seconds: 300 } }, 'the change of 1 rule'], ['rules', { rules: { a: 1, b: 2 } }, 'the change of 2 rules'], ['rules-reset', {}, 'the reset of the rules'],
+    ['bootfile', { file: YEAR }, "the change of the boot file to the river's year"], ['lightsroute', { route: 'router' }, 'the change of the lighting port to the spare router port'],
     ['switch', { file: LIVE }, 'the switch to the live river'], ['rebuild', { file: YEAR }, "the rebuild of the river's year"],
-    ['calibrate', { action: 'start' }, 'the start of a calibration'], ['calibrate', { action: 'start', dry_run: true }, 'the start of a dry run'],
+    ['calibrate', { action: 'start' }, 'the calibration start'], ['calibrate', { action: 'start', dry_run: true }, 'the dry run start'],
   ];
   for (const [action, body, want] of cases) {
     assert.equal(changeLabel(action, body), want, action);
     assert.equal(entryLabel(action, body), want, `the server's entry: ${action}`);
   }
   assert.equal(changeLabel('switch', { file: YEAR }, { running: YEAR }), "the restart on the river's year");
-  // Last done: the same name, one form ("The ropes change to dark"), for every action
-  assert.equal(lastDoneWhat({ action: 'ropes', body: { dark: true } }), 'The ropes change to dark');
+  // Last done: the same name, one form ("The change of the ropes to dark"), for every action
+  assert.equal(lastDoneWhat({ action: 'ropes', body: { dark: true } }), 'The change of the ropes to dark');
   assert.equal(lastDoneWhat({ action: 'switch', body: { file: YEAR }, label: "the restart on the river's year" }), "The restart on the river's year");
-  assert.equal(lastDoneWhat({ action: 'calibrate', body: { action: 'cancel' } }), 'The stop of the calibration');
-  assert.equal(lastDoneWhat({ action: 'calibrate', body: { action: 'start', dry_run: true } }), 'The start of a dry run');
+  assert.equal(lastDoneWhat({ action: 'calibrate', body: { action: 'cancel' } }), 'The calibration stop');
+  assert.equal(lastDoneWhat({ action: 'calibrate', body: { action: 'start', dry_run: true } }), 'The dry run start');
   assert.equal(lastDoneWhat({ action: 'check', body: {} }), 'The full check of bitcube');
   // Recent: a stop is a stop, a dry run is a dry run
   assert.equal(describeEvent({ kind: 'action', action: 'calibrate', body: { action: 'cancel' }, ok: true, source: 'studio chat' }), 'Stopped the calibration from the studio chat');
@@ -190,7 +190,7 @@ test('R7 #20: a dry run touches no lights, so it locks nothing on them, on the p
   let release; const gate = new Promise((r) => { release = r; });
   const start = a.run('calibrate', { action: 'start', dry_run: true }, () => gate);
   const e = a.list()[0];
-  assert.deepEqual([e.label, e.blocks, e.dry], ['the start of a dry run', ['calibrate'], true]);
+  assert.deepEqual([e.label, e.blocks, e.dry], ['the dry run start', ['calibrate'], true]);
   for (const x of ['ropes', 'switch', 'rebuild', 'bootfile', 'lightsroute']) assert.equal(a.conflict(x), null, x);
   assert.notEqual(a.conflict('calibrate'), null);
   const m = derive({ ...payload({ t }), applying: a.list(t) }, t);
@@ -212,15 +212,15 @@ test('R7 #12, #13: the hidden band region says the headline without its times, a
   const cal = { running: true, stage: 'ropes-capture', mode: 'full', started: t / 1000 - 10, updated: t / 1000, elapsed_s: 10, expected_s: 170, read_age_s: 0 };
   const m = derive(payload({ t, calibration: cal }), t);
   assert.equal(bandSaid(m), 'Attention. Calibrating the lights: the ropes are in patterns.');
-  const boot = { id: 'a.9', action: 'bootfile', label: "the boot file change to the river's year", phase: 'applying', source: 'studio chat', started_at: t - 4000, expect_s: 15, blocks: ['bootfile'] };
+  const boot = { id: 'a.9', action: 'bootfile', label: "the change of the boot file to the river's year", phase: 'applying', source: 'studio chat', started_at: t - 4000, expect_s: 15, blocks: ['bootfile'] };
   const m2 = derive({ ...payload({ t }), applying: [boot] }, t);
-  assert.equal(entrySaid(m2.show.applying[0]), "Applying: the boot file change to the river's year, from the studio chat.");
+  assert.equal(entrySaid(m2.show.applying[0]), "Applying: the change of the boot file to the river's year, from the studio chat.");
   const head = `${{ ok: 'OK', warning: 'Attention', unknown: 'Unknown', down: 'Down' }[m2.overall.level]}. ${m2.overall.headline}.`;
-  assert.equal(bandSaid(m2), `${head} Applying: the boot file change to the river's year, from the studio chat.`);
+  assert.equal(bandSaid(m2), `${head} Applying: the change of the boot file to the river's year, from the studio chat.`);
   // this phone's own change is said on its control only
   assert.equal(bandSaid(m2, { ownIds: ['a.9'] }), head);
-  assert.equal(entrySaid({ ...m2.show.applying[0], phase: 'confirming', source: 'mission control' }), "Waiting for bitcube to show the boot file change to the river's year.");
-  assert.equal(entrySaid({ ...m2.show.applying[0], maybe: true }), "No answer in time for the boot file change to the river's year, from the studio chat: waiting for bitcube to show whether it happened.");
+  assert.equal(entrySaid({ ...m2.show.applying[0], phase: 'confirming', source: 'mission control' }), "Waiting for bitcube to show the change of the boot file to the river's year.");
+  assert.equal(entrySaid({ ...m2.show.applying[0], maybe: true }), "No answer in time for the change of the boot file to the river's year, from the studio chat: waiting for bitcube to show whether it happened.");
 });
 
 test('R7 #29: the Calibrate checklist from an old full check, or with contact lost, is never a green ✓ and says "when last seen"', async () => {

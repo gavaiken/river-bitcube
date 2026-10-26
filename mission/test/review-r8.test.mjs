@@ -66,7 +66,7 @@ test('R8 #31: a lighting port change bitcube didn\'t answer in time is confirmed
   const r = await m.control('lightsroute', { route: 'router' });
   assert.equal(r.maybe, true);
   assert.deepEqual(m.snapshot().applying.map((e) => [e.action, e.phase, e.maybe]), [['lightsroute', 'confirming', true]]);
-  await assert.rejects(m.control('ropes', { dark: true }), (e) => e.status === 409 && /^wait: the lighting port change to the spare router port got no answer from bitcube in time; it unlocks by 21:06$/.test(e.message));
+  await assert.rejects(m.control('ropes', { dark: true }), (e) => e.status === 409 && /^wait: the change of the lighting port to the spare router port got no answer from bitcube in time; it unlocks by 21:06$/.test(e.message));
   t += 5000; await m.pollProbe();
   assert.equal(m.snapshot().applying.length, 1, 'a reading that still shows the old port: not yet');
   lr = 'router'; t += 15_000; await m.pollProbe();
@@ -209,21 +209,21 @@ test('R8 #17: every "Wait: …" for a change bitcube didn\'t answer in time says
 });
 
 test('R8 #22: another phone says the same usual time as the sending phone for a calibration start and a boot-file change', () => {
-  const c = { action: 'calibrate', label: 'the start of a calibration', phase: 'confirming', expect_s: 10 };
-  assert.equal(entryWords(c, 15), 'Waiting for bitcube to show the start of a calibration · 0:15 · a run usually shows within a minute');
-  assert.equal(entryWords({ ...c, action: 'bootfile', label: 'the boot file change to the live river', expect_s: 15 }, 43), "Waiting for bitcube to show the boot file change to the live river · 0:43 · bitcube's full check shows it within a minute");
-  assert.equal(entryWords({ ...c, phase: 'applying' }, 3), 'Applying: the start of a calibration · 0:03 · usually a few seconds', 'while its request is in flight, as before');
+  const c = { action: 'calibrate', label: 'the calibration start', phase: 'confirming', expect_s: 10 };
+  assert.equal(entryWords(c, 15), 'Waiting for bitcube to show the calibration start · 0:15 · a run usually shows within a minute');
+  assert.equal(entryWords({ ...c, action: 'bootfile', label: 'the change of the boot file to the live river', expect_s: 15 }, 43), "Waiting for bitcube to show the change of the boot file to the live river · 0:43 · bitcube's full check shows it within a minute");
+  assert.equal(entryWords({ ...c, phase: 'applying' }, 3), 'Applying: the calibration start · 0:03 · usually a few seconds', 'while its request is in flight, as before');
 });
 
 test('R8 #9: another phone\'s change that ended is said once by the band\'s region: done, or not shown in time; never this phone\'s own', () => {
   const t = T0;
-  const st = payload({ t, extra: { confirmed: [{ id: 'ax.1', action: 'bootfile', label: 'the boot file change to the live river', source: 'studio chat', at: t - 5000 },
-                                                { id: 'ax.2', action: 'ropes', label: 'the ropes change to dark', source: 'mission control', at: t - 4000 }],
+  const st = payload({ t, extra: { confirmed: [{ id: 'ax.1', action: 'bootfile', label: 'the change of the boot file to the live river', source: 'studio chat', at: t - 5000 },
+                                                { id: 'ax.2', action: 'ropes', label: 'the change of the ropes to dark', source: 'mission control', at: t - 4000 }],
                                     expired: [{ id: 'ax.3', action: 'switch', label: 'the switch to the live river', source: 'mission control', at: t - 2000 }] } });
   const m = derive(st, t);
-  assert.deepEqual(endedSaid(m, {}, t), ['Done: the boot file change to the live river, from the studio chat.', "The switch to the live river: bitcube didn't show it in time."]);
-  assert.match(bandSaid(m, {}, t), /^\w+\. [^.]+\. Done: the boot file change to the live river, from the studio chat\. The switch to the live river: bitcube didn't show it in time\.$/);
-  assert.deepEqual(endedSaid(m, { ownIds: ['ax.3'] }, t), ['Done: the boot file change to the live river, from the studio chat.'], 'this phone\'s own is said on its control');
+  assert.deepEqual(endedSaid(m, {}, t), ['Done: the change of the boot file to the live river, from the studio chat.', "The switch to the live river: bitcube didn't show it in time."]);
+  assert.match(bandSaid(m, {}, t), /^\w+\. [^.]+\. Done: the change of the boot file to the live river, from the studio chat\. The switch to the live river: bitcube didn't show it in time\.$/);
+  assert.deepEqual(endedSaid(m, { ownIds: ['ax.3'] }, t), ['Done: the change of the boot file to the live river, from the studio chat.'], 'this phone\'s own is said on its control');
   assert.deepEqual(endedSaid(m, {}, t + ENDED_SAID_S * 1000 + 5000), [], 'said once, then gone');
   assert.equal(bandSaid(m, {}), bandSaid(m, {}, null), 'without the server\'s clock: nothing extra');
 });

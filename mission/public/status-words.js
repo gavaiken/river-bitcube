@@ -133,8 +133,8 @@ export const notSentText = (why, clock) => notSentWords(why, clock);
 
 // ---- Last done: from the server's history, and its verdict on that change ------------------------------------------------
 /** What the band's "Last done" line names: the change's one name (model.js changeLabel, the same as its entry on every phone),
- *  in one form for every action: "The ropes change to dark", "The restart on the river's year", "The stop of the calibration"
- *  (R7 #19). A restart is told by the label the server recorded (the file it ran then). */
+ *  in one form for every action: "The change of the ropes to dark", "The restart on the river's year", "The calibration stop",
+ *  "The dry run stop" (R7 #19, R8 #20, #21). A restart is told by the label the server recorded (the file it ran then). */
 export function lastDoneWhat(a) {
   const restart = a?.action === 'switch' && /^the restart on /i.test(String(a?.label ?? ''));
   return cap(restart ? a.label : changeLabel(a?.action, a?.body ?? {}));

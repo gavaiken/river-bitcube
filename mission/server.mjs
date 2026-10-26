@@ -191,6 +191,8 @@ function recordAction(scenario, action, checked, result, error, { source = 'miss
   } catch (e) { console.warn(`history: ${e.message}`); }
 }
 
+/** The run a progress copy describes is a dry run (calibrate.py --dry-run: it touches no lights): its own flag, or its mode. */
+const isDryRun = (c) => !!c && typeof c === 'object' && c.running === true && (c.dry_run === true || c.mode === 'dry-run');
 /** One control, from a page (POST /api/control/<action>) or the studio agent (the control socket): the whitelist, the locks and
  *  the 409s, the history line. -> { status, body }. A refused request (400, 409, 429) is not something that happened: not recorded. */
 async function runControl(action, b, { scenario, source = 'mission control', calib = 'ok' } = {}) {
@@ -201,6 +203,8 @@ async function runControl(action, b, { scenario, source = 'mission control', cal
     let r;
     if (action === 'calibrate') {
       checked = checkedCalibrate(b.action, b);
+      // a Stop is recorded as the stop of the run it stopped: a dry run's by its own name (R8 #21; the body bitcube gets is the same)
+      if (checked.action === 'cancel' && isDryRun(mission.calibration(scenario))) checked = { ...checked, dry_run: true };
       // through the mission, which records a start as a change in flight and keeps the job's answer as its newest state
       r = await mission.calibrate(b.action, b, { scenario, outcome: calib, source, requestId });
     } else if (action === 'check') { checked = {}; r = await checkNow(scenario); }

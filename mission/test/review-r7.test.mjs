@@ -60,7 +60,7 @@ test('status.confirmed and status.expired: { id, action, file, started_at, at } 
   const ended = a.ended(t + 5000);                     // served 5 s ahead (fixture mode's clock)
   // R8 #9: with the change's label and source, so another phone can say how it ended
   assert.deepEqual(ended.confirmed, [{ id: sw.applying_id, action: 'switch', label: 'the switch to the live river', source: 'mission control', file: LIVE, started_at: 1_000_000 + 5000, at: 1_030_000 + 5000 }]);
-  assert.deepEqual(ended.expired, [{ id: bf.applying_id, action: 'bootfile', label: "the boot file change to the river's year", source: 'mission control', file: YEAR, started_at: 1_030_000 + 5000, at: t + 5000, maybe: true }]);
+  assert.deepEqual(ended.expired, [{ id: bf.applying_id, action: 'bootfile', label: "the change of the boot file to the river's year", source: 'mission control', file: YEAR, started_at: 1_030_000 + 5000, at: t + 5000, maybe: true }]);
   assert.deepEqual(a.list(), [], 'the lock went with it');
   t += ENDED_KEEP_MS - 100_000;
   assert.equal(a.ended().expired.length, 1);

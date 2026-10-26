@@ -354,7 +354,7 @@ test('fixture mode records every change in flight, holds a switch, rebuild or bo
   // a boot-file change
   const bf = m.control('bootfile', { file: 'river-local-oct-22-seasons.toe' }, 'all-good');
   await Promise.resolve();
-  assert.equal(m.snapshot('all-good').applying[0].label, "the boot file change to the river's year");
+  assert.equal(m.snapshot('all-good').applying[0].label, "the change of the boot file to the river's year");
   release(); await bf;
   assert.deepEqual([m.snapshot('all-good').probe.value.boot_file, m.snapshot('all-good').probe.value.td.file], ['river-local-oct-22-seasons.toe', 'river-online-oct-23.toe']);
   // a rebuild holds twice as long, then the map it baked in is the map in use
