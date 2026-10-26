@@ -107,7 +107,7 @@ function renderStateLine() {
   const change = lost || stale ? null : changeSince(m, a);
   const before = !!change && stateLevel({ levels }) === 'ok';   // the model still says all is well: say the reading is older
   const lv = stateLevel({ levels, lost, stale, change });
-  put('state-words', `<span class="lv-${lv}">${mark(lv)}</span> ${esc(words)}`);
+  put('state-words', `<span class="lv-${lv}">${mark(lv)}</span> ${esc(fmt.nb(words))}`);   // "100 %" never splits
   const from = lost ? `No contact with mission control for ${fmt.nb(dur(status.elapsed() / 1000))}: this is how it was at ${fmt.clock(status.last.now, status.last.now)}`
     : m.overall.cause === 'bitcube-offline' ? 'bitcube is offline'
     : a == null ? 'Not checked yet'
