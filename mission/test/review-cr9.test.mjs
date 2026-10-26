@@ -298,3 +298,19 @@ test('CR9 #9, #19: a history read back from its file indexes its actions and ver
   assert.deepEqual(feed(b.recent()).filter((l) => l.applying_id === 'c.1').map((l) => l.words),
     ["bitcube didn't show the change of the boot file to the live river in time", 'Asked to set the boot file to the live river from the studio chat']);
 });
+
+// ---- #10: a press the server's verdict ends while its POST is on the way still settles its page ---------------------------------
+
+test("CR9 #10: when the server's verdict ends a press in flight, expired and held run onFail (with its entry) as done and confirming run onSent", () => {
+  const ui = page('ui.js');
+  const block = /if \(own\?\.judged && s\.state === 'applying'\) \{[\s\S]*?\n    \}\n/.exec(ui)?.[0] ?? '';
+  assert.match(block, /sendToken = null;/, 'its late answer changes nothing');
+  assert.match(block, /if \(own\.step === 'done' \|\| own\.step === 'confirming'\) hook\('onSent', null\);/);
+  assert.match(block, /else if \(own\.step === 'expired'\) hook\('onFail', Object\.assign\(new Error\("bitcube didn't show it in time"\), \{ applyingId: own\.entryId, expired: true \}\)\);/);
+  assert.match(block, /else if \(own\.step === 'held'\) hook\('onFail', Object\.assign\(new Error\("bitcube didn't answer in time"\), \{ applyingId: own\.entryId, maybe: true, serverMaybe: true \}\)\);/);
+  // the hooks run before the state moves on, as send() runs them before go()
+  assert.ok(block.indexOf("hook('onFail'") < block.indexOf("if (own.step === 'expired') return go("));
+  assert.match(ui, /const hook = \(name, arg\) => \{ try \{ o\[name\]\?\.\(arg\); \} catch \(e\) \{ console\.warn\(name, e\); \} \};/);
+  // Lights' Start, Dry run and Rebuild refresh on it (pollCal; Rebuild remembers the entry as its own)
+  assert.match(page('lights.js'), /serverConfirms: true, onSent: afterStart, onFail: \(\) => pollCal\(\) \}\);/);
+});

@@ -771,6 +771,8 @@ export function control(target, opts = {}) {
     // a press: its status line is on screen, whatever the zoom or the phone's way up (R8 #3)
     if (s.state === 'applying' && was !== 'applying') bringIntoView(status);
   }
+  /** One of the page's hooks (onSent, onFail), never letting its slip stop the control. */
+  const hook = (name, arg) => { try { o[name]?.(arg); } catch (e) { console.warn(name, e); } };
   /** The failure in model.js's words, the same as Status's; this page has no verdict of its own, so it points at Status. */
   const failText = (e) => failWords(o.fail, plainError(e), sclock(), { tail: 'Try again, or check Status.' });
   async function send(next) {
@@ -830,10 +832,14 @@ export function control(target, opts = {}) {
     const own = 'model' in n ? ownVerdict(n.model, { state: s.state, entryId, requestId, sent, serverConfirms: !!o.serverConfirms, held, saidExpired, lost }) : null;
     if (own) entryId = own.entryId;
     if (own?.unlockAt != null && own.step !== 'held') text = heldWords(o.what, sclock(byMinute(own.unlockAt)));
-    // its answer still on the way: the server's verdict on its entry ends it now, never at the POST's own limit (R9 #1)
+    // its answer still on the way: the server's verdict on its entry ends it now, never at the POST's own limit (R9 #1); its late
+    // answer is dropped (sendToken), so the hooks its page refreshes on run here, as send() would have run them: onSent for done and
+    // confirming, onFail (with its entry) for expired and held, so Lights' Start, Dry run and Rebuild ask again (CR9 #10)
     if (own?.judged && s.state === 'applying') {
       sendToken = null; judgedAt = typeof readAt === 'number' ? readAt : now();
-      if (own.step === 'done' || own.step === 'confirming') { try { o.onSent?.(null); } catch (e) { console.warn('onSent', e); } }
+      if (own.step === 'done' || own.step === 'confirming') hook('onSent', null);
+      else if (own.step === 'expired') hook('onFail', Object.assign(new Error("bitcube didn't show it in time"), { applyingId: own.entryId, expired: true }));
+      else if (own.step === 'held') hook('onFail', Object.assign(new Error("bitcube didn't answer in time"), { applyingId: own.entryId, maybe: true, serverMaybe: true }));
       if (own.step === 'done') return go(ctlStep(s, { type: 'model', confirmed: true, now: now() }));
       if (own.step === 'expired') return go(ctlStep(s, { type: 'expired', now: now() }));
       if (own.step === 'confirming') return go(ctlStep(s, { type: 'pending', now: now() }));
