@@ -71,8 +71,9 @@ function actingFallback(verb, ...texts) {
 }
 /** A command that changes the installation whatever its description says (the page's CHANGE_CMD, and calibrate.ps1). */
 // A TouchDesigner bridge call that assigns a parameter (td.ps1 "op('/project1/ropes').par.Source='black'") changes the show too,
-// though it looks like a read (R7 #35)
-const CHANGE_CMD = /-Action\s+(ropes|hub75|switch|bootfile|lightsroute|rebuild|calibrate|mode|target|rules)\b|\/api\/control\/|Restart-Computer|Stop-Process|Start-Process|taskkill|\bkill\b|schtasks\s+\/(run|end|change)|ptz\.py\s+\w+\s+(?!presets)|td_save|calibrate\.ps1\s+-Action\s+(start|cancel)|td\.ps1\b.*\.par\.\w+(?:\.val)?\s*=(?!=)/i;
+// though it looks like a read (R7 #35): by its value, or its expression, mode or bind (.par.X.expr =, p.mode =, p.bindExpr =), or
+// setattr( (CR7 #9); a comparison (==, !=) or a read is not one
+const CHANGE_CMD = /-Action\s+(ropes|hub75|switch|bootfile|lightsroute|rebuild|calibrate|mode|target|rules)\b|\/api\/control\/|Restart-Computer|Stop-Process|Start-Process|taskkill|\bkill\b|schtasks\s+\/(run|end|change)|ptz\.py\s+\w+\s+(?!presets)|td_save|calibrate\.ps1\s+-Action\s+(start|cancel)|td\.ps1\b.*(?:\.par\.\w+(?:\.\w+)?\s*=(?!=)|\.(?:val|expr|mode|bindExpr)\s*=(?!=)|\bsetattr\s*\()/i;
 /** node mission/bin/mc.mjs <action> ['<body>']: a change asked of mission control (or its status read). An action can hold
  *  digits (hub75: R7 #22). */
 const MC = /\bmc\.mjs\s+([a-z0-9-]+)(?:\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)"))?/g;
@@ -82,15 +83,23 @@ const DIRECT_WORDS = { ropes: 'changed the ropes', hub75: 'changed the panels', 
   lightsroute: 'moved the lighting port', rebuild: "rebuilt the river's year", mode: "changed the river's year", target: "changed the river's year",
   rules: "changed the river's year", calibrate: 'started a calibration', start: 'started a calibration', cancel: 'stopped the calibration' };
 const directWords = (part) => DIRECT_WORDS[/-Action\s+([a-z0-9]+)/i.exec(part)?.[1]?.toLowerCase()] ?? actingFallback(null, part);
-/** One command line's commands: split at ;, &&, ||, |, & and new lines outside quotes (a JSON body's "a; b" is not two). */
-function parts(command) {
+/** One command line's commands: split at ;, &&, ||, |, |&, & and new lines outside quotes (a JSON body's "a; b" is not two); the &
+ *  of a redirection (2>&1, >&2, &>, &>>) is not a separator (CR7 #15). */
+export function commandParts(command) {
   const s = String(command ?? ''), out = [];
   let cur = '', q = null;
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
     if (q) { cur += c; if (c === '\\' && q === '"' && i + 1 < s.length) cur += s[++i]; else if (c === q) q = null; continue; }
     if (c === "'" || c === '"') { q = c; cur += c; continue; }
-    if (c === ';' || c === '\n' || c === '|' || c === '&') { if (cur.trim()) out.push(cur.trim()); cur = ''; if ((c === '|' || c === '&') && s[i + 1] === c) i++; continue; }
+    if (c === '&' && (s[i - 1] === '>' || s[i + 1] === '>')) { cur += c; continue; }      // a redirection: >&2, 2>&1, &>, &>>
+    if (c === ';' || c === '\n' || c === '|' || c === '&') {
+      if (cur.trim()) out.push(cur.trim());
+      cur = '';
+      if ((c === '|' || c === '&') && s[i + 1] === c) i++;
+      else if (c === '|' && s[i + 1] === '&') i++;                                        // |& pipes both outputs: one separator
+      continue;
+    }
     cur += c;
   }
   if (cur.trim()) out.push(cur.trim());
@@ -209,7 +218,7 @@ function mcLine(command) {
 function bashLine(description, command) {
   // a look through mission control chained to a change made around it ("mc.mjs status && ssh bitcube … probe.ps1 -Action
   // switch"): the change, and that it went around mission control's locks, never "looked at what mission control shows" (R7 #34)
-  const ps = parts(command), viaMc = ps.filter((x) => MC_ONE.test(x)), direct = ps.filter((x) => !MC_ONE.test(x) && CHANGE_CMD.test(x));
+  const ps = commandParts(command), viaMc = ps.filter((x) => MC_ONE.test(x)), direct = ps.filter((x) => !MC_ONE.test(x) && CHANGE_CMD.test(x));
   if (viaMc.length && direct.length) return { text: clip(`${directWords(direct[0])} on bitcube directly, not through mission control`, TEXT_MAX), acting: true };
   const mc = viaMc.length ? mcLine(viaMc.join('\n')) : null;
   if (mc) return mc;

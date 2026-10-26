@@ -40,6 +40,35 @@ export async function api(path, body, { timeout = apiTimeout(path, body) } = {})
   return j;
 }
 
+/** How long a GET may go unanswered (ui.js poll()'s limit, and Lights' every fetch). */
+export const POLL_TIMEOUT_MS = 8000;
+
+/** GET with a time limit (ui.js poll()'s 8 s), the body read inside it: { r, body } (body null when it isn't JSON). Lights reads
+ *  everything through it. A request that hangs throws "no answer in 8 s" instead of holding the page's next ask; 401 goes to the
+ *  login. The limit runs from the start, headers and body together (CR7 #11); only `idle` puts it on silence instead: 8 s with no
+ *  bytes, so the LED map (big even gzipped) loads on a slow phone link as long as it keeps coming (R7 #1). */
+export async function fetchTimed(url, read = (r) => r.json(), timeout = POLL_TIMEOUT_MS, { idle = false } = {}) {
+  const ctrl = new AbortController();
+  let t = setTimeout(() => ctrl.abort(), timeout);
+  const heard = () => { clearTimeout(t); t = setTimeout(() => ctrl.abort(), timeout); };
+  try {
+    const r = await fetch(url, { cache: 'no-store', signal: ctrl.signal });
+    if (r.status === 401) { location.href = '/login'; throw new Error('logged out'); }
+    if (idle) heard();                 // only the idle kind is told the answer is coming: any other keeps its limit from the start
+    const body = await (idle && r.body ? readJsonWhileHeard(r, heard) : read(r)).catch((e) => { if (ctrl.signal.aborted) throw e; return null; });
+    return { r, body };
+  } catch (e) {
+    if (ctrl.signal.aborted) throw Object.assign(new Error(`no answer in ${Math.round(timeout / 1000)} s`), { noAnswer: true, waitedS: timeout / 1000 });
+    throw e;
+  } finally { clearTimeout(t); }
+}
+/** An answer's JSON, read chunk by chunk, each chunk telling the time limit the answer is still coming. */
+async function readJsonWhileHeard(r, heard) {
+  const reader = r.body.getReader(), parts = [];
+  for (;;) { const { done, value } = await reader.read(); if (done) break; parts.push(value); heard(); }
+  return JSON.parse(new TextDecoder().decode(await new Blob(parts).arrayBuffer()));
+}
+
 /** A failed request's reason in the team's words, never a library's ("mission control didn't answer"). An error that
  *  came back inside an answer (e.status set) means mission control answered: what failed was its call to bitcube. The
  *  server's own "wait: <label> is being applied (started 21:04)" (a 409 while another change is applied) reads as it is. */

@@ -42,7 +42,7 @@ test('Start is blocked by the model\'s calibrate reason (a run on, a change bein
   assert.equal(startWhy(model('all-good', cal)), 'a calibration is already running');
 });
 
-test('a dry run (no lights, no camera, nothing on TouchDesigner) is stopped only by contact, bitcube, a change being applied or a run on', () => {
+test('a dry run (no lights, no camera, nothing on TouchDesigner) is stopped only by contact, bitcube, another start being applied or a run on', () => {
   assert.equal(dryWhy(null), "this page hasn't heard from mission control yet");
   assert.equal(dryWhy(model('all-good')), null);
   assert.equal(dryWhy(model('td-frozen')), null);
@@ -50,7 +50,9 @@ test('a dry run (no lights, no camera, nothing on TouchDesigner) is stopped only
   assert.equal(dryWhy(model('bitcube-offline')), 'bitcube is offline');
   assert.equal(dryWhy(model('all-good', (s) => s, 40_000)), "this page can't reach mission control");
   const sw = (s) => { s.applying = [{ id: 'a1', action: 'rebuild', label: "the rebuild of the river's year", started_at: s.now - 5000, expect_s: 150, blocks: ['calibrate', 'rebuild'] }]; return s; };
-  assert.equal(dryWhy(model('all-good', sw)), "wait: the rebuild of the river's year is being applied");
+  assert.equal(dryWhy(model('all-good', sw)), null, 'a rebuild in flight touches nothing a dry run does (CR7 #7)');
+  const st = (s) => { s.applying = [{ id: 'a2', action: 'calibrate', label: 'the start of a calibration', started_at: s.now - 5000, expect_s: 10, blocks: ['calibrate', 'ropes'] }]; return s; };
+  assert.equal(dryWhy(model('all-good', st)), 'wait: the start of a calibration is being applied');
   const cal = (s) => { s.probe.value.calibration = { running: true, mode: 'dry-run', dry_run: true, stage: 'ropes-capture', expected_s: 2, elapsed_s: 1 }; return s; };
   assert.equal(dryWhy(model('all-good', cal)), 'a dry run is already running');
 });

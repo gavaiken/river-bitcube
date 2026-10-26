@@ -35,9 +35,9 @@
 // Log out with a confirm), one <dialog class="sheet"> every sheet and confirm reuses, and the theme override
 // remembered in localStorage 'mc-theme'. After Check now the shell fires `document` event 'mc:check' so a page can
 // poll at once; after a theme change, 'mc:theme' (detail: 'auto' | 'light' | 'dark').
-import { api as rawApi, esc, md, plainError, noAnswerText } from '/app.js';
+import { api as rawApi, esc, md, plainError, noAnswerText, POLL_TIMEOUT_MS } from '/app.js';
 import { dur as modelDur, CONTACTS, TZ, ctlInit, ctlStep, ctlView, applyingWords, applyingText, confirmingWords, CONFIRMING_SAID, unconfirmedWords,
-  notSentWords, failWords, EXPECT_S, entryVerdict } from '/model.js';
+  notSentWords, failWords, EXPECT_S, serverJudged } from '/model.js';
 
 export { esc, md, plainError, noAnswerText };
 
@@ -184,7 +184,7 @@ export function tick(fn) {
 /** poll(url, { every, onData(payload, receivedAt), onError(err, downForMs) }) → { stop, refresh, last, receivedAt, failedSince }.
  *  `last` is the last good JSON (with `now` filled in when the server sent none), `receivedAt` the performance.now()
  *  it arrived, so a page renders derive(p.last, p.last.now + (performance.now() - p.receivedAt)). 401 → /login. */
-export const POLL_TIMEOUT_MS = 8000;   // a request that hangs this long counts as a failure (a phone's handover, a lock mid-fetch)
+export { POLL_TIMEOUT_MS };          // a request that hangs this long counts as a failure (a phone's handover, a lock mid-fetch): app.js
 const lastStatus = { j: null, wall: null };   // the newest /api/status any poll() on this page received, and when (Date.now())
 export function poll(url, { every = 5000, onData, onError, timeout = POLL_TIMEOUT_MS } = {}) {
   const h = { last: null, receivedAt: null, receivedWall: null, failedSince: null, startedAt: performance.now(), stop, refresh: () => once(true), elapsed };
@@ -485,7 +485,10 @@ export function whyText(why) {
  *               change, a calibration's start). The answer names its entry (applying_id); a 2xx waits in "confirming" until
  *               update({ model }) finds that id in status.confirmed (done), or in status.expired (unconfirmed), or its own limit
  *               passes; a maybe answer is unconfirmed until the server confirms it. Never judged from the reading's words: a
- *               restart names the same file before and after (R7 #6, #25). The page's own entry is `entryId`
+ *               restart names the same file before and after (R7 #6, #25). The page's own entry is `entryId`. When that verdict
+ *               can't be known (no id: the answer was lost; or no list names it: it aged out, the server restarted), `sent()` →
+ *               { action, file, before } (taken at the send) lets a reading taken after the send show it (model.js readingShows:
+ *               a switch to another file, a boot-file change; a restart or a rebuild never, CR7 #4)
  *    confirmed(model, { sentAt, result }) → boolean: given, a 2xx waits in "confirming" until update({ model, readAt }) shows it,
  *               or turns "unconfirmed" after max(3 × expectS, 120) s from the answer, but only once a reading taken after that
  *               limit has been judged (readAt: when that reading was taken, Date.now() by default; nothing is judged while the
@@ -504,7 +507,8 @@ export function whyText(why) {
  *  from the button to its status line (never <body>) and back when it ends. The page's one live region (announce) says
  *  applying, done, unconfirmed and failed once each; the status line itself is not live, so its ticking time is never read.
  *  show(state, text) sets a state by hand ('before'/'ready', 'pending'/'applying', 'done', 'failed', 'unconfirmed').
- *  entryId: the id of the server's entry for this control's last change (null before an answer named one). */
+ *  entryId: the id of the server's entry for this control's last change (null before an answer named one); at: when it entered
+ *  its state (Date.now()). */
 export function control(target, opts = {}) {
   const o = { label: 'Do it', before: '', why: null, confirm: null, run: null, done: 'Done', fail: 'Nothing changed', onDone: null, kind: 'plain', siblings: null, lock: null, ...opts };
   let button, status, whyEl, beforeEl, host;
@@ -534,7 +538,7 @@ export function control(target, opts = {}) {
   if (ident && !status.hasAttribute('data-ctl-status')) status.setAttribute('data-ctl-status', ident);
   button._mcStatus = status;     // refocus() and the sheet: where focus goes when this button is disabled under it
   const box = host.closest('.ctl') ?? (host.classList.contains('ctl') ? host : null);
-  let s = ctlInit(o.why), text = '', applyText = null, result = null, asking = null, untick = null, judgedAt = null, parked = false, entryId = null;
+  let s = ctlInit(o.why), text = '', applyText = null, result = null, asking = null, untick = null, judgedAt = null, parked = false, entryId = null, sent = null;
   const now = () => Date.now();
   const elapsedS = () => (s.sentAt == null ? 0 : (now() - s.sentAt) / 1000);
   const lockEls = () => { const l = typeof o.lock === 'function' ? o.lock() : o.lock; return l ? Array.from(l instanceof Element ? [l] : l).filter((x) => x instanceof Element) : []; };
@@ -631,6 +635,8 @@ export function control(target, opts = {}) {
   const failText = (e) => failWords(o.fail, plainError(e), fmt.clock(now()), { tail: 'Try again, or check Status.' });
   async function send(next) {
     applyText = null; entryId = null;
+    // what was sent, and when on the server's clock (its last answer carried forward), for when its verdict can't be known (CR7 #4)
+    try { sent = typeof o.sent === 'function' ? { ...o.sent(), sentAt: lastStatus.j?.now != null ? lastStatus.j.now + Math.max(0, Date.now() - lastStatus.wall) : null } : null; } catch { sent = null; }
     go(next);
     try {
       const r = await o.run?.();
@@ -667,9 +673,10 @@ export function control(target, opts = {}) {
   function update(n = {}) {
     const { readAt, ...rest } = n;
     Object.assign(o, rest);
-    if ('model' in n && (s.state === 'confirming' || s.state === 'unconfirmed') && o.serverConfirms && entryId) {
-      // the server's verdict on this control's own entry, by its id: confirmed (done), expired (unconfirmed now), else waiting
-      const v = entryVerdict(n.model, entryId);
+    if ('model' in n && (s.state === 'confirming' || s.state === 'unconfirmed') && o.serverConfirms && (entryId || sent)) {
+      // the server's verdict on this control's own entry, by its id: confirmed (done), expired (unconfirmed now), else waiting;
+      // when it can't be known, a reading taken after the send that shows it (CR7 #4)
+      const v = serverJudged(n.model, entryId, sent);
       judgedAt = typeof readAt === 'number' ? readAt : now();
       if (v === 'confirmed') return go(ctlStep(s, { type: 'model', confirmed: true, now: now() }));
       if (v === 'expired' && s.state === 'confirming') return go(ctlStep(s, { type: 'expired', now: now() }));
@@ -706,7 +713,8 @@ export function control(target, opts = {}) {
     s = { ...s, state: CTL_RESULT.has(st) ? st : 'failed', at: now(), effect: null }; text = words; ticking(false); paint();
   }
   paint();
-  return { button, host, status, show, update, get state() { return s.state; }, get busy() { return ctlView(s, o.why).busy; }, get entryId() { return entryId; } };
+  return { button, host, status, show, update, get state() { return s.state; }, get busy() { return ctlView(s, o.why).busy; }, get entryId() { return entryId; },
+           get at() { return s.at; } };
 }
 const CTL_RESULT = new Set(['done', 'failed', 'unconfirmed']);
 

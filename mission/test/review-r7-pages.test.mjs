@@ -69,8 +69,10 @@ test('R7 #3, #16, #28: Last done says "Last sent … waiting for bitcube to show
   assert.deepEqual(lastDoneParts(a, status({ applying: [RESTART] })), { head: 'Last sent', tail: ' · waiting for bitcube to show it' });
   assert.deepEqual(lastDoneParts(a, status({ expired: [{ id: 'ax.7', action: 'switch', at: NOW }] })), { head: 'Last sent', tail: " · bitcube didn't show it in time" });
   assert.deepEqual(lastDoneParts(a, status({ confirmed: [{ id: 'ax.7', action: 'switch', at: NOW }] })), { head: 'Last done', tail: '' });
-  assert.deepEqual(lastDoneParts(a, status()), { head: 'Last done', tail: '' }, 'an entry the server no longer lists (over 10 min ago)');
-  assert.deepEqual(lastDoneParts({ ...a, applying_id: undefined }, status({ applying: [RESTART] })), { head: 'Last done', tail: '' }, 'an older history line without an id');
+  // an entry the server no longer lists (over 10 min ago, or a restart): the verdict the history kept, else only "sent" (CR7 #5)
+  assert.deepEqual(lastDoneParts({ ...a, verdict: 'confirmed' }, status()), { head: 'Last done', tail: '' });
+  assert.deepEqual(lastDoneParts(a, status()), { head: 'Last sent', tail: '' }, 'no verdict known: never "done"');
+  assert.deepEqual(lastDoneParts({ ...a, applying_id: undefined }, status({ applying: [RESTART] })), { head: 'Last sent', tail: '' }, 'an older history line without an id');
   // a maybe the server then confirmed is done; one it still holds is sent; one with no lock says it may or may not have happened
   const mb = { ...a, ok: false, maybe: true };
   assert.deepEqual(lastDoneParts(mb, status({ confirmed: [{ id: 'ax.7', action: 'switch', at: NOW }] })), { head: 'Last done', tail: '' });

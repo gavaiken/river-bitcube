@@ -45,9 +45,10 @@
 import { readFileSync, readdirSync, existsSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { CAMERAS, calBlocked, checkedControl, awaitsReading } from './mission.mjs';
-import { Applying, applyLabel } from './applying.mjs';
+import { Applying } from './applying.mjs';
 import { readLocalPixelmap, summarizePixelmap, checkedCalibrate } from './lights.mjs';
 import { atlasFromUprights } from '../public/screens.js';
+import { changeLabel } from '../public/model.js';
 
 const NAME = /^[a-z0-9-]+$/;
 const STILL_AGE_S = 20;
@@ -186,7 +187,7 @@ export class FixtureMission {
   label(action, body, scenario = null) {
     let file = null;
     try { file = this.snapshot(scenario).probe?.value?.td?.file ?? null; } catch { /* a half-edited scenario */ }
-    return applyLabel(action, body, { running: typeof file === 'string' ? file : null });
+    return changeLabel(action, body, { running: typeof file === 'string' ? file : null });
   }
 
   /** Whether anything is in flight or confirming in any world (the server's self-update waits for none). */

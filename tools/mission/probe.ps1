@@ -19,13 +19,23 @@ $river = Split-Path $repo -Parent
 $out = [ordered]@{ ok = $true; time = (Get-Date).ToString('s') }
 # A camera's login never leaves bitcube: masked up to the authority's LAST @ (as mission/lib/scrub.mjs; ffmpeg takes the last
 # @ too), and masked BEFORE a line is cut, or a cut between two @ leaves a tail nobody can recognise as a login. The camera's own
-# HTTP API takes it as a JSON field or a query ("password":"…", ?password=…): those values are masked too, as scrubCreds does.
-$CRED_KEY = '((?<![\w-])(?:password|passwd|pwd|token|secret)(?![\w-])(?:\\?["''])?\s*[:=]\s*)'
+# HTTP API takes it as a JSON field or a query ("password":"...", ?password=...) and answers its token as one ({"Token":{"name":
+# "..."}}): those values are masked too, as scrubCreds does: a quoted value to its own closing quote, past an escaped quote inside
+# it; an object or array whole; a bare value in JSON text as "***" so the JSON stays JSON; null, true and false left alone.
+# The very patterns of mission/lib/scrub.mjs PATTERNS (mission/test/review-cr7.test.mjs compares them; tools/tests/test_masks.py
+# runs them): change both together.
+$CRED_URL = '([a-z][a-z0-9+.-]*:\/\/)[^\s/?#"<>]*@'
+$CRED_QUOTED = '((?<![\w-])(?:password|passwd|pwd|token|secret)(?![\w-])(?:\\?["''])?\s*[:=]\s*)(["''])((?:\\(?:[\s\S]|$)|(?!\2)[^\\])*)(\2|$)'
+$CRED_ESCAPED = '((?<![\w-])(?:password|passwd|pwd|token|secret)(?![\w-])(?:\\?["''])?\s*[:=]\s*)(\\(["'']))((?:\\\\\\\\|\\\\\\\3|\\(?:\\\\)?(?!\\|\3)[\s\S]|\\\\(?!\\|\3)|(?!\3)[^\\]|\\+$)*)(\\\3|$)'
+$CRED_BARE_JSON = '((?<![\w-])(?:password|passwd|pwd|token|secret)(?![\w-])(\\?["''])\s*:\s*)(?!\\?["''])(?!(?:null|true|false)(?![^\s"''&,;}\]]))([{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\])*[}\]])*[}\]])*[}\]])*[}\]]|[{\[][^\r\n]*|[^\s"''&,;}\]]+)'
+$CRED_BARE = '((?<![\w-])(?:password|passwd|pwd|token|secret)(?![\w-])(?:\\?["''])?\s*[:=]\s*)(?!\\?["''])(?!(?:null|true|false)(?![^\s"''&,;}\]]))([{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\]|[{\[](?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|[^{}\[\]"\\])*[}\]])*[}\]])*[}\]])*[}\]]|[{\[][^\r\n]*|[^\s"''&,;}\]]+)'
 function Mask-Creds([string]$s) {
     if ($null -eq $s) { return $null }
-    $s = $s -replace '([a-z][a-z0-9+.-]*://)[^\s/?#"<>]*@', '$1***@'
-    $s = $s -replace ($CRED_KEY + '(\\?(["'']))((?:(?!\\?\3).)*)(\\?\3)'), '$1$2***$5'
-    return ($s -replace ($CRED_KEY + '(?!\\?["''])([^\s"''&,;}\]]+)'), '$1***')
+    $s = $s -replace $CRED_URL, '$1***@'
+    $s = $s -replace $CRED_QUOTED, '$1$2***$4'
+    $s = $s -replace $CRED_ESCAPED, '$1$2***$5'
+    $s = $s -replace $CRED_BARE_JSON, '$1$2***$2'
+    return ($s -replace $CRED_BARE, '$1***')
 }
 
 $BOOT_FILES = @('river-local-oct-22-seasons.toe', 'river-online-oct-23.toe')   # retired show files start with old- (D27): never offered

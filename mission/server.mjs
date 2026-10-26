@@ -52,7 +52,6 @@
 import { createServer } from 'node:http';
 import { connect as netConnect } from 'node:net';
 import { readFileSync, existsSync, mkdirSync, copyFileSync, chmodSync, lstatSync, unlinkSync, statSync } from 'node:fs';
-import { gzipSync } from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { userInfo } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -65,6 +64,7 @@ import { Lights, readLocalPixelmap, readLocalScreens, checkedCalibrate } from '.
 import { History, describeEvent, feed } from './lib/history.mjs';
 import { describeTool } from './lib/steps.mjs';
 import { SelfUpdate } from './lib/update.mjs';
+import { Zipper } from './lib/zip.mjs';
 import { CONTACTS, derive } from './public/model.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -249,18 +249,27 @@ function sendPage(req, res, name) {
 // On a poor phone link (a gallery's Wi-Fi, cellular) every byte counts (R7 #1): text answers are gzipped when the request accepts
 // it (the LED map 481 → 39 KB, model.js 100 → 30 KB, /api/status 6 → 2 KB), and the page files revalidate instead of downloading
 // again on every tab (ETag and Last-Modified, cache-control no-cache: a 304 when unchanged, so a self-update is seen at once).
-// Every API answer stays no-store.
+// Every API answer stays no-store. Compressing never blocks the server (lib/zip.mjs, CR7 #12): a page file once per ETag, a big
+// answer (the LED map) off the event loop and once per content.
 const ZIPPED = /^(text\/|application\/(json|javascript|manifest\+json)|image\/svg\+xml)/;
 const SECURITY = { 'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin', 'x-frame-options': 'DENY' };
-function send(res, status, body, type = 'application/json', headers = {}) {
-  let data = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body);
+const zipper = new Zipper();
+/** zipKey: a page file's path and ETag (its gzipped bytes are kept under it). */
+function send(res, status, body, type = 'application/json', headers = {}, zipKey = null) {
+  const data = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body);
   const h = { 'content-type': type, 'cache-control': 'no-store', ...SECURITY, ...headers };
+  const out = (bytes, zipped) => { res.writeHead(status, zipped ? { ...h, 'content-encoding': 'gzip' } : h); res.end(bytes); };
   if (ZIPPED.test(type)) {
     h.vary = 'Accept-Encoding';
-    if (/\bgzip\b/i.test(String(res.req?.headers?.['accept-encoding'] ?? '')) && Buffer.byteLength(data) >= 1024) { data = gzipSync(data); h['content-encoding'] = 'gzip'; }
+    if (/\bgzip\b/i.test(String(res.req?.headers?.['accept-encoding'] ?? '')) && Buffer.byteLength(data) >= 1024) {
+      let z;
+      try { z = zipper.zip(data, zipKey); } catch { return out(data, false); }
+      if (Buffer.isBuffer(z)) return out(z, true);
+      z.then((bytes) => out(bytes, true), () => out(data, false));
+      return;
+    }
   }
-  res.writeHead(status, h);
-  res.end(data);
+  out(data, false);
 }
 /** A file from public/ that may be kept by the browser and revalidated: 304 when its ETag still matches (its size and time), else
  *  the file (gzipped when asked). Only ever called after the login check for a page. */
@@ -269,7 +278,7 @@ function sendFile(req, res, file, type) {
   const etag = `W/"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
   const h = { 'cache-control': 'no-cache', etag, 'last-modified': st.mtime.toUTCString() };
   if (req.headers['if-none-match'] === etag) { res.writeHead(304, { ...SECURITY, ...h, ...(ZIPPED.test(type) ? { vary: 'Accept-Encoding' } : {}) }); return res.end(); }
-  return send(res, 200, readFileSync(file), type, h);
+  return send(res, 200, readFileSync(file), type, h, `${file}|${etag}`);
 }
 
 function client(req) { return clientOf(req.headers['x-forwarded-for'], req.socket.remoteAddress); }

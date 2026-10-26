@@ -32,6 +32,10 @@
 //                                                          time, so it may or may not have happened; applying_id: its entry
 //                                                          (lib/applying.mjs), so a page can tell it is still being confirmed
 //                                                          (status.applying), confirmed or expired. Logins are scrubbed.
+//   { kind: 'verdict', t, applying_id, verdict }           the server's verdict on the last action's entry ('confirmed' or
+//                                                          'expired'), read from status.confirmed / status.expired: kept with the
+//                                                          history, so Last done knows it after those 10 min and after a restart
+//                                                          (summary().last_action.verdict, CR7 #5). Bookkeeping: not in recent().
 //
 // Rules, and why:
 // - 'unknown' is the absence of knowledge, not a state. A piece that can't be checked (bitcube offline, the server
@@ -60,6 +64,7 @@ export const KEEP_MS = 48 * 3600e3;
 export const MAX_EVENTS = 5000;
 export const BODY_MAX = 300;                 // an action's body, as JSON: a feed line, not a document
 export const UNSEEN_GAP_MS = 5 * 60e3;        // unseen for longer than this, a state seen again is a first sighting again
+export const RESTART_MARK_MS = 10 * 60e3;     // a piece last seen dark while TouchDesigner restarted, unseen since for longer: its mark lapses
 export const SOURCES = ['mission control', 'studio chat'];
 const SHOW_FIELDS = ['file', 'mode', 'season', 'ropes'];
 const BLIND = ['page', 'bitcube-offline', 'bitcube-unchecked', 'probe-stale', 'not-checked', 'check-failed'];   // causes that hide what is behind them
@@ -67,7 +72,7 @@ const obj = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : null);
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
 const str = (x, max) => (typeof x === 'string' ? x.slice(0, max) : null);
 /** The state a key is in is told by its latest event, so those are kept whatever their age (null: not a state). */
-const keyOf = (ev) => (ev.kind === 'item' ? `item:${ev.id}` : ev.kind === 'show' ? `show:${ev.field}` : ['overall', 'calibration', 'action'].includes(ev.kind) ? ev.kind : null);
+const keyOf = (ev) => (ev.kind === 'item' ? `item:${ev.id}` : ev.kind === 'show' ? `show:${ev.field}` : ['overall', 'calibration', 'action', 'verdict'].includes(ev.kind) ? ev.kind : null);
 /** An item's reason, from its summary without the numbers that change with every answer ("Running slowly: 4 of 60 frames
  *  a second" and "…: 5 of 60…" are one reason; "Dark on purpose: sending black" is another). */
 export const reasonOf = (summary) => String(summary ?? '').replace(/\d+(?:[.:]\d+)*\s*(?:s|min|h|days|%|W|GB)?(?![A-Za-z])/g, '#').trim();
@@ -85,7 +90,8 @@ export class History {
     this.state = { overall: null, items: {}, show: {}, calibration: null, last_action: null };   // last known, each with its t
     this.knownAt = {};           // item id -> the observation it was last known in (in memory: after a restart, a gap)
     this.prevObs = null;         // the observation before this one
-    this.restarted = new Set();  // pieces seen dark while TouchDesigner restarted (no lines of their own), until seen after it
+    this.restarted = new Map();  // piece id -> when it was last seen dark while TouchDesigner restarted (no lines of their own), until
+                                 // seen fresh after it, or RESTART_MARK_MS without (CR7 #8)
     this.#load();
   }
 
@@ -109,6 +115,9 @@ export class History {
       }
       // Each piece: unknown and muted (nothing to show) carry no knowledge, so they keep the last known level. A piece that
       // was not known in the previous observation changed at some moment of the gap: its since is "at least".
+      // A restart's mark lapses when the piece hasn't been seen for RESTART_MARK_MS since: then it is a first sighting again
+      // (the unseen-stretch rule below), never "still … for 1 min" as if it had been watched all along (CR7 #8)
+      for (const [id, at] of this.restarted) if (t - at > RESTART_MARK_MS) this.restarted.delete(id);
       for (const it of m.items) {
         if (it.level === 'unknown' || it.muted) continue;
         // the ropes and panels in calibration patterns are the calibration's own line below, not news of their own: the
@@ -116,11 +125,12 @@ export class History {
         // a five-minute run is never an "unseen stretch" that restarts their since.
         // The same for a restart (a switch, a rebuild, TouchDesigner restarting on a file): the overall line says it once, so
         // TouchDesigner, the ropes, the panels and the year's page dark meanwhile are not lines of their own (R7 #23)
-        if (it.cause === 'calibrating' || it.cause === 'td-restarting') { if (!it.stale) this.knownAt[it.id] = t; if (it.cause === 'td-restarting') this.restarted.add(it.id); continue; }
+        if (it.cause === 'calibrating' || it.cause === 'td-restarting') { if (!it.stale) this.knownAt[it.id] = t; if (it.cause === 'td-restarting') this.restarted.set(it.id, t); continue; }
         const p = this.state.items[it.id], seen = this.knownAt[it.id];
         // after a restart, a piece still not OK in the same way is a new instance of it: "still needs attention", and its since
-        // starts again there, as the band's does (never "for 12 min" beside a band that says 6)
-        const afterRestart = this.restarted.delete(it.id);
+        // starts again there, as the band's does (never "for 12 min" beside a band that says 6). Only a fresh sighting uses the
+        // mark: a last answer from a quiet source is not one, so the mark waits for the next (CR7 #8)
+        const afterRestart = !it.stale && this.restarted.delete(it.id);
         if (afterRestart && !it.stale && p && p.level === it.level && it.level !== 'ok' && p.reason === reasonOf(it.summary)) {
           this.knownAt[it.id] = t;
           rec({ kind: 'item', id: it.id, from: p.level, to: it.level, summary: it.summary, still: true });
@@ -149,6 +159,14 @@ export class History {
         rec({ kind: 'show', field, from: p?.value ?? null, to });
       }
       // The calibration job (lib/lights.mjs: the full check carries its progress file while one ran in the last 24 h).
+      // The server's verdict on the last action's entry (status.confirmed / status.expired keep it 10 min): kept once, with the
+      // history, so Last done still knows it later (CR7 #5)
+      const la = this.state.last_action, lid = typeof la?.applying_id === 'string' ? la.applying_id : null;
+      if (lid && !la.verdict) {
+        const named = (list) => Array.isArray(list) && list.some((e) => obj(e)?.id === lid);
+        const verdict = named(st.confirmed) ? 'confirmed' : named(st.expired) ? 'expired' : null;
+        if (verdict) rec({ kind: 'verdict', applying_id: lid, verdict });
+      }
       const cal = obj(obj(obj(st.probe)?.value)?.calibration);
       if (cal && (typeof cal.running === 'boolean' || typeof cal.stage === 'string')) {
         const running = cal.running === true, stage = str(cal.stage, 40), calStale = cal.stale === true, p = this.state.calibration;
@@ -188,13 +206,14 @@ export class History {
     return s ? { value: s.value, since: s.t, for_s: forS(s.t, num(nowMs) ?? this.now()), at_least: s.at_least } : null;
   }
 
-  /** Newest first (the last recorded first among equal times). kinds: one kind or a list; sinceT: strictly after that
-   *  time (default: the keepMs window, which hides the old markers kept for since()). */
+  /** Newest first (the last recorded first among equal times). kinds: one kind or a list (default: every kind but the
+   *  verdicts, which are bookkeeping); sinceT: strictly after that time (default: the keepMs window, which hides the old markers
+   *  kept for since()). */
   recent({ limit = 50, kinds, sinceT } = {}) {
     const from = num(sinceT) ?? this.now() - this.keepMs;
     const ks = kinds == null ? null : new Set([].concat(kinds));
     const out = [];
-    for (let i = this.events.length - 1; i >= 0; i--) { const e = this.events[i]; if (e.t > from && (!ks || ks.has(e.kind))) out.push(e); }
+    for (let i = this.events.length - 1; i >= 0; i--) { const e = this.events[i]; if (e.t > from && (ks ? ks.has(e.kind) : e.kind !== 'verdict')) out.push(e); }
     return out.sort((a, b) => b.t - a.t).slice(0, Math.max(0, num(limit) ?? 50));
   }
 
@@ -227,6 +246,9 @@ export class History {
       case 'show': if (typeof ev.field === 'string') S.show[ev.field] = { value: ev.to, t: ev.t, at_least: ev.from == null }; break;
       case 'calibration': S.calibration = { running: ev.running === true, stage: ev.stage ?? null, stale: ev.stale === true, t: ev.t }; break;
       case 'action': S.last_action = ev; break;
+      case 'verdict':
+        if (S.last_action && S.last_action.applying_id === ev.applying_id && ['confirmed', 'expired'].includes(ev.verdict)) S.last_action = { ...S.last_action, verdict: ev.verdict };
+        break;
     }
   }
 
@@ -420,7 +442,7 @@ export function actionPhrase(ev) {
     case 'rules-reset': return ['Reset', 'reset', "the year's rules"];
     case 'ropes': return ['Turned', 'turn', b.dark === true ? 'the ropes dark' : 'the ropes on'];   // as planControl: only a real true goes dark
     case 'hub75': return ['Set', 'set', `the panel brightness to ${pct}`];
-    // a switch to the file TouchDesigner was running is the button's "Restart on …" (its label says so, applying.mjs applyLabel)
+    // a switch to the file TouchDesigner was running is the button's "Restart on …" (its label says so, model.js changeLabel)
     case 'switch': return /^the restart on /.test(String(ev.label ?? '')) ? ['Restarted', 'restart', `TouchDesigner on ${fileLabel(b.file)}`]
       : ['Switched', 'switch', `TouchDesigner to ${fileLabel(b.file)}`];
     case 'bootfile': return ['Set', 'set', `the boot file to ${fileLabel(b.file)}`];
@@ -447,10 +469,11 @@ function plainNote(note) {
  *  moment (the verdict and the piece that caused it can say the same thing: "TouchDesigner is restarting on the river's year"
  *  once, R7 #23). Any order; the first of two equal lines is kept. */
 export function feed(events) {
-  const out = [];
+  const out = [], said = new Set();     // t|words: one look per event, never a scan of what is already out (CR7 #14)
   for (const ev of Array.isArray(events) ? events : []) {
-    const words = describeEvent(ev);
-    if (out.some((o) => o.words === words && o.t === ev?.t)) continue;
+    const words = describeEvent(ev), k = `${ev?.t}|${words}`;
+    if (said.has(k)) continue;
+    said.add(k);
     out.push({ ...ev, words });
   }
   return out;

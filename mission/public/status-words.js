@@ -141,11 +141,15 @@ export function lastDoneWhat(a) {
 }
 /** Where a change came from, as every line says it: "from mission control", "from the studio chat" (R7 #19). */
 export const fromWords = (source) => (source === 'studio chat' ? 'from the studio chat' : 'from mission control');
+/** A change that is real only once the server confirms it from bitcube's reading: a switch, a rebuild, a boot-file change, a
+ *  calibration's start (a dry run's too). */
+const SERVER_CONFIRMS = (a) => ['switch', 'rebuild', 'bootfile'].includes(a?.action) || (a?.action === 'calibrate' && a?.body?.action === 'start');
 /** The band's "Last done" line's head and tail for the last action (status.last_action) and the status it came with: "Last sent"
  *  and "waiting for bitcube to show it" while the server is still confirming its entry (status.applying, by applying_id), "didn't
- *  show it in time" when it gave up (status.expired), "Last done" once confirmed or when it is no longer listed; a failure is
- *  "Last tried", a quick change bitcube didn't answer in time (no lock) "may or may not have happened". Never "done" for a change
- *  the server is still confirming (R7 #3, #16, #28). */
+ *  show it in time" when it gave up (status.expired, or the verdict the history kept: last_action.verdict), "Last done" once
+ *  confirmed; a failure is "Last tried", a quick change bitcube didn't answer in time (no lock) "may or may not have happened".
+ *  Never "done" for a change the server is still confirming (R7 #3, #16, #28), nor for a switch, rebuild, boot-file change or
+ *  calibration start whose verdict isn't known (no longer listed, no verdict kept): "Last sent" (CR7 #5). */
 export function lastDoneParts(a, st) {
   const id = typeof a?.applying_id === 'string' ? a.applying_id : null;
   const has = (list) => !!id && Array.isArray(list) && list.some((e) => e && e.id === id);
@@ -153,10 +157,11 @@ export function lastDoneParts(a, st) {
     return a.maybe === true ? { head: 'Last sent', tail: ' · no answer in time; waiting for bitcube to show whether it happened' }
       : { head: 'Last sent', tail: ' · waiting for bitcube to show it' };
   }
-  if (has(st?.expired)) return { head: 'Last sent', tail: " · bitcube didn't show it in time" };
-  if (has(st?.confirmed)) return { head: 'Last done', tail: '' };
+  if (has(st?.expired) || (!has(st?.confirmed) && a?.verdict === 'expired')) return { head: 'Last sent', tail: " · bitcube didn't show it in time" };
+  if (has(st?.confirmed) || a?.verdict === 'confirmed') return { head: 'Last done', tail: '' };
   if (a?.maybe === true) return { head: 'Last sent', tail: ' · no answer in time: it may or may not have happened' };
   if (a?.ok === false) return { head: 'Last tried', tail: a.note ? ` · failed: ${plainError(a.note)}` : '' };
+  if (SERVER_CONFIRMS(a)) return { head: 'Last sent', tail: '' };
   return { head: 'Last done', tail: '' };
 }
 

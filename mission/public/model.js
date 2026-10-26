@@ -64,10 +64,14 @@ export const APPLY_BLOCKS = {
   ropes: ['ropes'], hub75: ['hub75'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
   calibrate: ['ropes', 'hub75', 'switch', 'lightsroute', 'rebuild', 'calibrate'],   // a calibration's start: what a running one blocks, and a second start
 };
+/** A calibration start that touches no lights, camera or TouchDesigner: a dry run, or a decode of earlier photos (calibrate.py
+ *  --dry-run, --decode-only; CR7 #6). Its entry locks only a second start, and it waits only for one (CR7 #7). */
+export const dryStart = (action, body) => action === 'calibrate' && !!body && typeof body === 'object' && body.action === 'start'
+  && (body.dry_run === true || (typeof body.decode_only === 'string' && body.decode_only !== ''));
 /** The team's words for a change in flight when the server's entry has no label of its own (an older server). */
 export const APPLY_LABEL = { switch: 'a show-file switch', rebuild: "the rebuild of the river's year", bootfile: 'the boot file change', lightsroute: 'the lighting port change',
   ropes: 'the ropes change', hub75: 'the panels change', mode: 'the mode change', target: 'the target change', rules: 'the rules change', 'rules-reset': 'the rules reset', calibrate: 'the start of a calibration' };
-/** One name per change (R7 #19), made here for the server's entries (lib/applying.mjs applyLabel), this phone's own applying
+/** One name per change (R7 #19), made here for the server's entries (lib/applying.mjs), this phone's own applying
  *  line, every other phone's band, Last done and the unconfirmed line: a noun phrase that names what it changes to, and reads in
  *  every frame ("Applying: …", "Wait: … is being applied.", "Waiting for bitcube to show …", "… was sent at 21:04"). `running`:
  *  the show file TouchDesigner runs now, so a switch to it is the button's "the restart on …". */
@@ -260,14 +264,14 @@ function probeWords(e) {
 /** One source of the snapshot: { at, value | error, age_s } -> freshness and content. */
 function source(raw, name, serverNow) {
   const r = obj(raw);
-  if (!r) return { present: false, ok: false, value: null, error: null, age_s: null, failing_s: null, stale: false };
+  if (!r) return { present: false, ok: false, value: null, error: null, at: null, age_s: null, failing_s: null, stale: false };
   const at = num(r.at);
   const age_s = serverNow != null && at != null ? Math.max(0, Math.round((serverNow - at) / 1000)) : num(r.age_s);   // the server's clock, never the phone's
   const error = typeof r.error === 'string' && r.error ? r.error : null;
   const value = error ? null : r.value ?? null;
   // a failing source keeps the time of its first failure in a row (mission.mjs failing_since): "failing for 52 min"
   const fs = num(r.failing_since), failing_s = error && fs != null && serverNow != null ? Math.max(0, Math.round((serverNow - fs) / 1000)) : null;
-  return { present: true, ok: value != null, value, error: error ?? (value == null ? 'no answer' : null), age_s, failing_s,
+  return { present: true, ok: value != null, value, error: error ?? (value == null ? 'no answer' : null), at, age_s, failing_s,
            stale: age_s != null && age_s > POLL_S[name] * STALE_FACTOR };
 }
 
@@ -756,6 +760,8 @@ export function derive(status, nowMs) {
   // TouchDesigner, so it waits for a ropes change still in flight), as the server's Applying.conflict does
   // A dry run's start touches no lights: nothing waits for it but a second start (its entry's blocks), R7 #20
   const waitFor = (action) => { const a = applying.find((x) => x.blocks.includes(action) || (!x.dry && (APPLY_BLOCKS[action] ?? []).includes(x.action))); return a ? `wait: ${a.label} is being applied` : null; };
+  // a dry run's or a decode's start touches nothing a change in flight does: it waits only for another calibration start (CR7 #7)
+  const waitStart = () => { const a = applying.find((x) => x.action === 'calibrate'); return a ? `wait: ${a.label} is being applied` : null; };
 
   // ---- show: what the piece is doing -----------------------------------------------------------------------------
   // a restart (a switch, a rebuild, TouchDesigner opening a file at boot) has the ropes dark for a minute: never "not getting the
@@ -827,6 +833,7 @@ export function derive(status, nowMs) {
   const tdBusy = tdRestarting ? 'TouchDesigner is restarting: wait a minute' : tdOffBooting || (tdStarting && booted) ? 'TouchDesigner is still starting: wait a minute' : null;
   // first the page's contact and bitcube itself, then a change in flight anywhere (status.applying), then the model's own reasons
   const first = (action) => cantPage ?? cantBitcube ?? waitFor(action);
+  const calOn = calibrating ? (calDry ? 'a dry run is already running' : 'a calibration is already running') : null;
   const notYear = kind === 'year' ? null : kind ? "the river's year isn't running: switch to it first" : "what TouchDesigner is running isn't known";
   const controls = {
     mode: ctl(first('mode') ?? cantYear, { dynamic: ctl(first('mode') ?? cantYear ?? (counter ? null : "the people counter isn't available yet")) }),
@@ -843,12 +850,14 @@ export function derive(status, nowMs) {
     // a rebuild bakes the LED map into the river's year and ends in a switch: the switch's reasons, and only on the river's year
     rebuild: ctl(first('rebuild') ?? cantUnknown ?? tdBusy ?? cantOld ?? cantCal ?? (frozen ? "TouchDesigner isn't answering" : null) ?? notYear),
     // a calibration's start: TouchDesigner answering on a show file, the gallery camera reachable, nothing running already
-    calibrate: ctl(first('calibrate') ?? (calibrating ? (calDry ? 'a dry run is already running' : 'a calibration is already running') : null) ?? cantTd ?? (tdOk ? null : "TouchDesigner isn't answering")
-      ?? (galleryDown ? "the gallery camera isn't reachable" : null)),
+    // dry: a dry run's start (no lights, no camera, nothing on TouchDesigner): only contact, bitcube, another start, a run on
+    calibrate: ctl(first('calibrate') ?? calOn ?? cantTd ?? (tdOk ? null : "TouchDesigner isn't answering")
+      ?? (galleryDown ? "the gallery camera isn't reachable" : null), { dry: ctl(cantPage ?? cantBitcube ?? waitStart() ?? calOn) }),
   };
 
   const sources = {};
-  for (const k of Object.keys(S)) sources[k] = { present: S[k].present, ok: S[k].ok, error: S[k].error, age_s: S[k].age_s, failing_s: S[k].failing_s, stale: S[k].stale };
+  // at: when that source's reading was taken, on the server's clock (ms): a page judges its own change only by a reading after it
+  for (const k of Object.keys(S)) sources[k] = { present: S[k].present, ok: S[k].ok, error: S[k].error, at: S[k].at, age_s: S[k].age_s, failing_s: S[k].failing_s, stale: S[k].stale };
   return { overall, problems: P.map(({ pri, fromProbe: _f, ...p }) => p), show, items, controls, sources };
 }
 
@@ -963,6 +972,12 @@ export function untimed(text) {
     .replace(/\s*\b(?:for\s+)?(?:about\s+|over\s+)?\d+(?:[.,]\d+)?\s*(?:s|min|h|days?)\b(?:\s+(?:more|ago|left))?/g, '')
     .replace(/\s+([.,;:])/g, '$1').replace(/\s{2,}/g, ' ').trim();
 }
+/** derive()'s show.applying with each entry's elapsed time moved to serverNowMs (the server's clock carried forward): a page that
+ *  derives once per answer ticks only the m:ss (the chat, CR7 #13). An entry with no start keeps the time it was derived with. */
+export function entriesAt(list, serverNowMs) {
+  const now = num(serverNowMs);
+  return (Array.isArray(list) ? list : []).map((a) => (now != null && num(a?.started_at) != null ? { ...a, elapsed_s: Math.max(0, Math.round((now - a.started_at) / 1000)) } : { ...a }));
+}
 /** A change in flight from another phone or the studio chat, as a live region says it (no times): "Applying: <label>, from the
  *  studio chat.", "Waiting for bitcube to show <label>.", "No answer in time for <label>: waiting for bitcube to show whether it
  *  happened." (R7 #12) */
@@ -972,13 +987,31 @@ export function entrySaid(a) {
   return a?.phase === 'confirming' ? `Waiting for bitcube to show ${label}${from}.` : `Applying: ${label}${from}.`;
 }
 /** What Status's hidden band region says: the level and the headline without their times (R7 #13), then each change in flight
- *  but this phone's own (ownIds: its entries; ownActions: a request still in flight with no id yet) by name and source (R7 #12). */
+ *  but this phone's own (ownEntries: ownIds, its entries; ownActions, a request without an id yet) by name and source (R7 #12). */
 export function bandSaid(m, { ownIds = [], ownActions = [] } = {}) {
   if (!m) return '';
   const head = `${{ ok: 'OK', warning: 'Attention', down: 'Down', unknown: 'Unknown' }[m.overall.level] ?? 'Unknown'}. ${untimed(m.overall.headline.replace(/\s*\(no answer for [^()]*\)$/, ''))}.`;
   if (m.overall.cause === 'page') return head;
   const others = (m.show.applying ?? []).filter((a) => !(a.id && ownIds.includes(a.id)) && !ownActions.includes(a.action));
   return [head.replace(/\.\.$/, '.'), ...others.map(entrySaid)].join(' ');
+}
+/** This phone's own changes among status.applying (derive()'s show.applying), from its controls: [{ action, state, entryId, at }]
+ *  (at: when the control entered its state, this phone's clock, ms). ownIds: its entries by id, and, for a control unconfirmed
+ *  without an id (its answer never came), an entry of its action begun before it gave up (one begun later is another phone's
+ *  change of the same thing); ownActions: a request in flight or confirming without an id, by its action (CR7 #10). What
+ *  bandSaid, Status's band and Lights' state line leave out: this phone's own change is said on its control only. */
+export function ownEntries(m, controls, nowMs = Date.now()) {
+  const list = (Array.isArray(controls) ? controls : []).filter((c) => c && typeof c.action === 'string');
+  const ownIds = list.map((c) => c.entryId).filter((x) => typeof x === 'string' && x !== '');
+  const ownActions = [...new Set(list.filter((c) => !c.entryId && (c.state === 'applying' || c.state === 'confirming')).map((c) => c.action))];
+  for (const a of m?.show?.applying ?? []) {
+    if (!a.id || ownIds.includes(a.id)) continue;
+    // the entry's age against the time since the control gave up: both durations, so the phone's clock offset never matters
+    const gaveUp = list.some((c) => !c.entryId && c.state === 'unconfirmed' && c.action === a.action
+      && (num(c.at) == null || num(a.elapsed_s) == null || a.elapsed_s + 2 >= (nowMs - c.at) / 1000));
+    if (gaveUp) ownIds.push(a.id);
+  }
+  return { ownIds, ownActions };
 }
 /** What the page's live region says once on entering confirming (never with a time). */
 export const CONFIRMING_SAID = 'Sent; waiting for bitcube to show it';
@@ -1000,6 +1033,25 @@ export function entryVerdict(m, id) {
   if ((m.show.confirmed ?? []).some((e) => e.id === id)) return 'confirmed';
   if ((m.show.expired ?? []).some((e) => e.id === id)) return 'expired';
   return null;
+}
+/** When the server's verdict on a page's own change can't be known (no id: its answer was lost; or no list names it: it aged out
+ *  after 10 min, or the server restarted), whether bitcube's reading shows it anyway (CR7 #4). sent: { action, file, before (the
+ *  file running, or the boot file, when it was sent), sentAt (the server's clock, ms) }. A switch to a file other than the one
+ *  running then, once a full check taken after the send shows TouchDesigner answering on that file; a boot-file change to another
+ *  boot file, once one shows it. A restart (the same file) or a rebuild: no reading can tell, so never. */
+export function readingShows(m, sent) {
+  const o = obj(sent), at = num(m?.sources?.probe?.at), t = num(o?.sentAt);
+  if (!o || !m?.show || typeof o.file !== 'string' || o.file === o.before || at == null || t == null || at <= t) return false;
+  if (o.action === 'switch') return m.show.file?.name === o.file;
+  if (o.action === 'bootfile') return m.show.boot_file?.name === o.file;
+  return false;
+}
+/** A page's own change, judged: the server's verdict by its entry's id (entryVerdict: 'pending', 'confirmed', 'expired'), or, when
+ *  that can't be known, 'confirmed' when bitcube's reading shows it (readingShows), else null (waiting; its own limit applies). */
+export function serverJudged(m, id, sent = null) {
+  const v = entryVerdict(m, id);
+  if (v) return v;
+  return sent && readingShows(m, sent) ? 'confirmed' : null;
 }
 /** A change no reading showed in time, naming what was sent: "The switch to the live river was sent at 21:13, but bitcube doesn't
  *  show it yet: look at the Now line, or call Gavin." (what: the change in team words, or null for "Sent at 21:13, …"). */
