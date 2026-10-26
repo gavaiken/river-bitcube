@@ -465,10 +465,15 @@ test('round 6 #39: a clear refusal holds nothing; a start that never shows up fr
   const refused = driven({ lights: fakeLights({ start: { ok: false, started: false, error: 'TouchDesigner is not running' } }) });
   await refused.m.calibrate('start', {});
   assert.deepEqual([refused.m.snapshot().applying, refused.timers], [[], []]);
-  // an older calibrate.ps1's refusal (no started, no pid) is clear too
+  // an older calibrate.ps1's refusal (no started, no pid) is clear too; its slow-start answer ("did not report within 6 s",
+  // the run before's file, no pid after the -Task launch) is not: the job may well be starting
   const older = driven({ lights: fakeLights({ start: { ok: false, error: 'a calibration is already running' } }) });
   await older.m.calibrate('start', {});
   assert.deepEqual(older.m.snapshot().applying, []);
+  const slow = driven({ lights: fakeLights({ start: { ok: false, error: 'the job did not report within 6 s', calibration: { running: false, ok: true, started: AT_2104 / 1000 - 3700, updated: AT_2104 / 1000 - 3600 } } }) });
+  await slow.m.calibrate('start', {});
+  assert.deepEqual(slow.m.snapshot().applying.map((e) => [e.action, e.phase]), [['calibrate', 'confirming']]);
+  await assert.rejects(slow.m.control('ropes', { dark: true }), (e) => e.status === 409);
   // the call itself timed out: maybe; no file ever comes
   const lights = fakeLights({ start: { ok: false, maybe: true, error: 'bitcube took too long to answer' } });
   const c = driven({ lights });

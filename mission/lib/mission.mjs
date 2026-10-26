@@ -334,12 +334,14 @@ export function newRunTest(r, before, nowMs) {
   };
 }
 
-/** A start that isn't a clear refusal and whose run isn't known yet: launched (calibrate.ps1 says started or names a pid) or a
- *  maybe (no answer in time). A clear refusal (ok false, started false, no pid) and a run already in hand are not pending. */
+/** A start that isn't a clear refusal and whose run isn't known yet: launched (calibrate.ps1 says started or names a pid; an
+ *  older calibrate.ps1 said "the job did not report within 6 s", also after the -Task launch, with no pid) or a maybe (no
+ *  answer in time). A clear refusal (ok false, started false, no pid) and a run already in hand are not pending. */
 export function startPending(r, isNew) {
   if (!r || typeof r !== 'object') return false;
   if (isNew(r.calibration)) return false;
-  return r.maybe === true || r.started === true || (r.pid != null && r.pid !== '');
+  if (r.started === false) return false;
+  return r.maybe === true || r.started === true || (r.pid != null && r.pid !== '') || /did not report/i.test(String(r.error ?? ''));
 }
 
 /** Ropes and panels act through TouchDesigner: when its own answer says it failed, the action failed, whatever the probe's
