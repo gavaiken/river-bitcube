@@ -972,6 +972,12 @@ export function untimed(text) {
     .replace(/\s*\b(?:for\s+)?(?:about\s+|over\s+)?\d+(?:[.,]\d+)?\s*(?:s|min|h|days?)\b(?:\s+(?:more|ago|left))?/g, '')
     .replace(/\s+([.,;:])/g, '$1').replace(/\s{2,}/g, ' ').trim();
 }
+/** derive()'s show.applying with each entry's elapsed time moved to serverNowMs (the server's clock carried forward): a page that
+ *  derives once per answer ticks only the m:ss (the chat, CR7 #13). An entry with no start keeps the time it was derived with. */
+export function entriesAt(list, serverNowMs) {
+  const now = num(serverNowMs);
+  return (Array.isArray(list) ? list : []).map((a) => (now != null && num(a?.started_at) != null ? { ...a, elapsed_s: Math.max(0, Math.round((now - a.started_at) / 1000)) } : { ...a }));
+}
 /** A change in flight from another phone or the studio chat, as a live region says it (no times): "Applying: <label>, from the
  *  studio chat.", "Waiting for bitcube to show <label>.", "No answer in time for <label>: waiting for bitcube to show whether it
  *  happened." (R7 #12) */

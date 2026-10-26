@@ -2,7 +2,7 @@
 // turns the chat's events (GET /api/chat/history, the SSE /api/chat/events) into one card per request, pairs replies with
 // their request by id, and keeps the pinned status bar and the composer. Server API unchanged: history, events, send, stop.
 import { mountShell, tick, art, fmt, control, confirm, api, esc, md, chip, mark, plainError, noAnswerText, WARN_MS, LOST_MS, poll } from '/ui.js';
-import { TZ, applyingWords, derive, entryWords, entrySaid } from '/model.js';
+import { TZ, applyingWords, derive, entryWords, entrySaid, entriesAt } from '/model.js';
 import { stateOf as judge, stepWords, stepsToggle, excerpt } from '/chat-words.js';
 
 const $ = (id) => document.getElementById(id);
@@ -289,10 +289,17 @@ new ResizeObserver(() => { for (const el of [document.querySelector('main.chat')
 // Status's band and Lights' state line do; nothing while this page has no contact with mission control.
 const applyingPoll = poll('/api/status', { every: 5000, onData: () => paintApplying(), onError: () => paintApplying() });
 let applyingKey = '';
+let applyingMemo = { at: null, list: [] };   // the model, derived once per status answer (keyed on when it arrived), never once a second (CR7 #13)
 function applyingNow() {
   const p = applyingPoll;
   if (!p.last || p.elapsed() > LOST_MS) return [];
-  try { return derive(p.last, p.last.now + p.elapsed()).show.applying ?? []; } catch { return []; }
+  const serverNow = p.last.now + p.elapsed();
+  if (applyingMemo.at !== p.receivedAt) {
+    let list = [];
+    try { list = derive(p.last, serverNow).show.applying ?? []; } catch { list = []; }
+    applyingMemo = { at: p.receivedAt, list };
+  }
+  return entriesAt(applyingMemo.list, serverNow);   // the tick moves only the m:ss
 }
 function paintApplying() {
   const host = $('chat-applying'), list = applyingNow();

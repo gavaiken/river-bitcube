@@ -430,3 +430,21 @@ test('CR7 #12: the server gzips through the Zipper, never gzipSync in send()', (
   assert.doesNotMatch(src, /gzipSync/);
   assert.match(src, /zipper\.zip\(/);
 });
+
+// ---- the chat's applying lines --------------------------------------------------------------------------------------------
+test('CR7 #13: the chat derives the status once per answer; each second only the entries\' m:ss moves', async () => {
+  const { derive, entriesAt } = await import('../public/model.js');
+  const m = derive(statusAt(T0, { applying: [{ id: 'ax.1', action: 'switch', label: 'the switch to the live river', phase: 'confirming', started_at: all._scenario.now - 20_000, expect_s: 60, blocks: ['switch'] }] }), all._scenario.now);
+  const list = m.show.applying;
+  assert.equal(list[0].elapsed_s, 20);
+  const later = entriesAt(list, all._scenario.now + 7400);
+  assert.deepEqual([later[0].elapsed_s, later[0].label, later[0].phase], [27, 'the switch to the live river', 'confirming']);
+  assert.equal(list[0].elapsed_s, 20, 'the derived list is left alone');
+  assert.deepEqual(entriesAt([{ action: 'ropes', started_at: null, elapsed_s: 4 }], all._scenario.now).map((a) => a.elapsed_s), [4], 'no start: as derived');
+  // chat.js: one derive() per answer (keyed on when it arrived), the tick only moves the times
+  const src = readFileSync(new URL('../public/chat.js', import.meta.url), 'utf8');
+  assert.equal(src.match(/\bderive\(/g)?.length, 1, 'one derive() call');
+  const fn = src.slice(src.indexOf('function applyingNow()'), src.indexOf('function paintApplying('));
+  assert.match(fn, /receivedAt/);
+  assert.match(fn, /entriesAt\(/);
+});
