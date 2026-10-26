@@ -88,9 +88,18 @@ const writeTargets = (part) => [...part.matchAll(WRITE_ARGS)].map((m) => m[1]).c
 const inState = (t) => STATE_RE.some(([re]) => re.test(t)) || [...t.matchAll(RIVER_DIR)].some((m) => !REPO_DIRS.includes(m[1].toLowerCase()));
 /** A command part that writes the installation's state (R8 #37; the repo is not it, CR8 #2). */
 const writesState = (part) => writeTargets(part).some(inState);
-/** Code that writes a state file (a python or node one-liner: open(…'w'), write_text, WriteAllText, writeFileSync): a change too (R9 #38). */
+/** Code that writes a state file (a python or node one-liner): a change too (R9 #38). The mode is the open() call's own (CR9 #3): its
+ *  first argument names the file (or a variable that was given its name) and its second is 'w', 'a' or 'x' (mode= too); a Path of it
+ *  opened to write, or written (write_text, write_bytes); a writer given it (WriteAllText, writeFileSync, appendFile…). Never a read
+ *  of it beside a mode-like word elsewhere: print(open('boot-file.txt').read(), 'a') is a look. */
 const STATE_NAMES = String.raw`(?:boot-file\.txt|calibration\.cancel|presence\.json)`;
-const STATE_CODE = new RegExp(String.raw`${STATE_NAMES}[\s\S]*?(?:,\s*['"][wax]\+?b?['"]|\.write_text\s*\(|\.write_bytes\s*\()|(?:write_text|WriteAllText|writeFileSync|writeFile)\s*\([^)]*${STATE_NAMES}`, 'i');
+const OPEN_MODE = String.raw`\s*,\s*(?:mode\s*=\s*)?[rbu]?['"][wax]\+?[bt]?['"]`;
+const STATE_CODE = new RegExp([
+  String.raw`\bopen\s*\(\s*(?=[^)]*${STATE_NAMES})(?:[^,()]|\([^()]*\))*${OPEN_MODE}`,                            // open(<the file>, 'w')
+  String.raw`\b(\w+)\s*=\s*[rRbBuU]{0,2}['"][^'"\n]*${STATE_NAMES}['"][\s\S]*?\bopen\s*\(\s*\1${OPEN_MODE}`,         // p = '…boot-file.txt'; open(p, 'w')
+  String.raw`${STATE_NAMES}['"]\s*\)\s*\.(?:open\s*\(\s*(?:mode\s*=\s*)?['"][wax]|write_(?:text|bytes)\s*\()`,        // Path('…').open('w'), .write_text(
+  String.raw`\b(?:WriteAllText|WriteAllLines|WriteAllBytes|AppendAllText|writeFileSync|writeFile|appendFileSync|appendFile)\s*\([^)]*${STATE_NAMES}`,
+].join('|'), 'i');
 /** A POST to the river's year's own page (:9981): around mission control's mode, target and rules lock (R9 #38). curl's flags by
  *  their case (CR9 #2): -d, --data…, -F, --form, --json, -X POST (alone or in a cluster: -sd, -XPOST) send a body; -f (fail) and
  *  -D (dump headers) do not, and -G or --get sends -d as a query (a GET). PowerShell's -Method Post in any case. */

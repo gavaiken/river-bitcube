@@ -64,3 +64,21 @@ test("CR9 #2: only a POST to the year's page is a change to it: curl's -f (fail)
   }
 });
 
+// ---- #3: a state file's mode is the open() call's own ---------------------------------------------------------------------------
+
+test('CR9 #3: code that opens a state file to read is a look; only its own open(…, "w"), a Path write or a writer of it is a change', async () => {
+  for (const cmd of [
+    `${B} "python -c \\"print(open(r'C:\\Users\\user\\River\\boot-file.txt').read(), 'a')\\""`,
+    `python -c "x = open('presence.json').read(); print(x, 'w')"`,
+    `python -c "import json; d = json.load(open('C:/Users/user/River/calibration.cancel')); print(d, 'x')"`,
+    `python -c "from pathlib import Path; print(Path('boot-file.txt').read_text()); Path('/tmp/o').write_text('y')"`,
+  ]) assert.equal((await stepOf(cmd))[1], false, cmd);
+  for (const [cmd, words] of [
+    [`${B} "python -c \\"open(r'C:\\Users\\user\\River\\boot-file.txt','w').write('x')\\""`, 'changed the boot file'],
+    [`python -c "open(os.path.join(R, 'boot-file.txt'), mode='w').write('x')"`, 'changed the boot file'],
+    [`python -c "p = r'C:\\Users\\user\\River\\calibration.cancel'; open(p, 'a').close()"`, 'stopped the calibration'],
+    [`python -c "from pathlib import Path; Path(r'C:/Users/user/River/presence.json').write_text('{}')"`, "changed the people counter's count"],
+    [`python -c "Path('C:/Users/user/River/boot-file.txt').open('w').write('x')"`, 'changed the boot file'],
+    [`node -e "require('fs').writeFileSync('C:/Users/user/River/boot-file.txt', 'x')"`, 'changed the boot file'],
+  ]) assert.deepEqual(await stepOf(cmd), [words, true], cmd);
+});
