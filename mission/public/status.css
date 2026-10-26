@@ -58,6 +58,7 @@ details.sub .sub-body { padding-top: 2px; }
 .target-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .target-grid .btn { padding: 8px 4px; font-size: 14px; text-transform: capitalize; min-width: 0; overflow-wrap: normal; }
 .now-on { font-size: 14px; color: var(--muted); font-weight: 600; }   /* "now 240 s on bitcube" under a draft */
+.now-on:empty { display: none; }   /* always there (a control's aria-describedby names it), shown only when it says something */
 .rules { display: grid; gap: 14px; }
 /* a rule: its label and range, then the box with its unit beside it; the error and bitcube's value under, across both */
 .rule { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; font-size: 15px; }

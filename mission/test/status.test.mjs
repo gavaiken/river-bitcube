@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { derive, dur, ctlInit, ctlStep } from '../public/model.js';
+import { derive, ctlInit, ctlStep, BOOT_USUAL } from '../public/model.js';
 import { ruleLabel, ruleRange, ruleError, rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows, bootWords, controlLine,
   failText, notSentText, applyingLine, ropesTile, panelsTile, stillDue, rowFromHash, ROPES_STATE, PANELS_STATE } from '../public/status-words.js';
 
@@ -41,7 +41,8 @@ test('Rules form: Apply only when something changed and all is valid, and says h
   // one out of range: its error, Apply off, the count still says what was typed
   f = rulesForm(RULES, { cycle_seconds: '5', empty_seconds: '90' });
   assert.equal(f.fields.cycle_seconds.error, 'Must be 60 to 1800 s');
-  assert.deepEqual([f.count, f.canApply, f.invalid, f.label], [2, false, true, 'Apply 2 changes']);
+  assert.deepEqual([f.count, f.canApply, f.invalid, f.label], [2, false, true, 'Fix the box first'], 'R6 #24: never a count it will not apply');
+  assert.equal(rulesForm(RULES, { cycle_seconds: '5', empty_seconds: '1' }).label, 'Fix the boxes first');
   assert.deepEqual(f.changed, { empty_seconds: 90 });
   // another phone changed it meanwhile: the draft stays, and says what bitcube has now
   const other = JSON.parse(JSON.stringify(RULES)); other.cycle_seconds.value = 600;
@@ -98,11 +99,14 @@ test("a control's status line in each state: applying (m:ss and the usual time w
   const t0 = 1_000_000;
   let s = ctlStep(ctlInit(), { type: 'press', now: t0 });
   let c = { s, applyText: 'Applying: the switch to the live river…', expectS: 60 };
-  assert.deepEqual(controlLine(c, t0 + 23_000), { cls: 'pending applying', spin: true, text: 'Applying: the switch to the live river · 0:23 · usually about 1 min' });
+  assert.deepEqual(controlLine(c, t0 + 23_000), { cls: 'pending applying', spin: true, text: 'Applying: the switch to the live river · 0:23 · usually about 1\u00a0min' });
   c = { s, applyText: 'Applying: ropes dark…', expectS: 15 };
-  assert.equal(controlLine(c, t0 + 3000).text, 'Applying: ropes dark…', 'a short change: no ticking time');
+  assert.equal(controlLine(c, t0 + 3000).text, 'Applying: ropes dark…', 'a short change: no ticking time within its usual time');
+  assert.equal(controlLine(c, t0 + 20_000).text, 'Applying: ropes dark · 0:20 · usually a few seconds', 'R6 #1: past its usual time it says so');
   s = ctlStep(s, { type: 'ok', confirmed: false, now: t0 + 6000 });
   assert.deepEqual(controlLine({ s }, t0 + 34_000), { cls: 'pending confirming', spin: true, text: 'Sent · waiting for bitcube to show it · 0:34' });
+  assert.equal(controlLine({ s, expectS: 60 }, t0 + 34_000).text, 'Sent · waiting for bitcube to show it · 0:34 · usually about 1\u00a0min', 'R6 #17: the waiting line gives the usual time');
+  assert.equal(controlLine({ s, expectS: 15, usual: BOOT_USUAL }, t0 + 6000).text, "Sent · waiting for bitcube to show it · 0:06 · bitcube's full check shows it within a minute");
   for (const st of ['done', 'failed', 'unconfirmed']) assert.deepEqual(controlLine({ s: { state: st }, text: 'x' }, t0), { cls: st, spin: false, text: 'x' });
   assert.equal(controlLine(undefined, t0).text, '');
 });
@@ -113,19 +117,22 @@ test('a failure in words: a 409 reads as the server wrote it, a refusal that say
   const e502 = Object.assign(new Error('HTTP 502'), { status: 502 });
   assert.equal(failText('The ropes are unchanged', e502, '21:05'), "The ropes are unchanged: mission control couldn't reach bitcube (21:05). Try again, or see the verdict above.");
   assert.equal(failText('The rules are unchanged', e502, '21:05', 'What you typed is kept.'), "The rules are unchanged: mission control couldn't reach bitcube (21:05). What you typed is kept. Try again, or see the verdict above.");
+  const cal = Object.assign(new Error('a calibration is running: stop it on the Lights page first'), { status: 409 });
+  assert.equal(failText('The show file is unchanged', cal, '21:14'), 'The show file is unchanged: a calibration is running (21:14). Stop it on the Lights page, or try again when it ends.', 'R6 #14');
   const refused = Object.assign(new Error('"quieter" must be below "busier"'), { status: 400 });
   assert.match(failText('The rules are unchanged', refused, '21:05'), /apply again \(21:05\)\.$/);
 });
 
-test('a confirm withdrawn, or a press found impossible when answered: "Not sent: <why>", never "wait:"', () => {
-  assert.equal(notSentText('bitcube is offline', '21:04'), 'Not sent: bitcube is offline (21:04).');
-  assert.equal(notSentText('wait: the switch to the live river is being applied', '21:04'), 'Not sent: the switch to the live river is being applied (21:04).');
-  assert.equal(notSentText(null, '21:04'), "Not sent: this page can't reach mission control (21:04).");
+test('a confirm withdrawn, or a press found impossible when answered: "Not sent at 21:04: <why>", never "wait:", a change in flight in the past tense (R6 #4, #16)', () => {
+  assert.equal(notSentText('bitcube is offline', '21:04'), 'Not sent at 21:04: bitcube is offline.');
+  assert.equal(notSentText('wait: the switch to the live river is being applied', '21:04'), 'Not sent at 21:04: the switch to the live river was being applied. Press again when it is done.');
+  assert.equal(notSentText(null, '21:04'), "Not sent at 21:04: this page can't reach mission control.");
 });
 
-test("another phone's change on the band: 'Applying: <label> · 0:23', with the usual time when it is long", () => {
-  assert.equal(applyingLine({ label: 'the switch to the live river', expect_s: 60 }, 23), 'Applying: the switch to the live river · 0:23 · usually about 1 min');
-  assert.equal(applyingLine({ label: 'a ropes change', expect_s: 15 }, 4), 'Applying: a ropes change · 0:04');
+test("another phone's change on the band: 'Applying: <label> · 0:23 · <usual time>', then waiting for bitcube once it answered", () => {
+  assert.equal(applyingLine({ label: 'the switch to the live river', expect_s: 60 }, 23), 'Applying: the switch to the live river · 0:23 · usually about 1\u00a0min');
+  assert.equal(applyingLine({ label: 'a ropes change', expect_s: 15 }, 4), 'Applying: a ropes change · 0:04 · usually a few seconds');
+  assert.equal(applyingLine({ label: 'the switch to the live river', expect_s: 60, phase: 'confirming' }, 50), 'Waiting for bitcube to show the switch to the live river · 0:50 · usually about 1\u00a0min');
 });
 
 test('the tiles: calibration patterns with the time left, and a second line that never repeats the state word (R5 #25)', () => {
@@ -133,7 +140,8 @@ test('the tiles: calibration patterns with the time left, and a second line that
   let m = run(cal);
   let r = ropesTile(m, item(m, 'ropes'), false), p = panelsTile(m, item(m, 'hub75 panels'));
   assert.equal(r.state, 'In calibration patterns');
-  assert.equal(r.words, `about ${dur(m.show.calibration.left_s)} more · stop it on the Lights page`);
+  assert.equal(r.words, `${m.show.calibration.left_words} · stop it on the Lights page`);
+  assert.match(r.words, /^(about \d+ (s|min) more|nearly done) · /);
   assert.equal(p.state, 'In calibration patterns');
   assert.equal(p.words, r.words);
   assert.equal(ROPES_STATE.calibrating, PANELS_STATE.calibrating);

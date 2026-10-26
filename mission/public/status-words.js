@@ -3,7 +3,7 @@
 // file: probe.ps1 writes boot-file.txt for a switch), the tiles' state words, the band's line for a change in flight from
 // another phone, and when the room's still is due again. status.js lays them out. Relative imports: in the browser these are
 // the same /model.js and /app.js every page loads.
-import { dur, seasonPace, FILES, applyingWords, confirmingWords, elapsedClock, LONG_CHANGE_S } from './model.js';
+import { seasonPace, FILES, applyingWords, confirmingWords, entryWords, failWords, notSentWords, LONG_CHANGE_S } from './model.js';
 import { plainError } from './app.js';
 
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s ?? '');
@@ -54,8 +54,9 @@ export function rulesForm(rules, draft = {}) {
     if (isChange && !error) changed[k] = value;
   }
   const count = Object.values(fields).filter((f) => f.changed).length;
-  const invalid = Object.values(fields).some((f) => f.error);
-  return { fields, changed, count, invalid, canApply: count > 0 && !invalid, label: count ? `Apply ${plural(count, 'change')}` : 'Apply' };
+  const bad = Object.values(fields).filter((f) => f.error).length, invalid = bad > 0;
+  // while a box is out of range the greyed button says what to do, never a count it won't apply (R6 #24)
+  return { fields, changed, count, invalid, canApply: count > 0 && !invalid, label: invalid ? `Fix the ${bad === 1 ? 'box' : 'boxes'} first` : count ? `Apply ${plural(count, 'change')}` : 'Apply' };
 }
 
 // ---- Target (manual) -------------------------------------------------------------------------------------------------
@@ -104,9 +105,10 @@ export const bootShows = (m, file) => m?.show?.boot_file?.name === file;
 export function bootWords(boot) { return boot ? `${boot.label}${boot.default ? ' (by default)' : ''}` : 'not known'; }
 
 // ---- a control's status line, in each of the contract's states ---------------------------------------------------------
-/** What a control's status line says now: c = { s: ctlStep's state, text, applyText, expectS }. Applying: the words, and for a
- *  long change the elapsed m:ss and the usual time; confirming: "Sent · waiting for bitcube to show it · 0:34"; done, failed,
- *  unconfirmed: their text. Ticking times are never announced (the page's live region says the text without them). */
+/** What a control's status line says now: c = { s: ctlStep's state, text, applyText, expectS, usual }. Applying: the words, and
+ *  for a long change (or a short one past its usual time) the elapsed m:ss and the usual time; confirming: "Sent · waiting for
+ *  bitcube to show it · 0:34 · usually about 1 min" (usual: words of its own, the boot file's); done, failed, unconfirmed: their
+ *  text. The words are model.js's, the same on every page. Ticking times are never announced. */
 export function controlLine(c, nowMs) {
   const st = c?.s?.state ?? 'ready', el = c?.s?.sentAt != null ? Math.max(0, (nowMs - c.s.sentAt) / 1000) : 0;
   if (st === 'applying') {
@@ -114,39 +116,33 @@ export function controlLine(c, nowMs) {
     const t = c.applyText ?? 'Sending to bitcube…', long = num(c.expectS) != null && c.expectS > LONG_CHANGE_S;
     return { cls: 'pending applying', spin: true, text: applyingWords(long ? t.replace(/…$/, '') : t, el, c.expectS) };
   }
-  if (st === 'confirming') return { cls: 'pending confirming', spin: true, text: confirmingWords(el) };
+  if (st === 'confirming') return { cls: 'pending confirming', spin: true, text: confirmingWords(el, c.usual ?? c.expectS ?? null) };
   if (['done', 'failed', 'unconfirmed'].includes(st)) return { cls: st, spin: false, text: c.text ?? '' };
   return { cls: '', spin: false, text: c?.text ?? '' };
 }
 /** A refused or failed change on its control: "<fail>: <reason> (21:04). Try again, or see the verdict above." A 409 from
  *  another change in flight reads as the server wrote it, without its "wait:" ("…: the switch to the live river is being
- *  applied (started 21:04). Try again when it is done."). `kept`: a form's "What you typed is kept." after the reason. */
-export function failText(fail, e, clock, kept = '') {
-  const why = plainError(e), k = kept ? ` ${kept}` : '';
-  if (/^wait: /i.test(why)) return `${fail}: ${why.slice(6)}.${k} Try again when it is done.`;
-  return `${fail}: ${why} (${clock}).${k}${/try again|apply again/i.test(why) ? '' : ' Try again, or see the verdict above.'}`;
-}
+ *  applied (started 21:04). Try again when it is done."); a calibration running says to stop it or wait. `kept`: a form's
+ *  "What you typed is kept." after the reason. model.js failWords, the same words as Lights'. */
+export function failText(fail, e, clock, kept = '') { return failWords(fail, plainError(e), clock, { kept }); }
 
-/** A press judged again and found impossible, or a confirm withdrawn: "Not sent: bitcube is offline (21:04)." (another change in
- *  flight reads without its "wait:": "Not sent: the switch to the live river is being applied (21:04)."). */
-export function notSentText(why, clock) {
-  const w = String(why ?? "this page can't reach mission control").replace(/^wait: /i, '').replace(/[.\s]+$/, '');
-  return `Not sent: ${w} (${clock}).`;
-}
+/** A press judged again and found impossible, or a confirm withdrawn: "Not sent at 21:04: bitcube is offline."; another change in
+ *  flight in the past tense, so it stays true after it ends: "Not sent at 21:17: the restart on the river's year was being
+ *  applied. Press again when it is done." (model.js notSentWords). */
+export const notSentText = (why, clock) => notSentWords(why, clock);
 
 // ---- another phone's change in flight, on the band ---------------------------------------------------------------------
-/** "Applying: the switch to the live river · 0:23 · usually about 1 min" (model show.applying entry, seconds since it began). */
-export function applyingLine(a, elapsedS) {
-  const exp = num(a?.expect_s);
-  return `Applying: ${a?.label ?? 'a change'} · ${elapsedClock(elapsedS)}${exp != null && exp > LONG_CHANGE_S ? ` · usually about ${dur(exp)}` : ''}`;
-}
+/** "Applying: the switch to the live river · 0:23 · usually about 1 min", then "Waiting for bitcube to show the switch to the
+ *  live river · …" once its request answered (model show.applying entry, seconds since it began; model.js entryWords). */
+export const applyingLine = (a, elapsedS) => entryWords(a, elapsedS);
 
 // ---- the tiles ---------------------------------------------------------------------------------------------------------
 export const ROPES_STATE = { river: 'Showing the river', dark: 'Dark on purpose', 'not-reaching': 'Not getting the river', calibrating: 'In calibration patterns', unknown: 'Not known' };
 export const PANELS_STATE = { unknown: 'Not known', 'no-sender': 'No panel sender', restarting: 'Dark while restarting', frozen: 'Picture frozen',
   gone: 'Nothing drawn', 'no-output': 'No panel output', off: 'Switched off', calibrating: 'In calibration patterns', river: 'Showing the river' };
-/** A calibration's second line: "about 4 min more · stop it on the Lights page". */
-const calLine = (m) => `about ${dur(m?.show?.calibration?.left_s)} more · stop it on the Lights page`;
+/** A calibration's second line: "about 4 min more · stop it on the Lights page" ("nearly done" in its last 45 s): the model's one
+ *  time left, the same as the band's and Lights'. */
+const calLine = (m) => `${m?.show?.calibration?.left_words ?? 'time left not known'} · stop it on the Lights page`;
 /** The second line never repeats the state word: a summary that starts with it keeps only what it adds. */
 function adds(state, summary) {
   const s = String(summary ?? ''), w = String(state ?? '').toLowerCase();
