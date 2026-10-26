@@ -32,7 +32,10 @@ export { BLOCKS };
  *  only its start (the run reports its own progress). */
 export { EXPECT_S };   // one table for the server and the pages: public/model.js
 /** Changes whose answer comes before they are real: TouchDesigner is still opening the file when a switch or a rebuild answers. */
-export const CONFIRMED_BY_READING = ['switch', 'rebuild'];
+export const CONFIRMED_BY_READING = ['switch', 'rebuild', 'bootfile'];
+/** A maybe (bitcube didn't answer in time) keeps its lock only for a change that could still be under way on bitcube and must not
+ *  be run twice; a quick one (ropes, panels, the year's controls) is no lock: the next reading says what happened. */
+export const MAYBE_HOLDS = ['switch', 'rebuild', 'bootfile', 'lightsroute', 'calibrate'];
 /** The actions whose entry names the show file they act on (any other `file` in a request is not ours to repeat). */
 const FILE_ACTIONS = ['switch', 'rebuild', 'bootfile'];
 export const SOURCES = ['mission control', 'studio chat'];
@@ -77,11 +80,12 @@ export class Applying {
     this.seq = 0;
   }
 
-  /** Drop confirming entries past their confirm limit (3 x the usual time, at least 2 min, from the start): unconfirmed. A
-   *  request still in flight stays (it ends by itself: every call to bitcube has its own time limit). */
+  /** Drop confirming entries past their confirm limit (3 x the usual time, at least 2 min, from the answer: a slow rebuild
+   *  still has its whole limit for TouchDesigner to reopen): unconfirmed. A request still in flight stays (it ends by itself:
+   *  every call to bitcube has its own time limit). */
   #prune() {
     const t = this.now();
-    for (const [id, e] of this.entries) if (e.phase === 'confirming' && t - e.t0 > confirmLimitS(e.expect_s) * 1000) this.entries.delete(id);
+    for (const [id, e] of this.entries) if (e.phase === 'confirming' && t - (e.answered ?? e.t0) > confirmLimitS(e.expect_s) * 1000) this.entries.delete(id);
   }
 
   /** status.applying, oldest first; times on the clock the snapshot is served on (clockMs: that clock's now). */
@@ -124,7 +128,7 @@ export class Applying {
     let r;
     try { r = await fn(); } catch (e) { this.entries.delete(id); throw e; }
     const maybe = !!r && typeof r === 'object' && r.maybe === true;
-    let pending = maybe;
+    let pending = maybe && MAYBE_HOLDS.includes(action);
     try { pending = pending || (typeof awaits === 'function' && awaits(r) === true); } catch { /* a bad answer: not pending */ }
     if (pending && this.entries.has(id)) {
       Object.assign(entry, { phase: 'confirming', answered: this.now(), ...(maybe ? { maybe: true } : {}) });
@@ -139,7 +143,8 @@ export class Applying {
     const done = [];
     for (const [id, e] of this.entries) {
       if (e.phase !== 'confirming' || !CONFIRMED_BY_READING.includes(e.action) || !e.file) continue;
-      if (typeof askedAt === 'number' && askedAt >= e.answered && answersOn(reading, e.file)) { this.entries.delete(id); done.push(e); }
+      const shows = e.action === 'bootfile' ? reading?.boot_file === e.file : answersOn(reading, e.file);
+      if (typeof askedAt === 'number' && askedAt >= e.answered && shows) { this.entries.delete(id); done.push(e); }
     }
     return done;
   }

@@ -179,7 +179,9 @@ export class Mission {
     if (!c || typeof c.running !== 'boolean') return;
     const u = typeof c.updated === 'number' && Number.isFinite(c.updated) ? c.updated : this.now() / 1000;
     if (this.calNote && u < this.calNote.u) return;
-    this.calNote = { at: this.now(), u, value: scrubCreds(c) };
+    // the same write read again keeps its first read time (read_age_s ages the copy's elapsed_s from it)
+    const at = this.calNote && u === this.calNote.u ? this.calNote.at : this.now();
+    this.calNote = { at, u, value: scrubCreds(c) };
   }
 
   /** The calibration job as the newest copy says (the probe's or Lights'), or null: none in the last 24 h. */

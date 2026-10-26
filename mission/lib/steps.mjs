@@ -72,7 +72,7 @@ function actingFallback(verb, ...texts) {
 /** A command that changes the installation whatever its description says (the page's CHANGE_CMD, and calibrate.ps1). */
 const CHANGE_CMD = /-Action\s+(ropes|hub75|switch|bootfile|lightsroute|rebuild|calibrate|mode|target|rules)\b|\/api\/control\/|Restart-Computer|Stop-Process|Start-Process|taskkill|\bkill\b|schtasks\s+\/(run|end|change)|ptz\.py\s+\w+\s+(?!presets)|td_save|calibrate\.ps1\s+-Action\s+(start|cancel)/i;
 /** node mission/bin/mc.mjs <action> ['<body>']: a change asked of mission control (or its status read). */
-const MC = /\bmc\.mjs\s+([a-z-]+)(?:\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)"))?/;
+const MC = /\bmc\.mjs\s+([a-z-]+)(?:\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)"))?/g;
 /** Words that are as often things as actions after "and" ("the ropes and light"), so only a first word is taken as a verb. */
 const NOUNISH = new Set(['light', 'note', 'view', 'report', 'count', 'call', 'watch', 'test', 'copy', 'record', 'build', 'search']);
 // a raw command, in any case ("SSH bitcube …" as "ssh bitcube …"); "ssh into bitcube and check …" is a description, not one
@@ -170,8 +170,10 @@ function pastTense(s) {
 
 /** A change asked of mission control through its control socket (bin/mc.mjs), in the history's words; null if not one. */
 function mcLine(command) {
-  const m = MC.exec(String(command ?? ''));
-  if (!m) return null;
+  // "status first, then one control" in one command: the step is the control, not the look before it
+  const all = [...String(command ?? '').matchAll(MC)];
+  if (!all.length) return null;
+  const m = all.find((x) => x[1] !== 'status') ?? all[0];
   if (m[1] === 'status') return { text: 'looked at what mission control shows', acting: false };
   let body = {};
   try { const j = JSON.parse(m[2] ?? (m[3] != null ? m[3].replace(/\\(.)/g, '$1') : '{}')); if (j && typeof j === 'object' && !Array.isArray(j)) body = j; } catch { /* words from the action alone */ }

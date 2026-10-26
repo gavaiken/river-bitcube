@@ -45,6 +45,7 @@
 //   POST /control/<action>                     exactly POST /api/control/<action>: the same whitelist, locks and 409 "wait: …",
 //                                              recorded with source 'studio chat' (Applying line, Last done and Recent say so)
 import { createServer } from 'node:http';
+import { connect as netConnect } from 'node:net';
 import { readFileSync, existsSync, mkdirSync, copyFileSync, chmodSync, lstatSync, unlinkSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { userInfo } from 'node:os';
@@ -470,11 +471,23 @@ const local = createServer(async (req, res) => {
   } catch (e) { return send(res, e.status || 500, { ok: false, error: e.message }); }
 });
 let socketMine = false;
-function listenLocal() {
+/** Whether a server answers on the socket now (a live mission control), rather than a file left by one that was killed. */
+const socketLive = (path) => new Promise((resolve) => {
+  const c = netConnect(path);
+  const done = (v) => { c.destroy(); resolve(v); };
+  c.once('connect', () => done(true)); c.once('error', () => done(false));
+  setTimeout(() => done(false), 1000).unref();
+});
+async function listenLocal() {
   try {
     mkdirSync(dirname(SOCKET), { recursive: true });
-    // a socket left by a server that was killed is ours to replace; any other file there is not (listen then fails, said below)
-    try { if (lstatSync(SOCKET).isSocket()) unlinkSync(SOCKET); } catch { /* none there */ }
+    // a socket left by a server that was killed is ours to replace; one a running server answers on is not (a second server
+    // started on the same state folder, e.g. a fixture or dev server, must never take the live one's agent away); any other
+    // file there is not ours either (listen then fails, said below)
+    let stale = false;
+    try { stale = lstatSync(SOCKET).isSocket(); } catch { /* none there */ }
+    if (stale && await socketLive(SOCKET)) { console.warn(`control socket ${SOCKET}: another mission control answers on it; this one has none`); return; }
+    if (stale) unlinkSync(SOCKET);
     const before = process.umask(0o177);           // created 0600 from its first moment; the chmod below makes sure
     try { local.listen(SOCKET); } finally { process.umask(before); }
   } catch (e) { console.warn(`control socket: ${e.message}`); }

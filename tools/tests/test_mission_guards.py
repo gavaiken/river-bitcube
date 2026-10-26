@@ -5,7 +5,7 @@ Mac mini where this suite runs, so these read the scripts: where the guard sits,
   its job's process is alive): the rule mission control's calBlocked applies, now on bitcube itself, so no path (a phone, the
   studio chat, a hand-run SSH) can spoil a run.
 - calibrate.ps1 -Action start says whether it launched the job: started false on every refusal (nothing runs), started true
-  with the pid and its own clock (requested) once launched, and a maybe (not a refusal) when the job hasn't written yet.
+  with the pid and its own clock (requested) once launched, and pending (a start, not a refusal or a maybe) when the job hasn't written yet.
 """
 import pathlib
 import re
@@ -65,13 +65,13 @@ def test_calibrate_start_says_whether_it_launched_the_job():
     assert '-ErrorAction Stop' in block[launch:block.index('} catch {', launch)]
 
 
-def test_calibrate_start_answers_started_with_the_pid_and_its_clock_and_a_maybe_before_the_first_write():
+def test_calibrate_start_answers_started_with_the_pid_and_its_clock_and_pending_before_the_first_write():
     block = start_block()
-    reported, waiting = block.split('} else {\n        # Launched, but no first write yet')
+    reported, waiting = block.split('} else {\n        # Launched (Start-Process gave a pid), but no first write yet')
     answer = reported[reported.rindex('Out-Json'):]
     assert 'started = $true' in answer and 'pid = $procId' in answer and 'requested = $t0' in answer
     later = waiting[waiting.index('Out-Json'):waiting.index('exit 0')]
-    assert 'ok = $false; maybe = $true; started = $true' in later
+    assert 'ok = $true; started = $true; pending = $true' in later, 'launched: a start, not a maybe (mc.mjs and Recent must not say "may or may not")'
     assert 'pid = $procId' in later and 'requested = $t0' in later
     assert 'calibration =' not in later, "the file there is the run before: it isn't this run"
     assert "within 6 s" not in later, 'not a refusal: no "did not report" error'

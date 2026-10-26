@@ -140,3 +140,19 @@ test('the agent gets the socket in its environment; the self-update waits for no
   const none = new SelfUpdate({ boot: null, tree: () => 'b', quiet: () => true, exit: () => { exits++; }, log: () => {} });
   assert.equal(none.check(), false, 'not a git checkout: never restarts');
 });
+
+test('code review: a second server on the same state folder never takes the live one\'s control socket, and leaves it in place when it exits', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mc2-'));
+  writeFileSync(join(dir, 'pw'), 'NOT-A-REAL-PW\n');
+  const state = join(dir, 'state'), socket = join(state, 'mc.sock');
+  const env = { MISSION_PORT: '0', MISSION_STATE_DIR: state, MISSION_PASSWORD_FILE: join(dir, 'pw'), MISSION_FIXTURES: FIXTURES, MISSION_FAKE_AGENT: '1' };
+  const a = await startServer(env);
+  t.after(() => a.p.kill());
+  await sleep(300);
+  assert.equal((await mc(socket, 'status')).code, 0, 'the first server answers on its socket');
+  const b = await startServer(env);
+  await sleep(1500);
+  assert.match(b.log(), /another mission control answers on it/);
+  b.p.kill('SIGTERM'); await sleep(800);
+  assert.equal((await mc(socket, 'status')).code, 0, 'still the first server\'s socket after the second one exits');
+});

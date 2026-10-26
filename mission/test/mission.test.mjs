@@ -415,11 +415,9 @@ test('round 6 #32: a maybe answer keeps its lock until the confirm limit (bitcub
   await c.m.pollProbe();
   const r = await c.m.control('ropes', { dark: true });
   assert.deepEqual(r, { ok: false, maybe: true, error: 'bitcube took too long to answer' });
-  assert.deepEqual(c.m.snapshot().applying.map((e) => [e.action, e.phase, e.maybe]), [['ropes', 'confirming', true]]);
-  await assert.rejects(c.m.control('ropes', { dark: false }), (e) => e.status === 409 && /^wait: a ropes change is being applied/.test(e.message));
-  await assert.rejects(c.m.control('switch', { file: LIVE }), (e) => e.status === 409, 'a switch would restart TouchDesigner under it');
-  c.t += 121_000;
-  assert.deepEqual(c.m.snapshot().applying, [], 'max(3 x 15, 120) s from its start');
+  // a quick change (ropes, panels, the year's controls) that may or may not have happened is no lock: the next reading says
+  // which (code review of round 6: a 2 min lock on the mode for a slow page was worse than the doubt)
+  assert.deepEqual(c.m.snapshot().applying, []);
   // a switch that timed out: done as soon as TouchDesigner answers on its file
   await c.m.control('switch', { file: LIVE });
   assert.deepEqual(c.m.snapshot().applying.map((e) => [e.action, e.phase, e.maybe]), [['switch', 'confirming', true]]);
@@ -429,9 +427,10 @@ test('round 6 #32: a maybe answer keeps its lock until the confirm limit (bitcub
   const slow = createServer(() => {});              // takes the request, never answers
   await new Promise((ok) => slow.listen(0, '127.0.0.1', ok));
   const m = new Mission({ seasonsUrl: `http://127.0.0.1:${slow.address().port}`, seasonsTimeoutMs: 150, later: () => {} });
-  assert.deepEqual(await m.control('mode', { mode: 'manual' }), { ok: false, maybe: true, error: "the river's year page took too long to answer" });
-  assert.deepEqual(m.snapshot().applying.map((e) => [e.action, e.phase, e.maybe]), [['mode', 'confirming', true]]);
-  slow.closeAllConnections(); slow.close();
+  try {
+    assert.deepEqual(await m.control('mode', { mode: 'manual' }), { ok: false, maybe: true, error: "the river's year page took too long to answer" });
+    assert.deepEqual(m.snapshot().applying, [], 'a quick change: no lock (the next reading of the page says which)');
+  } finally { slow.closeAllConnections(); slow.close(); }
   const none = new Mission({ seasonsUrl: 'http://127.0.0.1:9', later: () => {} });
   await assert.rejects(none.control('mode', { mode: 'manual' }));
   assert.deepEqual(none.snapshot().applying, []);

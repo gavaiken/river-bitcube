@@ -272,17 +272,21 @@ export function derive(status, nowMs) {
   const applyNow = pageNow ?? now;
   const applying = (Array.isArray(st.applying) ? st.applying : []).map(obj).filter((a) => a && typeof a.action === 'string').map((a) => {
     const raw = num(a.started_at), started = raw == null ? null : raw < 1e12 ? raw * 1000 : raw;   // ms (seconds accepted)
+    const rawA = num(a.answered_at), answered = rawA == null ? null : rawA < 1e12 ? rawA * 1000 : rawA;
     const expect_s = num(a.expect_s) ?? 60, elapsed = started != null ? Math.max(0, (applyNow - started) / 1000) : 0;
     const label = typeof a.label === 'string' && a.label.trim() ? a.label.trim() : APPLY_LABEL[a.action] ?? 'a change';
     const blocks = Array.isArray(a.blocks) ? a.blocks.filter((b) => typeof b === 'string') : APPLY_BLOCKS[a.action] ?? [a.action];
     return { id: a.id ?? null, action: a.action, label, file: typeof a.file === 'string' ? a.file : null, started_at: started, expect_s, elapsed_s: Math.round(elapsed), blocks,
-             phase: a.phase === 'confirming' ? 'confirming' : 'applying', source: typeof a.source === 'string' ? a.source : null,
-             words: `${cap(label)} is being applied${started != null ? ` (started ${clock(started)})` : ''}`, old: started != null && elapsed > confirmLimitS(expect_s) };
+             phase: a.phase === 'confirming' ? 'confirming' : 'applying', source: typeof a.source === 'string' ? a.source : null, maybe: a.maybe === true,
+             words: `${cap(label)} is being applied${started != null ? ` (started ${clock(started)})` : ''}`,
+             // its limit runs from the answer once there is one (lib/applying.mjs #prune): a slow rebuild keeps its whole limit
+             old: (answered ?? started) != null && (applyNow - (answered ?? started)) / 1000 > confirmLimitS(expect_s) };
   }).filter((a) => !a.old).map(({ old: _o, ...a }) => a);
   // A switch or a rebuild (it ends in a switch to the river's year) restarts TouchDesigner: until it answers on the file, the full
   // check sees it not running (the launcher waits 10 s), then not answering while the file loads. That is the restart, never a
   // fault to press Switch for (a second switch kills the half-opened file: another minute dark) (R6 #26).
-  const restartBy = applying.find((a) => a.action === 'switch' || a.action === 'rebuild') ?? null;
+  // A maybe (no answer in time) may never have run, so it explains nothing: a crash or a freeze meanwhile is said as it is.
+  const restartBy = applying.find((a) => !a.maybe && (a.action === 'switch' || a.action === 'rebuild')) ?? null;
 
   // What each source says, defensively: a half-written payload must never throw.
   const online = typeof obj(bc.value)?.online === 'boolean' ? bc.value.online : null;      // null = not checked
@@ -834,10 +838,10 @@ export function ctlStep(s, ev) {
   switch (ev?.type) {
     case 'press':
       if (BUSY.has(s.state) || why) return s.state === 'ready' && why ? to('blocked') : same;
-      return ev.confirm ? { ...to('confirm', { before: s.state }), effect: 'confirm' } : { ...to('applying', { sentAt: now, answeredAt: null, notSent: null }), effect: 'send' };
+      return ev.confirm ? { ...to('confirm', { before: s.state, seen: false }), effect: 'confirm' } : { ...to('applying', { sentAt: now, answeredAt: null, notSent: null, seen: false }), effect: 'send' };
     case 'yes':
       if (s.state !== 'confirm') return same;
-      return why ? to('failed', { notSent: why }) : { ...to('applying', { sentAt: now, answeredAt: null, notSent: null }), effect: 'send' };
+      return why ? to('failed', { notSent: why }) : { ...to('applying', { sentAt: now, answeredAt: null, notSent: null, seen: false }), effect: 'send' };
     case 'no': return s.state === 'confirm' ? to(rest(s.before)) : same;
     case 'why':
       if (s.state === 'confirm' && why) return { ...to('failed', { notSent: why }), effect: 'withdraw' };
@@ -900,7 +904,7 @@ export function confirmingWords(elapsedS, usual = null) {
 }
 /** Words without their numbers ("for about 40 s more" and "for about 35 s more" read the same): a live region says a headline
  *  again only when this changes, so a ticking time is never re-announced (R6 #8; Status's band and Lights' state line). */
-export const sansTime = (t) => String(t ?? '').replace(/\d+(?:[.,]\d+)?(?:[\s\u00a0]*(?:s|min|h|days)\b)?/g, '#');
+export const sansTime = (t) => String(t ?? '').replace(/\b\d+:\d{2}\b|\d+(?:[.,]\d+)?[\s\u00a0]*(?:s|min|h|days?)\b/g, '#');
 /** What the page's live region says once on entering confirming (never with a time). */
 export const CONFIRMING_SAID = 'Sent; waiting for bitcube to show it';
 /** Another phone's change in flight (a show.applying entry), for the band: "Applying: the switch to the live river · 0:23 · usually

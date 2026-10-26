@@ -2,9 +2,7 @@
 // buttons can't run, which view the Calibrate block shows, whether the river's year uses a run's map, the run's "last heard"
 // note, the state line's next line, the LED map's provenance words, and where the rope numbers sit on the map. Pure ES
 // module, no DOM: lights.js uses it in the browser and test/lights-words.test.mjs under node --test.
-import * as M from './model.js';
-
-const { dur } = M;
+import { dur, entryWords } from './model.js';
 
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s ?? '');
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -154,7 +152,7 @@ export function stateLevel({ levels, lost = false, stale = false, change = null 
 export function applyingNow(m, own = []) {
   return (m?.show.applying ?? []).filter((a) => !own.includes(a.action)).map((a) => {
     const waiting = a.phase === 'confirming';
-    const line = typeof M.entryWords === 'function' ? M.entryWords(a, a.elapsed_s) : M.applyingWords(`Applying: ${a.label}…`, a.elapsed_s, a.expect_s);
+    const line = entryWords(a, a.elapsed_s);
     return { label: a.label, line, said: waiting ? `Waiting for bitcube to show ${a.label}.` : `Applying: ${a.label}.` };
   });
 }

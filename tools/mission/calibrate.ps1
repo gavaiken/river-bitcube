@@ -83,11 +83,11 @@ if ($Action -eq 'start') {
         if (-not $procId) { $procId = $n.pid }
         Out-Json ([ordered]@{ ok = [bool]$n.running -or [bool]$n.ok; started = $true; running = [bool]$n.running; pid = $procId; requested = $t0; log = $log; calibration = $n; error = $(if ($n.reason) { $n.reason } else { $n.error }); raw = $n.error })
     } else {
-        # Launched, but no first write yet (a cold venv loading numpy and OpenCV, or the -Task path): it may well be running.
-        # Not a refusal but a maybe: the page says "it may or may not have happened", and mission control keeps the lock and
-        # reads the progress until the run shows up. No calibration here: the file there now is the run before.
+        # Launched (Start-Process gave a pid), but no first write yet (a cold venv loading numpy and OpenCV, or the -Task path):
+        # it is starting. Not a refusal and not a maybe: this script knows it launched the job. Mission control keeps the
+        # starting lock and reads the progress until the run shows up. No calibration here: the file there now is the run before.
         $tail = @(if (Test-Path $log) { Get-Content $log -Tail 5 })
-        Out-Json ([ordered]@{ ok = $false; maybe = $true; started = $true; pid = $procId; requested = $t0; error = "the calibration was launched but hasn't reported yet"; log = $log; log_tail = $tail })
+        Out-Json ([ordered]@{ ok = $true; started = $true; pending = $true; pid = $procId; requested = $t0; note = "the calibration was launched; its first progress is still to come"; log = $log; log_tail = $tail })
     }
     exit 0
 }
