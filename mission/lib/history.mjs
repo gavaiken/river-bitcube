@@ -18,9 +18,10 @@
 // describeEvent(ev) -> one plain sentence for a feed (glossary words, no jargon; never throws).
 //
 // Events (all carry t, ms epoch on the server's clock; `from` is null the first time something is seen):
-//   { kind: 'overall', t, level, cause, headline, stale, lost, from: { level, cause, stale, lost } | null }
+//   { kind: 'overall', t, level, cause, headline, stale, lost, from: { level, cause, stale, lost } | null, back? }
 //       the verdict changed: level, cause, or contact. stale: a source the verdict needs has gone quiet and `lost`
-//       names it ('bitcube', "the river's year page", "Dave's agent").
+//       names it ('bitcube', "the river's year page", "Dave's agent"). back: the verdict TouchDesigner restarting
+//       interrupted, the same after it: it keeps its since from before the restart ("After the restart, as before: …", R8 #5).
 //   { kind: 'item', t, id, from, to, summary, stale?, gap?, still? }   a piece of equipment changed level (levels: ok warning
 //                                                          down); stale: its source was already quiet at the time; gap: it
 //                                                          was not seen just before (since is "at least"); still: the same
@@ -78,6 +79,10 @@ export const VERDICTS_SERVED = 20;            // status.verdicts: the newest thi
 export const VERDICTS_MS = 12 * 3600e3;       // … from the last this long (a phone locked for an evening still learns its own)
 const VERDICTS_KEPT = 500;                    // in memory, newest kept
 const SHOW_FIELDS = ['file', 'mode', 'season', 'ropes'];
+/** The causes of a restart under way: TouchDesigner restarting on a file, then (its first check) coming up. */
+const RESTARTISH = ['td-restarting', 'coming-up'];
+/** The pieces dark while TouchDesigner restarts (model.js's td-restarting problem): their state after it is a new instance. */
+const RESTARTED_PIECES = ['touchdesigner', 'seasons', 'ropes', 'hub75 panels'];
 const BLIND = ['page', 'bitcube-offline', 'bitcube-unchecked', 'probe-stale', 'not-checked', 'check-failed'];   // causes that hide what is behind them
 const obj = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : null);
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
@@ -131,7 +136,13 @@ export class History {
       // at any moment of it: its since is "at least" (a first sighting), never "for 1 min".
       const blind = !!prev && (prev.stale || BLIND.includes(prev.cause));
       if ((o.level !== 'unknown' || stale) && (!prev || prev.level !== o.level || prev.cause !== cause || prev.stale !== stale)) {
-        rec({ kind: 'overall', level: o.level, cause, headline: o.headline, stale, lost: stale ? lostWho(m) : null, from: prev, ...(blind && !stale ? { gap: true } : {}) });
+        // the verdict a restart interrupted (TouchDesigner restarting, then coming up), the same after it: no new fault (R8 #5). Only
+        // for a cause the restart doesn't touch (a camera, the internet): one of TouchDesigner's own pieces still not OK after it is a
+        // new instance, its since starting again, as its row's does (R7 #4, CR7 #8)
+        const br = this.state.overall?.before_restart, items = m.problems.find((x) => x.id === cause)?.items ?? [];
+        const back = !!br && !stale && !RESTARTISH.includes(cause) && br.level === o.level && br.cause === cause && t - br.at <= RESTART_MARK_MS
+          && !items.some((id) => RESTARTED_PIECES.includes(id));
+        rec({ kind: 'overall', level: o.level, cause, headline: o.headline, stale, lost: stale ? lostWho(m) : null, from: prev, ...(blind && !stale ? { gap: true } : {}), ...(back ? { back: true } : {}) });
       }
       // Each piece: unknown and muted (nothing to show) carry no knowledge, so they keep the last known level. A piece that
       // was not known in the previous observation changed at some moment of the gap: its since is "at least".
@@ -288,11 +299,17 @@ export class History {
         const p = S.overall, known = ev.level !== 'unknown' || !p, same = p && p.level === ev.level && p.cause === (ev.cause ?? null);
         const blindNow = !!ev.stale || BLIND.includes(ev.cause);
         const longGap = !!p && ev.gap === true && typeof p.blind_since === 'number' && ev.t - p.blind_since > UNSEEN_GAP_MS;
-        const base = known && !same ? { level: ev.level, cause: ev.cause ?? null, t: ev.t, at_least: ev.from == null || ev.gap === true }
+        // what a restart interrupted (R8 #5): remembered as TouchDesigner starts restarting, kept through coming up, and restored
+        // (its since too) when the same verdict is back after it; anything else ends it
+        const br0 = p?.before_restart ?? null;
+        const before = ev.cause === 'td-restarting' ? br0 ?? (p && !RESTARTISH.includes(p.cause) ? { level: p.level, cause: p.cause, t: p.t, at_least: p.at_least, at: ev.t } : null)
+          : ev.cause === 'coming-up' || ev.stale ? br0 : null;
+        const base = ev.back === true && br0 ? { level: br0.level, cause: br0.cause, t: br0.t, at_least: br0.at_least }
+          : known && !same ? { level: ev.level, cause: ev.cause ?? null, t: ev.t, at_least: ev.from == null || ev.gap === true }
           : known && longGap ? { level: p.level, cause: p.cause, t: ev.t, at_least: true }
           : { level: p.level, cause: p.cause, t: p.t, at_least: p.at_least };
         S.overall = { ...base, stale: !!ev.stale, lost: ev.lost ?? null, last: { level: ev.level, cause: ev.cause ?? null, stale: !!ev.stale, lost: ev.lost ?? null },
-                      blind_since: blindNow ? (typeof p?.blind_since === 'number' ? p.blind_since : ev.t) : null };
+                      blind_since: blindNow ? (typeof p?.blind_since === 'number' ? p.blind_since : ev.t) : null, before_restart: before };
         break;
       }
       case 'item': if (typeof ev.id === 'string') S.items[ev.id] = { level: ev.to, reason: reasonOf(ev.summary), t: ev.t, at_least: ev.from == null || ev.gap === true }; break;
@@ -426,6 +443,12 @@ const SAID = [
   [/^(Gallery|River) clips failing/, (_m, cam) => `=${cam} clips to Dave are failing`],
   [/^Sync has seen no new state/, 'has seen no new state from Dave'], [/^Current run can't/, "can't"],
 ];
+/** A piece still not OK in the same way after a restart, in its own words where it is a deliberate state rather than a fault: "The
+ *  ropes are still dark on purpose", never "still need attention" (R8 #25). A real fault keeps "still needs attention" (a warning)
+ *  or "is still down". */
+const STILL = [
+  [/^Dark on purpose\b/, 'are still dark on purpose'], [/^At 0 %/, 'are still at 0 %'], [/^Panel sender present, but the panel output is off/, 'are still switched off in the show file'],
+];
 const STAGE = { 'ropes-capture': 'photographing the ropes', 'ropes-decode': 'working out where each rope is', 'hub75-capture': 'photographing the panels', 'hub75-locate': 'finding the panels', done: 'done' };
 const MODE_WHY = { automatic: 'the clock turns the year by itself', dynamic: 'the people in the room steer the year', manual: 'someone is steering the year by hand' };
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s);
@@ -457,8 +480,12 @@ export function ageless(s) {
 function itemWords(ev) {
   const [name, plural] = WHO[ev.id] ?? [cap(String(ev.id ?? 'something'))];
   const s = timeless(String(ev.summary ?? '').trim());
-  if (ev.still && ev.to !== 'ok') return ev.to === 'down' ? `${name} ${plural ? 'are' : 'is'} still down${s ? `: ${lc(s)}` : ''}`
-    : `${name} still ${plural ? 'need' : 'needs'} attention${s ? `: ${lc(s)}` : ''}`;
+  if (ev.still && ev.to !== 'ok') {
+    const own = ev.to === 'warning' ? STILL.find(([re]) => re.test(s)) : null;
+    if (own) return `${name} ${s.replace(own[0], own[1])}`;
+    return ev.to === 'down' ? `${name} ${plural ? 'are' : 'is'} still down${s ? `: ${lc(s)}` : ''}`
+      : `${name} still ${plural ? 'need' : 'needs'} attention${s ? `: ${lc(s)}` : ''}`;
+  }
   if (ev.to === 'ok') return `${name} ${plural ? 'are' : 'is'} ${ev.from == null ? 'fine' : ev.from === 'down' ? 'back' : 'OK again'}${s ? `: ${lc(s)}` : ''}`;
   const said = SAID.find(([re]) => re.test(s));
   if (said) { const r = s.replace(said[0], said[1]); return r.startsWith('=') ? r.slice(1) : `${name} ${r}`; }
@@ -554,7 +581,9 @@ export function describeEvent(ev) {
         if (e.stale) {
           const same = e.from && e.from.level === e.level && e.from.cause === (e.cause ?? null);
           line = e.level === 'unknown' || same ? `Lost contact with ${who}` : `${head} (and no word from ${who})`;
-        } else line = e.from?.stale ? `Back in touch with ${e.from.lost ?? 'bitcube'}: ${lc(head)}` : head;
+        } else line = e.from?.stale ? `Back in touch with ${e.from.lost ?? 'bitcube'}: ${lc(head)}`
+          : e.back === true ? `After the restart, as before: ${lc(head)}`     // no new fault: the one a restart interrupted (R8 #5)
+          : head;
         break;
       }
       case 'item': line = itemWords(e); break;

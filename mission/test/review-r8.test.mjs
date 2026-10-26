@@ -269,3 +269,46 @@ test('every page script parses (a slip in a page file breaks the whole page, and
   const dir = fileURLToPath(new URL('../public/', import.meta.url));
   for (const f of readdirSync(dir).filter((x) => x.endsWith('.js'))) execFileSync(process.execPath, ['--check', join(dir, f)], { stdio: 'pipe' });
 });
+
+const RESTART = (t) => [{ id: 'ax.8', action: 'switch', label: "the restart on the river's year", file: YEAR, source: 'mission control', phase: 'confirming', started_at: t - 3000, answered_at: t - 1000, expect_s: 60, blocks: ['ropes', 'hub75', 'switch'] }];
+
+test('R8 #5: a chosen restart never makes the band\'s fault look as if it started seconds ago; Recent says it was as before', async () => {
+  const { feed } = await import('../lib/history.mjs');
+  let t = T0;
+  const h = new History({ file: null, now: () => t });
+  const camDown = (extra = {}) => { const p = payload({ t, ...extra }); p.probe.value.devices.gallery_cam = false; return p; };
+  h.observe(camDown()); t += 18 * 60_000; h.observe(camDown());
+  assert.equal(h.since('overall', t).cause, 'gallery-cam');
+  const began = h.since('overall', t).since;
+  const n = h.events.length;
+  for (const td of [{ ok: false, error: 'not running' }, { ok: false, error: 'not answering' }]) { t += 5000; h.observe(camDown({ td, applying: RESTART(t) })); }
+  assert.equal(h.state.overall.cause, 'td-restarting', 'the restart is a line of its own');
+  t += 30_000; h.observe(camDown());
+  t += 33_000;
+  const s = h.since('overall', t);
+  assert.deepEqual([s.cause, s.since], ['gallery-cam', began], 'the same fault as before the restart keeps its since (not "Attention for 33 s")');
+  const lines = feed(h.events.slice(n)).map((e) => e.words);
+  assert.ok(lines.includes("TouchDesigner is restarting on the river's year"), JSON.stringify(lines));
+  assert.ok(lines.some((w) => /^After the restart, as before: the gallery camera is down/.test(w)), JSON.stringify(lines));
+  // TouchDesigner's own fault still there after a restart is a new instance: its since starts again, as its row's does (R7 #4)
+  t += 5000;
+  const slow = { ok: true, file: YEAR, fps: 4, errors: 0, ropes: { source: 'canvas', status: { open: true, active: true, watts: [1, 1] } }, hub75: { brightness: 1, output: true } };
+  h.observe(payload({ t, td: slow })); t += 10 * 60_000; h.observe(payload({ t, td: slow }));
+  t += 5000; h.observe(payload({ t, td: { ok: false, error: 'not running' }, applying: RESTART(t) }));
+  t += 30_000; h.observe(payload({ t, td: slow }));
+  assert.deepEqual([h.since('overall', t).cause, h.since('overall', t).since], ['td-slow', t]);
+  // a different cause after the restart is news, with its own since
+  t += 5000; h.observe(camDown({ td: { ok: false, error: 'not running' }, applying: RESTART(t) }));
+  t += 30_000; h.observe(payload({ t, td: { ok: true, file: YEAR, fps: 4, errors: 0, ropes: { source: 'canvas', status: { open: true, active: true, watts: [1, 1] } }, hub75: { brightness: 1, output: true } } }));
+  assert.equal(h.since('overall', t).since, t);
+});
+
+test('R8 #25: after a restart, a deliberate state reads as itself ("The ropes are still dark on purpose"), never "still need attention"', async () => {
+  const { describeEvent: words } = await import('../lib/history.mjs');
+  assert.equal(words({ kind: 'item', id: 'ropes', from: 'warning', to: 'warning', summary: 'Dark on purpose: sending black', still: true }), 'The ropes are still dark on purpose: sending black');
+  assert.equal(words({ kind: 'item', id: 'hub75 panels', from: 'warning', to: 'warning', summary: "At 0 %, so they're dark", still: true }), "The panels are still at 0 %, so they're dark");
+  // a real fault keeps "still needs attention"; down stays "still down"
+  assert.equal(words({ kind: 'item', id: 'touchdesigner', from: 'warning', to: 'warning', summary: 'Running slowly: 4 of 60 frames a second', still: true }), 'TouchDesigner still needs attention: running slowly; 4 of 60 frames a second');
+  assert.equal(words({ kind: 'item', id: 'modal link', from: 'warning', to: 'warning', summary: 'Gallery clips failing since 02:43; river fine', still: true }), 'Clips to Dave still needs attention: gallery clips failing since 02:43; river fine');
+  assert.equal(words({ kind: 'item', id: 'gallery camera', from: 'down', to: 'down', summary: 'Not answering', still: true }), 'The gallery camera is still down: not answering');
+});
