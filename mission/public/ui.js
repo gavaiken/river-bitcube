@@ -390,12 +390,15 @@ export function refocus(key, root = document, fallback = null) {
   if (says(own) && focusEl(own)) return true;
   return park(t?.closest('.ctl, [data-ctl], .ctl-host') ?? null, fallback);
 }
-/** sheet({ title, body, actions, focus }) opens the bottom sheet (body: HTML string or a Node; actions: [{ label, kind: 'primary'|'danger'|'plain',
- *  onClick, keep }] stacked full width, each closes the sheet unless `keep`); a Close button when there are no actions.
- *  `focus`: the index of the action that takes focus when it opens (default: the browser's choice, the first control).
- *  Returns { close, el }; a click on the backdrop or Escape closes it. A sheet opened over another replaces it. On close,
- *  focus goes back to what opened it, found again by its data-* identity when a re-render replaced it meanwhile. */
-export function sheet({ title, body = '', actions = null, onClose = null, focus = null } = {}) {
+/** sheet({ title, body, actions, focus, row }) opens the bottom sheet (body: HTML string or a Node; actions: [{ label, kind: 'primary'|'danger'|'plain',
+ *  onClick, keep }] stacked full width, each closes the sheet unless `keep`); a Close button when there are no actions. The actions are
+ *  a row that stays at the sheet's bottom while a long body scrolls under it (R9 #3); row: true sets two of them side by side (a
+ *  way back and Close: never a confirm's, which stack).
+ *  `focus`: the index of the action that takes focus when it opens (default: its title, which names it; the browser's own choice
+ *  when it opens). Returns { close, el }; a click on the backdrop or Escape closes it. A sheet opened over another replaces it, and
+ *  focus goes into the new one, never to <body> (R9 #8). On close, focus goes back to what opened it, found again by its data-*
+ *  identity when a re-render replaced it meanwhile. */
+export function sheet({ title, body = '', actions = null, onClose = null, focus = null, row = false } = {}) {
   const d = dialog();
   const opener = d.open ? d._mcOpener : document.activeElement;
   const openerKey = d.open ? d._mcOpenerKey : focusKey(document.activeElement);
@@ -410,7 +413,7 @@ export function sheet({ title, body = '', actions = null, onClose = null, focus 
   if (desc) { desc.id ||= 'mc-sheet-desc'; d.setAttribute('aria-describedby', desc.id); } else d.removeAttribute('aria-describedby');
   if (title) { d.setAttribute('aria-labelledby', 'mc-sheet-title'); d.removeAttribute('aria-label'); } else { d.removeAttribute('aria-labelledby'); d.setAttribute('aria-label', 'Details'); }
   const acts = actions ?? [{ label: 'Close', kind: 'plain' }];
-  const stack = el('<div class="stack"></div>');
+  const stack = el(`<div class="stack sheet-acts${row ? ' row' : ''}"></div>`);
   const btns = [];
   for (const a of acts) {
     const b = el(`<button class="btn ${a.kind === 'primary' ? 'primary' : a.kind === 'danger' ? 'danger' : ''}" type="button">${esc(a.label)}</button>`);
@@ -419,13 +422,20 @@ export function sheet({ title, body = '', actions = null, onClose = null, focus 
   }
   inner.append(stack);
   d.append(inner);
+  // the row's height keeps a focused link above it (scroll-padding), and a hairline over it says the body scrolls under it
+  let ro = null;
+  if (typeof ResizeObserver === 'function') {
+    const fit = () => { inner.style.setProperty('--acts-h', `${stack.offsetHeight}px`); inner.classList.toggle('overflows', inner.scrollHeight > inner.clientHeight + 1); };
+    ro = new ResizeObserver(fit); ro.observe(stack); ro.observe(inner);
+  }
   let closed = false;
   const mine = {};
   d._mcToken = mine; d._mcOpener = opener; d._mcOpenerKey = openerKey;
-  d._mcReplaced = () => { if (closed) return; closed = true; onClose?.(); };
+  d._mcReplaced = () => { if (closed) return; closed = true; ro?.disconnect(); onClose?.(); };
   function close() {
     if (closed) return;
     closed = true;
+    ro?.disconnect();
     if (d._mcToken === mine) {
       d._mcToken = null; d._mcReplaced = null; d.onclick = null; d.oncancel = null;
       if (d.open) d.close();
@@ -442,8 +452,12 @@ export function sheet({ title, body = '', actions = null, onClose = null, focus 
   }
   d.onclick = (e) => { if (e.target === d || e.target.closest('[data-sheet="close"]')) close(); };
   d.oncancel = (e) => { e.preventDefault(); close(); };
-  if (!d.open) d.showModal();
+  const was = d.open;
+  if (!was) d.showModal();
+  // the browser's initial focus runs only at showModal(): a sheet shown over an open one (Recent, Who to call, Back to the menu)
+  // takes focus into itself and names it, by its title, since the button that was pressed went with the old content (R9 #8)
   if (focus != null && btns[focus]) btns[focus].focus();
+  else if (was) (inner.querySelector('#mc-sheet-title') ?? btns[0])?.focus();
   return { close, el: inner };
 }
 /** confirm({ title, body, ok, cancel, destructive }) → Promise<boolean>: a bottom sheet naming the cost, the costly button first
@@ -972,7 +986,7 @@ function normaliseContacts(j) {
 }
 const telHref = (t) => 'tel:' + String(t).replace(/[^\d+]/g, '');
 async function openContacts(shell) {
-  const s = sheet({ title: 'Who to call', body: '<p class="muted">Looking up the numbers…</p>', actions: [{ label: 'Back to the menu', onClick: () => openMenu(shell) }] });
+  const s = sheet({ title: 'Who to call', body: '<p class="muted">Looking up the numbers…</p>', actions: [{ label: 'Back to the menu', onClick: () => openMenu(shell) }, { label: 'Close' }], row: true });
   let list, note = '';
   try { list = normaliseContacts(await getJSON('/api/contacts')); }
   catch (e) { list = normaliseContacts(null); note = /404|not found/i.test(e.message) ? "The numbers aren't on this mission control yet: first names and what they own, for now." : `Couldn't fetch the numbers: ${plainError(e)}.`; }
@@ -987,7 +1001,7 @@ async function openContacts(shell) {
  *  later. A failed refresh keeps the list it has. */
 export const RECENT_EVERY_MS = 5000;
 async function openRecent(shell) {
-  const s = sheet({ title: 'Recent', body: '<div class="recent-host"><p class="muted">Fetching…</p></div>', actions: [{ label: 'Back to the menu', onClick: () => openMenu(shell) }] });
+  const s = sheet({ title: 'Recent', body: '<div class="recent-host"><p class="muted">Fetching…</p></div>', actions: [{ label: 'Back to the menu', onClick: () => openMenu(shell) }, { label: 'Close' }], row: true });
   const host = s.el.querySelector('.recent-host');
   const st = { j: null, at: null, wall: null, err: null, busy: false, html: null };
   const showing = () => host.isConnected && !!host.closest('dialog')?.open;
@@ -1030,7 +1044,7 @@ function openMenu(shell) {
     <div><div class="ctl-h">Theme</div><div class="seg" role="group" aria-label="Theme">${['auto', 'light', 'dark'].map((x) => `<button type="button" data-theme="${x}" class="${t === x ? 'lit' : ''}" aria-pressed="${t === x}">${cap(x)}</button>`).join('')}</div></div>
     <div class="links">${DOC_LINKS.map(([l, h]) => `<a href="${h}" ${h.startsWith('/') ? '' : 'target="_blank" rel="noopener"'}>${esc(l)}</a>`).join('')}</div>
   </div>`);
-  const s = sheet({ title: 'Menu', body, actions: [{ label: 'Log out', onClick: () => logout(shell) }, { label: 'Close' }] });
+  const s = sheet({ title: 'Menu', body, actions: [{ label: 'Log out', onClick: () => logout(shell) }, { label: 'Close' }], row: true });
   body.querySelector('[data-m="contacts"]').onclick = () => openContacts(shell);
   body.querySelector('[data-m="recent"]').onclick = () => openRecent(shell);
   body.querySelector('.seg').onclick = (e) => { const b = e.target.closest('[data-theme]'); if (!b) return; setTheme(b.dataset.theme); body.querySelectorAll('[data-theme]').forEach((x) => { x.classList.toggle('lit', x === b); x.setAttribute('aria-pressed', x === b); }); };
