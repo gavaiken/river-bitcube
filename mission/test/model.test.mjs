@@ -515,6 +515,8 @@ test('during a calibration the ropes (and the panels in their own stages) are in
   assert.equal(panels().cause, 'calibrating');
   assert.match(panels().summary, /^In calibration patterns/);
   assert.equal(m.show.ropes.state, 'calibrating');
+  assert.match(m.overall.headline, /^Calibrating the lights: the ropes and the panels are in patterns/);
+  assert.doesNotMatch(`${ropes().detail} ${panels().detail} ${m.overall.detail}`, /gallery camera is working/);
   // a dry run touches no lights: the ropes show the river, and the band doesn't say they are in patterns
   calib(fx, { mode: 'dry-run', dry_run: true, stage: 'ropes-capture', expected_s: 170, elapsed_s: 5 });
   fx.status.probe.value.td.ropes.source = 'canvas'; fx.status.probe.value.td.ropes.status.source = 'canvas';
@@ -523,7 +525,6 @@ test('during a calibration the ropes (and the panels in their own stages) are in
   assert.equal(ropes().level, 'ok');
   assert.equal(m.overall.cause, 'calibrating');
   assert.doesNotMatch(m.overall.headline, /patterns/);
-  for (const s of ['river', 'calibrating']) assert.ok(s);
 });
 
 test("the ropes' connection held by another program (10048) says so and calls Gavin; never the cable advice (R5 #20)", () => {

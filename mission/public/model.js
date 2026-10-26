@@ -426,7 +426,7 @@ export function derive(status, nowMs) {
       `The sender is ${rs.retrying ? 'retrying' : 'stopped'}: ${why}.${both ? ' Expected before the lights are connected; it picks up by itself once they are.' : ''}`,
       { action: both ? "In the ceiling: plug the lighting switch into bitcube's LIGHTS port; the sender picks up by itself." : senderTaken ? TAKEN_ACTION : "Check the lighting switch and the cable into bitcube's LIGHTS port.", raw: senderErr });
   } else if (senderOff) it('ropes', 'warning', 'Sender switched off', 'The sender is not active, so the ropes get nothing.', { action: 'Press Ropes → On to turn it back on.' });
-  else if (calRopes && boxesDown.length < 2) it('ropes', 'warning', cap(calWords), `The gallery camera is ${calStageWords}; the ropes come back to the river by themselves when it ends.`,
+  else if (calRopes && boxesDown.length < 2) it('ropes', 'warning', cap(calWords), `The calibration is ${calStageWords}; the ropes come back to the river by themselves when it ends.`,
     { action: 'If the room is needed now, stop it on the Lights page: the ropes come back at once.' });
   else if (ropesDark) it('ropes', 'warning', 'Dark on purpose: sending black', 'The sender is open and sending black; both boxes stay dark instead of playing their own colour cycle. Not a fault.',
     { action: 'Press Ropes → On to show the river again; they follow within a few seconds.', raw: watts ? wattsWords : null });
@@ -452,7 +452,7 @@ export function derive(status, nowMs) {
   else if (tdRestarting || tdOffBooting) it('hub75 panels', 'warning', `Panel sender present; dark while TouchDesigner ${tdRestarting ? 'restarts' : 'starts'}`, 'The picture comes back with TouchDesigner.');
   else if (!tdOk) it('hub75 panels', 'warning', `Panel sender present, but the picture is ${frozen ? 'frozen' : 'gone'}`, frozen ? 'TouchDesigner is frozen, so the panels keep their last picture.' : 'TouchDesigner is not running, so nothing is drawn.');
   else if (!hub) it('hub75 panels', 'warning', 'Panel sender present; this file has no panel output', 'TouchDesigner reports no panels in this show file.');
-  else if (calPanels) it('hub75 panels', 'warning', cap(calWords), `The gallery camera is ${calStageWords}; the panels come back to the river by themselves when it ends.`,
+  else if (calPanels) it('hub75 panels', 'warning', cap(calWords), `The calibration is ${calStageWords}; the panels come back to the river by themselves when it ends.`,
     { action: 'If the room is needed now, stop it on the Lights page: the lights come back at once.' });
   else if (hub.output === false) it('hub75 panels', 'warning', 'Panel sender present, but the panel output is off', 'The panels are switched off in the show file.');
   else if (brightness === 0) it('hub75 panels', 'warning', "At 0 %, so they're dark", 'Someone turned the panels down to nothing.', { action: 'Raise the panels brightness below.' });
@@ -581,8 +581,8 @@ export function derive(status, nowMs) {
       if (calibrating && calDry) add('calibrating', 'warning', 61, "Calibration dry run: the lights stay as they are",
         `It walks the calibration's steps without touching the lights (${calStageWords} now) and ends by itself in about a minute.`,
         'Nothing to do; it ends by itself. To end it now, stop it on the Lights page.', ['ropes']);
-      else if (calibrating) add('calibrating', 'warning', 61, `Calibrating the lights: the ropes are in patterns for about ${dur(calLeftS)} more`,
-        `The gallery camera is ${calStageWords}; the ropes${calPanels ? ' and the panels' : ''} come back to the river by themselves when it ends.`,
+      else if (calibrating) add('calibrating', 'warning', 61, `Calibrating the lights: the ropes${calPanels ? ' and the panels are' : ' are'} in patterns for about ${dur(calLeftS)} more`,
+        `The calibration is ${calStageWords}; the ropes${calPanels ? ' and the panels' : ''} come back to the river by themselves when it ends.`,
         "Keep people out of the camera's view. If the room is needed now, stop it on the Lights page: the ropes come back at once.", ['ropes', calPanels ? 'hub75 panels' : null]);
       else if (ropesDark) add('ropes-dark', 'warning', 42, 'The ropes are dark on purpose; everything else is up',
         'Someone pressed Ropes → Dark: the sender keeps sending black, so the boxes stay dark instead of playing their own colour cycle. The panels still show the river.',
