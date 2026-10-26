@@ -250,10 +250,15 @@ async function send() {
   const t = text.value.trim();
   if (!t || sending) return;
   sending = true;
+  // Send is disabled while the message goes: focus on it (a keyboard's Tab, Enter) moves to the box first, so it is never dropped
+  // to <body>, during the send or after a failure; the box is where the message stays when it fails (R9 #9)
+  const keep = document.activeElement === sendBtn;
+  if (keep) text.focus({ preventScroll: true });
   sendShow('pending', 'Sending…');
   try {
     const r = await api('/api/chat/send', { text: t });
-    text.value = ''; autogrow();
+    if (text.value.trim() === t) text.value = '';   // what was typed into the box meanwhile is kept
+    autogrow();
     // the stream can bring the request before its POST answers: then it has already shown up, and nothing is waited for (R6 #11)
     if (r?.id != null && S.reqs.has(r.id)) { S.pendingSend = null; sendShow('before'); }
     else {

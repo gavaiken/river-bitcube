@@ -58,3 +58,14 @@ test('R9 #3: a sheet\'s actions stay in reach under a long list (a sticky row), 
     assert.match(src, /actions: \[\{ label: 'Back to the menu', onClick: \(\) => openMenu\(shell\) \}, \{ label: 'Close' \}\], row: true/, fn);
   }
 });
+
+// ---- #9: the chat's Send keeps keyboard focus --------------------------------------------------------------------------------
+
+test('R9 #9: Send pressed by keyboard hands focus to the box before it is disabled, so focus is never on <body> during the send or after a failure', () => {
+  const chat = page('chat.js');
+  const send = /async function send\(\) \{[\s\S]*?\n\}/.exec(chat)[0];
+  assert.match(send, /const keep = document\.activeElement === sendBtn;\s*if \(keep\) text\.focus\(\{ preventScroll: true \}\);\s*sendShow\('pending', 'Sending…'\);/,
+    'focus moves before sendShow disables Send');
+  assert.match(send, /if \(text\.value\.trim\(\) === t\) text\.value = '';/, 'what was typed into the box during the send is kept');
+  assert.ok(send.indexOf("const keep = document.activeElement === sendBtn;") < send.indexOf("sendShow('pending'"));
+});
