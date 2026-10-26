@@ -93,6 +93,9 @@ test('stepWords: the old shape (a raw line) and the new one (plain words with th
   assert.deepEqual(n, { text: 'looked at bitcube', title: 'ran: Check bitcube is online', act: false });
   // its own act flag wins; without one, only a change to the installation is highlighted
   assert.equal(stepWords({ text: 'checked the ropes', raw: 'x', act: true }).act, true);
+  // lib/steps.mjs names the flag `acting`: it wins the same way, in both directions
+  assert.equal(stepWords({ text: 'checked the ropes', raw: 'x', acting: true }).act, true);
+  assert.equal(stepWords({ text: 'turned the ropes dark', raw: 'x', acting: false }).act, false);
   assert.equal(stepWords({ text: 'turned the ropes dark', raw: 'x' }).act, true);
   assert.equal(stepWords({ text: 'looked at the ropes', raw: 'x' }).act, false);
   // the server's words still pass the same guard (a slip never shows a file name)

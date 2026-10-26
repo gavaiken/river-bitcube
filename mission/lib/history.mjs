@@ -105,6 +105,9 @@ export class History {
       // was not known in the previous observation changed at some moment of the gap: its since is "at least".
       for (const it of m.items) {
         if (it.level === 'unknown' || it.muted) continue;
+        // the ropes and panels in calibration patterns are the calibration's own line below, not news of their own: the
+        // piece keeps its last level, so the run ending with everything back is no event either
+        if (it.cause === 'calibrating') continue;
         const p = this.state.items[it.id], seen = this.knownAt[it.id];
         const gap = !!p && (seen == null || (this.prevObs != null && seen < this.prevObs));
         if (!it.stale) this.knownAt[it.id] = t;          // a last answer from a quiet source is not a sighting
@@ -124,7 +127,7 @@ export class History {
       const show = { file: m.show.file?.name, mode: m.show.mode?.id, season: m.show.season, ropes: m.show.ropes?.state === 'unknown' ? null : m.show.ropes?.state };
       for (const field of SHOW_FIELDS) {
         const to = str(show[field], 80), p = this.state.show[field];
-        if (to == null || (p && p.value === to)) continue;
+        if (to == null || to === 'calibrating' || (p && p.value === to)) continue;
         rec({ kind: 'show', field, from: p?.value ?? null, to });
       }
       // The calibration job (lib/lights.mjs: the full check carries its progress file while one ran in the last 24 h).

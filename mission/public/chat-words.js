@@ -200,16 +200,18 @@ export function plainStep(raw) {
 
 /** An activity event, old or new shape → { text, title, act }. Old: `text` is the raw line (it becomes the tooltip, and the
  *  words are worked out here). New (lib/agent.mjs sending the team's words): `text` is already plain and `raw` carries the raw
- *  line for the tooltip; an `act` boolean, when sent, says whether it changed the installation. Either way the words pass the
+ *  line for the tooltip; an `acting` boolean (or the older `act`), when sent, says whether it changed the installation. Either way the words pass the
  *  same guard, so a slip never puts a file name or a working word on the page. */
 export function stepWords(e) {
   const text = typeof e?.text === 'string' ? e.text.trim() : '';
+  // lib/steps.mjs sends `acting`; `act` is the older name
+  const flag = typeof e?.acting === 'boolean' ? e.acting : typeof e?.act === 'boolean' ? e.act : null;
   if (typeof e?.raw === 'string') {
     const t = !text ? plainStep(e.raw).text : bad(text) ? plainWords(text, plainStep(e.raw).text) : text.replace(/[.\s]+$/, '');
-    return { text: t, title: e.raw, act: typeof e.act === 'boolean' ? e.act : actOf(t) };
+    return { text: t, title: e.raw, act: flag ?? actOf(t) };
   }
   const p = plainStep(text);
-  return { text: p.text, title: text, act: typeof e?.act === 'boolean' ? e.act : p.act };
+  return { text: p.text, title: text, act: flag ?? p.act };
 }
 
 /** The "N steps" toggle: its visible words, and its accessible name starting with them (label in name: a Voice Control
