@@ -126,6 +126,8 @@ export const fmt = {
 /** api(path) GETs, api(path, body) POSTs JSON; a non-2xx, a 401 (→ /login) or `ok: false` throws an Error in words. */
 export async function api(path, body, opts) {
   const j = await rawApi(path, body, opts);
+  // mission control answered, but bitcube didn't in time (lib/lights.mjs noAnswer): it may or may not have happened
+  if (j && j.ok === false && j.maybe === true) throw Object.assign(new Error(j.error || "bitcube didn't answer in time"), { status: 200, maybe: true, posted: true, serverMaybe: true });
   if (j && j.ok === false) throw Object.assign(new Error(j.error || "bitcube didn't answer"), { status: 200 });
   // ropes and panels act through TouchDesigner: its own failure inside an otherwise good answer is a failure too
   if (/\/api\/control\/(ropes|hub75)$/.test(path) && j?.td && j.td.ok === false) throw Object.assign(new Error(j.td.error || "TouchDesigner didn't answer"), { status: 200 });
@@ -612,6 +614,7 @@ export function control(target, opts = {}) {
     go(next);
     try {
       const r = await o.run?.();
+      if (r && r.ok === false && r.maybe === true) throw Object.assign(new Error(r.error || "bitcube didn't answer in time"), { status: 200, maybe: true, posted: true, serverMaybe: true });
       if (r && r.ok === false) throw Object.assign(new Error(r.error || "bitcube didn't answer"), { status: 200 });
       result = r;
     } catch (e) {

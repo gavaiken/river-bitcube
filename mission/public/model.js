@@ -61,7 +61,7 @@ export const CAL_STAGE_WORDS = { 'ropes-capture': 'photographing the ropes', 'ro
 const TD_TOUCHING = ['ropes', 'hub75', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
 export const APPLY_BLOCKS = {
   switch: TD_TOUCHING, rebuild: TD_TOUCHING, bootfile: ['switch', 'rebuild', 'bootfile', 'calibrate'], lightsroute: ['ropes', 'hub75', 'lightsroute', 'calibrate'],
-  ropes: ['ropes'], hub75: ['hub75'], mode: ['mode'], target: ['target'], rules: ['rules'], 'rules-reset': ['rules-reset'],
+  ropes: ['ropes'], hub75: ['hub75'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
   calibrate: ['ropes', 'hub75', 'switch', 'lightsroute', 'rebuild', 'calibrate'],   // a calibration's start: what a running one blocks, and a second start
 };
 /** The team's words for a change in flight when the server's entry has no label of its own. */
@@ -276,7 +276,7 @@ export function derive(status, nowMs) {
     const label = typeof a.label === 'string' && a.label.trim() ? a.label.trim() : APPLY_LABEL[a.action] ?? 'a change';
     const blocks = Array.isArray(a.blocks) ? a.blocks.filter((b) => typeof b === 'string') : APPLY_BLOCKS[a.action] ?? [a.action];
     return { id: a.id ?? null, action: a.action, label, file: typeof a.file === 'string' ? a.file : null, started_at: started, expect_s, elapsed_s: Math.round(elapsed), blocks,
-             phase: a.phase === 'confirming' ? 'confirming' : 'applying',
+             phase: a.phase === 'confirming' ? 'confirming' : 'applying', source: typeof a.source === 'string' ? a.source : null,
              words: `${cap(label)} is being applied${started != null ? ` (started ${clock(started)})` : ''}`, old: started != null && elapsed > confirmLimitS(expect_s) };
   }).filter((a) => !a.old).map(({ old: _o, ...a }) => a);
   // A switch or a rebuild (it ends in a switch to the river's year) restarts TouchDesigner: until it answers on the file, the full
@@ -475,8 +475,8 @@ export function derive(status, nowMs) {
       `The sender is ${rs.retrying ? 'retrying' : 'stopped'}: ${why}.${both ? ' Expected before the lights are connected; it picks up by itself once they are.' : ''}`,
       { action: both ? "In the ceiling: plug the lighting switch into bitcube's LIGHTS port; the sender picks up by itself." : senderTaken ? TAKEN_ACTION : "Check the lighting switch and the cable into bitcube's LIGHTS port.", raw: senderErr });
   } else if (senderOff) it('ropes', 'warning', 'Sender switched off', 'The sender is not active, so the ropes get nothing.', { action: 'Press Ropes → On to turn it back on.' });
-  else if (calRopes && boxesDown.length < 2) it('ropes', 'warning', cap(calWords), `The calibration is ${calStageWords}; the ropes come back to the river by themselves when it ends.`,
-    { action: 'If the room is needed now, stop it on the Lights page: the ropes come back at once.' });
+  else if (calRopes && boxesDown.length < 2) it('ropes', 'warning', cap(calWords), `The calibration is ${calStageWords}; the ropes go back to what they showed before, by themselves, when it ends.`,
+    { action: 'If the room is needed now, stop it on the Lights page: the ropes go back at once.' });
   else if (ropesDark) it('ropes', 'warning', 'Dark on purpose: sending black', 'The sender is open and sending black; both boxes stay dark instead of playing their own colour cycle. Not a fault.',
     { action: 'Press Ropes → On to show the river again; they follow within a few seconds.', raw: watts ? wattsWords : null });
   else if (boxesDown.length === 2) it('ropes', 'down', 'Both rope boxes are silent: the ropes are dark', 'The sender is open but neither box answers over the lighting network.', { action: 'Check power to the rope boxes and the lighting switch.' });
@@ -501,7 +501,7 @@ export function derive(status, nowMs) {
   else if (tdRestarting || tdOffBooting) it('hub75 panels', 'warning', `Panel sender present; dark while TouchDesigner ${tdRestarting ? 'restarts' : 'starts'}`, 'The picture comes back with TouchDesigner.');
   else if (!tdOk) it('hub75 panels', 'warning', `Panel sender present, but the picture is ${frozen ? 'frozen' : 'gone'}`, frozen ? 'TouchDesigner is frozen, so the panels keep their last picture.' : 'TouchDesigner is not running, so nothing is drawn.');
   else if (!hub) it('hub75 panels', 'warning', 'Panel sender present; this file has no panel output', 'TouchDesigner reports no panels in this show file.');
-  else if (calPanels) it('hub75 panels', 'warning', cap(calWords), `The calibration is ${calStageWords}; the panels come back to the river by themselves when it ends.`,
+  else if (calPanels) it('hub75 panels', 'warning', cap(calWords), `The calibration is ${calStageWords}; the panels go back to what they showed before, by themselves, when it ends.`,
     { action: 'If the room is needed now, stop it on the Lights page: the lights come back at once.' });
   else if (hub.output === false) it('hub75 panels', 'warning', 'Panel sender present, but the panel output is off', 'The panels are switched off in the show file.');
   else if (brightness === 0) it('hub75 panels', 'warning', "At 0 %, so they're dark", 'Someone turned the panels down to nothing.', { action: 'Raise the panels brightness below.' });
@@ -631,8 +631,8 @@ export function derive(status, nowMs) {
         `It walks the calibration's steps without touching the lights (${calStageWords} now) and ends by itself in about a minute.`,
         'Nothing to do; it ends by itself. To end it now, stop it on the Lights page.', ['ropes']);
       else if (calibrating) add('calibrating', 'warning', 61, `Calibrating the lights: the ropes${calPanels ? ' and the panels are' : ' are'} in patterns${calNearly ? ', nearly done' : ` for ${calLeftWords}`}`,
-        `The calibration is ${calStageWords}; the ropes${calPanels ? ' and the panels' : ''} come back to the river by themselves when it ends.`,
-        "Keep people out of the camera's view. If the room is needed now, stop it on the Lights page: the ropes come back at once.", ['ropes', calPanels ? 'hub75 panels' : null]);
+        `The calibration is ${calStageWords}; the ropes${calPanels ? ' and the panels' : ''} go back to what they showed before, by themselves, when it ends.`,
+        "Keep people out of the camera's view. If the room is needed now, stop it on the Lights page: the ropes go back at once.", ['ropes', calPanels ? 'hub75 panels' : null]);
       else if (ropesDark) add('ropes-dark', 'warning', 42, 'The ropes are dark on purpose; everything else is up',
         'Someone pressed Ropes → Dark: the sender keeps sending black, so the boxes stay dark instead of playing their own colour cycle. The panels still show the river.',
         'If the ropes should be showing the river, press Ropes → On; they follow within a few seconds. Nothing is broken.', ['ropes']);
@@ -907,7 +907,7 @@ export const CONFIRMING_SAID = 'Sent; waiting for bitcube to show it';
  *  about 1 min", then, once its request answered (phase 'confirming'), "Waiting for bitcube to show the switch to the live river · …". */
 export function entryWords(a, elapsedS) {
   const head = a?.phase === 'confirming' ? `Waiting for bitcube to show ${a?.label ?? 'a change'}` : `Applying: ${a?.label ?? 'a change'}`;
-  return `${head} · ${elapsedClock(elapsedS)} · ${usualWords(a?.expect_s)}`;
+  return `${head}${a?.source === 'studio chat' ? ' · from the studio chat' : ''} · ${elapsedClock(elapsedS)} · ${usualWords(a?.expect_s)}`;
 }
 /** A change no reading showed in time, naming what was sent: "The switch to the live river was sent at 21:13, but bitcube doesn't
  *  show it yet: look at the Now line, or call Gavin." (what: the change in team words, or null for "Sent at 21:13, …"). */

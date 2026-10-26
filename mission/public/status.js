@@ -175,7 +175,7 @@ function refreshAges(root = document) {
   });
   // another phone's change in flight (the band): "Applying: the switch to the live river · 0:23 · usually about 1 min"
   root.querySelectorAll('[data-el]').forEach((s) => {
-    const t = applyingLine({ label: s.dataset.label, expect_s: s.dataset.exp === '' ? null : Number(s.dataset.exp), phase: s.dataset.phase }, Number(s.dataset.el) + el);
+    const t = applyingLine({ label: s.dataset.label, expect_s: s.dataset.exp === '' ? null : Number(s.dataset.exp), phase: s.dataset.phase, source: s.dataset.source || null }, Number(s.dataset.el) + el);
     if (s.textContent !== t) s.textContent = t;
   });
   // a control applying or confirming: its line ticks (m:ss) without re-rendering the control under a thumb
@@ -313,7 +313,7 @@ function applyingHTML(m) {
   // this phone's own change, applying or confirming, is said on its control only: never two states for one change (R6 #4)
   const others = (m.show.applying ?? []).filter((a) => !busy(a.action));
   if (!others.length || lostContact(m)) return '';
-  return `<div class="applying-now">${others.map((a) => `<div class="applying-line"><span class="spin" aria-hidden="true"></span><span data-el="${a.started_at != null ? Math.max(0, Math.round((p.last.now - a.started_at) / 1000)) : a.elapsed_s}" data-label="${esc(a.label)}" data-exp="${a.expect_s ?? ''}" data-phase="${esc(a.phase ?? 'applying')}"></span></div>`).join('')}</div>`;
+  return `<div class="applying-now">${others.map((a) => `<div class="applying-line"><span class="spin" aria-hidden="true"></span><span data-el="${a.started_at != null ? Math.max(0, Math.round((p.last.now - a.started_at) / 1000)) : a.elapsed_s}" data-label="${esc(a.label)}" data-exp="${a.expect_s ?? ''}" data-phase="${esc(a.phase ?? 'applying')}" data-source="${esc(a.source ?? '')}"></span></div>`).join('')}</div>`;
 }
 function staleWords(m) {
   const s = m.sources, out = [];
@@ -364,9 +364,12 @@ function checkLine(m) {
 function lastDone() {
   const a = p.last?.last_action;
   if (!a || typeof a.t !== 'number') return '';
-  const what = ACTION_WORDS[a.action]?.(a.body) ?? a.words ?? a.action;
+  const restart = a.action === 'switch' && /^the restart on /i.test(String(a.label ?? ''));
+  const what = restart ? `Restart on ${FILES[a.body?.file]?.label ?? 'the show file'}` : ACTION_WORDS[a.action]?.(a.body) ?? a.words ?? a.action;
   const when = fmt.clock(a.t);
-  return `<div class="last-done">${a.ok === false ? 'Last tried' : 'Last done'}: <b>${esc(what)}</b> · ${esc(when)} · from ${esc(a.source ?? 'mission control')}${a.ok === false && a.note ? ` · failed: ${esc(plainError(a.note))}` : ''}</div>`;
+  const head = a.maybe === true ? 'Last sent' : a.ok === false ? 'Last tried' : 'Last done';
+  const tail = a.maybe === true ? ' · no answer in time: it may or may not have happened' : a.ok === false && a.note ? ` · failed: ${esc(plainError(a.note))}` : '';
+  return `<div class="last-done">${head}: <b>${esc(what)}</b> · ${esc(when)} · from ${esc(a.source ?? 'mission control')}${tail}</div>`;
 }
 
 // ---- the piece now: season, tiles, the room ----------------------------------------------------------------------------

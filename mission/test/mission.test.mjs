@@ -515,3 +515,12 @@ test('round 6 #40: only the checked fields of a request reach status.applying an
   assert.equal(m.snapshot().applying[0].file, undefined);
   g2.release({ ok: true, td: { ok: true } }); await rp;
 });
+
+test('integration: a calibration copy from Lights is served with how long ago it was read (one time left on every page)', async () => {
+  let t = T0 * 1000;
+  const m = new Mission({ lights: fakeLights(), now: () => t, probe: async () => ({ ok: true, td: { ok: true, file: YEAR } }) });
+  await m.pollProbe();
+  await m.calibrate('start', {});
+  t += 7_000;
+  assert.equal(m.snapshot().probe.value.calibration.read_age_s, 7);
+});

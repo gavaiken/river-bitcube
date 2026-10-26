@@ -55,7 +55,10 @@ test('what blocks what: a ropes change blocks the ropes, and what would block it
   for (const k of ['ropes', 'hub75', 'lightsroute', 'calibrate', 'switch', 'rebuild']) assert.equal(m.controls[k].why, 'wait: a lighting port change is being applied', k);
   assert.equal(m.controls.mode.possible, true, 'the year is not touched by the lighting port');
   for (const a of ['switch', 'rebuild']) assert.deepEqual([...APPLY_BLOCKS[a]].sort(), [...EVERY].sort(), a);
-  for (const a of ['ropes', 'hub75', 'mode', 'target', 'rules', 'rules-reset']) assert.deepEqual(APPLY_BLOCKS[a], [a], a);
+  for (const a of ['ropes', 'hub75', 'mode', 'target']) assert.deepEqual(APPLY_BLOCKS[a], [a], a);
+  // the rules and their reset change the same thing: each waits for the other
+  assert.deepEqual(APPLY_BLOCKS.rules, ['rules', 'rules-reset']);
+  assert.deepEqual(APPLY_BLOCKS['rules-reset'], ['rules-reset', 'rules']);
 });
 
 test('an entry older than 3 × expect_s and at least 2 min is ignored (a request that never ended)', () => {

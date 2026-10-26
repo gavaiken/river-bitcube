@@ -76,7 +76,8 @@ export function plainError(msg) {
 /** A control whose POST got no usable answer (none in time, one that couldn't be read, a proxy's error page): it may or
  *  may not have happened, so it never says "unchanged". `where` names where to look ("the Now line shows what bitcube reports"). */
 export function noAnswerText(e, where) {
-  const first = e?.unreadable ? "Mission control's answer couldn't be read" : e?.notOurs ? "Mission control didn't answer" : `No answer in ${dur(e?.waitedS)}`;
+  const first = e?.unreadable ? "Mission control's answer couldn't be read" : e?.notOurs ? "Mission control didn't answer" : e?.serverMaybe ? "bitcube didn't answer in time"
+    : `No answer in ${dur(e?.waitedS)}`;
   return `${first}: it may or may not have happened; ${where} (${clock(Date.now())}).`;
 }
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

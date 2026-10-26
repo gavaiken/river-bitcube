@@ -156,7 +156,10 @@ export class Mission {
     for (const [k, v] of Object.entries(this.data)) out[k] = { ...v, age_s: Math.round((this.now() - v.at) / 1000) };
     // the calibration the pages see is the newest copy there is (Lights' own answer can be up to a minute ahead of the probe)
     const cal = this.calibration();
-    if (obj(out.probe?.value) && cal !== (out.probe.value.calibration ?? null)) out.probe = { ...out.probe, value: { ...out.probe.value, calibration: cal } };
+    // a copy from Lights' own answer carries how long ago it was read, so every page counts the run's time left from that,
+    // not from the full check's age (up to a minute older): the Lights card, the tiles and the band agree (R6 #33)
+    const served = cal && cal === this.calNote?.value ? { ...cal, read_age_s: Math.max(0, Math.round((this.now() - this.calNote.at) / 1000)) } : cal;
+    if (obj(out.probe?.value) && served !== (out.probe.value.calibration ?? null)) out.probe = { ...out.probe, value: { ...out.probe.value, calibration: served } };
     out.applying = this.applying.list();
     return out;
   }
