@@ -30,12 +30,15 @@
 //                                              seen down after it: the old TouchDesigner answering on the same file proves nothing
 //   release(id, verdict?)                      ends one entry now: 'confirmed' (a calibration start whose run showed up),
 //                                              'expired' (one whose run never did), or neither (just gone)
-//   ended(clockMs = now) -> { confirmed, expired }   status.confirmed / status.expired: [{ id, request_id?, action, label,
-//                                              source, file?, started_at, at, maybe? }], the entries that ended confirmed or ran
-//                                              out unconfirmed in the last ENDED_KEEP_MS (the newest ENDED_MAX), so every phone (and
-//                                              the one that sent it) sees the server's verdict, and another phone can say how a
-//                                              change it watched ended (R8 #9)
+//   ended(clockMs = now) -> { confirmed, expired, failed }   status.confirmed / status.expired / status.failed: [{ id,
+//                                              request_id?, action, label, source, file?, started_at, at, maybe?, error? }], the
+//                                              entries that ended confirmed, ran out unconfirmed, or failed (refused or failed by
+//                                              bitcube, or a quick change bitcube didn't answer: maybe) in the last ENDED_KEEP_MS (the
+//                                              newest ENDED_MAX), so every phone (and the one that sent it, also when its answer was
+//                                              lost: R10 #31) sees the server's verdict, and another phone can say how a change it
+//                                              watched ended (R8 #9)
 // Only the actions in BLOCKS are recorded or checked (a calibration only for its start: Stop must always get through).
+import { scrubCreds } from './scrub.mjs';
 import { TZ, EXPECT_S, APPLY_BLOCKS as BLOCKS, confirmLimitS, changeLabel, FILES, dryStart, waitWords, MAYBE_HOLDS, AWAITED } from '../public/model.js';
 
 /** What an action in flight blocks (mission-ui.md "What blocks what"): one table for the server and the pages, model.js
@@ -94,12 +97,13 @@ export class Applying {
 
   /** End an entry with the server's verdict: 'confirmed' (bitcube's reading showed it, or its own answer was the change) or
    *  'expired' (its confirm limit passed unconfirmed); kept for ENDED_KEEP_MS in ended(). */
-  #settle(id, e, verdict) {
+  #settle(id, e, verdict, { error = null, maybe = false } = {}) {
     this.entries.delete(id);
     const hook = this.hooks.get(id);
     this.hooks.delete(id);
     this.done.push({ id, ...(e.request_id ? { request_id: e.request_id } : {}), action: e.action, label: e.label, source: e.source, ...(e.file ? { file: e.file } : {}),
-                     verdict, t0: e.t0, at: this.now(), ...(e.maybe ? { maybe: true } : {}), ...(e.phase === 'confirming' ? { awaited: true } : {}) });
+                     verdict, t0: e.t0, at: this.now(), ...(e.maybe || maybe ? { maybe: true } : {}), ...(e.phase === 'confirming' ? { awaited: true } : {}),
+                     ...(error ? { error: String(scrubCreds(String(error))).slice(0, 300) } : {}) });
     // the newest ENDED_MAX, the oldest change confirmed at its own answer first (R8 #39)
     while (this.done.length > ENDED_MAX) { const i = this.done.findIndex((d) => !d.awaited); this.done.splice(i >= 0 ? i : 0, 1); }
     if (verdict === 'confirmed' && hook) { try { hook(this.#served(e)); } catch (x) { console.warn(`applying: ${x.message}`); } }
@@ -131,10 +135,10 @@ export class Applying {
   ended(clockMs = this.now()) {
     this.#prune();
     const off = clockMs - this.now();
-    const out = { confirmed: [], expired: [] };
+    const out = { confirmed: [], expired: [], failed: [] };
     for (const d of this.done) {
       out[d.verdict].push({ id: d.id, ...(d.request_id ? { request_id: d.request_id } : {}), action: d.action, label: d.label, source: d.source, ...(d.file ? { file: d.file } : {}),
-                            started_at: d.t0 + off, at: d.at + off, ...(d.maybe ? { maybe: true } : {}) });
+                            started_at: d.t0 + off, at: d.at + off, ...(d.maybe ? { maybe: true } : {}), ...(d.verdict === 'failed' && d.error ? { error: d.error } : {}) });
     }
     return out;
   }
@@ -187,7 +191,9 @@ export class Applying {
     this.entries.set(id, entry);
     if (typeof onConfirmed === 'function') this.hooks.set(id, onConfirmed);
     let r;
-    try { r = await fn(); } catch (e) { this.entries.delete(id); this.hooks.delete(id); throw e; }
+    // a failure is kept as the server's verdict too (status.failed), so a page whose answer was lost learns it failed, by its request
+    // id, never "sent, waiting" until its limit (R10 #31)
+    try { r = await fn(); } catch (e) { if (this.entries.has(id)) this.#settle(id, entry, 'failed', { error: e?.message ?? String(e) }); throw e; }
     const isObj = !!r && typeof r === 'object' && !Array.isArray(r);
     const maybe = isObj && r.maybe === true;
     let pending = maybe && MAYBE_HOLDS.includes(action);
@@ -199,7 +205,7 @@ export class Applying {
       // its own good answer is the change (ropes, panels, the year's controls, a boot file the answer shows, a calibration whose
       // run is already in the answer); a refusal or a maybe on a quick change is not something the server saw through
       if (isObj && r.ok !== false && !maybe) this.#settle(id, entry, 'confirmed');
-      else { this.entries.delete(id); this.hooks.delete(id); }
+      else this.#settle(id, entry, 'failed', { error: isObj ? r.error ?? null : 'no answer', maybe });
     }
     return isObj ? { ...r, applying_id: id } : r;
   }

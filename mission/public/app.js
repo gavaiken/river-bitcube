@@ -6,7 +6,8 @@ import { dur, clock } from './model.js';
  *  (about 60 s; a rebuild builds, saves and restarts, up to 400 s), so a hung POST never leaves a control pending for good. */
 export function apiTimeout(path, body) {
   if (body === undefined) return 30_000;
-  return /\/api\/control\/rebuild$/.test(path) ? 420_000 : 75_000;
+  // Check now: its own time, a little past the full check's (45 s), never the 75 s of a change (R10 #3)
+  return /\/api\/control\/rebuild$/.test(path) ? 420_000 : /\/api\/control\/check$/.test(path) ? 50_000 : 75_000;
 }
 export async function api(path, body, { timeout = apiTimeout(path, body) } = {}) {
   const ctrl = new AbortController(), posted = body !== undefined;

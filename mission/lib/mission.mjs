@@ -185,6 +185,7 @@ export class Mission {
     const ended = this.applying.ended();
     out.confirmed = ended.confirmed;
     out.expired = ended.expired;
+    out.failed = ended.failed;      // refused or failed: a page whose answer was lost learns it by its request id (R10 #31)
     return out;
   }
 

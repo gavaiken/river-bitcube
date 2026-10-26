@@ -62,8 +62,8 @@ test('scenarios: listed alphabetically; the cookie picks one, all-good is the de
 test('snapshot: the fixture status plus the scenario name, read again on every call', () => {
   const dir = fixtureDir();
   const m = fm(dir);
-  assert.deepEqual(m.snapshot(), { ...STATUS, applying: [], confirmed: [], expired: [], fixture: 'all-good', now: 5_000_000 });          // no _scenario.now: served on the real clock
-  assert.deepEqual(m.snapshot('bitcube-offline'), { ...STATUS, applying: [], confirmed: [], expired: [], fixture: 'bitcube-offline', now: 5_000_000 });
+  assert.deepEqual(m.snapshot(), { ...STATUS, applying: [], confirmed: [], expired: [], failed: [], fixture: 'all-good', now: 5_000_000 });          // no _scenario.now: served on the real clock
+  assert.deepEqual(m.snapshot('bitcube-offline'), { ...STATUS, applying: [], confirmed: [], expired: [], failed: [], fixture: 'bitcube-offline', now: 5_000_000 });
   assert.equal(m.snapshot('nope').fixture, 'all-good');
   // edit the file: no restart needed
   writeFileSync(join(dir, 'all-good.json'), scenario('all-good', { status: { bitcube: { at: 4_990_000, value: { online: false } }, probe: { age_s: 70, error: 'x' }, modal: null } }));

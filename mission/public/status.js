@@ -13,7 +13,8 @@ import { rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows,
   ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash, lastDoneParts, lastDoneWhat, fromWords } from '/status-words.js';
 
 const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, changeLabel, bandParts,
-  newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS, endedOnce, ownMemory, byMinute } = M;
+  newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS, endedOnce, ownMemory, byMinute, confirmChanged, UNKNOWN_ANSWERS, NOT_RECEIVED, neverGotWords } = M;
+import { apiTimeout } from '/app.js';
 const $ = (sel, root = document) => root.querySelector(sel);
 const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
 // One name per thing (the copy rules); descriptors live on the card, never in the name.
@@ -617,7 +618,7 @@ function rowHTML(x, m) {
   const body = [
     x.detail ? `<p class="detail">${esc(nb(x.detail))}</p>` : '',
     x.action ? `<div class="todo"><div class="label">What to do</div><div class="action">${esc(nb(x.action))}</div></div>` : '',
-    x.id === 'ropes' ? ropesCtlHTML(m) : x.id === 'hub75 panels' ? hubCtlHTML(m) : x.id === 'touchdesigner' ? showfileCtlHTML(m)
+    x.id === 'ropes' ? ropesCtlHTML(m) : x.id === 'hub75 panels' ? hubCtlHTML(m) : x.id === 'touchdesigner' ? showfileCtlHTML(m, null, 'td', { noWait: !!x.waits })
       : x.id === 'seasons' && m.show.season ? '<div class="row-btns"><button type="button" class="btn" data-act="goto" data-target="steer">Steer the year</button></div>'
       : x.id === 'seasons' && ['live', 'other'].includes(m.show.file?.kind) ? showfileCtlHTML(m, 'year')
       : x.id === 'river camera' ? riverStillHTML(x) : x.id === 'modal agent' ? daveHTML(m) : '',
@@ -674,7 +675,10 @@ function installerHTML(m) {
   return `<details class="card installer" data-id="installer" id="installer-card"${op('installer')}><summary><span class="tool" aria-hidden="true">🛠</span><span>Installer</span><span class="note">changes cabling and boot settings · asks first</span><span class="chev" aria-hidden="true">›</span></summary><div class="body">
     <div class="ctl ${whyOf('lightsroute') && !busy('lightsroute') ? 'off' : ''}" id="ctl-lightsroute" data-ctl="lightsroute"${busy('lightsroute') ? ' aria-busy="true"' : ''}><div class="ctl-h">Lighting network port on bitcube</div>${whyLine('lightsroute')}
       <div class="seg" role="group" aria-label="Lighting network port"><button type="button" id="ctl-lightsroute-direct" data-act="lightsroute" data-route="direct" class="${route === 'direct' ? 'lit' : ''}" aria-pressed="${route === 'direct'}" ${lrOff ? 'disabled' : ''}>LIGHTS port (white)</button><button type="button" id="ctl-lightsroute-router" data-act="lightsroute" data-route="router" class="${route === 'router' ? 'lit' : ''}" aria-pressed="${route === 'router'}" ${lrOff ? 'disabled' : ''}>Router port (spare)</button></div>
-      <div class="effect">${seen.pre}: <b>${esc(s.ropes.route_words ?? 'not known')}</b>${seen.tail}${s.ropes.route_note ? `: ${esc(s.ropes.route_note)}` : ''}. The wrong port leaves all 20 ropes dark. Only change it after moving the cable; it asks first.</div>
+      <div class="effect">${s.ropes.route_note
+        // both ports or neither: one instruction, the Ropes row's too, and never "only after moving the cable" beside it (R10 #27)
+        ? `${seen.pre}: <b>${esc(s.ropes.route_note)}</b>${seen.tail}. The wrong port leaves all 20 ropes dark. It asks first.`
+        : `${seen.pre}: <b>${esc(s.ropes.route_words ?? 'not known')}</b>${seen.tail}. The wrong port leaves all 20 ropes dark. Only change it after moving the cable; it asks first.`}</div>
       ${statusLine('ctl-lightsroute', ['lightsroute'])}</div>
     <div class="ctl ${whyOf('bootfile') && !busy('bootfile') ? 'off' : ''}" id="ctl-bootfile" data-ctl="bootfile"${busy('bootfile') ? ' aria-busy="true"' : ''}><div class="ctl-h">Boot file: the show file that opens at boot</div>${whyLine('bootfile')}
       <div class="seg" role="group" aria-label="Boot file">${files.map((f) => `<button type="button" id="ctl-bootfile-${FILES[f]?.kind ?? 'other'}" data-act="bootfile" data-file="${esc(f)}" class="${boot === f ? 'lit' : ''}" aria-pressed="${boot === f}" ${bfOff ? 'disabled' : ''}>${esc(cap(fileLabel(f)))}</button>`).join('')}</div>
@@ -730,7 +734,7 @@ function hubCtlHTML(m) {
 }
 /** The show-file control: every file (the TouchDesigner row: where 'td'), or only the files of one kind (the Season card and
  *  the year's row: the river's year). A switch also sets the boot file (probe.ps1 writes boot-file.txt), and says so. */
-function showfileCtlHTML(m, onlyKind = null, where = onlyKind ? 'year' : 'td') {
+function showfileCtlHTML(m, onlyKind = null, where = onlyKind ? 'year' : 'td', { noWait = false } = {}) {
   const s = m.show, all = s.show_files.length ? s.show_files : Object.keys(FILES).slice(0, 2);
   // only the river's year and the live river: model.js leaves old show files out of show_files (execution plan D27)
   const files = onlyKind ? all.filter((f) => FILES[f]?.kind === onlyKind) : all;
@@ -739,7 +743,7 @@ function showfileCtlHTML(m, onlyKind = null, where = onlyKind ? 'year' : 'td') {
   const restartOn = s.restart ? Object.keys(FILES).find((f) => FILES[f].label === s.restart.on) ?? null : null;
   const running = s.file?.name ?? restartOn, o = off('switch'), host = `ctl-switch-${where}`, td = item(m, 'touchdesigner');
   const btns = files.map((f) => `<button type="button" id="${host}-${FILES[f]?.kind ?? 'other'}" class="btn ${f === running ? '' : 'primary'}" data-act="switch" data-file="${esc(f)}" ${o ? 'disabled' : ''}>${f === running ? `Restart on ${esc(fileLabel(f))}` : `Switch to ${esc(fileLabel(f))}`}</button>`).join('');
-  return `<div class="ctl ${whyOf('switch') && !busy('switch') ? 'off' : ''}" id="${host}" data-ctl="switch"${busy('switch') ? ' aria-busy="true"' : ''}><div class="ctl-h">Show file</div>${whyLine('switch', host)}
+  return `<div class="ctl ${whyOf('switch') && !busy('switch') ? 'off' : ''}" id="${host}" data-ctl="switch"${busy('switch') ? ' aria-busy="true"' : ''}><div class="ctl-h">Show file</div>${noWait ? '' : whyLine('switch', host)}
     <div class="readout">${readoutWords(s, td)}</div>
     <div class="row-btns">${btns}</div>
     <div class="effect">Switching restarts TouchDesigner on that file: the lights go dark for about a minute and unsaved changes in TouchDesigner are lost. That file then also opens at boot. It asks first.</div>
@@ -747,14 +751,15 @@ function showfileCtlHTML(m, onlyKind = null, where = onlyKind ? 'year' : 'td') {
 }
 
 /** The Show file readout: "Now showing the river's year · opens at boot: …"; "Restarting on …" while TouchDesigner restarts (R7 #18);
- *  "Maybe restarting on …" while a restart bitcube didn't answer in time holds the lock and TouchDesigner is seen down (R8 #16);
+ *  "Maybe restarting on …" while a restart bitcube didn't answer in time holds the lock and TouchDesigner is seen down (R8 #16, R10 #16);
  *  from a last answer "Last seen: showing … · 15 min ago", never "Now" (R8 #33). */
 function readoutWords(s, td) {
   const boot = s.boot_file ? ` · opens at boot: ${esc(bootWords(s.boot_file))}` : '';
   if (td?.stale && s.file) return `Last seen: showing <b>${esc(s.file.label)}</b>${boot} · ${ageSpan(td.age_s)}`;
   if (s.file) return `Now showing <b>${esc(s.file.label)}</b>${boot}`;
   if (s.restart) return `Restarting on <b>${esc(s.restart.on)}</b>${boot}`;
-  if (s.held) return `Maybe restarting on <b>${esc(s.held.on)}</b>: bitcube didn't answer in time${boot}`;
+  // the row's advice and the band say bitcube didn't answer it, and when the buttons unlock: the readout only what may be under way (R10 #16)
+  if (s.held) return `Maybe restarting on <b>${esc(s.held.on)}</b>${boot}`;
   return `What is showing <b>isn't known</b>${boot}`;
 }
 /** Where focus waits for a control: its host's status line (the host the press came from). */
@@ -786,16 +791,54 @@ function settleControls() {
     // its answer is still on the way: the server's own entry, found by the request id this page sent, ends it on the server's
     // verdict now, never at the POST's own limit (R9 #1): done, given up, confirming (the server answered it), held (a maybe)
     if (c.s.state === 'applying') {
-      if (!model || lostContact(model) || !c.requestId) continue;
+      if (!model || lostContact(model)) continue;
+      // Check now has no request id: it ran once a full check newer than the press is in (the server's clock), whatever its own answer
+      // is doing, so a stalled answer ends at the check's own time, never at the POST's limit (R10 #3)
+      if (name === 'check') {
+        const at = model.sources.probe?.at;
+        if (typeof at === 'number' && c.sentServer != null && at > c.sentServer && model.sources.probe?.ok) {
+          c.sendToken = null; shell.setChecking(false);
+          c.s = ctlStep(c.s, { type: 'model', confirmed: true, now }); finish(name); ended.push(name);
+        }
+        continue;
+      }
+      if (!c.requestId) continue;
       const own = ownVerdict(model, { state: 'applying', requestId: c.requestId, serverConfirms: !!c.o?.serverConfirms });
       if (own.entryId) { c.entryId = own.entryId; mine.id(own.entryId); }
-      if (!own.step) continue;
+      // each status answer since the press: does it know this press at all (R10 #2)? An answer lost on the network waits here, saying
+      // nothing, for the one state its entry is in (R10 #6, #22, #32)
+      if (p.receivedAt != null && p.receivedAt !== c.seenAt && p.receivedAt > c.pressedAt) {
+        c.seenAt = p.receivedAt;
+        if (own.entryId) { c.unknown = 0; c.received = true; } else c.unknown += 1;
+      }
+      if (!own.step) {
+        const gone = c.received && !own.entryId;                       // its entry left with no verdict (a server that keeps none)
+        const never = !c.received && c.unknown >= UNKNOWN_ANSWERS;       // mission control never got it
+        if (c.lostNet && (gone || never || Date.now() - c.s.sentAt > c.limitMs)) {
+          c.sendToken = null; c.refreshAt = performance.now(); c.judgedWall = p.receivedWall;
+          c.s = ctlStep(c.s, { type: 'error', maybe: !never, now });
+          c.text = never ? neverGotWords(sclock()) : noAnswerText(c.lostErr, c.o?.noAnswer ?? 'the Now line shows what bitcube reports', serverNow());
+          c.notReceived = false; c.lost = !never;
+          announce(c.text); ended.push(name);
+        } else if (!c.lostNet && never && !c.notReceived) { c.notReceived = true; announce(NOT_RECEIVED); }
+        else if (own.entryId && c.notReceived) c.notReceived = false;
+        continue;
+      }
       c.sendToken = null;             // its answer, when it comes, changes nothing now
+      c.notReceived = false;
       c.refreshAt = performance.now(); c.judgedWall = p.receivedWall;
       if (own.step === 'done') { c.s = ctlStep(c.s, { type: 'model', confirmed: true, now }); finish(name); ended.push(name); }
       else if (own.step === 'expired') { c.s = ctlStep(c.s, { type: 'expired', now }); unconfirm(name); ended.push(name); }
       else if (own.step === 'confirming') { c.s = ctlStep(c.s, { type: 'pending', now }); announce(CONFIRMING_SAID); }
       else if (own.step === 'held') { c.s = ctlStep(c.s, { type: 'error', maybe: true, now }); c.held = true; c.text = heldWords(c.o?.what, sclock(byMinute(own.unlockAt))); announce(c.text); ended.push(name); }
+      // the server saw it fail (refused, or failed by bitcube; a quick one bitcube didn't answer: maybe): said once (R10 #31)
+      else if (own.step === 'failed') {
+        const maybe = !!own.failed?.maybe;
+        c.s = ctlStep(c.s, { type: 'error', maybe, now }); c.lost = false;
+        c.text = maybe ? noAnswerText({ serverMaybe: true }, c.o?.noAnswer ?? 'the Now line shows what bitcube reports', serverNow())
+          : failText(c.o?.fail ?? 'It is unchanged', Object.assign(new Error(own.failed?.error || "bitcube couldn't do it"), { status: 200 }), sclock(), c.o?.kept);
+        announce(c.text); ended.push(name);
+      }
       continue;
     }
     // only a reading taken after the answer can confirm the change or take a done line away
@@ -818,6 +861,12 @@ function settleControls() {
       // its answer was lost, but its entry shows the server answered it: under way, never "may or may not" with grey buttons (R9 #29)
       else if (own.step === 'confirming') { c.s = ctlStep(c.s, { type: 'pending', now }); c.text = ''; c.lost = false; announce(CONFIRMING_SAID); }
       else if (own.step === 'held') { c.held = true; c.lost = false; c.text = heldWords(c.o?.what, sclock(byMinute(own.unlockAt))); announce(c.text); }
+      // one that may or may not have happened, which the server saw fail: it didn't happen (R10 #31)
+      else if (own.step === 'failed' && !own.failed?.maybe) {
+        c.s = { ...c.s, state: 'failed' }; c.lost = false;
+        c.text = failText(c.o?.fail ?? 'It is unchanged', Object.assign(new Error(own.failed?.error || "bitcube couldn't do it"), { status: 200 }), sclock(), c.o?.kept);
+        announce(c.text); ended.push(name);
+      }
     } else if (fresh && (c.s.state === 'confirming' || c.s.state === 'unconfirmed') && typeof c.o?.confirmed === 'function') {
       let yes = false;
       try { yes = !!c.o.confirmed(model); } catch (e) { console.warn('confirmed', e); }
@@ -830,7 +879,7 @@ function settleControls() {
       if (next.effect === 'drop') c.text = '';   // "Now on …" beside a Now line that says dark: the claim goes (R6 #30)
       c.s = next;
     } else if (c.s.state === 'confirm' && c.asking) {
-      const w = whyOf(name);
+      const w = whyOf(name) ?? askedElse(c);
       const next = ctlStep(c.s, { type: 'why', why: w, now });
       if (next.effect === 'withdraw') {
         const a = c.asking; c.asking = null;
@@ -842,6 +891,15 @@ function settleControls() {
     }
   }
   return { withdrawn, ended };
+}
+/** An open confirm judged again (R10 #28): what a press would ask now, by the control's own ask(), against what its sheet asks. When it
+ *  would ask something else (the show file changed meanwhile, so "Restart on the river's year" would now switch away from the live
+ *  river), the reason it is withdrawn and never sent; null when it asks the same, or when what runs isn't known (nothing to compare). */
+function askedElse(c) {
+  if (!c.askFn || !c.asked || !model?.show.file) return null;
+  let now = null;
+  try { now = c.askFn(); } catch { return null; }
+  return confirmChanged(c.asked, now) ? (c.askChanged ?? M.CHANGED_MEANWHILE) : null;
 }
 /** Every second: a change confirming too long turns unconfirmed (never "unchanged": it may yet show), but only once a reading
  *  taken after its limit has been judged: never by the clock alone, so a phone that slept through it (its clock jumps on waking)
@@ -864,6 +922,7 @@ function tickControls() {
  *  it yet: …" (R6 #16), said once. */
 function unconfirm(name) {
   const c = ctl[name];
+  c.saidExpired = true;          // said now: the same entry still listed as expired at the next answer is never said again (R10 #30)
   c.text = unconfirmedWords(c.o?.what, sclock(c.sentServer ?? serverNow()), c.o?.unconfirmed ?? 'look at the Now line, or call Gavin');
   announce(c.text);
 }
@@ -886,6 +945,8 @@ async function runControl(name, path, body, o) {
   let next = ctlStep(c.s, { type: 'press', why: whyOf(name), confirm: !!ask, now: Date.now() });
   if (next.effect === 'confirm') {
     c.s = next;
+    // what the sheet asks, and how to ask it again: judged against what it would ask now on every answer and on yes (R10 #28)
+    c.asked = ask; c.askFn = typeof o.ask === 'function' ? o.ask : null; c.askChanged = o.askChanged ?? null;
     const pr = confirm(ask);
     c.asking = pr;
     const yes = await pr;
@@ -893,7 +954,8 @@ async function runControl(name, path, body, o) {
     c.asking = null;
     // judged again now it is answered: a control that became impossible meanwhile sends nothing
     model = p.last ? derive(p.last, serverNow()) : null;
-    next = ctlStep(c.s, { type: yes ? 'yes' : 'no', why: whyOf(name), now: Date.now() });
+    next = ctlStep(c.s, { type: yes ? 'yes' : 'no', why: whyOf(name) ?? (yes ? askedElse(c) : null), now: Date.now() });
+    c.asked = null; c.askFn = null;
     if (next.notSent) { c.s = next; c.text = notSentText(next.notSent, sclock()); announce(c.text); render(); focusStatus(name); return; }
   }
   if (next.effect !== 'send') { c.s = next; render(); return; }
@@ -906,6 +968,7 @@ async function runControl(name, path, body, o) {
   mine.request(requestId);
   const token = {};                   // this press: an answer that comes after the server's verdict ended it changes nothing (R9 #1)
   Object.assign(c, { s: next, text: '', o: { holds: o.confirmed, ...o }, result: null, refreshAt: null, judgedWall: null, entryId: null, requestId, saidExpired: false, held: false, lost: false, sent, sendToken: token,
+    pressedAt: performance.now(), seenAt: null, unknown: 0, received: false, lostNet: false, lostErr: null, notReceived: false, limitMs: apiTimeout(path, body),
     sentServer: serverNow(), expectS: EXPECT_S[name] ?? null, usual: name === 'bootfile' || name === 'lightsroute' ? BOOT_USUAL : null, applyText: o.pending ?? M.applyingText(o.what) });
   for (const other of SHARE[name] ?? []) if (ctl[other] && !busy(other)) ctl[other] = { s: ctlInit(), text: '' };
   const a = document.activeElement, idle = !a || a === document.body, here = !!(a && c.host && document.getElementById(c.host)?.contains(a));
@@ -922,6 +985,14 @@ async function runControl(name, path, body, o) {
   try { r = await api(path, requestId ? { ...body, request_id: requestId } : body); }
   catch (e) {
     if (c.sendToken !== token) return;   // the server's verdict already ended it (R9 #1)
+    // its answer lost on the network: nothing said and focus left where it is; the next status answer finds its entry by the request
+    // id it sent and says the one state it is in (done, waiting for bitcube, held, failed), or that mission control never got it, or
+    // (no entry left, no verdict) that it may or may not have happened (R10 #6, #22, #31, #32)
+    if (e?.network && requestId) {
+      c.lostNet = true; c.lostErr = e;
+      p.refresh(); render();
+      return;
+    }
     c.entryId = typeof e?.applyingId === 'string' ? e.applyingId : null;   // a maybe answer still names its entry
     mine.id(c.entryId);
     const maybe = !!(e?.maybe || (e?.noAnswer && e?.posted));
@@ -931,7 +1002,12 @@ async function runControl(name, path, body, o) {
     // the buttons unlock, never a "Wait: …" about itself above it (R8 #18; model.js heldMaybe, the rule control() follows: CR8 #10)
     const held = heldMaybe(name, { maybe, serverMaybe: e?.serverMaybe, entryId: c.entryId });
     c.held = held;
-    c.text = held ? heldWords(o.what, sclock(byMinute(serverNow() + confirmLimitS(EXPECT_S[name]) * 1000)))
+    // no answer in its time, and the status answers since the press never knew its request id: mission control never got it, so
+    // nothing changed and its buttons unlock (R10 #2)
+    const never = !!(requestId && e?.noAnswer && !e?.serverMaybe && !c.received && c.unknown >= UNKNOWN_ANSWERS && model && !lostContact(model));
+    if (never) { c.s = { ...c.s, state: 'failed' }; c.lost = false; }
+    c.notReceived = false;
+    c.text = never ? neverGotWords(sclock()) : held ? heldWords(o.what, sclock(byMinute(serverNow() + confirmLimitS(EXPECT_S[name]) * 1000)))
       : maybe ? noAnswerText(e, o.noAnswer ?? 'the Now line shows what bitcube reports', serverNow()) : failText(o.fail, e, sclock(), o.kept);
     announce(c.text);
     if (name === 'check') shell.setChecking(false);
@@ -941,6 +1017,7 @@ async function runControl(name, path, body, o) {
   }
   if (name === 'check') shell.setChecking(false);
   if (c.sendToken !== token) return;     // the server's verdict already ended it (R9 #1)
+  c.notReceived = false;
   c.result = r;
   c.entryId = typeof r?.applying_id === 'string' ? r.applying_id : null;
   mine.id(c.entryId);
@@ -1096,6 +1173,7 @@ document.addEventListener('click', async (e) => {
     case 'switch': {
       const f = b.dataset.file, w = switchWords(f, m?.show.file?.name, m?.show.boot_file);   // the button's own words
       runControl('switch', '/api/control/switch', { file: f }, { btn: b, ask: () => { const x = switchWords(f, model?.show.file?.name, model?.show.boot_file); return { title: x.title, body: x.body, ok: x.ok, cancel: 'Leave it' }; },
+        askChanged: M.CHANGED_MEANWHILE,
         what: w.what, done: w.done, fail: 'The show file is unchanged', serverConfirms: true, holds: (mm) => switchShows(mm, f),
         sent: (mm) => ({ action: 'switch', file: f, before: mm?.show.file?.name ?? null }),
         noAnswer: 'the Now line shows what bitcube reports', unconfirmed: 'look at the Now line, or call Gavin' });

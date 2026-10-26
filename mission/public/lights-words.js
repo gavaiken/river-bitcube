@@ -148,6 +148,8 @@ export function stateWords(m) {
   const r = m?.show?.ropes, p = m?.show?.panels;
   if (!r || !p) return '';
   if (r.state === 'restarting' && p.state === 'restarting') return `The ropes and the panels are dark while TouchDesigner ${/\bstarts$/.test(r.words) ? 'starts' : 'restarts'}.`;
+  // TouchDesigner not running: the ropes not driven and the panels showing nothing for the one reason, said once (R10 #17)
+  if (r.state === 'not-driven' && p.state === 'gone' && /not running$/.test(r.words)) return 'The ropes and the panels are not being driven: TouchDesigner is not running.';
   return `${cap(r.words)} · ${p.words}.`;
 }
 /** The changes that alter what the ropes or the panels show: a switch or a rebuild restarts TouchDesigner (the lights go dark),
@@ -209,12 +211,12 @@ export function stateLive(o) { const p = stateParts(o); return [p.head, ...p.lin
  *  run, which is dark when they were dark on purpose, never always "the river" (R6 #22). */
 export const CAL_COPY = {
   stopBefore: 'Ends the run now; the ropes go back to what they showed before within a few seconds. No map is written.',
-  stopped: 'Stopped; the ropes are back to what they showed before. No map was written.',
+  stopped: 'The ropes are back to what they showed before. No map was written.',   // under the heading "Stopped", never its words again (R10 #19)
   restored: 'The ropes are back to what they showed before; no map was written.',
 };
 /** The run's fine print: "Started 21:14, using the gallery camera. When it ends, …" (a dry run touches no camera). */
 export function runFine({ started, cam, dry }) {
-  return dry ? `Started ${started}. The lights stay as they are.`
+  return dry ? `Started ${started}.`   // the heading says the lights stay as they are, once (R10 #19)
     : `Started ${started}${cam ? `, using the ${cam} camera` : ''}. When it ends, the ropes go back to what they showed before, by themselves.`;
 }
 /** A finished run's heading: not "Map made" over a line that starts "Map made 23 Oct …" (R6 #24). */

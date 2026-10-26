@@ -177,7 +177,9 @@ export class History {
         const afterRestart = !it.stale && this.restarted.delete(it.id);
         if (afterRestart && !it.stale && p && p.level === it.level && it.level !== 'ok' && p.reason === reasonOf(it.summary)) {
           this.knownAt[it.id] = t;
-          rec({ kind: 'item', id: it.id, from: p.level, to: it.level, summary: it.summary, still: true });
+          // kept (its since starts here), but when the piece is what the band is about the band's own line says it ("TouchDesigner is
+          // running slowly: …"): Recent leaves this one out, never two lines for one moment (R10 #23)
+          rec({ kind: 'item', id: it.id, from: p.level, to: it.level, summary: it.summary, still: true, ...(it.cause && it.cause === m.overall?.cause ? { banded: true } : {}) });
           continue;
         }
         const gap = !!p && (seen == null || (this.prevObs != null && seen < this.prevObs));
@@ -285,11 +287,17 @@ export class History {
       if (!(e.t > from)) continue;
       if (split && e.kind === 'verdict') {
         const a = this.actionOf.get(e.applying_id);
+        // a calibration start that showed its run: the run's own line ("The calibration started: …") carries the verdict (R10 #23)
+        if (a?.action === 'calibrate' && e.verdict === 'confirmed') continue;
         if (a && awaitsVerdict(a)) out.push({ kind: 'verdict', t: e.t, applying_id: e.applying_id, verdict: e.verdict, action: a.action, source: a.source,
                                               label: typeof a.label === 'string' && a.label ? a.label : changeLabel(a.action, obj(a.body) ?? {}) });
         continue;
       }
       if (!(ks ? ks.has(e.kind) : e.kind !== 'verdict')) continue;
+      // the band's "Calibrating the lights: …" beside the run's own lines says the same event again (R10 #23)
+      if (split && e.kind === 'overall' && e.cause === 'calibrating' && !e.stale) continue;
+      // and a piece "still" not OK after a restart, at the moment the band's line about the same cause says it (R10 #23)
+      if (split && e.kind === 'item' && e.banded) continue;
       out.push(this.#judged(e, now, split));
     }
     return out.sort((a, b) => b.t - a.t).slice(0, Math.max(0, num(limit) ?? 50));
@@ -497,7 +505,8 @@ const WHO = { bitcube: ['bitcube'], touchdesigner: ['TouchDesigner'], ropes: ['T
 // on bitcube"); the rest of the summary follows unchanged. A replacement starting with '=' is the whole sentence.
 // Summaries matched by none read "<name> went down: <summary>" or "<name> needs attention: <summary>".
 const SAID = [
-  [/^Offline\b/, 'went offline'], [/^Reachable, but/, 'is reachable, but'], [/^Answers, but/, 'answers, but'],
+  // the row's source line says from where, Recent has none: it says so (R10 #33)
+  [/^Offline: not reachable$/, 'went offline: not reachable from the Mac mini'], [/^Offline\b/, 'went offline'], [/^Reachable, but/, 'is reachable, but'], [/^Answers, but/, 'answers, but'],
   [/^Not started yet/, "hasn't started yet"], [/^Not running\b/, 'stopped running'], [/^Restarting\b/, 'is restarting'],
   [/^Frozen\b/, 'froze'], [/^Running slowly/, 'is running slowly'], [/^Not served while/, 'is not served while'],
   [/^Page not answering/, 'page stopped answering'], [/^Page not served/, 'page is not served'], [/^Not answering\b/, 'stopped answering'],
@@ -510,7 +519,7 @@ const SAID = [
   [/^Panel sender present, but the picture is frozen/, 'hold a frozen picture'], [/^Panel sender present, but the picture is gone/, 'show nothing'],
   [/^Panel sender present; this file has no panel output/, 'have no picture: this show file has no panel output'],
   [/^Panel sender present, but the panel output is off/, 'are switched off in the show file'], [/^Panel sender present, brightness 0/, 'are at brightness 0'],
-  [/^No internet from bitcube/, 'is down: bitcube cannot reach it'], [/^Reports a problem/, 'reports a problem'], [/^Hasn't (?:ticked|updated)/, "hasn't updated"],
+  [/^No internet(?: from bitcube)?$/, 'is down: bitcube cannot reach it'], [/^Reports a problem/, 'reports a problem'], [/^Hasn't (?:ticked|updated)/, "hasn't updated"],
   [/^Clips failing for both cameras/, 'is failing: no clips from either camera'],
   [/^(Gallery|River) clips failing/, (_m, cam) => `=${cam} clips to Dave are failing`],
   [/^Sync has seen no new state/, 'has seen no new state from Dave'], [/^Current run can't/, "can't"],

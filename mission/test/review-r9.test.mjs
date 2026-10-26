@@ -44,12 +44,12 @@ test('R9 #5, #17, #30: how another phone\'s change ended is said once by its id:
   const t1 = T0 + 5000;
   const flying = derive(payload({ t: t1, applying: [entry('a.2', { started_at: t1 - 1000 })], extra: { confirmed: [{ ...entry('a.1'), at: T0 - 5000 }] } }), t1);
   assert.deepEqual(say(flying, {}, t1), []);
-  assert.deepEqual(bandParts(flying).lines, [`Applying: ${RESTART}.`]);
+  assert.deepEqual(bandParts(flying).lines, [`Applying: ${RESTART}, from another phone.`]);
   assert.doesNotMatch(bandSaid(flying), /Done/);
   // it ends: said once, though the same words were said for the first one
   const t2 = T0 + 20_000;
   const ended = derive(payload({ t: t2, extra: { confirmed: [{ ...entry('a.1'), at: T0 - 5000 }, { ...entry('a.2'), at: t2 - 1000 }] } }), t2);
-  assert.deepEqual(say(ended, {}, t2), [`Done: ${RESTART}.`]);
+  assert.deepEqual(say(ended, {}, t2), [`Done: ${RESTART}, from another phone.`]);
   assert.deepEqual(say(ended, {}, t2 + 5000), [], 'once');
   assert.deepEqual(say(ended, {}, t2 + 10_000), [], 'and never again while it is listed');
   // one that ends while another with the same name is already in flight: the newer one is what happens now
@@ -70,7 +70,7 @@ test('R9 #5: Lights\' state line and the chat bar stand for their words and say 
   const p = stateParts({ words: 'The ropes show the river · the panels show the river at 100 %.', applying: [{ label: RESTART, said: `Applying: ${RESTART}.` }] });
   assert.deepEqual(p, { head: 'The ropes show the river · the panels show the river at 100 %.', lines: [`Applying: ${RESTART}.`] });
   assert.equal(stateLive({ words: 'x.', applying: [] }), 'x.');
-  assert.match(page('lights.js'), /endedNews\(m, \{ ownIds: own\.ids \}, serverClock\(\)\)/);
+  assert.match(page('lights.js'), /endedNews\(m, \{ ownIds: own\.ids, skip: [^\n]*\}, serverClock\(\)\)/);
   assert.match(page('chat.js'), /setLive\(\$\('pin-live'\), sayAll, \{ once: lost \? \[\] : endedNow\(\) \}\)/);
   assert.match(page('status.js'), /endedNews\(m, own, serverNow\(\)\)/);
   assert.match(page('ui.js'), /const news = liveNews\(prev, \{ head, lines \}\)/);
@@ -92,7 +92,7 @@ test('R9 #6, #31: a phone\'s earlier change stays its own after the same control
   assert.ok(!own.ownIds.includes('b.9'), 'another phone\'s is not');
   const say = endedOnce();
   say(derive(payload({ t: T0 }), T0), {}, T0);
-  assert.deepEqual(say(m, own, t), ['Done: the change of the boot file to the live river.'], 'only the other phone\'s ending is said');
+  assert.deepEqual(say(m, own, t), ['Done: the change of the boot file to the live river, from another phone.'], 'only the other phone\'s ending is said');
   for (let i = 0; i < 30; i++) mem.request(`x${i}`);
   assert.equal(mem.mine.requestIds.length, 20, 'the newest 20 are kept');
   assert.match(page('status.js'), /M\.ownEntries\(model, [^\n]*mine\.mine\)/);
@@ -183,7 +183,7 @@ test('R9 #16: while a switch or restart is in flight, the band never says to pre
   assert.equal(live.overall.cause, 'online-file');
   assert.equal(live.overall.action, "Someone is switching TouchDesigner to the river's year now: wait a minute and look again.");
   const rb = derive(payload({ t, td: slowTd, applying: [entry('w.3', { action: 'rebuild', label: "the rebuild of the river's year", started_at: t - 3000, expect_s: 150 })] }), t);
-  assert.equal(rb.overall.action, "Someone is rebuilding the river's year now: wait a minute and look again.");
+  assert.equal(rb.overall.action, "Someone is rebuilding the river's year now: wait a few minutes and look again.");   // R10 #13
   const none = derive(payload({ t, td: slowTd }), t);
   assert.match(none.overall.action, /press Restart on the river's year/);
   assert.equal(none.overall.waits, null);
@@ -223,11 +223,11 @@ test('R9 #34: a switch or rebuild while TouchDesigner is starting or restarting 
   const m = new Mission({ now: () => t, later: () => {}, probe: async (_h, args) => (args ? { ok: true, td: { ok: true, file: YEAR } } : reading) });
   reading = { ok: true, uptime_h: 0.05, td: { ok: false, error: 'TouchDesigner is not running' } };   // bitcube's own boot
   await m.pollProbe();
-  await assert.rejects(m.control('switch', { file: YEAR }), (e) => e.status === 409 && e.message === 'TouchDesigner is still starting: wait a minute');
-  await assert.rejects(m.control('rebuild', { file: YEAR }), (e) => e.status === 409 && e.message === 'TouchDesigner is still starting: wait a minute');
+  await assert.rejects(m.control('switch', { file: YEAR }), (e) => e.status === 409 && e.message === 'bitcube is still coming up; wait a minute');
+  await assert.rejects(m.control('rebuild', { file: YEAR }), (e) => e.status === 409 && e.message === 'bitcube is still coming up; wait a minute');
   t += 5000; reading = { ok: true, uptime_h: 30, td: { ok: false, error: `restarting on ${YEAR}` } };   // a crash relaunch, no entry
   await m.pollProbe();
-  await assert.rejects(m.control('switch', { file: LIVE }), (e) => e.status === 409 && e.message === 'TouchDesigner is restarting: wait a minute');
+  await assert.rejects(m.control('switch', { file: LIVE }), (e) => e.status === 409 && e.message === 'TouchDesigner is restarting; wait a minute');
   t += 5000; reading = { ok: true, uptime_h: 30, td: { ok: true, file: YEAR, fps: 60 } };
   await m.pollProbe();
   const r = await m.control('switch', { file: LIVE });
@@ -238,7 +238,7 @@ test('R9 #34: a switch or rebuild while TouchDesigner is starting or restarting 
   const { mkdtempSync } = await import('node:fs'); const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
   const dir = new URL('./fixtures/', import.meta.url).pathname;
   const fx = new FixtureMission({ dir, stateDir: mkdtempSync(join(tmpdir(), 'r9-')), applyS: 0 });
-  await assert.rejects(fx.control('switch', { file: YEAR }, 'just-booted'), (e) => e.status === 409 && /^TouchDesigner is still starting/.test(e.message));
+  await assert.rejects(fx.control('switch', { file: YEAR }, 'just-booted'), (e) => e.status === 409 && /^bitcube is still coming up/.test(e.message));
   assert.equal(typeof (await fx.control('switch', { file: YEAR }, 'all-good')).applying_id, 'string');
 });
 
@@ -264,8 +264,8 @@ test('R9 #35, #25: the lighting address on both ports or on neither has words of
   const det = (lr) => at(lr).items.find((x) => x.id === 'ropes').detail;
   assert.match(det('router'), /; lighting network on the spare router port\.$/);
   assert.match(det('direct'), /; lighting network on bitcube's LIGHTS port\.$/);
-  assert.match(det('BOTH'), /; lighting network on both ports: move the address to one\.$/);
-  assert.match(det('none'), /; lighting network on neither port: the ropes can't be reached\.$/);
+  assert.match(det('BOTH'), /; lighting network on both ports: under Installer, press the port the lighting switch is plugged into\.$/);   // one instruction (R10 #27)
+  assert.match(det('none'), /; lighting network on neither port, so the ropes can't be reached: under Installer, press the port the lighting switch is plugged into\.$/);
   assert.match(det('Ethernet 3'), /; lighting network on another port\.$/);
   assert.equal(at('BOTH').show.ropes.route_words, 'both ports');
   assert.equal(at('none').show.ropes.route_words, 'neither port');
@@ -364,13 +364,13 @@ test('R9 #21: a change bitcube didn\'t answer in time reads "Asked to …" until
 test('R9 #19: a dry run is never "photographing the ropes": Recent, the band and Lights name its stage as a step', async () => {
   const { describeEvent } = await import('../lib/history.mjs');
   assert.equal(describeEvent({ kind: 'calibration', running: true, stage: 'ropes-capture', mode: 'dry-run', from: null }), 'A dry run started');
-  assert.equal(describeEvent({ kind: 'calibration', running: true, stage: 'ropes-decode', mode: 'dry-run', from: { running: true, stage: 'ropes-capture' } }), 'A dry run is at step 2 of 4');
+  assert.equal(describeEvent({ kind: 'calibration', running: true, stage: 'ropes-decode', mode: 'dry-run', from: { running: true, stage: 'ropes-capture' } }), 'A dry run is at the rope map');   // in words (R10 #18)
   const t = T0;
   const m = derive(payload({ t, probe: { calibration: { running: true, stage: 'ropes-capture', mode: 'dry-run', dry_run: true, expected_s: 170, elapsed_s: 5 } } }), t);
   assert.equal(m.overall.cause, 'calibrating');
-  assert.equal(m.overall.detail, "It walks the calibration's steps without touching the lights (step 1 of 4 now) and ends by itself in about a minute.");
-  assert.equal(m.show.calibration.words, 'step 1 of 4');
-  assert.match(page('lights.js'), /dry \? `Step \$\{calStep\(s\)\.n\}`/, 'its step from model.js calStep (CR9 #16)');
+  assert.equal(m.overall.detail, "It walks the calibration's steps without touching the lights; it is at the ropes now, and ends by itself in about a minute.");
+  assert.equal(m.show.calibration.words, 'the ropes');
+  assert.match(page('lights.js'), /dry \? calStep\(s\)\.label/, 'its stage from model.js calStep (CR9 #16), in words (R10 #18)');
 });
 
 // ---- #2: Recent is kept current while it is open -------------------------------------------------------------------------------

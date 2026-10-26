@@ -219,8 +219,8 @@ test('R7 #12, #13: the hidden band region says the headline without its times, a
   assert.equal(bandSaid(m2), `${head} Applying: the change of the boot file to the river's year, from the studio chat.`);
   // this phone's own change is said on its control only
   assert.equal(bandSaid(m2, { ownIds: ['a.9'] }), head);
-  assert.equal(entrySaid({ ...m2.show.applying[0], phase: 'confirming', source: 'mission control' }), "Waiting for bitcube to show the change of the boot file to the river's year.");
-  assert.equal(entrySaid({ ...m2.show.applying[0], maybe: true }), "No answer in time for the change of the boot file to the river's year, from the studio chat: waiting for bitcube to show whether it happened.");
+  assert.equal(entrySaid({ ...m2.show.applying[0], phase: 'confirming', source: 'mission control' }), "Waiting for bitcube to show the change of the boot file to the river's year, from another phone.");   // R10 #9
+  assert.equal(entrySaid({ ...m2.show.applying[0], maybe: true }), "No answer in time for the change of the boot file to the river's year: waiting for bitcube to show whether it happened, from the studio chat.");
 });
 
 test('R7 #29: the Calibrate checklist from an old full check, or with contact lost, is never a green ✓ and says "when last seen"', async () => {

@@ -210,7 +210,7 @@ test('CR9 #7, #8: a decode of earlier photos touches no lights but is no dry run
   const d = at(DECODE), y = at(DRY);
   assert.equal(d.show.calibration.words, 'working out where each rope is', 'a decode really works out where each rope is');
   assert.equal(d.show.calibration.dry, false);
-  assert.equal(y.show.calibration.words, 'step 2 of 4');
+  assert.equal(y.show.calibration.words, 'the rope map');   // in words, never a step number (R10 #18)
   assert.equal(y.show.calibration.dry, true);
   // a decode locks nothing on the lights (R7 #20), and it is "a calibration", never "a dry run", in its headline and its reasons
   assert.equal(d.controls.ropes.why, null);
@@ -234,12 +234,12 @@ test('CR9 #7, #8: a decode of earlier photos touches no lights but is no dry run
 test("CR9 #16: a dry run's \"step N of 4\" comes from one helper (model.js calStep), never a table or a literal 4 of its own", async () => {
   const { calStep, CAL_STAGES, CAL_STAGE_S } = await import('../public/model.js');
   assert.deepEqual(CAL_STAGES, Object.keys(CAL_STAGE_S));
-  assert.deepEqual(calStep('ropes-decode'), { n: 2, of: 4, words: 'step 2 of 4' });
-  assert.deepEqual(calStep('hub75-locate'), { n: 4, of: 4, words: 'step 4 of 4' });
+  assert.deepEqual(calStep('ropes-decode'), { n: 2, of: 4, label: 'Rope map', words: 'the rope map' });     // in words (R10 #18)
+  assert.deepEqual(calStep('hub75-locate'), { n: 4, of: 4, label: 'Panel places', words: "the panels' places" });
   assert.equal(calStep('done'), null);
   assert.equal(calStep(null), null);
   const { describeEvent } = await import('../lib/history.mjs');
-  assert.equal(describeEvent({ kind: 'calibration', running: true, stage: 'hub75-capture', mode: 'dry-run', from: { running: true, stage: 'ropes-decode' } }), 'A dry run is at step 3 of 4');
+  assert.equal(describeEvent({ kind: 'calibration', running: true, stage: 'hub75-capture', mode: 'dry-run', from: { running: true, stage: 'ropes-decode' } }), 'A dry run is at the panels');
   assert.doesNotMatch(src('../lib/history.mjs'), /STAGE_STEP|of 4/);
   assert.doesNotMatch(page('lights.js'), /of 4|const STAGE_ORDER = \['ropes-capture'/);
   assert.match(page('lights.js'), /calStep\(/);
@@ -319,8 +319,8 @@ test("CR9 #10: when the server's verdict ends a press in flight, expired and hel
 
 test('CR9 #11: "TouchDesigner is starting" is one small rule on the full check\'s reading (model.js tdStartingWhy), the pages\' and the server\'s', async () => {
   const { tdStartingWhy, TD_STARTING_WHY, TD_RESTARTING_WHY, TD_UNREADABLE_WHY, derive } = await import('../public/model.js');
-  assert.equal(TD_STARTING_WHY, 'TouchDesigner is still starting: wait a minute');
-  assert.equal(TD_RESTARTING_WHY, 'TouchDesigner is restarting: wait a minute');
+  assert.equal(TD_STARTING_WHY, 'bitcube is still coming up; wait a minute');      // the band's words, one colon (R10 #15)
+  assert.equal(TD_RESTARTING_WHY, 'TouchDesigner is restarting; wait a minute');
   for (const [pr, want] of [
     [{ uptime_h: 0.05, td: { ok: false, error: 'TouchDesigner is not running' } }, TD_STARTING_WHY],     // bitcube's own boot
     [{ uptime_h: 30, td: { ok: false, error: 'TouchDesigner is not running' } }, null],                 // a fault, not a start

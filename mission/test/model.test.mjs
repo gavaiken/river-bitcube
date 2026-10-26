@@ -594,11 +594,11 @@ test("the show-file switch waits while TouchDesigner is still starting after bit
   s.probe.value.uptime_h = 0.05; s.probe.value.td = { ok: false, error: 'TouchDesigner is not running' };
   let m = derive(s, NOW + 2000);
   assert.equal(m.controls.switch.possible, false);
-  assert.equal(m.controls.switch.why, 'TouchDesigner is still starting: wait a minute');
+  assert.equal(m.controls.switch.why, 'bitcube is still coming up; wait a minute');   // the band's words (R10 #15)
   // open, first check after the start (frame rate not known yet), bitcube just booted: wait too
   s.probe.value.td = clone(byName['all-good'].status.probe.value.td); s.probe.value.td.fps = null;
   m = derive(s, NOW + 2000);
-  assert.equal(m.controls.switch.why, 'TouchDesigner is still starting: wait a minute');
+  assert.equal(m.controls.switch.why, 'bitcube is still coming up; wait a minute');   // the band's words (R10 #15)
   // long after the boot, TouchDesigner not running: the switch is the way to start it
   s.probe.value.uptime_h = 3; s.probe.value.td = { ok: false, error: 'TouchDesigner is not running' };
   m = derive(s, NOW + 2000);

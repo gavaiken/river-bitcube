@@ -125,7 +125,9 @@ function renderStateLine(own = null) {
   const lines = lost ? [] : applyingNow(m, own);
   paintApplying(lines);
   // and, once by its id, how another phone's change ended (R8 #9, R9 #5)
-  const ended = lost || !status.last ? [] : endedNews(m, { ownIds: own.ids }, serverClock());
+  // a calibration's or a dry run's start that showed its run is said by the Calibrate block's new view ("Dry run started; …"), never
+  // also as "Done: the dry run start." in the same breath (R10 #20); one bitcube didn't show in time still is
+  const ended = lost || !status.last ? [] : endedNews(m, { ownIds: own.ids, skip: (e, verdict) => e.action === 'calibrate' && verdict === 'confirmed' }, serverClock());
   sayState(stateParts({ words, lost, stale, applying: lines }), ended);
 }
 /** Screen readers hear the state line's words when they change, never a ticking time (lights.html #state-live; lights-words
@@ -807,7 +809,7 @@ function calHtml({ view, dry, lost }, p) {
         <p class="r-words">bitcube went offline during the run: the ropes may still be in patterns; they come back when TouchDesigner reloads.</p>
         <div class="cal-dismiss"><button type="button" class="btn" data-cal="dismiss-lost">OK</button></div></div>`;
     case 'run': return `<div class="cal-run" id="cal-run">
-        <div class="cal-stage" id="cal-head" tabindex="-1">${dry ? 'A dry run: the lights don\'t change' : 'Calibrating'}</div>
+        <div class="cal-stage" id="cal-head" tabindex="-1">${dry ? 'A dry run: the lights stay as they are' : 'Calibrating'}</div>
         <div class="stages" id="cal-stages"></div>
         <div class="prog ${dry ? 'dry' : ''}" id="cal-prog" role="progressbar" aria-label="${dry ? 'How far the dry run is' : 'How far the calibration is'}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="cal-bar" style="width:0%"></i></div>
         <div class="cal-line" id="cal-line"></div>
@@ -819,7 +821,7 @@ function calHtml({ view, dry, lost }, p) {
     case 'stopped': {
       const forced = p.restored === false && !dry;
       return `<div class="cal-result lv-unknown"><div class="h" id="cal-head" tabindex="-1">${mark('unknown')}<span>${dry ? 'Dry run stopped' : 'Stopped'}</span></div>
-        <p class="r-words">${dry ? 'Dry run stopped; nothing changed.' : forced ? 'Stopped, but it had to be forced: the ropes may still show a pattern. Press Ropes → On on the Status page. No map was written.' : CAL_COPY.stopped}</p>
+        <p class="r-words">${dry ? 'Nothing changed; the lights were never touched.' : forced ? 'It had to be forced, so the ropes may still show a pattern. Press Ropes → On on the Status page. No map was written.' : CAL_COPY.stopped}</p>
         <div class="cal-dismiss"><button type="button" class="btn" data-cal="dismiss">OK</button>${forced ? '<a class="btn" href="/status">Open Status</a>' : ''}</div></div>`;
     }
     case 'failed': {
@@ -902,10 +904,10 @@ function paintRun(p) {
   // a dry run touches no lights and no camera: its stages are steps (R9 #19); what a dry run is and its steps, one rule with the
   // band and the history (model.js calDryRun, calStep: CR9 #7, #8, #16)
   const dry = calDryRun(p);
-  const stages = STAGE_ORDER.map((s) => `<span class="${s === p.stage ? 'now' : STAGE_ORDER.indexOf(s) < STAGE_ORDER.indexOf(p.stage ?? 'ropes-capture') ? 'done' : ''}">${s !== 'done' && dry ? `Step ${calStep(s).n}` : STAGE_WORDS[s]}</span>`).join('<span aria-hidden="true">→</span>');
+  const stages = STAGE_ORDER.map((s) => `<span class="${s === p.stage ? 'now' : STAGE_ORDER.indexOf(s) < STAGE_ORDER.indexOf(p.stage ?? 'ropes-capture') ? 'done' : ''}">${s !== 'done' && dry ? calStep(s).label : STAGE_WORDS[s]}</span>`).join('<span aria-hidden="true">→</span>');
   const st = $('#cal-stages'); if (st && S.html['cal-stages'] !== stages) { S.html['cal-stages'] = stages; st.innerHTML = stages; }
   const pct = Math.round(runFraction(p) * 100), prog = $('#cal-prog'), bar = $('#cal-bar');
-  const vt = `${pct} %, ${dry && calStep(p.stage) ? calStep(p.stage).words : CAL_STAGE_WORDS[p.stage] ?? (p.stage === 'done' ? 'done' : 'starting')}`;
+  const vt = `${pct} %, ${dry && calStep(p.stage) ? `at ${calStep(p.stage).words}` : CAL_STAGE_WORDS[p.stage] ?? (p.stage === 'done' ? 'done' : 'starting')}`;
   if (prog && prog.getAttribute('aria-valuetext') !== vt) { prog.setAttribute('aria-valuenow', String(pct)); prog.setAttribute('aria-valuetext', vt); bar.style.width = `${pct}%`; }
 }
 /** Why a run failed, in the team's words: calibrate.py's plain `reason` (from 24 Oct), else its error when that is already
@@ -965,7 +967,7 @@ function mountStart(m) {
     noAnswer: 'this block shows the run if it started', unconfirmed: 'this block shows the run if it starts; if none does, try again or call Gavin',
     serverConfirms: true, onSent: afterStart, onFail: () => pollCal() });
   const dry = control($('#cal-dry'), { label: 'Dry run: the lights stay as they are', kind: 'plain', why: dryWhy(m), siblings: pair,
-    before: 'Walks the same steps without touching the lights or the camera, about a minute: a check that bitcube can run one.',
+    before: 'Walks the same steps without touching the lights or the camera, about a minute, to show that bitcube can run one.',
     ...CAL_CTL.dry, expectS: EXPECT_S.calibrate, usual: START_USUAL, run: ({ requestId } = {}) => startRun(true, requestId), done: 'Dry run started', fail: "The dry run didn't start",
     noAnswer: 'this block shows the run if it started', unconfirmed: 'this block shows the run if it starts; if none does, try again or call Gavin',
     serverConfirms: true, onSent: afterStart, onFail: () => pollCal() });
@@ -977,7 +979,7 @@ function mountStart(m) {
  *  gets through on the server too. A dry run touches no lights. */
 function mountStop(dry) {
   return control($('#cal-stop'), { label: dry ? 'Stop the dry run' : 'Stop and restore the ropes', kind: 'danger',
-    before: dry ? 'Ends the check now; the lights were not touched.' : CAL_COPY.stopBefore,
+    before: dry ? 'Ends the dry run now.' : CAL_COPY.stopBefore,
     ...(dry ? CAL_CTL.stopDry : CAL_CTL.stop), run: () => api('/api/control/calibrate', { action: 'cancel' }), fail: "It didn't stop",
     noAnswer: 'the progress above shows whether it is still running',
     done: (r) => (r?.forced && !dry ? 'Stopped, but it had to be forced' : r?.cancelled === false ? 'Nothing was running' : 'Stopped'),
