@@ -48,7 +48,7 @@ test('plainStep: the agent\'s tool lines in the team\'s words, never its working
     ['fetched https://example.com/a?b=c', /^looked something up online$/, false],
     ['used ToolSearch', /^used a tool$/, false],
     ['read CLAUDE.md', /^looked at the repo's notes$/, false],
-    ['edited docs/sessions/U.md', /^changed the session notes$/, false],
+    ['edited docs/sessions/U.md', /^changed the team's work log$/, false],
     ['ran: ssh bitcube "powershell -File C:\\river\\tools\\td.ps1 -Action ropes -Dark"', /^ran a command on bitcube$/, true],
     ['ran: git log -3', /^ran a command$/, false],
     ['ran: Turn the ropes dark', /^turned the ropes dark$/, true],

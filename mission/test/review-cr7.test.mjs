@@ -230,7 +230,7 @@ test('CR7 #15: 2>&1, >&2 and &> are redirections, not command separators', async
   }
   // a change asked of mission control with its output redirected is that change, through mission control
   const s = bash(`node mission/bin/mc.mjs ropes '{"dark":true}' 2>&1`, 'Ropes dark');
-  assert.deepEqual([s.text, s.acting], ['asked mission control to turn the ropes dark', true]);
+  assert.deepEqual([s.text, s.acting], ['asked mission control for the change of the ropes to dark', true]);
   // a real & still separates: a look chained to a change made directly on bitcube says so
   const d = bash('node mission/bin/mc.mjs status 2>&1 & ssh bitcube "powershell -File C:\\x\\probe.ps1 -Action ropes -Dark" 2>&1', 'Look');
   assert.match(d.text, /^changed the ropes on bitcube directly, not through mission control$/);

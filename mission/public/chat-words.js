@@ -82,7 +82,7 @@ export function plainFile(path) {
   if (/\.toe$/.test(f)) return 'a show file';
   if (f === 'claude.md') return "the repo's notes";
   if (f === 'glossary.md') return 'the glossary';
-  if (/\/sessions\//.test(p)) return 'the session notes';
+  if (/\/sessions\//.test(p)) return "the team's work log";   // "session" is off the main view (R9 #27)
   if (/plan\.md$/.test(f)) return 'the plan';
   if (/\.md$/.test(f)) return 'the docs';
   if (/^system\.json$/.test(f)) return 'the system map';

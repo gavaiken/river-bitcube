@@ -378,3 +378,65 @@ test('R9 #2: Recent asks again every few seconds while its sheet shows it, and i
   assert.match(body, /data-t="\$\{t\}"/);
   assert.match(body, /const now = typeof st\.j\?\.now === 'number' \? carried\(st\.j\.now, st\.at, st\.wall\) : Date\.now\(\);/, 'on the history\'s own clock, carried forward');
 });
+
+// ---- #22, #27, #38: the chat's step lines -------------------------------------------------------------------------------------------
+
+const stepOf = async (command, description = 'Look', ctx = undefined) => {
+  const { describeTool } = await import('../lib/steps.mjs');
+  const { stepWords } = await import('../public/chat-words.js');
+  const d = describeTool({ name: 'Bash', input: { command, description } }, ctx);
+  const shown = stepWords(d);            // the page shows every line as it was sent
+  assert.deepEqual([shown.text, shown.act], [d.text, d.acting], `the page reworded "${d.text}"`);
+  return [d.text, d.acting];
+};
+
+test('R9 #22: a change asked of mission control is named as the band and Recent name it (model.js changeLabel)', async () => {
+  const mc = (body) => `node mission/bin/mc.mjs ${body}`;
+  assert.deepEqual(await stepOf(mc(`ropes '{"dark":true}'`)), ['asked mission control for the change of the ropes to dark', true]);
+  assert.deepEqual(await stepOf(mc(`switch '{"file":"${YEAR}"}'`), 'Restart', { running: YEAR }), [`asked mission control for ${RESTART}`, true]);
+  assert.deepEqual(await stepOf(mc(`switch '{"file":"${YEAR}"}'`), 'Switch', { running: LIVE }), ["asked mission control for the switch to the river's year", true]);
+  assert.deepEqual(await stepOf(mc(`calibrate '{"action":"cancel"}'`), 'Stop', { calDry: true }), ['asked mission control for the dry run stop', true]);
+  assert.deepEqual(await stepOf(mc(`calibrate '{"action":"cancel"}'`), 'Stop'), ['asked mission control to stop the run', true], 'which run it is isn\'t known: neutral');
+  assert.deepEqual(await stepOf(mc(`calibrate '{"action":"start","dry_run":true}'`)), ['asked mission control for the dry run start', true]);
+  assert.deepEqual(await stepOf(mc(`hub75 '{"brightness":0.5}'`)), ['asked mission control for the change of the panels to 50 %', true]);
+  assert.deepEqual(await stepOf(mc('check')), ['asked mission control for the full check of bitcube', false]);
+  assert.deepEqual(await stepOf(mc('nope'), ''), ['ran a command', false], 'not a control of mission control');
+  // the live agent passes what TouchDesigner runs, so a switch to it reads as the restart it is
+  assert.match(page('../lib/agent.mjs'), /ctx = context\?\.\(\) \?\? \{\}; \} catch \{ ctx = \{\}; \} yield \{ kind: 'activity', \.\.\.describeTool\(b, ctx\) \}/);
+  assert.match(readFileSync(new URL('../server.mjs', import.meta.url), 'utf8'), /context: \(\) => stepContext\(\)/);
+});
+
+test('R9 #27: the session notes are "the team\'s work log" on a step line', async () => {
+  const { describeTool } = await import('../lib/steps.mjs');
+  assert.equal(describeTool({ name: 'Edit', input: { file_path: 'docs/sessions/U.md' } }).text, "changed the team's work log");
+});
+
+test('R9 #38: the direct changes that read as checks now read as the change they are', async () => {
+  const B = 'ssh bitcube';
+  const cases = [
+    [`${B} "powershell -File C:\\Users\\user\\River\\river-bitcube\\tools\\lights_route.ps1 router"`, 'moved the lighting port'],
+    [`${B} "Start-ScheduledTask -TaskName RopeLights"`, "started Will's rope lights"],
+    [`${B} "C:\\Users\\user\\RopeLights\\Start-Rope-Lights.cmd"`, "started Will's rope lights"],
+    [`${B} "Stop-ScheduledTask -TaskName RopeLights"`, "stopped Will's rope lights"],
+    ['curl -X POST http://100.73.68.60:9981/mode -d \'{"mode":"manual"}\'', "changed the river's year"],
+    [`${B} "Invoke-RestMethod -Method Post -Uri http://localhost:9981/target -Body x"`, "changed the river's year"],
+    ['scp /tmp/c bitcube:C:/Users/user/River/calibration.cancel', 'stopped the calibration'],
+    [`${B} "python -c \\"open(r'C:\\Users\\user\\River\\boot-file.txt','w').write('x')\\""`, 'changed the boot file'],
+    [`${B} "Disable-NetAdapter -Name 'Ethernet 2' -Confirm:$false"`, "changed bitcube's network"],
+    [`${B} "cmd /c C:\\Users\\user\\River\\river-bitcube\\Start-River.cmd"`, 'started TouchDesigner'],
+    ["ssh root@100.127.193.8 \"uci set wireless.radio0.channel=36 && uci commit wireless\"", "changed the router's settings"],
+    ['ssh root@100.127.193.8 "/etc/init.d/network restart"', "restarted the router's network"],
+    [`${B} "shutdown /r /t 0"`, 'restarted bitcube'],
+    [`${B} "powershell -File C:\\x\\td.ps1 \\"mod('seasons_td').set_mode('manual')\\""`, "changed the river's year"],
+  ];
+  for (const [cmd, words] of cases) {
+    const [text, acting] = await stepOf(cmd, 'Check it');
+    assert.equal(acting, true, cmd);
+    assert.equal(text, words, cmd);
+  }
+  // reads stay reads
+  for (const cmd of [`${B} "Get-ScheduledTask -TaskName RopeLights"`, 'curl http://100.73.68.60:9981/state', 'scp bitcube:C:/Users/user/River/calibration.json /tmp/',
+    `${B} "Get-NetAdapter"`, 'ssh root@100.127.193.8 "uci show wireless"', `${B} "netsh interface show interface"`]) {
+    assert.equal((await stepOf(cmd, 'Check it'))[1], false, cmd);
+  }
+});

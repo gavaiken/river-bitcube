@@ -40,7 +40,7 @@ export function agentEnv(base, { token = null, controlSocket = null } = {}) {
 }
 
 /** Build the runner the Studio drives. */
-export function agentRunner({ cwd, appendPrompt, token, model, executable, onSynced, controlSocket = null }) {
+export function agentRunner({ cwd, appendPrompt, token, model, executable, onSynced, controlSocket = null, context = null }) {
   return async function* run({ text, resume, signal }) {
     const ac = new AbortController();
     if (signal.aborted) return;
@@ -74,7 +74,8 @@ export function agentRunner({ cwd, appendPrompt, token, model, executable, onSyn
       } else if (m.type === 'assistant') {
         for (const b of m.message?.content ?? []) {
           if (b.type === 'text' && b.text.trim()) yield { kind: 'text', text: b.text };
-          else if (b.type === 'tool_use') yield { kind: 'activity', ...describeTool(b) };
+          // context: what TouchDesigner runs and whether a dry run is going, so a step names the change as the band does (R9 #22)
+          else if (b.type === 'tool_use') { let ctx = {}; try { ctx = context?.() ?? {}; } catch { ctx = {}; } yield { kind: 'activity', ...describeTool(b, ctx) }; }
         }
       } else if (m.type === 'result') {
         if (m.session_id) yield { kind: 'session', sessionId: m.session_id };

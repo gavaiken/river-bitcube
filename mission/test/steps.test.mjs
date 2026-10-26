@@ -44,7 +44,7 @@ test('the other tools: plain verbs, no paths, addresses, patterns or tool names 
   const d = (name, input) => describeTool({ name, input });
   assert.deepEqual(d('Read', { file_path: '/Users/river/river-bitcube/CLAUDE.md' }), { text: "looked at the repo's notes", raw: '/Users/river/river-bitcube/CLAUDE.md', acting: false });
   assert.equal(d('Read', { file_path: 'tools/mission/calibrate.py' }).text, 'looked at the calibration script');
-  assert.equal(d('Edit', { file_path: 'docs/sessions/U.md' }).text, 'changed the session notes');
+  assert.equal(d('Edit', { file_path: 'docs/sessions/U.md' }).text, "changed the team's work log");
   assert.equal(d('Write', { file_path: 'tools/pixelmap/pixelmap-2026-10-23.json' }).text, 'changed the LED map');
   assert.equal(d('Grep', { pattern: 'fps|td\\.ok' }).text, 'searched the repo');
   assert.equal(d('Glob', { pattern: '**/*.toe' }).text, 'searched the repo');
@@ -129,9 +129,9 @@ test('round 6 #20: a step that changes the installation never reads only "worked
   assert.equal(kill.acting, true);
   // a change asked of mission control (the agent's one way, bin/mc.mjs) reads in the history's words
   const mc = (cmd) => shown(describeTool({ name: 'Bash', input: { description: 'Turn the ropes dark through mission control', command: cmd } }));
-  assert.deepEqual(Object.values(mc(`node mission/bin/mc.mjs ropes '{"dark":true}'`)), ['asked mission control to turn the ropes dark', `node mission/bin/mc.mjs ropes '{"dark":true}'`, true]);
-  assert.equal(mc(`node mission/bin/mc.mjs switch '{"file":"river-local-oct-22-seasons.toe"}'`).text, "asked mission control to switch TouchDesigner to the river's year");
-  assert.equal(mc('node mission/bin/mc.mjs calibrate \'{"action":"start","dry_run":true}\'').text, 'asked mission control to start a dry run');
+  assert.deepEqual(Object.values(mc(`node mission/bin/mc.mjs ropes '{"dark":true}'`)), ['asked mission control for the change of the ropes to dark', `node mission/bin/mc.mjs ropes '{"dark":true}'`, true]);
+  assert.equal(mc(`node mission/bin/mc.mjs switch '{"file":"river-local-oct-22-seasons.toe"}'`).text, "asked mission control for the switch to the river's year");
+  assert.equal(mc('node mission/bin/mc.mjs calibrate \'{"action":"start","dry_run":true}\'').text, 'asked mission control for the dry run start');
   assert.deepEqual([mc('node mission/bin/mc.mjs status').text, mc('node mission/bin/mc.mjs status').acting], ['looked at what mission control shows', false]);
   assert.equal(mc('node mission/bin/mc.mjs check').acting, false);
   // the earlier lines too: none is reworded by the page

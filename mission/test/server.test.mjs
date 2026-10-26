@@ -134,7 +134,7 @@ test('server in fixture mode: /version, login, /fixtures, status, stills, contro
   assert.equal(events.find((e) => e.kind === 'failed').id, events[0].id);
   // step lines in the team's words; the raw input apart, for a tooltip; only a change to the installation is an acting line
   assert.deepEqual(events.filter((e) => e.kind === 'activity').slice(0, 3).map((e) => [e.text, e.raw, e.acting]),
-                   [["looked at the repo's notes", 'CLAUDE.md', false], ['checked bitcube is online', 'ssh bitcube hostname', false], ['changed the session notes', 'docs/sessions/U.md', false]]);
+                   [["looked at the repo's notes", 'CLAUDE.md', false], ['checked bitcube is online', 'ssh bitcube hostname', false], ["changed the team's work log", 'docs/sessions/U.md', false]]);
   assert.match(events.find((e) => e.kind === 'error').text, /ssh: connect to host bitcube/);
   assert.match(events.find((e) => e.kind === 'text').text, /You said: hello[\s\S]*\n- TouchDesigner is running \*\*the river's year\*\*/);
   assert.deepEqual(events.filter((e) => e.kind === 'result').map((e) => e.ok), [false, true]);

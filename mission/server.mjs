@@ -139,7 +139,14 @@ async function makeRunner() {
   const { agentRunner } = await import('./lib/agent.mjs');
   return agentRunner({ cwd: REPO, appendPrompt: readFileSync(join(HERE, 'STUDIO.md'), 'utf8'),
                        token: readFileSync(tokenFile, 'utf8').trim(), model: env.MISSION_MODEL || undefined,
-                       controlSocket: SOCKET, onSynced: () => update.check() });
+                       controlSocket: SOCKET, onSynced: () => update.check(), context: () => stepContext() });
+}
+/** What a step line needs to name a change as the band does (R9 #22): the show file TouchDesigner runs (a switch to it is the restart
+ *  on it), and whether the calibration going is a dry run (its Stop is the dry run stop). */
+function stepContext() {
+  const s = mission?.snapshot?.(), td = s?.probe?.value?.td, cal = s?.probe?.value?.calibration;
+  return { running: td && td.ok !== false && typeof td.file === 'string' ? td.file : null,
+           ...(cal?.running === true ? { calDry: cal.dry_run === true || cal.mode === 'dry-run' || cal.mode === 'decode-only' } : {}) };
 }
 
 let mission = null;                // set below; the self-update's quiet() reads it

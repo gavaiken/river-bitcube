@@ -35,7 +35,7 @@ test('R7 #22: a panels change asked of mission control reads as a change and is 
                              [`node mission/bin/mc.mjs hub75 '{"brightness":0.5}'`, 'Ask mission control to set HUB75 brightness 0.5']]) {
     const s = bash(cmd, desc);
     assert.equal(s.acting, true, `${cmd} / ${desc}`);
-    assert.match(s.text, /^asked mission control to set the panel brightness to (0|50) %$/, `${cmd} / ${desc}`);
+    assert.match(s.text, /^asked mission control for the change of the panels to (0|50) %$/, `${cmd} / ${desc}`);
   }
 });
 
@@ -54,13 +54,13 @@ test('R7 #34: a status read chained to a change made directly on bitcube is an a
   }
   // a status read and a change, both through mission control: still the change, in the history's words (R6)
   const both = bash(`node mission/bin/mc.mjs status && node mission/bin/mc.mjs switch '{"file":"${LIVE}"}'`, 'Check, then switch');
-  assert.deepEqual([both.text, both.acting], ['asked mission control to switch TouchDesigner to the live river', true]);
+  assert.deepEqual([both.text, both.acting], ['asked mission control for the switch to the live river', true]);
   // a status read piped to a filter changes nothing
   assert.deepEqual(Object.values(bash('node mission/bin/mc.mjs status | head -20', 'Look')).filter((v) => typeof v !== 'string' || !v.includes('node')), ['looked at what mission control shows', false]);
   // a separator inside the JSON body is not a second command
   const quoted = bash(`node mission/bin/mc.mjs rules '{"rules":{"note":"a; b && c"}}'`, '');
   assert.equal(quoted.acting, true);
-  assert.match(quoted.text, /^asked mission control to change/);
+  assert.match(quoted.text, /^asked mission control for the change/);
   void YEAR;
 });
 
