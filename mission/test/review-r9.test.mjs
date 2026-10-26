@@ -467,3 +467,12 @@ test('R9 #37: the masks catch SSHPASS=, pass=, mysql\'s attached -p, a Wi-Fi key
   const ps = Object.fromEntries([...src.matchAll(/^\$(CRED_\w+) = '((?:[^']|'')*)'$/gm)].map((m) => [m[1], m[2].replace(/''/g, "'")]));
   for (const [k, v] of [['CRED_MYSQL', PATTERNS.MYSQL], ['CRED_UCI', PATTERNS.UCI], ['CRED_KEY_JSON', PATTERNS.KEYJSON], ['CRED_SKANT', PATTERNS.SKANT], ['CRED_QUOTED', PATTERNS.QUOTED]]) assert.equal(ps[k], v, k);
 });
+
+// ---- #24: the chat's "Not sent" in the controls' form ----------------------------------------------------------------------------
+
+test('R9 #24: the chat says "Not sent at 21:04: <why>." as every control does', async () => {
+  const { notSentWords } = await import('../public/model.js');
+  assert.equal(`${notSentWords("mission control didn't accept it", '21:04')} Your message is still in the box.`, "Not sent at 21:04: mission control didn't accept it. Your message is still in the box.");
+  assert.match(page('chat.js'), /\$\{notSentWords\(plainError\(e\), sclock\(\)\)\} Your message is still in the box\./);
+  assert.doesNotMatch(page('chat.js'), /`Not sent: /);
+});

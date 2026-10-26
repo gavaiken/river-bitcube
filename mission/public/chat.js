@@ -3,7 +3,7 @@
 // their request by id, and keeps the pinned status bar and the composer. Server API unchanged: history, events, send, stop.
 import { mountShell, tick, art, fmt, control, confirm, api, esc, md, chip, mark, plainError, noAnswerText, WARN_MS, LOST_MS, poll, announce, setLive,
   serverNow, serverClock, sclock, noteServerTime } from '/ui.js';
-import { TZ, applyingWords, derive, entryWords, entrySaid, entriesAt, endedOnce } from '/model.js';
+import { TZ, applyingWords, derive, entryWords, entrySaid, entriesAt, endedOnce, notSentWords } from '/model.js';
 import { stateOf as judge, stepWords, stepsToggle, excerpt } from '/chat-words.js';
 
 const $ = (id) => document.getElementById(id);
@@ -267,7 +267,7 @@ async function send() {
     // no usable answer (none in time, one that couldn't be read, a proxy's error page): it may or may not have been sent
     sendShow('failed', e?.noAnswer || e?.unreadable || e?.notOurs
       ? `${noAnswerText(e, 'look for it above before sending again', serverNow())} Your message is still in the box.`
-      : `Not sent: ${plainError(e)} (${sclock()}). Your message is still in the box.`);
+      : `${notSentWords(plainError(e), sclock())} Your message is still in the box.`);   // the controls' form: "Not sent at 21:04: <why>." (R9 #24)
   } finally { sending = false; if (sendStatus.className.includes('failed')) sendBtn.disabled = !text.value.trim(); }
 }
 sendBtn.addEventListener('click', send);
