@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { derive, dur, daytimeMinutes, intensityWord, seasonOfPhase, contactFor, PAGE_STALE_S, POLL_S, STALE_FACTOR } from '../public/model.js';
+import { derive, dur, daytimeMinutes, intensityWord, seasonOfPhase, contactFor, seasonPace, EXPECT_S, PAGE_STALE_S, POLL_S, STALE_FACTOR } from '../public/model.js';
 
 const DIR = new URL('./fixtures/', import.meta.url);
 const fixtures = readdirSync(DIR).filter((f) => f.endsWith('.json') && !f.startsWith('_')).sort()
@@ -607,11 +607,12 @@ test('model sentences carry no ages that freeze while the page ticks: clock time
   const AGO = /\b\d+ (?:s|min|h|days) ago\b|\bin \d+ (?:s|min|h)\b/;
   for (const name of ['all-good', 'river-cam-stale', 'seasons-not-running', 'no-internet', 'just-booted', 'bitcube-offline']) {
     const m = run(byName[name]);
-    // (Dave's agent's summary keeps "Last updated N ago": the Recent feed drops exactly that form, lib/history.mjs timeless())
-    for (const it of m.items) for (const k of ['summary', 'detail']) if (!(it.id === 'modal agent' && k === 'summary')) assert.doesNotMatch(it[k] ?? '', AGO, `${name} ${it.id}.${k}: ${it[k]}`);
+    for (const it of m.items) for (const k of ['summary', 'detail']) assert.doesNotMatch(it[k] ?? '', AGO, `${name} ${it.id}.${k}: ${it[k]}`);
     for (const p of m.problems) assert.doesNotMatch(p.detail, AGO, `${name} ${p.id}: ${p.detail}`);
   }
   const m = run(byName['all-good']);
+  // Dave's agent on schedule: the summary says so, the detail has the clock times (no "Last updated 3 min ago" that freezes)
+  assert.equal(m.items.find((x) => x.id === 'modal agent').summary, 'Updating on schedule');
   assert.match(m.items.find((x) => x.id === 'modal agent').detail, /^Last updated at \d\d:\d\d; next update due at \d\d:\d\d/);
   assert.equal(m.items.find((x) => x.id === 'modal link').summary, 'Posting');
   assert.match(m.items.find((x) => x.id === 'modal link').detail, /^Gallery clip at \d\d:\d\d, river clip at \d\d:\d\d/);
@@ -653,4 +654,44 @@ test("the model's own words: no raw display names on the main view (R5 #28)", ()
   assert.doesNotMatch(`${p.summary} ${p.detail}`, /M14/);
   assert.match(p.detail, /^bitcube sees only its own small screen/);
   assert.match(p.raw, /M14/, 'the names go to Addresses and links');
+});
+
+test("the mode's pace comes from the year-length rule, never a fixed 'one season a minute' (R5 #18)", () => {
+  assert.equal(seasonPace(240), 'one season a minute');
+  assert.equal(seasonPace(120), 'one season every 30 s');
+  assert.equal(seasonPace(60), 'one season every 15 s');
+  assert.equal(seasonPace(480), 'one season every 2 min');
+  assert.equal(seasonPace(600), 'one season every 2.5 min');
+  assert.equal(seasonPace(1800), 'one season every 7.5 min');
+  assert.equal(seasonPace(null), null);
+  assert.equal(seasonPace('x'), null);
+  const fx = clone(byName['all-good']);
+  let m = run(fx);
+  assert.equal(m.show.mode.words, 'the clock turns the year, one season a minute');
+  fx.status.seasons.value.rules.cycle_seconds.value = 600;
+  m = run(fx);
+  assert.equal(m.show.mode.words, 'the clock turns the year, one season every 2.5 min');
+  assert.match(m.items.find((x) => x.id === 'seasons').detail, /^The clock turns the year, one season every 2\.5 min\./);
+  // the rules not known (the year only from the full check): no pace is made up
+  delete fx.status.seasons.value.rules;
+  m = run(fx);
+  assert.equal(m.show.mode.words, 'the clock turns the year');
+});
+
+test("a calibration's time left is on show.calibration, so a tile can say it without parsing words", () => {
+  const fx = calib(clone(byName['all-good']), { stage: 'ropes-capture', expected_s: 170, elapsed_s: 20 });
+  let m = run(fx);
+  assert.equal(m.show.calibration.dry, false);
+  assert.equal(m.show.calibration.stage, 'ropes-capture');
+  assert.ok(m.show.calibration.left_s >= 30, String(m.show.calibration.left_s));
+  assert.match(m.show.ropes.words, new RegExp(`about ${dur(m.show.calibration.left_s)} more$`));
+  assert.equal(run(byName['all-good']).show.calibration, null);
+  calib(fx, { mode: 'dry-run', dry_run: true, stage: 'ropes-capture', expected_s: 170, elapsed_s: 5 });
+  m = run(fx);
+  assert.equal(m.show.calibration.dry, true);
+});
+
+test("the usual time of each change is the server's own (lib/applying.mjs EXPECT_S): a page shows 'usually about 1 min' from it", async () => {
+  const { EXPECT_S: server } = await import('../lib/applying.mjs');
+  assert.deepEqual(EXPECT_S, server);
 });

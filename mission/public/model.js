@@ -15,7 +15,7 @@
 //     checked   { page_age_s, bitcube_age_s, seasons_age_s, modal_age_s, probe_age_s }: seconds, or null
 //   problems: [ { id, level, headline, detail, action, items } ]   one per cause, the headline's first
 //   show: what the piece is doing: { file, boot_file, show_files, season, phase, weights, intensity, mode, target,
-//         presence, ropes, panels, river, scene, modal, fresh, words }, each with plain words for the page
+//         presence, ropes, panels, river, scene, modal, fresh, calibration, applying, words }, each with plain words for the page
 //         (ropes and panels carry { state, words, summary }: a state word, a sentence, and the item's summary)
 //   items: [ { id, name, level, summary, detail, action, checked_from, age_s, stale, address, cause, muted } ]
 //     one per piece of equipment or link, what matters most first and OK items last. `level` is the state of
@@ -66,6 +66,9 @@ export const APPLY_BLOCKS = {
 /** The team's words for a change in flight when the server's entry has no label of its own. */
 export const APPLY_LABEL = { switch: 'a show-file switch', rebuild: "a rebuild of the river's year", bootfile: 'the boot file change', lightsroute: 'a lighting port change',
   ropes: 'a ropes change', hub75: 'a panels change', mode: 'a mode change', target: 'a target change', rules: 'a rules change', 'rules-reset': 'a rules reset', calibrate: 'a calibration start' };
+/** The usual time of each change, in seconds, until bitcube's reading shows it: the server's own table (lib/applying.mjs EXPECT_S,
+ *  kept equal by test/model.test.mjs), so a page can say "usually about 1 min" for its own change before status.applying has it. */
+export const EXPECT_S = { switch: 60, rebuild: 150, bootfile: 15, lightsroute: 20, ropes: 15, hub75: 15, mode: 3, target: 3, rules: 3, 'rules-reset': 3, calibrate: 10 };
 export const CONFIRM_MIN_S = 120;               // a change not shown by bitcube's reading within max(3 × its usual time, this) is "unconfirmed"
 export const LONG_CHANGE_S = 20;                // a change usually longer than this shows its elapsed m:ss and the usual time
 /** How long a change may go unconfirmed (and an entry in status.applying stay a lock): 3 × its usual time, at least 2 min. */
@@ -146,6 +149,16 @@ export function dur(s) {
   if (s < 90 * 60) return `${Math.round(s / 60)} min`;
   if (s < 48 * 3600) return `${Math.round(s / 3600)} h`;
   return `${Math.round(s / 86400)} days`;
+}
+/** How fast Automatic turns the year, from the year-length rule (cycle_seconds; four seasons a year): "one season a minute",
+ *  "one season every 30 s", "one season every 2.5 min"; null when the rule isn't known. */
+export function seasonPace(cycleS) {
+  const per = typeof cycleS === 'number' && Number.isFinite(cycleS) && cycleS > 0 ? cycleS / 4 : null;
+  if (per == null) return null;
+  if (Math.abs(per - 60) < 0.5) return 'one season a minute';
+  if (per < 90) return `one season every ${Math.round(per)} s`;
+  const min = Math.round(per / 30) / 2;
+  return `one season every ${Number.isInteger(min) ? min : min.toFixed(1)} min`;
 }
 export function intensityWord(x) { return x == null ? null : INTENSITY_WORDS.find(([max]) => x < max)[1]; }
 /** Wall-clock parts in the installation's zone (falls back to a fixed -7 h if Intl has no zones). */
@@ -389,9 +402,11 @@ export function derive(status, nowMs) {
   else it('touchdesigner', 'ok', `Running ${label} at ${Math.round(fps)} frames a second`, `${cap(label)}: ${fps} frames a second, ${tdErrors ? `${tdErrors} errors in the file` : 'no errors'}.`, { raw: `file: ${td.file}` });
 
   const intensity = yearOk ? num(year.intensity) : null;
+  // Automatic's pace from the year-length rule (the seasons page's rules; the full check's copy of the year has none)
+  const pace = seasonPace(num(obj(obj(year?.rules)?.cycle_seconds)?.value) ?? num(obj(obj(y?.rules)?.cycle_seconds)?.value));
   const modeWords = !yearOk ? '' : year.mode === 'manual' ? `set by hand, heading for ${year.target ?? obj(year.manual)?.season ?? 'a season'}`
     : year.mode === 'dynamic' ? (year.effective_mode === 'dynamic' ? 'people are steering it' : 'dynamic, but running automatic while the people counter is unavailable')
-    : 'the clock turns the year, one season a minute';
+    : ['the clock turns the year', pace].filter(Boolean).join(', ');
   if (y && yearOk) it('seasons', 'ok', `${cap(y.mode)}, ${y.season}, ${intensityWord(intensity)}`,
     `${cap(modeWords)}. ${Array.isArray(y.history) && y.history.length === 0 ? 'The year has just started. ' : ''}${counter ? '' : 'There is no people counter yet; that is normal.'}`,
     { source: 'seasons' });
@@ -496,7 +511,7 @@ export function derive(status, nowMs) {
     { source: 'modal', action: DAVE_LATE_ACTION });
   else if (nextMs != null && nextMs < now) it('modal agent', 'ok', `${inRest(now) ? 'Resting overnight' : 'Update due'}; last update ${Number.isFinite(finMs) ? clockDay(finMs, now) : 'not known'}`,
     inRest(now) ? 'It rests from 23:55 to 07:00 Pacific, so a missed update is normal at this hour.' : 'An update is due; it gets 15 minutes of daytime before that counts as a fault.', { source: 'modal' });
-  else it('modal agent', 'ok', Number.isFinite(finMs) ? `Last updated ${dur(sinceTickS)} ago` : 'Updating on schedule', `${Number.isFinite(finMs) ? `Last updated at ${clockDay(finMs, now)}` : 'Last update time not known'}${nextMs != null ? `; next update due at ${clockDay(nextMs, now)}` : ''}${obj(m.scene) ? `; its scene is ${m.scene.animation} / ${m.scene.palette}` : ''}.`, { source: 'modal', raw: `tick ${m.tick}, mood ${m.mood ?? 'none'}` });
+  else it('modal agent', 'ok', 'Updating on schedule', `${Number.isFinite(finMs) ? `Last updated at ${clockDay(finMs, now)}` : 'Last update time not known'}${nextMs != null ? `; next update due at ${clockDay(nextMs, now)}` : ''}${obj(m.scene) ? `; its scene is ${m.scene.animation} / ${m.scene.palette}` : ''}.`, { source: 'modal', raw: `tick ${m.tick}, mood ${m.mood ?? 'none'}` });
 
   const sinceWords = (c) => (c.since ? `since ${c.since}` : 'for a while');
   if (behind) unknown('modal link', behind);
@@ -712,6 +727,8 @@ export function derive(status, nowMs) {
     // the year's recent path (the seasons page keeps a point every 10 s): when each season began, for a timeline
     history: Array.isArray(y?.history) ? y.history.map(obj).filter((h) => h && num(h.t) != null)
       .map((h) => ({ t_ms: h.t * 1000, phase: num(h.phase), season: seasonOfPhase(num(h.phase)), intensity: num(h.intensity) })) : [],
+    // a calibration run: its time left (on the server's clock), its stage, and whether it is a dry run that touches no lights
+    calibration: calibrating ? { left_s: calLeftS, stage: typeof cal.stage === 'string' ? cal.stage : null, dry: calDry, words: calStageWords } : null,
     uptime_s: upS != null ? Math.round(upS) : null,   // bitcube's uptime as of the server's clock (its restart = now - uptime)
     applying,   // [{ id, action, label, file, started_at (ms), expect_s, elapsed_s, blocks, words }]: changes in flight, from any phone
     words: tdOk ? `${cap(tdWords)}${yearOk ? `: ${year.season}, ${intensityWord(intensity)}, ${modeWords}` : ''}. ${cap(ropesWords)}.` : (top?.headline ?? ''),
