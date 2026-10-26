@@ -829,7 +829,8 @@ export function ctlView(s, why = null) {
 export function elapsedClock(s) { s = Math.max(0, Math.floor(num(s) ?? 0)); return `${Math.floor(s / 60)}:${pad(s % 60)}`; }
 /** The applying line: a long change (usually over 20 s) adds its elapsed m:ss and the usual time; a short one, the text alone. */
 export function applyingWords(text, elapsedS, expectS) {
-  return num(expectS) != null && expectS > LONG_CHANGE_S ? `${text} · ${elapsedClock(elapsedS)} · usually about ${dur(expectS)}` : text;
+  // a long change's line goes on after its words, so their "…" goes: "Applying: the switch · 0:34 · usually about 1 min"
+  return num(expectS) != null && expectS > LONG_CHANGE_S ? `${String(text).replace(/…$/, '')} · ${elapsedClock(elapsedS)} · usually about ${dur(expectS)}` : text;
 }
 /** The confirming line: sent, waiting for bitcube's reading to show it, with the time since it was sent. */
 export function confirmingWords(elapsedS) { return `Sent · waiting for bitcube to show it · ${elapsedClock(elapsedS)}`; }

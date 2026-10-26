@@ -329,7 +329,7 @@ test('describeEvent: one plain sentence for every kind, in glossary words', () =
   assert.equal(describeEvent(item(a, 'seasons')), "The river's year is fine: automatic, spring, flowing");
   assert.equal(describeEvent(item(a, 'modal agent')), "Dave's agent is fine: updating on schedule", 'its summary carries no age that froze ("last updated 3 min ago")');
   assert.equal(describeEvent(show(a, 'file')), "TouchDesigner is showing the river's year");
-  assert.equal(describeEvent(show(a, 'mode')), 'The year runs in automatic mode: the clock turns the year, one season a minute');
+  assert.equal(describeEvent(show(a, 'mode')), 'The year runs in automatic mode: the clock turns the year by itself'); // its pace depends on the rule, which Recent doesn't keep
   assert.equal(describeEvent(show(a, 'season')), 'The season is spring');
   assert.equal(describeEvent(show(a, 'ropes')), 'The ropes show the river');
   const b = h.observe(payload('lights-not-connected'), T0 + MIN);

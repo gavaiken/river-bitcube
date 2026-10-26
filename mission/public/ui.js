@@ -550,7 +550,7 @@ export function control(target, opts = {}) {
   }
   function failWords(e) {
     const why = plainError(e);
-    return /^wait: /i.test(why) ? `${o.fail}: ${why}. Try again when it is done.` : /try again/i.test(why) ? `${o.fail}: ${why} (${fmt.clock(now())}).` : `${o.fail}: ${why} (${fmt.clock(now())}). Try again, or check Status.`;
+    return /^wait: /i.test(why) ? `${o.fail}: ${why.slice(6)}. Try again when it is done.` : /try again/i.test(why) ? `${o.fail}: ${why} (${fmt.clock(now())}).` : `${o.fail}: ${why} (${fmt.clock(now())}). Try again, or check Status.`;
   }
   async function send(next) {
     applyText = null;
@@ -581,7 +581,7 @@ export function control(target, opts = {}) {
     // judged again now it is answered: a control that became impossible meanwhile sends nothing
     const ans = ctlStep(s, { type: yes ? 'yes' : 'no', why: o.why, now: now() });
     if (ans.effect === 'send') return send(ans);
-    if (ans.notSent) return go(ans, `Not sent: ${ans.notSent} (${fmt.clock(now())}).`);
+    if (ans.notSent) return go(ans, `Not sent: ${String(ans.notSent).replace(/^wait: /i, '')} (${fmt.clock(now())}).`);
     s = ans; paint();
   });
   function update(n = {}) {
@@ -596,7 +596,7 @@ export function control(target, opts = {}) {
       // a confirm still open for a control that just became impossible is withdrawn, with the reason on the control and
       // focus on its status line (the sheet's close() puts it there: the button is disabled now)
       const a = asking; asking = null;
-      go(next, `Not sent: ${next.notSent} (${fmt.clock(now())}).`);
+      go(next, `Not sent: ${String(next.notSent).replace(/^wait: /i, '')} (${fmt.clock(now())}).`);
       a?.close();
       if (!host.contains(document.activeElement)) focusEl(status);
       return;

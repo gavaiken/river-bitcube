@@ -168,9 +168,9 @@ test('failed and unconfirmed: a refusal fails; no answer, or an answer that coul
 test('elapsed m:ss and "usually about" for long changes only; ticking times are for the screen, never the live region', () => {
   assert.deepEqual([0, 9, 34, 60, 65, 754].map(elapsedClock), ['0:00', '0:09', '0:34', '1:00', '1:05', '12:34']);
   assert.equal(LONG_CHANGE_S, 20);
-  assert.equal(applyingWords('Applying: the switch…', 34, 60), 'Applying: the switch… · 0:34 · usually about 1 min');
+  assert.equal(applyingWords('Applying: the switch…', 34, 60), 'Applying: the switch · 0:34 · usually about 1 min');
   assert.equal(applyingWords('Applying: a ropes change…', 3, 10), 'Applying: a ropes change…', 'a short change shows no clock');
-  assert.equal(applyingWords('Rebuilding…', 75, 400), 'Rebuilding… · 1:15 · usually about 7 min');
+  assert.equal(applyingWords('Rebuilding…', 75, 400), 'Rebuilding · 1:15 · usually about 7 min');
   assert.equal(applyingWords('Sending…', 5, null), 'Sending…');
   assert.equal(confirmingWords(34), 'Sent · waiting for bitcube to show it · 0:34');
 });

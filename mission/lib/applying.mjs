@@ -9,7 +9,7 @@
 //   run(action, body, fn, { clock, running })  409 "wait: <label> is being applied (started 21:04)" on a conflict; else
 //                                              records the entry, awaits fn(), and removes the entry when it ends, either way
 // Only the actions in BLOCKS are recorded or checked (a calibration only for its start: Stop must always get through).
-import { FILES, TZ } from '../public/model.js';
+import { FILES, TZ, EXPECT_S } from '../public/model.js';
 
 /** Everything that touches TouchDesigner or the year: a switch or a rebuild restarts TouchDesigner, so nothing else may run. */
 export const TOUCHES_TD = ['ropes', 'hub75', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
@@ -29,7 +29,7 @@ export const BLOCKS = {
  *  gives up on confirming at 3 x this, at least 2 min). A switch: about 10 s to stop TouchDesigner and start the launcher, which
  *  waits 10 s and opens the file (about 40 s). A rebuild: the build and the save, then the switch. A calibration's entry is
  *  only its start (the run reports its own progress). */
-export const EXPECT_S = { switch: 60, rebuild: 150, bootfile: 15, lightsroute: 20, ropes: 15, hub75: 15, mode: 3, target: 3, rules: 3, 'rules-reset': 3, calibrate: 10 };
+export { EXPECT_S };   // one table for the server and the pages: public/model.js
 
 const fileLabel = (f) => FILES[f]?.label ?? 'a show file';
 /** The entry's label, in team words ("the switch to the live river"); `running` is the show file TouchDesigner runs now, so a

@@ -320,7 +320,7 @@ const SAID = [
   [/^Sync has seen no new state/, 'has seen no new state from Dave'], [/^Current run can't/, "can't"],
 ];
 const STAGE = { 'ropes-capture': 'photographing the ropes', 'ropes-decode': 'working out where each rope is', 'hub75-capture': 'photographing the panels', 'hub75-locate': 'finding the panels', done: 'done' };
-const MODE_WHY = { automatic: 'the clock turns the year, one season a minute', dynamic: 'the people in the room steer the year', manual: 'someone is steering the year by hand' };
+const MODE_WHY = { automatic: 'the clock turns the year by itself', dynamic: 'the people in the room steer the year', manual: 'someone is steering the year by hand' };
 const cap = (s) => (s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s);
 const lc = (s) => (!s || /^(?:[A-Z][a-z]+[A-Z]|[A-Z]{2}|Dave|Modal|Gray|Mac |Wi-Fi|Starlink|Colorlight|Ethernet|Tailscale)/.test(s) ? s : s[0].toLowerCase() + s.slice(1));   // keep proper nouns
 /** A show file in glossary words; an unlisted one by its name without the extension (never "toe" in a feed). */
