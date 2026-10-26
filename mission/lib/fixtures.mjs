@@ -200,7 +200,8 @@ export class FixtureMission {
     if (blocked) throw blocked;
     // and TouchDesigner opening a file by itself, as the live server refuses it (R9 #34)
     const w = this.worldFor(scenario);
-    const starting = w.applying.conflict(action, checked) ? null : startingBlocked(action, () => ({ ...this.snapshot(scenario), now: this.clock(scenario) }), this.clock(scenario));
+    let probe; try { probe = this.snapshot(scenario).probe; } catch { probe = { value: 'unreadable' }; }   // a half-edited scenario: closed
+    const starting = w.applying.conflict(action, checked) ? null : startingBlocked(action, probe);
     if (starting) throw starting;
     let td = null;                 // TouchDesigner in this world: a switch to the file it runs reads "the restart on ..."
     try { td = this.snapshot(scenario).probe?.value?.td ?? null; } catch { /* a half-edited scenario: plain words */ }

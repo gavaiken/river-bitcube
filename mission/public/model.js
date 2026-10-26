@@ -939,7 +939,8 @@ export function derive(status, nowMs) {
   const cantOld = pr && pb.stale ? `mission control hasn't heard from bitcube for ${dur(pb.age_s)}` : null;
   // never a second switch while TouchDesigner is opening a file: it kills the half-opened one (another minute dark), and
   // while bitcube's own login is still opening it, a second TouchDesigner could start beside it
-  const tdBusy = tdRestarting ? 'TouchDesigner is restarting: wait a minute' : tdOffBooting || (tdStarting && booted) ? 'TouchDesigner is still starting: wait a minute' : null;
+  // (by an entry: the restart it holds; else the full check's own reading, the very rule the server refuses by: tdStartingWhy)
+  const tdBusy = byEntry ? TD_RESTARTING_WHY : tdStartingWhy(pb.value);
   // first the page's contact and bitcube itself, then a change in flight anywhere (status.applying), then the model's own reasons
   const first = (action) => cantPage ?? cantBitcube ?? waitFor(action);
   const calOn = calibrating ? (calDry ? 'a dry run is already running' : 'a calibration is already running') : null;
@@ -977,11 +978,27 @@ export function derive(status, nowMs) {
 }
 
 /** Why a switch or a rebuild must wait while TouchDesigner is starting or restarting (a second one kills the half-opened file:
- *  another minute dark), in the pages' words ("TouchDesigner is still starting: wait a minute"), or null: the server refuses one with
- *  them (409), also when no entry holds the lock (bitcube's own boot, a crash relaunch), as every page greys it (R9 #34). status: a
- *  GET /api/status payload; nowMs: the server's clock. */
-export function tdStarting(status, nowMs) {
-  try { return derive(status, nowMs).controls.switch.starting ?? null; } catch { return null; }
+ *  another minute dark), in the pages' words, or null. One small rule on the full check's reading itself (pr: probe.ps1's answer,
+ *  the snapshot's probe.value), for derive()'s controls and the server's 409 alike (lib/mission.mjs startingBlocked, R9 #34; never
+ *  the whole page model on the server: CR9 #11): restarting on a file; not running yet, or answering with no frame rate yet, while
+ *  bitcube has only just booted. No reading at all (none yet, or the check failed) says nothing (the pages have their own reasons,
+ *  and bitcube answers a switch itself); a reading that can't say (no td, an uptime that isn't a number) is TD_UNREADABLE_WHY: a
+ *  switch then waits for a check that can. A change in flight that restarts TouchDesigner is derive()'s to add (byEntry). */
+export const TD_STARTING_WHY = 'TouchDesigner is still starting: wait a minute';
+export const TD_RESTARTING_WHY = 'TouchDesigner is restarting: wait a minute';
+export const TD_UNREADABLE_WHY = "bitcube's full check can't say whether TouchDesigner is starting: wait a minute and try again";
+export function tdStartingWhy(pr) {
+  if (pr == null) return null;
+  const p = obj(pr), td = obj(p?.td), up = p?.uptime_h;
+  if (!p || !td || (up != null && num(up) == null)) return TD_UNREADABLE_WHY;
+  const err = td.ok === false ? String(td.error || 'not answering') : null, booted = num(up) != null && up < COMING_UP_H;
+  if (err) return /restarting/i.test(err) ? TD_RESTARTING_WHY : /not running/i.test(err) && booted ? TD_STARTING_WHY : null;
+  return typeof td.file === 'string' && num(td.fps) == null && booted ? TD_STARTING_WHY : null;
+}
+/** tdStartingWhy for a GET /api/status payload (its probe source: a failed check is no reading). */
+export function tdStarting(status) {
+  const p = obj(obj(status)?.probe);
+  return tdStartingWhy(p && !p.error ? p.value ?? null : null);
 }
 
 // ---- one control's state (docs/mission-ui.md "Applying a change") -----------------------------------------------------

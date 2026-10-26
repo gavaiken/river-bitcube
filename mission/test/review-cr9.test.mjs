@@ -314,3 +314,50 @@ test("CR9 #10: when the server's verdict ends a press in flight, expired and hel
   // Lights' Start, Dry run and Rebuild refresh on it (pollCal; Rebuild remembers the entry as its own)
   assert.match(page('lights.js'), /serverConfirms: true, onSent: afterStart, onFail: \(\) => pollCal\(\) \}\);/);
 });
+
+// ---- #11: the server's own check that TouchDesigner is starting, on the reading itself, closed when it can't tell -----------------
+
+test('CR9 #11: "TouchDesigner is starting" is one small rule on the full check\'s reading (model.js tdStartingWhy), the pages\' and the server\'s', async () => {
+  const { tdStartingWhy, TD_STARTING_WHY, TD_RESTARTING_WHY, TD_UNREADABLE_WHY, derive } = await import('../public/model.js');
+  assert.equal(TD_STARTING_WHY, 'TouchDesigner is still starting: wait a minute');
+  assert.equal(TD_RESTARTING_WHY, 'TouchDesigner is restarting: wait a minute');
+  for (const [pr, want] of [
+    [{ uptime_h: 0.05, td: { ok: false, error: 'TouchDesigner is not running' } }, TD_STARTING_WHY],     // bitcube's own boot
+    [{ uptime_h: 30, td: { ok: false, error: 'TouchDesigner is not running' } }, null],                 // a fault, not a start
+    [{ uptime_h: 30, td: { ok: false, error: `restarting on ${YEAR}` } }, TD_RESTARTING_WHY],          // a crash relaunch, no entry
+    [{ uptime_h: 0.1, td: { ok: true, file: YEAR } }, TD_STARTING_WHY],                                // its first check: no frame rate yet
+    [{ uptime_h: 30, td: { ok: true, file: YEAR } }, null],
+    [{ uptime_h: 30, td: { ok: true, file: YEAR, fps: 60 } }, null],
+    [null, null],                                                                                       // no reading: the pages' own reasons
+    [{ uptime_h: 30 }, TD_UNREADABLE_WHY], [{ uptime_h: 30, td: 'x' }, TD_UNREADABLE_WHY], [{ uptime_h: 'soon', td: { ok: true, file: YEAR } }, TD_UNREADABLE_WHY], ['x', TD_UNREADABLE_WHY],
+  ]) assert.equal(tdStartingWhy(pr), want, JSON.stringify(pr));
+  // the pages grey a switch and a rebuild by the very rule
+  const t = T0, booting = payload({ t, uptime_h: 0.05, td: { ok: false, error: 'TouchDesigner is not running' } });
+  assert.equal(derive(booting, t).controls.switch.starting, TD_STARTING_WHY);
+  assert.equal(derive(booting, t).controls.rebuild.why, TD_STARTING_WHY);
+});
+
+test('CR9 #11: the server refuses a switch or rebuild it can\'t judge (a reading it can\'t read, a slip in the check): closed, with a clear 409', async () => {
+  const { startingBlocked, Mission } = await import('../lib/mission.mjs');
+  const { TD_UNREADABLE_WHY, TD_STARTING_WHY } = await import('../public/model.js');
+  const why = (action, probe) => startingBlocked(action, probe)?.message ?? null;
+  assert.equal(why('switch', { at: T0, value: { ok: true, uptime_h: 30, td: { ok: true, file: YEAR, fps: 60 } } }), null);
+  assert.equal(why('switch', { at: T0, value: { ok: true, uptime_h: 30 } }), TD_UNREADABLE_WHY);
+  assert.equal(why('rebuild', { at: T0, value: { get td() { throw new Error('a slip'); } } }), TD_UNREADABLE_WHY, 'an exception fails closed');
+  assert.equal(startingBlocked('rebuild', { at: T0, value: { uptime_h: 30 } }).status, 409);
+  assert.equal(why('ropes', { at: T0, value: { uptime_h: 30 } }), null, 'only a switch or a rebuild');
+  assert.equal(why('switch', { at: T0, error: 'ssh: timed out' }), null, 'a failed check says nothing: bitcube answers the switch itself');
+  assert.equal(why('switch', undefined), null);
+  // the live server judges its own reading, never the whole page model
+  let t = T0, reading = { ok: true, uptime_h: 30 };
+  const m = new Mission({ now: () => t, later: () => {}, probe: async (_h, args) => (args ? { ok: true, td: { ok: true, file: YEAR } } : reading) });
+  await m.pollProbe();
+  await assert.rejects(m.control('switch', { file: LIVE }), (e) => e.status === 409 && e.message === TD_UNREADABLE_WHY);
+  t += 5000; reading = { ok: true, uptime_h: 0.05, td: { ok: true, file: YEAR } };
+  await m.pollProbe();
+  await assert.rejects(m.control('rebuild', { file: YEAR }), (e) => e.status === 409 && e.message === TD_STARTING_WHY);
+  const lib = src('../lib/mission.mjs');
+  assert.match(lib, /startingBlocked\(action, this\.data\.probe\)/);
+  assert.doesNotMatch(lib, /tdStarting\(snap\(\)/);
+  assert.match(src('../lib/fixtures.mjs'), /try \{ probe = this\.snapshot\(scenario\)\.probe; \} catch \{ probe = \{ value: 'unreadable' \}; \}[^\n]*\n[^\n]*startingBlocked\(action, probe\)/, 'fixture mode: its scenario\'s reading, closed when it can\'t be read');
+});
