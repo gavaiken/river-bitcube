@@ -2,8 +2,9 @@
 Mac mini where this suite runs, so these read the scripts: where the guard sits, what it checks and what it answers.
 
 - probe.ps1 refuses ropes, hub75, switch, rebuild and lightsroute while a calibration runs (calibration.json says running and
-  its job's process is alive): the rule mission control's calBlocked applies, now on bitcube itself, so no path (a phone, the
-  studio chat, a hand-run SSH) can spoil a run.
+  its job's process is alive, and it is not a dry run): the rule mission control's calBlocked applies, now on bitcube itself,
+  so no change made through probe.ps1 (a phone, the studio chat, a hand-run SSH) can spoil a run. Only probe.ps1 is guarded:
+  td.ps1, td_save.ps1, Start-River.cmd or a killed process are not (R7 #35: the chat keeps to mission control by its brief).
 - calibrate.ps1 -Action start says whether it launched the job: started false on every refusal (nothing runs), started true
   with the pid and its own clock (requested) once launched, and pending (a start, not a refusal or a maybe) when the job hasn't written yet.
 """
