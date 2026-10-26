@@ -1059,7 +1059,8 @@ document.addEventListener('click', async (e) => {
     case 'lightsroute': {
       const route = b.dataset.route, where = route === 'direct' ? "bitcube's LIGHTS port" : 'the spare router port';
       runControl('lightsroute', '/api/control/lightsroute', { route }, { btn: b, ask: { title: route === 'direct' ? "Use bitcube's LIGHTS port?" : 'Use the spare router port?', body: 'Moves the lighting network to that port. If the lighting switch is plugged into the other one, all 20 ropes go dark until it is moved back.', ok: 'Change the port', cancel: 'Leave it' },
-        what: changeLabel('lightsroute', { route }), done: `Now the lighting network is on ${where}`, fail: 'The port is unchanged', holds: (mm) => mm.show.ropes.route === route });
+        // done on the server's verdict: an answer that reads another port, or none in time, waits for a full check that shows it (R8 #31)
+        what: changeLabel('lightsroute', { route }), done: `Now the lighting network is on ${where}`, fail: 'The port is unchanged', serverConfirms: true, holds: (mm) => mm.show.ropes.route === route });
       break;
     }
     default: break;
