@@ -86,7 +86,8 @@ def probe_mask():
     body = body[:body.index('\n}\n')]
     steps = re.findall(r"-replace \$(CRED_\w+), '([^']*)'", body)
     assert [name for name, _ in steps] == ['CRED_URL', 'CRED_QUOTED', 'CRED_ESCAPED', 'CRED_BARE_JSON', 'CRED_BARE',
-                                           'CRED_AUTH', 'CRED_BEARER', 'CRED_USER', 'CRED_FLAG', 'CRED_SSHPASS'], steps
+                                           'CRED_AUTH', 'CRED_BEARER', 'CRED_USER', 'CRED_FLAG', 'CRED_SSHPASS',
+                                           'CRED_MYSQL', 'CRED_UCI', 'CRED_KEY_JSON', 'CRED_SKANT'], steps
     compiled = [(re.compile(pats[name], re.I), re.sub(r'\$(\d+)', r'\\g<\1>', repl)) for name, repl in steps]
 
     def mask(s):
@@ -134,6 +135,14 @@ PROBE_CASES = CASES + [
     ('docker run -u 1000:1000 img; sort -u a:b f', 'docker run -u 1000:1000 img; sort -u a:b f'),
     ('curl -s https://h/x | sort -u a:b', 'curl -s https://h/x | sort -u a:b'),
     ('"tokens_used": 3, cwd: /x', '"tokens_used": 3, cwd: /x'),
+    # R9 #37: SSHPASS and pass=, mysql's attached -p, a Wi-Fi key in uci or JSON, a bare sk-ant token; bypass, sort key= spared
+    ('SSHPASS=hunter2 sshpass -e ssh root@h', 'SSHPASS=*** sshpass -e ssh root@h'),
+    ('api.cgi?cmd=Snap&user=admin&pass=hunter2', 'api.cgi?cmd=Snap&user=admin&pass=***'),
+    ('mysql -u root -phunter2 river', 'mysql -u root -p*** river'),
+    ("uci set wireless.@wifi-iface[1].key='hunter2'", "uci set wireless.@wifi-iface[1].key='***'"),
+    ('{"ssid":"gray-river","key":"hunter2"}', '{"ssid":"gray-river","key":"***"}'),
+    (f'token sk-ant-oat01-{FAKE}', 'token sk-ant-***'),
+    ('op("x").bypass = True; sort key=name', 'op("x").bypass = True; sort key=name'),
 ]
 
 

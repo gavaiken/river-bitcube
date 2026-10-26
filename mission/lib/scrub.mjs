@@ -21,8 +21,9 @@
 const CREDS = String.raw`([a-z][a-z0-9+.-]*:\/\/)[^\s/?#"<>]*@`;
 /** A password-like key: password, passwd, pwd, passphrase, token, secret, api_key (apikey, api-key), also with a prefix
  *  (cam_password, CLAUDE_CODE_OAUTH_TOKEN, X-Auth-Token, access_token: R8 #38), glued too (PGPASSWORD, MYSQLPWD, accessToken:
- *  CR8 #5); a whole word that ends with one, never one that goes on (input_tokens, max_tokens, tokens_used, passwords, secret_ref). */
-const NAMES = String.raw`(?<![\w-])[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)(?![\w-])`;
+ *  CR8 #5); a whole word that ends with one, never one that goes on (input_tokens, max_tokens, tokens_used, passwords, secret_ref).
+ *  And pass alone or after a separator (pass=, db_pass, "pass":), and SSHPASS: never bypass, compass or a passage (R9 #37). */
+const NAMES = String.raw`(?<![\w-])(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])?pass|sshpass)(?![\w-])`;
 /** The key (never part of a longer word: input_tokens, passwords), its own quote (plain or escaped), then : or =. */
 const KEY = String.raw`(${NAMES}(?:\\?["'])?\s*[:=]\s*)`;
 /** The key in JSON text: quoted (plain or escaped: group 2, the quote the masked value gets), then :. */
@@ -53,14 +54,21 @@ const BARE_VALUE = String.raw`(?!\\?["'])(?!(?:null|true|false)(?![^\s"'&,;}\]])
 const AUTH = String.raw`(\bAuthorization\s*[:=]\s*["']?(?:(?:Bearer|Basic|Token|Digest)\s+)?)([^\s"',;]+)`;
 const BEARER = String.raw`(\bBearer\s+)([A-Za-z0-9._~+/=-]{12,})`;
 const USER = String.raw`((?:^|[\s"'\\/])(?:curl|wget|https?|xh)(?:\.exe)?\s(?:[^\n;&|]*?[\s"'])?(?:-u|--user)(?:[\s=]+|(?=[^\s=-]))[^\s:"'*]+:)([^\s"']+)`;
-const FLAG = String.raw`((?:^|\s)--?(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)\s+)(?![-*])([^\s"']+)`;
+const FLAG = String.raw`((?:^|\s)--?(?:[\w-]*[_-])?(?:password|passwd|pwd|passphrase|pass|token|secret|api[_-]?key)\s+)(?![-*])([^\s"']+)`;
 const SSHPASS = String.raw`(\bsshpass\s+-p\s*)([^\s"']+)`;
+/** R9 #37: mysql's password attached to -p (with a space it is a database name, and it asks); the Wi-Fi key the router keeps
+ *  (uci set ….key=, "option key" in its config); "key" as a JSON key (the router's answers carry the Wi-Fi key that way); a bare
+ *  Anthropic token (sk-ant-…), wherever it stands. */
+const MYSQL = String.raw`(\b(?:mysql|mysqldump|mysqladmin|mariadb)(?:\.exe)?\s(?:[^\n;&|]*?\s)?-p)([^\s"'-][^\s"']*)`;
+const UCI = String.raw`(\buci\s+(?:-\w+\s+)*(?:set|add_list)\s+[^\s=]*\.key=["']?|\boption\s+key\s+["']?)([^\s"']+)`;
+const KEYJSON = String.raw`((?<![\w-])["']key["']\s*:\s*["'])([^"']*)`;
+const SKANT = String.raw`(\bsk-ant-)([A-Za-z0-9_-]{8,})`;
 /** The patterns, as probe.ps1 writes them too (the tests compare the two). */
-export const PATTERNS = { CREDS, KEY, KEY_JSON, QUOTED, ESCAPED, ELEM, NESTED, BARE_JSON: KEY_JSON + BARE_VALUE, BARE: KEY + BARE_VALUE, AUTH, BEARER, USER, FLAG, SSHPASS };
-const RE = Object.fromEntries(['CREDS', 'QUOTED', 'ESCAPED', 'BARE_JSON', 'BARE', 'AUTH', 'BEARER', 'USER', 'FLAG', 'SSHPASS'].map((k) => [k, new RegExp(PATTERNS[k], 'gi')]));
+export const PATTERNS = { CREDS, KEY, KEY_JSON, QUOTED, ESCAPED, ELEM, NESTED, BARE_JSON: KEY_JSON + BARE_VALUE, BARE: KEY + BARE_VALUE, AUTH, BEARER, USER, FLAG, SSHPASS, MYSQL, UCI, KEYJSON, SKANT };
+const RE = Object.fromEntries(['CREDS', 'QUOTED', 'ESCAPED', 'BARE_JSON', 'BARE', 'AUTH', 'BEARER', 'USER', 'FLAG', 'SSHPASS', 'MYSQL', 'UCI', 'KEYJSON', 'SKANT'].map((k) => [k, new RegExp(PATTERNS[k], 'gi')]));
 /** An object's key whose value is a login, whatever it holds (a password-like key, a prefix allowed, glued too: never
  *  input_tokens, passwords, secret_ref). */
-const SECRET_KEY = /^[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)$/i;
+const SECRET_KEY = /^(?:[\w-]*?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key)|(?:[\w-]*[_-])?pass|sshpass|key)$/i;
 
 /** "rtsp://admin:pw@10.0.0.1/x" -> "rtsp://***@10.0.0.1/x", '"password":"x"' -> '"password":"***"', "?password=x" ->
  *  "?password=***", '"Token":{"name":"x"}' -> '"Token":"***"'; deep for objects and arrays; anything else unchanged. */
@@ -68,7 +76,8 @@ export function scrubCreds(x, depth = 0) {
   if (typeof x === 'string') {
     return x.replace(RE.CREDS, '$1***@').replace(RE.QUOTED, '$1$2***$4').replace(RE.ESCAPED, '$1$2***$5')
       .replace(RE.BARE_JSON, '$1$2***$2').replace(RE.BARE, '$1***')
-      .replace(RE.AUTH, '$1***').replace(RE.BEARER, '$1***').replace(RE.USER, '$1***').replace(RE.FLAG, '$1***').replace(RE.SSHPASS, '$1***');
+      .replace(RE.AUTH, '$1***').replace(RE.BEARER, '$1***').replace(RE.USER, '$1***').replace(RE.FLAG, '$1***').replace(RE.SSHPASS, '$1***')
+      .replace(RE.MYSQL, '$1***').replace(RE.UCI, '$1***').replace(RE.KEYJSON, '$1***').replace(RE.SKANT, '$1***');
   }
   if (depth > 20 || x == null || typeof x !== 'object') return x;
   if (Array.isArray(x)) return x.map((v) => scrubCreds(v, depth + 1));

@@ -440,3 +440,30 @@ test('R9 #38: the direct changes that read as checks now read as the change they
     assert.equal((await stepOf(cmd, 'Check it'))[1], false, cmd);
   }
 });
+
+// ---- #37: the login masks: what CR8 left (SSHPASS, pass=, mysql -p…, uci's key, a bare sk-ant token) ---------------------------
+
+test('R9 #37: the masks catch SSHPASS=, pass=, mysql\'s attached -p, a Wi-Fi key in uci, a JSON "key", and a bare sk-ant token', async () => {
+  const { scrubCreds, PATTERNS } = await import('../lib/scrub.mjs');
+  const F = 'NOT-A-REAL-PW-r9';
+  const cases = [
+    [`SSHPASS=${F} sshpass -e ssh root@192.168.9.1`, 'SSHPASS=*** sshpass -e ssh root@192.168.9.1'],
+    [`https://cam/cgi-bin/api.cgi?cmd=Snap&user=admin&pass=${F}`, 'https://cam/cgi-bin/api.cgi?cmd=Snap&user=admin&pass=***'],
+    [`{"user":"admin","pass":"${F}"} db_pass=${F}`, '{"user":"admin","pass":"***"} db_pass=***'],
+    [`mysql -u root -p${F} river`, 'mysql -u root -p*** river'],
+    [`uci set wireless.@wifi-iface[1].key='${F}'`, "uci set wireless.@wifi-iface[1].key='***'"],
+    [`option key '${F}'`, "option key '***'"],
+    [`{"ssid":"gray-river","key":"${F}","encryption":"psk2"}`, '{"ssid":"gray-river","key":"***","encryption":"psk2"}'],
+    [`my token is sk-ant-oat01-${F}xyzxyz`, 'my token is sk-ant-***'],
+    [`openssl enc -pass ${F} -in x`, 'openssl enc -pass *** -in x'],
+  ];
+  for (const [line, want] of cases) assert.equal(scrubCreds(line), want, line);
+  // never what isn't a login
+  for (const line of ['op("x").bypass = True', 'the bypass is open', 'sort key=name', 'the primary key: id', 'mysql -u root river', 'else: pass', 'uci show wireless',
+                      '"input_tokens": 12', 'a passage', 'compass=north']) assert.equal(scrubCreds(line), line, line);
+  assert.deepEqual(scrubCreds({ SSHPASS: F, pass: F, key: F, keys: ['a'], bypass: true }), { SSHPASS: '***', pass: '***', key: '***', keys: ['a'], bypass: true });
+  // probe.ps1 carries the very patterns (tools/tests/test_masks.py runs them)
+  const src = readFileSync(new URL('../../tools/mission/probe.ps1', import.meta.url), 'utf8');
+  const ps = Object.fromEntries([...src.matchAll(/^\$(CRED_\w+) = '((?:[^']|'')*)'$/gm)].map((m) => [m[1], m[2].replace(/''/g, "'")]));
+  for (const [k, v] of [['CRED_MYSQL', PATTERNS.MYSQL], ['CRED_UCI', PATTERNS.UCI], ['CRED_KEY_JSON', PATTERNS.KEYJSON], ['CRED_SKANT', PATTERNS.SKANT], ['CRED_QUOTED', PATTERNS.QUOTED]]) assert.equal(ps[k], v, k);
+});
