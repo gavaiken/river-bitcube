@@ -64,10 +64,14 @@ export const APPLY_BLOCKS = {
   ropes: ['ropes'], hub75: ['hub75'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
   calibrate: ['ropes', 'hub75', 'switch', 'lightsroute', 'rebuild', 'calibrate'],   // a calibration's start: what a running one blocks, and a second start
 };
+/** A calibration start that touches no lights, camera or TouchDesigner: a dry run, or a decode of earlier photos (calibrate.py
+ *  --dry-run, --decode-only; CR7 #6). Its entry locks only a second start, and it waits only for one (CR7 #7). */
+export const dryStart = (action, body) => action === 'calibrate' && !!body && typeof body === 'object' && body.action === 'start'
+  && (body.dry_run === true || (typeof body.decode_only === 'string' && body.decode_only !== ''));
 /** The team's words for a change in flight when the server's entry has no label of its own (an older server). */
 export const APPLY_LABEL = { switch: 'a show-file switch', rebuild: "the rebuild of the river's year", bootfile: 'the boot file change', lightsroute: 'the lighting port change',
   ropes: 'the ropes change', hub75: 'the panels change', mode: 'the mode change', target: 'the target change', rules: 'the rules change', 'rules-reset': 'the rules reset', calibrate: 'the start of a calibration' };
-/** One name per change (R7 #19), made here for the server's entries (lib/applying.mjs applyLabel), this phone's own applying
+/** One name per change (R7 #19), made here for the server's entries (lib/applying.mjs), this phone's own applying
  *  line, every other phone's band, Last done and the unconfirmed line: a noun phrase that names what it changes to, and reads in
  *  every frame ("Applying: …", "Wait: … is being applied.", "Waiting for bitcube to show …", "… was sent at 21:04"). `running`:
  *  the show file TouchDesigner runs now, so a switch to it is the button's "the restart on …". */
@@ -756,6 +760,8 @@ export function derive(status, nowMs) {
   // TouchDesigner, so it waits for a ropes change still in flight), as the server's Applying.conflict does
   // A dry run's start touches no lights: nothing waits for it but a second start (its entry's blocks), R7 #20
   const waitFor = (action) => { const a = applying.find((x) => x.blocks.includes(action) || (!x.dry && (APPLY_BLOCKS[action] ?? []).includes(x.action))); return a ? `wait: ${a.label} is being applied` : null; };
+  // a dry run's or a decode's start touches nothing a change in flight does: it waits only for another calibration start (CR7 #7)
+  const waitStart = () => { const a = applying.find((x) => x.action === 'calibrate'); return a ? `wait: ${a.label} is being applied` : null; };
 
   // ---- show: what the piece is doing -----------------------------------------------------------------------------
   // a restart (a switch, a rebuild, TouchDesigner opening a file at boot) has the ropes dark for a minute: never "not getting the
@@ -827,6 +833,7 @@ export function derive(status, nowMs) {
   const tdBusy = tdRestarting ? 'TouchDesigner is restarting: wait a minute' : tdOffBooting || (tdStarting && booted) ? 'TouchDesigner is still starting: wait a minute' : null;
   // first the page's contact and bitcube itself, then a change in flight anywhere (status.applying), then the model's own reasons
   const first = (action) => cantPage ?? cantBitcube ?? waitFor(action);
+  const calOn = calibrating ? (calDry ? 'a dry run is already running' : 'a calibration is already running') : null;
   const notYear = kind === 'year' ? null : kind ? "the river's year isn't running: switch to it first" : "what TouchDesigner is running isn't known";
   const controls = {
     mode: ctl(first('mode') ?? cantYear, { dynamic: ctl(first('mode') ?? cantYear ?? (counter ? null : "the people counter isn't available yet")) }),
@@ -843,8 +850,9 @@ export function derive(status, nowMs) {
     // a rebuild bakes the LED map into the river's year and ends in a switch: the switch's reasons, and only on the river's year
     rebuild: ctl(first('rebuild') ?? cantUnknown ?? tdBusy ?? cantOld ?? cantCal ?? (frozen ? "TouchDesigner isn't answering" : null) ?? notYear),
     // a calibration's start: TouchDesigner answering on a show file, the gallery camera reachable, nothing running already
-    calibrate: ctl(first('calibrate') ?? (calibrating ? (calDry ? 'a dry run is already running' : 'a calibration is already running') : null) ?? cantTd ?? (tdOk ? null : "TouchDesigner isn't answering")
-      ?? (galleryDown ? "the gallery camera isn't reachable" : null)),
+    // dry: a dry run's start (no lights, no camera, nothing on TouchDesigner): only contact, bitcube, another start, a run on
+    calibrate: ctl(first('calibrate') ?? calOn ?? cantTd ?? (tdOk ? null : "TouchDesigner isn't answering")
+      ?? (galleryDown ? "the gallery camera isn't reachable" : null), { dry: ctl(cantPage ?? cantBitcube ?? waitStart() ?? calOn) }),
   };
 
   const sources = {};

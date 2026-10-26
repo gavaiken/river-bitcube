@@ -10,7 +10,8 @@
 //                                              or it may or may not have happened (maybe: the call timed out). Times are on
 //                                              the clock the snapshot is served on (fixture mode: the scenario's moment, which
 //                                              stands still; started_at moves back as time passes)
-//   conflict(action) -> entry | null           the first entry that blocks this action, or that it would block
+//   conflict(action, body?) -> entry | null    the first entry that blocks this action, or that it would block; a dry run's or
+//                                              a decode's start (body) only another calibration start
 //   run(action, body, fn, opts) -> fn's answer, with applying_id: the entry's id (a maybe answer too), so a page knows which
 //                                              entry is its own. 409 "wait: <label> is being applied (started 21:04)" on a
 //                                              conflict; else records the entry and awaits fn(). When it ends: confirmed (its
@@ -30,7 +31,7 @@
 //                                              maybe? }], the entries that ended confirmed or ran out unconfirmed in the last
 //                                              ENDED_KEEP_MS, so every phone (and the one that sent it) sees the server's verdict
 // Only the actions in BLOCKS are recorded or checked (a calibration only for its start: Stop must always get through).
-import { TZ, EXPECT_S, APPLY_BLOCKS as BLOCKS, confirmLimitS, changeLabel, FILES } from '../public/model.js';
+import { TZ, EXPECT_S, APPLY_BLOCKS as BLOCKS, confirmLimitS, changeLabel, FILES, dryStart } from '../public/model.js';
 
 /** What an action in flight blocks (mission-ui.md "What blocks what"): one table for the server and the pages, model.js
  *  APPLY_BLOCKS. A boot-file change also keeps a calibration from starting, so the pages grey Calibrate exactly when the server
@@ -54,11 +55,6 @@ export const SOURCES = ['mission control', 'studio chat'];
 export const ENDED_KEEP_MS = 10 * 60_000;
 /** Fields kept on an entry for the server's own use, never served. */
 const INTERNAL = ['t0', 'answered', 'restart', 'sawDown'];
-
-/** The entry's label, in team words ("the switch to the live river", "the ropes change to dark"): model.js changeLabel, the one
- *  name every phone, Last done and the unconfirmed line use for it (R7 #19); `running` is the show file TouchDesigner runs now, so
- *  a switch to that same file reads as the button does ("the restart on the river's year"). */
-export function applyLabel(action, body = {}, { running = null } = {}) { return changeLabel(action, body, { running }); }
 
 const HHMM = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 /** A moment as the team's clock reads it: 24-hour Pacific, "21:04". */
@@ -125,9 +121,11 @@ export class Applying {
   }
 
   /** Both ways: an entry blocks what it names, and an action waits for an entry it would block (a switch restarts
-   *  TouchDesigner, so it waits for a ropes change in flight; a boot-file change for a calibration's start). */
-  conflict(action) {
+   *  TouchDesigner, so it waits for a ropes change in flight; a boot-file change for a calibration's start). A dry run's or a
+   *  decode's start (body) touches no lights, camera or TouchDesigner: it waits only for another calibration start (CR7 #7). */
+  conflict(action, body = null) {
     this.#prune();
+    if (dryStart(action, body)) { for (const e of this.entries.values()) if (e.action === 'calibrate') return e; return null; }
     const mine = BLOCKS[action] ?? [];
     for (const e of this.entries.values()) if (e.blocks.includes(action) || (!e.dry && mine.includes(e.action))) return e;
     return null;
@@ -148,13 +146,15 @@ export class Applying {
    *  The answer comes back with applying_id, the entry's id. */
   async run(action, body, fn, { clock = null, running = null, source = 'mission control', awaits = null, onPending = null, onConfirmed = null } = {}) {
     if (!recorded(action, body)) return fn();
-    const c = this.conflict(action);
+    const c = this.conflict(action, body);
     if (c) throw this.waitError(c, clock ? clock() : this.now());
     const id = `${this.prefix}${++this.seq}`;
     const f = FILE_ACTIONS.includes(action) && body && typeof body === 'object' && typeof body.file === 'string' && FILES[body.file] ? body.file : null;
-    // a dry run's start touches no lights, camera or TouchDesigner: it blocks only a second start, and nothing waits for it (R7 #20)
-    const dry = action === 'calibrate' && body?.dry_run === true;
-    const entry = { id, action, label: applyLabel(action, body, { running }), ...(f ? { file: f } : {}), source: SOURCES.includes(source) ? source : 'mission control',
+    // a dry run's start (or a decode of earlier photos: CR7 #6) touches no lights, camera or TouchDesigner: it blocks only a second
+    // start, and nothing waits for it (R7 #20)
+    const dry = dryStart(action, body);
+    // the change's one name (model.js changeLabel, R7 #19): a switch to the file TouchDesigner runs now reads "the restart on …"
+    const entry = { id, action, label: changeLabel(action, body, { running }), ...(f ? { file: f } : {}), source: SOURCES.includes(source) ? source : 'mission control',
                     phase: 'applying', t0: this.now(), expect_s: EXPECT_S[action], blocks: dry ? ['calibrate'] : BLOCKS[action], ...(dry ? { dry: true } : {}),
                     restart: action === 'switch' && !!f && f === running };
     this.entries.set(id, entry);

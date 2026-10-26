@@ -420,7 +420,7 @@ export function actionPhrase(ev) {
     case 'rules-reset': return ['Reset', 'reset', "the year's rules"];
     case 'ropes': return ['Turned', 'turn', b.dark === true ? 'the ropes dark' : 'the ropes on'];   // as planControl: only a real true goes dark
     case 'hub75': return ['Set', 'set', `the panel brightness to ${pct}`];
-    // a switch to the file TouchDesigner was running is the button's "Restart on …" (its label says so, applying.mjs applyLabel)
+    // a switch to the file TouchDesigner was running is the button's "Restart on …" (its label says so, model.js changeLabel)
     case 'switch': return /^the restart on /.test(String(ev.label ?? '')) ? ['Restarted', 'restart', `TouchDesigner on ${fileLabel(b.file)}`]
       : ['Switched', 'switch', `TouchDesigner to ${fileLabel(b.file)}`];
     case 'bootfile': return ['Set', 'set', `the boot file to ${fileLabel(b.file)}`];

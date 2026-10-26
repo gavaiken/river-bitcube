@@ -140,7 +140,9 @@ test('R7 #18: while a chosen switch, restart or rebuild restarts TouchDesigner, 
 
 test('R7 #19: one name per change, made in one place and the same on every phone, in Last done and in the history', async () => {
   const { changeLabel } = await import('../public/model.js');
-  const { applyLabel } = await import('../lib/applying.mjs');
+  const { Applying } = await import('../lib/applying.mjs');
+  // the server's entry, as status.applying serves it (applying.mjs labels it with model.js changeLabel)
+  const entryLabel = (action, body) => { const a = new Applying(); a.run(action, body, () => new Promise(() => {})); return a.list()[0]?.label; };
   const { lastDoneWhat } = await import('../public/status-words.js');
   const { describeEvent } = await import('../lib/history.mjs');
   const cases = [
@@ -154,7 +156,7 @@ test('R7 #19: one name per change, made in one place and the same on every phone
   ];
   for (const [action, body, want] of cases) {
     assert.equal(changeLabel(action, body), want, action);
-    assert.equal(applyLabel(action, body), want, `the server's entry: ${action}`);
+    assert.equal(entryLabel(action, body), want, `the server's entry: ${action}`);
   }
   assert.equal(changeLabel('switch', { file: YEAR }, { running: YEAR }), "the restart on the river's year");
   // Last done: the same name, one form ("The ropes change to dark"), for every action

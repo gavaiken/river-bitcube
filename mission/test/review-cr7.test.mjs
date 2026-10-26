@@ -81,3 +81,58 @@ test('CR7 #1: probe.ps1 Mask-Creds masks with the very patterns scrubCreds uses,
   assert.deepEqual([...fn.matchAll(/-replace \$(CRED_\w+), '([^']*)'/g)].map((m) => `${m[1]} ${m[2]}`),
     ['CRED_URL $1***@', 'CRED_QUOTED $1$2***$4', 'CRED_ESCAPED $1$2***$5', 'CRED_BARE_JSON $1$2***$2', 'CRED_BARE $1***']);
 });
+
+// ---- dry and decode-only starts --------------------------------------------------------------------------------------
+const T0 = 1_792_749_540_000;
+const all = JSON.parse(readFileSync(new URL('./fixtures/all-good.json', import.meta.url), 'utf8'));
+const statusAt = (t, extra = {}) => ({ ...JSON.parse(JSON.stringify(all.status)), now: all._scenario.now, ...extra });
+const DECODE = { action: 'start', decode_only: 'pixelmap-20261018-154155' };
+const DRY = { action: 'start', dry_run: true };
+
+test('CR7 #6: a decode of earlier photos starts as a dry run does: it locks only a second start, and nothing waits for it', async () => {
+  const { Applying } = await import('../lib/applying.mjs');
+  const a = new Applying({ now: () => T0 });
+  let release; const gate = new Promise((r) => { release = r; });
+  const start = a.run('calibrate', DECODE, () => gate);
+  const e = a.list()[0];
+  assert.deepEqual([e.blocks, e.dry], [['calibrate'], true]);
+  for (const x of ['ropes', 'hub75', 'switch', 'rebuild', 'bootfile', 'lightsroute']) assert.equal(a.conflict(x), null, x);
+  assert.notEqual(a.conflict('calibrate', { action: 'start' }), null, 'a second start waits');
+  release({ ok: true, started: true }); await start;
+});
+
+test('CR7 #7: a dry or decode-only start waits only for another calibration start, on the server and on the pages', async () => {
+  const { Applying } = await import('../lib/applying.mjs');
+  const { derive } = await import('../public/model.js');
+  const { dryWhy, startWhy } = await import('../public/lights-words.js');
+  for (const busy of [['ropes', { dark: true }], ['hub75', { brightness: 0.5 }], ['lightsroute', { route: 'router' }], ['switch', { file: 'river-online-oct-23.toe' }],
+                      ['rebuild', { file: 'river-local-oct-22-seasons.toe' }], ['bootfile', { file: 'river-online-oct-23.toe' }]]) {
+    const a = new Applying({ now: () => T0 });
+    let release; const gate = new Promise((r) => { release = r; });
+    const p = a.run(busy[0], busy[1], () => gate);
+    // the server: a full start waits for it; a dry run or a decode doesn't, and runs
+    assert.notEqual(a.conflict('calibrate', { action: 'start' }), null, busy[0]);
+    for (const b of [DRY, DECODE]) {
+      assert.equal(a.conflict('calibrate', b), null, `${busy[0]} / ${JSON.stringify(b)}`);
+      const r = await a.run('calibrate', b, async () => ({ ok: true, calibration: { running: true } }));
+      assert.equal(r.ok, true, busy[0]);
+    }
+    // the pages: Start says wait, Dry run doesn't
+    const m = derive(statusAt(T0, { applying: a.list(all._scenario.now) }), all._scenario.now + 1000);
+    assert.match(startWhy(m), /^wait: /, busy[0]);
+    assert.equal(dryWhy(m), null, busy[0]);
+    assert.equal(m.controls.calibrate.dry.why, null, busy[0]);
+    release({ ok: true }); await p;
+  }
+  // another calibration start in flight (a full one or a dry one): a dry run waits for it, on both
+  for (const first of [{ action: 'start' }, DRY, DECODE]) {
+    const a = new Applying({ now: () => T0 });
+    let release; const gate = new Promise((r) => { release = r; });
+    const p = a.run('calibrate', first, () => gate);
+    for (const b of [DRY, DECODE]) assert.notEqual(a.conflict('calibrate', b), null, JSON.stringify(first));
+    await assert.rejects(a.run('calibrate', DRY, async () => ({ ok: true })), (e) => e.status === 409);
+    const m = derive(statusAt(T0, { applying: a.list(all._scenario.now) }), all._scenario.now + 1000);
+    assert.match(dryWhy(m), /^wait: the start of a (calibration|dry run) is being applied$/, JSON.stringify(first));
+    release({ ok: true, calibration: { running: true } }); await p;
+  }
+});

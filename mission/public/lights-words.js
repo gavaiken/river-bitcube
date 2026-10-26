@@ -48,14 +48,12 @@ export function startWhy(m) {
   if (!m) return NO_CONTACT;
   return m.controls.calibrate.why ?? calChecklist(m).find((c) => c.level !== 'ok')?.why ?? null;
 }
-/** The reasons that stop a dry run too: no contact, bitcube itself, another change being applied, a run already on. A dry run
- *  touches no lights and no camera and runs nothing on TouchDesigner (calibrate.py --dry-run), so those reasons don't. */
-const DRY_STOPS = [/^wait: /, /^a calibration is already running$/, /^a dry run is already running$/, /^this page can't reach mission control$/, /^bitcube is offline$/,
-  /^bitcube hasn't been checked yet$/, /^mission control hasn't checked bitcube for /];
+/** Why a dry run can't start now: no contact, bitcube itself, another calibration start in flight, a run already on (the model's
+ *  controls.calibrate.dry). A dry run touches no lights and no camera and runs nothing on TouchDesigner (calibrate.py --dry-run),
+ *  so neither TouchDesigner nor any other change in flight stops it (CR7 #7). */
 export function dryWhy(m) {
   if (!m) return NO_CONTACT;
-  const w = m.controls.calibrate.why;
-  return w && DRY_STOPS.some((re) => re.test(w)) ? w : null;
+  return m.controls.calibrate.dry?.why ?? null;
 }
 
 // ---- which view the Calibrate block shows ---------------------------------------------------------------------

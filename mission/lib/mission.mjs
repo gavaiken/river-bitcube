@@ -6,9 +6,9 @@ import { connect } from 'node:net';
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { scrubCreds } from './scrub.mjs';
-import { Applying, applyLabel } from './applying.mjs';
+import { Applying } from './applying.mjs';
 import { checkedCalibrate, noAnswer } from './lights.mjs';
-import { CAL_RUNNING } from '../public/model.js';
+import { CAL_RUNNING, changeLabel } from '../public/model.js';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 const PROBE = PS + 'probe.ps1';
@@ -144,8 +144,8 @@ export class Mission {
   /** Whether anything is being applied or confirmed (a self-update restart waits for nothing to be in flight). */
   busy() { return this.applying.list().length > 0; }
 
-  /** The label a change gets (applying.mjs applyLabel): a switch to the file TouchDesigner runs is "the restart on …". */
-  label(action, body) { return applyLabel(action, body, { running: this.data.probe?.value?.td?.file ?? null }); }
+  /** The label a change gets (model.js changeLabel, as its entry has it): a switch to the file TouchDesigner runs is "the restart on …". */
+  label(action, body) { return changeLabel(action, body, { running: this.data.probe?.value?.td?.file ?? null }); }
 
   /** After a switch or rebuild answered: look again sooner than the 60 s timer, so the confirmation arrives when it is real. */
   #recheckSoon() {
