@@ -17,7 +17,9 @@ test('planControl: the whitelist accepts the fixed actions and rejects everythin
   assert.deepEqual(probes.map((p) => p.args), ['-Action ropes -Dark', '-Action hub75 -Brightness 0.50', '-Action bootfile -BootFile river-online-oct-23.toe',
                                                '-Action switch -BootFile river-local-oct-22-seasons.toe', '-Action lightsroute -LightsRoute router', '-Action rebuild -BootFile river-local-oct-22-seasons.toe']);
   assert.ok(probes[5].timeout >= 300_000, 'a rebuild builds, saves and restarts: minutes');
-  for (const dark of ['no', 1, 'true', {}]) assert.equal(planControl('ropes', { dark }).args, '-Action ropes', `dark: ${JSON.stringify(dark)} is not true`);
+  // a dark that isn't a real true or false is refused, never read as "on" (R10 #37)
+  for (const dark of ['no', 1, 'true', {}]) assert.throws(() => planControl('ropes', { dark }), (e) => e.status === 400, `dark: ${JSON.stringify(dark)}`);
+  assert.equal(planControl('ropes', { dark: false }).args, '-Action ropes');
   for (const [a, b] of [['mode', { mode: 'chaos' }], ['target', { season: 'monsoon' }], ['hub75', { brightness: 3 }],
                         ['bootfile', { file: 'evil.toe; rm -rf' }], ['bootfile', { file: 'old-river-online-oct-20.toe' }], ['switch', { file: 'river-online-oct-20.toe' }], ['lightsroute', { route: 'both' }], ['rules', { rules: { 'x; y': 1 } }], ['shell', {}],
                         ['ropes', null], ['mode', 'manual'], ['rebuild', { file: 'river-online-oct-23.toe' }], ['rebuild', {}],
