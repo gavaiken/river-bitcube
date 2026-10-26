@@ -856,7 +856,10 @@ export function onScreen(n, { whole = false } = {}) {
 /** The smallest scroll that shows all of n between the header and the bars at the bottom (its top first when it is taller than
  *  that); nothing when it is shown already. */
 export function bringIntoView(n) {
-  if (!(n instanceof Element) || !drawn(n) || onScreen(n, { whole: true })) return false;
+  if (!(n instanceof Element) || !drawn(n)) return false;
+  // inside a sheet (the menu's Check now): the sheet's own scroll, never the page behind it
+  if (n.closest('dialog')) { n.scrollIntoView({ block: 'nearest', behavior: 'auto' }); return true; }
+  if (onScreen(n, { whole: true })) return false;
   const r = n.getBoundingClientRect(), b = shownBand(), pad = 8;
   const dy = r.top < b.top + pad || r.height > b.bottom - b.top - 2 * pad ? r.top - (b.top + pad) : r.bottom - (b.bottom - pad);
   if (Math.abs(dy) < 1) return false;
