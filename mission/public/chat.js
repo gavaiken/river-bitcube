@@ -266,8 +266,8 @@ async function send() {
   } catch (e) {
     // no usable answer (none in time, one that couldn't be read, a proxy's error page): it may or may not have been sent
     sendShow('failed', e?.noAnswer || e?.unreadable || e?.notOurs
-      ? `${noAnswerText(e, 'look for it above before sending again')} Your message is still in the box.`
-      : `Not sent: ${plainError(e)} (${fmt.clock(Date.now())}). Your message is still in the box.`);
+      ? `${noAnswerText(e, 'look for it above before sending again', Date.now() + (S.skew ?? 0))} Your message is still in the box.`
+      : `Not sent: ${plainError(e)} (${fmt.clock(Date.now() + (S.skew ?? 0))}). Your message is still in the box.`);
   } finally { sending = false; if (sendStatus.className.includes('failed')) sendBtn.disabled = !text.value.trim(); }
 }
 sendBtn.addEventListener('click', send);

@@ -681,7 +681,7 @@ export function control(target, opts = {}) {
     // judged again now it is answered: a control that became impossible meanwhile sends nothing
     const ans = ctlStep(s, { type: yes ? 'yes' : 'no', why: o.why, now: now() });
     if (ans.effect === 'send') return send(ans);
-    if (ans.notSent) return go(ans, notSentWords(ans.notSent, fmt.clock(now())));
+    if (ans.notSent) return go(ans, notSentWords(ans.notSent, fmt.clock(serverNow(), serverNow())));
     s = ans; paint();
   });
   function update(n = {}) {
@@ -727,7 +727,7 @@ export function control(target, opts = {}) {
       // a confirm still open for a control that just became impossible is withdrawn, with the reason on the control and
       // focus on its status line (the sheet's close() puts it there: the button is disabled now)
       const a = asking; asking = null;
-      go(next, notSentWords(next.notSent, fmt.clock(now())));
+      go(next, notSentWords(next.notSent, fmt.clock(serverNow(), serverNow())));
       a?.close();
       if (!host.contains(document.activeElement)) focusEl(status);
       return;
