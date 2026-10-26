@@ -86,3 +86,18 @@ test('R9 #10: a card added to the chat\'s log, or one that settles, takes its tu
   assert.match(layout, /if \(speaks\) \{ layoutQueued = true; speakBy\(\(\) => \{ layoutQueued = false; draw\(\); \}\); return; \}/);
   assert.match(chat, /const busy = BUSY\.has\(stateOf\(r\)\.s\);/, 'what settles is what was busy');
 });
+
+// ---- #7: a re-render patches what is there in place ------------------------------------------------------------------------------
+
+test('R9 #7: Status draws every section by patching it in place (ui.js morph): the focused tile, button, row or box is never re-created', () => {
+  const ui = page('ui.js'), st = page('status.js');
+  assert.match(ui, /export function morph\(el, html\) \{/);
+  const set = /function setHTML\(el, html\) \{[\s\S]*?\n\}/.exec(st)[0];
+  assert.match(set, /\n  morph\(el, html\);\n/, 'every section, focus inside it or not (a screen reader\'s cursor is not focus)');
+  assert.doesNotMatch(set, /innerHTML = html/, 'never drawn anew');
+  assert.match(set, /if \(had && !\(document\.activeElement === active && usable\(active\)\)\) placeFocus\(/, 'focus is placed again only when the focused node went or can\'t hold it');
+  // the patch keeps what the page gave at run time: the tabindex a line holding focus was given, a box's typed value while focused
+  const patch = /function patchNode\(o, n\) \{[\s\S]*?\n\}/.exec(ui)[0];
+  assert.match(patch, /a\.name === 'tabindex' && a\.value === '-1'/);
+  assert.match(patch, /o instanceof HTMLInputElement && o !== document\.activeElement/);
+});

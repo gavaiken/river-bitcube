@@ -190,5 +190,5 @@ test('R8 #3, #6, #12, #13, #29: Status brings the pressed line into view, jumps 
   assert.match(st, /if \(onLine && parked\)/);
   assert.match(lights, /if \(c\?\.state === 'confirm'\) c\.update\(\{ why \}\)/, 'Lights: a done control is left as it is when its view goes');
   assert.match(lights, /unannounce\(c\.text\)/);
-  assert.match(st, /typing && morphKeeping\(el, html, active\)/);
+  assert.match(st, /\n  morph\(el, html\);\n/, 'the box being typed in is patched in place, never re-created (ui.js morph, which R9 #7 made every section\'s way to draw)');
 });

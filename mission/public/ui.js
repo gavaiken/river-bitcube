@@ -892,39 +892,66 @@ export function control(target, opts = {}) {
 }
 const CTL_RESULT = new Set(['done', 'failed', 'unconfirmed']);
 
-// ---- the box being typed in is never re-created ----------------------------------------------------------------------
-/** Replaces el's content with html but keeps `keep` (the box being typed in) and every element around it in place, so its value,
- *  its caret and its focus stay while everything else is drawn anew (R8 #29: a re-render while you type never turns "150" into
- *  "015"). The elements on its path take the new markup's attributes (a box's typed value is its own: the value attribute never
- *  changes it). The path is matched by tag, id and data-* identity; false (nothing changed) when the new markup doesn't hold the
- *  same box on the same path, and the caller draws it as before. */
-export function morphKeeping(el, html, keep) {
-  if (!(el instanceof Element) || !(keep instanceof Element) || !el.contains(keep) || el === keep) return false;
+// ---- a re-render patches the page in place ---------------------------------------------------------------------------
+// A section drawn anew from its markup re-creates every node in it, so the focused tile, button or row was a new node at every poll
+// and a screen reader read it out again (R9 #7), the node a screen reader's cursor was on went, a box lost its caret (R8 #29) and a
+// picture reloaded. morph() makes the section's content the new markup by patching what is there instead.
+const MORPH_KEYS = [...KEY_ATTRS, 'data-rule', 'data-ctl', 'data-still'];
+/** An element's identity among its siblings: its id, else its data-* identity (focusKey's attributes and a few more), else null. */
+function morphKey(n) {
+  if (n.nodeType !== 1) return null;
+  if (n.id) return `#${n.id}`;
+  let k = '';
+  for (const a of MORPH_KEYS) { const v = n.getAttribute(a); if (v != null) k += `[${a}=${v}]`; }
+  return k ? n.tagName + k : null;
+}
+/** Is old node o the same thing as new node n: text with text; an element of the same tag and identity, or, with none, the same
+ *  first class (unkeyed elements of different kinds never patch into each other). */
+function sameNode(o, n) {
+  if (o.nodeType !== n.nodeType) return false;
+  if (o.nodeType !== 1) return true;
+  if (o.tagName !== n.tagName) return false;
+  const k = morphKey(n);
+  return k ? morphKey(o) === k : !morphKey(o) && (o.classList[0] ?? null) === (n.classList[0] ?? null);
+}
+/** morph(el, html): el's content becomes html, patched in place: an element that is the same thing in the new markup (its id or data-*
+ *  identity anywhere among its siblings, else its place, tag and first class) stays itself, takes the new markup's attributes and has
+ *  its own content patched the same way; only what is new is made and only what went is removed. So the focused tile, button, row or
+ *  line is never re-created (a screen reader doesn't read it again: R9 #7), the box being typed in keeps its caret and what was typed
+ *  (R8 #29), a screen reader's cursor keeps its place, and a picture whose address is the same never reloads. */
+export function morph(el, html) {
+  if (!(el instanceof Element)) return;
   const t = document.createElement('template');
   t.innerHTML = html;
-  const path = [];
-  for (let n = keep; n && n !== el; n = n.parentElement) path.unshift(n);
-  const ids = [...KEY_ATTRS, 'data-rule', 'data-ctl'], first = (x) => x.classList[0] ?? null;
-  const same = (a, b) => a.tagName === b.tagName && (a.id || null) === (b.id || null) && ids.every((k) => a.getAttribute(k) === b.getAttribute(k)) && first(a) === first(b);
-  // the new markup's path, level by level: the one child of each that matches the old path's element
-  const npath = [];
-  let np = t.content;
-  for (const o of path) {
-    const hit = [...np.children].filter((c) => same(c, o));
-    if (hit.length !== 1) return false;
-    npath.push(hit[0]); np = hit[0];
+  morphKids(el, t.content);
+}
+function morphKids(op, np) {
+  const kept = new Set();                 // old nodes matched, and new nodes put in
+  let cur = op.firstChild;                // where the next node goes: before this one
+  for (let n = np.firstChild; n;) {
+    const next = n.nextSibling;
+    let m = null;
+    if (morphKey(n)) { for (let c = op.firstChild; c; c = c.nextSibling) if (!kept.has(c) && sameNode(c, n)) { m = c; break; } }
+    else if (cur && !kept.has(cur) && sameNode(cur, n)) m = cur;
+    if (!m) { op.insertBefore(n, cur); kept.add(n); n = next; continue; }
+    kept.add(m);
+    if (m === cur) cur = m.nextSibling;
+    else if (cur && cur.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING) cur = m.nextSibling;   // what it skipped goes, or moves
+    else op.insertBefore(m, cur);         // a node skipped earlier, now wanted here (only a reorder moves a node)
+    patchNode(m, n);
+    n = next;
   }
-  let parent = el;
-  for (let i = 0; i < path.length; i++) {
-    const o = path[i], n = npath[i], kids = [...(i ? npath[i - 1] : t.content).childNodes], at = kids.indexOf(n);
-    for (const k of [...parent.childNodes]) if (k !== o) k.remove();
-    for (const k of kids.slice(0, at)) parent.insertBefore(k, o);
-    for (const k of kids.slice(at + 1)) parent.append(k);
-    for (const a of [...o.attributes]) if (!n.hasAttribute(a.name)) o.removeAttribute(a.name);
-    for (const a of [...n.attributes]) if (o.getAttribute(a.name) !== a.value) o.setAttribute(a.name, a.value);
-    parent = o;
-  }
-  return true;
+  for (let c = op.firstChild; c;) { const nx = c.nextSibling; if (!kept.has(c)) c.remove(); c = nx; }
+}
+/** Old node o takes new node n's text, or its attributes and (patched the same way) its content. What the page gave at run time stays:
+ *  the tabindex -1 a line holding focus was given (focusEl: taking it away would drop focus to <body>), and a box's value while it is
+ *  being typed in (a box not focused shows the markup's value, as a new one would). */
+function patchNode(o, n) {
+  if (o.nodeType !== 1) { if (o.nodeValue !== n.nodeValue) o.nodeValue = n.nodeValue; return; }
+  for (const a of [...o.attributes]) if (!n.hasAttribute(a.name) && !(a.name === 'tabindex' && a.value === '-1')) o.removeAttribute(a.name);
+  for (const a of [...n.attributes]) if (o.getAttribute(a.name) !== a.value) o.setAttribute(a.name, a.value);
+  if (o instanceof HTMLInputElement && o !== document.activeElement) { const v = n.getAttribute('value') ?? ''; if (o.value !== v) o.value = v; }
+  morphKids(o, n);
 }
 
 // ---- keeping what you are working on in view -----------------------------------------------------------------------

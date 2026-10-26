@@ -7,7 +7,7 @@
 // status-words.js, where node's tests check them.
 import * as M from '/model.js';
 import { mountShell, poll, tick, watchContact, focusKey, refocus, park, focusShown, drawn, art, fmt, confirm, sheet, api, plainError, noAnswerText, esc, goto, mark, chip, WORD, MARK,
-  NAMES_FROM_BITCUBE, sinceAgrees as sinceAgreesWith, splitHeadline, WARN_MS, LOST_MS, announce, setLive, whyText, POLL_TIMEOUT_MS, onScreen, keepInView, placeOf, bringIntoView, closedAround, morphKeeping,
+  NAMES_FROM_BITCUBE, sinceAgrees as sinceAgreesWith, splitHeadline, WARN_MS, LOST_MS, announce, setLive, whyText, POLL_TIMEOUT_MS, onScreen, keepInView, placeOf, bringIntoView, closedAround, morph,
   serverNow, serverClock, sclock } from '/ui.js';
 import { rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows, bootWords, controlLine, failText, notSentText, applyingLine,
   ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash, lastDoneParts, lastDoneWhat, fromWords } from '/status-words.js';
@@ -118,15 +118,16 @@ function setHTML(el, html) {
       return;
     }
   }
-  // a control under the user's finger or keyboard focus keeps the focus across the re-render (found again by its data-*)
   const active = document.activeElement, had = active && active !== document.body && el.contains(active);
   const key = had ? focusKey(active) : null, hostEl = had ? active.closest('[data-ctl]') : null, hostId = hostEl?.id ?? null;
-  // the box being typed in (a rule's) stays itself, with its caret: everything around it is drawn anew (R8 #29)
-  const typing = had && active.matches('input:not([type=button]):not([type=checkbox]):not([type=radio]), textarea');
-  if (!(typing && morphKeeping(el, html, active))) el.innerHTML = html;
+  // patched in place, never drawn anew (ui.js morph): the focused tile, button, row or line stays the same node, so a screen reader
+  // doesn't read it again at every poll (R9 #7), and the box being typed in keeps its caret and what was typed (R8 #29)
+  morph(el, html);
   el.querySelectorAll('details[data-id]').forEach((d) => { d.open = openRows.has(d.dataset.id); });
   refreshAges(el);
-  if (had && !(typing && document.activeElement === active && usable(active))) placeFocus(key, hostId, el, hostEl?.dataset.ctl ?? null);
+  // a control under the user's finger or keyboard focus keeps it; when it went, or can't hold it now (disabled, in a closed row), it
+  // is found again by its data-* identity, or focus waits on the line that says why
+  if (had && !(document.activeElement === active && usable(active))) placeFocus(key, hostId, el, hostEl?.dataset.ctl ?? null);
 }
 /** Can t hold focus where it is (enabled, drawn: not inside a closed <details>)? */
 const usable = (t) => !!t && !t.disabled && drawn(t);
@@ -532,7 +533,7 @@ function steerHTML(m) {
     <div class="ctl ${(whyOf('target') && !busy('target')) || !manual ? 'off' : ''}" id="ctl-target" data-ctl="target"${busy('target') ? ' aria-busy="true"' : ''}><div class="ctl-h">Target</div>${whyLine('target')}
       <div class="target-grid" role="group" aria-label="Target season" aria-describedby="target-now-season">${M.SEASONS.map((x) => `<button type="button" id="ctl-target-${x}" class="btn ${t.season === x ? 'primary' : ''}" aria-pressed="${t.season === x}" data-act="tseason" data-season="${x}" ${tOff ? 'disabled' : ''}>${x}</button>`).join('')}</div>
       <div class="now-on" id="target-now-season">${t.nowSeason ? esc(t.nowSeason) : ''}</div>
-      <div class="stepper"><button type="button" class="btn step" id="ctl-target-less" data-act="tint" data-d="-0.1" ${tOff || t.intensity <= 0 ? 'disabled' : ''} aria-label="Less intensity" aria-describedby="target-now-int">−</button><output id="target-int" aria-label="Target intensity, 0 (stillness) to 1 (torrent)" aria-describedby="target-now-int">${esc(M.intensityWord(t.intensity) ?? '')} (${t.intensity.toFixed(1)})</output><button type="button" class="btn step" id="ctl-target-more" data-act="tint" data-d="0.1" ${tOff || t.intensity >= 1 ? 'disabled' : ''} aria-label="More intensity" aria-describedby="target-now-int">+</button></div>
+      <div class="stepper"><button type="button" class="btn step" id="ctl-target-less" data-act="tint" data-d="-0.1" ${tOff || t.intensity <= 0 ? 'disabled' : ''} aria-label="Less intensity" aria-describedby="target-now-int">−</button><output id="target-int" aria-live="off" aria-label="Target intensity, 0 (stillness) to 1 (torrent)" aria-describedby="target-now-int">${esc(M.intensityWord(t.intensity) ?? '')} (${t.intensity.toFixed(1)})</output><button type="button" class="btn step" id="ctl-target-more" data-act="tint" data-d="0.1" ${tOff || t.intensity >= 1 ? 'disabled' : ''} aria-label="More intensity" aria-describedby="target-now-int">+</button></div>
       <div class="now-on" id="target-now-int">${t.nowIntensity ? esc(t.nowIntensity) : ''}</div>
       <div class="row-btns"><button type="button" class="btn primary" id="ctl-target-apply" data-act="target-set" ${tOff || !t.canApply ? 'disabled' : ''}>${esc(t.label)}</button></div>
       <div class="effect">${manual ? 'Intensity runs from 0 (stillness) to 1 (torrent). The river travels forward through the calendar to the target; it never jumps. Takes over by hand.' : 'Choose Manual first; the target then steers the river by hand.'}</div>
@@ -721,7 +722,7 @@ function hubCtlHTML(m) {
   const draft = hubDraft ?? cur, o = off('hub75'), seen = nowOr(item(m, 'hub75 panels'));
   return `<div class="ctl ${whyOf('hub75') && !busy('hub75') ? 'off' : ''}" id="ctl-hub75" data-ctl="hub75"${busy('hub75') ? ' aria-busy="true"' : ''}><div class="ctl-h">Panels brightness</div>${whyLine('hub75')}
     <div class="readout">${seen.pre}: <b>${cur == null ? 'not known' : nb(`${cur} %`)}</b>${cur != null && m.show.panels.state === 'no-sender' ? ' (no panel sender, so dark)' : ''}${seen.tail}</div>
-    <div class="stepper"><button type="button" class="btn step" id="ctl-hub75-less" data-act="hub-step" data-d="-10" ${o || draft == null || draft <= 0 ? 'disabled' : ''} aria-label="Darker">−</button><output id="hub-draft" aria-label="Brightness to set, 0 to 100 %">${draft == null ? '?' : nb(`${draft} %`)}</output><button type="button" class="btn step" id="ctl-hub75-more" data-act="hub-step" data-d="10" ${o || draft == null || draft >= 100 ? 'disabled' : ''} aria-label="Brighter">+</button>
+    <div class="stepper"><button type="button" class="btn step" id="ctl-hub75-less" data-act="hub-step" data-d="-10" ${o || draft == null || draft <= 0 ? 'disabled' : ''} aria-label="Darker">−</button><output id="hub-draft" aria-live="off" aria-label="Brightness to set, 0 to 100 %">${draft == null ? '?' : nb(`${draft} %`)}</output><button type="button" class="btn step" id="ctl-hub75-more" data-act="hub-step" data-d="10" ${o || draft == null || draft >= 100 ? 'disabled' : ''} aria-label="Brighter">+</button>
       <button type="button" class="btn primary" id="ctl-hub75-set" data-act="hub-set" ${o || draft == null || draft === cur ? 'disabled' : ''}>${draft == null ? 'Set brightness' : `Set ${nb(`${draft} %`)}`}</button>
       <button type="button" class="btn danger" id="ctl-hub75-off" data-act="hub-off" ${o || cur === 0 ? 'disabled' : ''}>Panels off</button></div>
     <div class="effect">A change shows on the panels within a few seconds. Panels off sets ${nb('0 %')} and asks first.</div>
