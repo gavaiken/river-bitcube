@@ -2,11 +2,16 @@
 // banner, the verdict band, the piece now (season, ropes, panels, the room), Not OK grouped by cause, the fine list,
 // the installer. Every verdict, state word, control reason and sentence comes from model.js's derive(); this file only
 // lays it out. The shell (ui.js) owns the art, the header, the tab bar, the menu and the sheets. Plain ES module.
+// Every control follows the contract's states (docs/mission-ui.md "Applying a change": ready, blocked, confirm, applying,
+// confirming, done, unconfirmed, failed) through model.js's ctlStep/ctlView; the words and the forms' rules are in
+// status-words.js, where node's tests check them.
 import * as M from '/model.js';
 import { mountShell, poll, tick, watchContact, focusKey, refocus, art, fmt, confirm, sheet, api, plainError, noAnswerText, esc, goto, mark, chip, WORD, MARK,
-  NAMES_FROM_BITCUBE, sinceAgrees as sinceAgreesWith, splitHeadline, WARN_MS, LOST_MS } from '/ui.js';
+  NAMES_FROM_BITCUBE, sinceAgrees as sinceAgreesWith, splitHeadline, WARN_MS, LOST_MS, announce, whyText, POLL_TIMEOUT_MS } from '/ui.js';
+import { rulesForm, targetForm, modeEffect, switchWords, switchShows, bootShows, bootWords, controlLine, failText, notSentText, applyingLine,
+  ropesTile as ropesTileWords, panelsTile as panelsTileWords, stillDue, rowFromHash } from '/status-words.js';
 
-const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS } = M;
+const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S } = M;
 const $ = (sel, root = document) => root.querySelector(sel);
 const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
 // One name per thing (the copy rules); descriptors live on the card, never in the name.
@@ -22,19 +27,15 @@ const LINKS = { bitcube: [["See bitcube's screen (needs Tailscale)", 'vnc://100.
   seasons: [["The river's year page (needs Tailscale)", 'http://100.73.68.60:9981/']],
   router: [['Router admin (from the gallery Wi-Fi)', 'http://192.168.9.1/']],
   'modal agent': [["Dave's app", 'https://to-be-a-river--river.modal.run/']] };
-// The tiles' state words, from the model's ropes/panels state ids.
 // Short "what they own" for the Call line (the menu's Who to call has the full version).
 const OWNS = { gavin: 'bitcube and the show file', lilian: 'the lights and the rigging', andi: 'the panels', will: 'network and cameras', dave: 'his agent', colin: 'how the piece should look' };
-const ROPES_STATE = { river: 'Showing the river', dark: 'Dark on purpose', 'not-reaching': 'Not getting the river', unknown: 'Not known' };
-const PANELS_STATE = { unknown: 'Not known', 'no-sender': 'No panel sender', restarting: 'Dark while restarting', frozen: 'Picture frozen',
-  gone: 'Nothing drawn', 'no-output': 'No panel output', off: 'Switched off', river: 'Showing the river' };
 // What a recorded action reads as on the band's "Last done" line (never a name: the source is a place).
 const ACTION_WORDS = {
   ropes: (b) => `Ropes → ${b?.dark ? 'Dark' : 'On'}`, hub75: (b) => `Panels → ${b?.brightness != null ? fmt.pct(b.brightness) : 'set'}`,
   switch: (b) => `Switch to ${FILES[b?.file]?.label ?? b?.file ?? 'a show file'}`, mode: (b) => `Mode → ${cap(b?.mode ?? '')}`,
   target: (b) => `Target → ${b?.season ?? ''}${b?.intensity != null ? `, ${M.intensityWord(b.intensity)}` : ''}`,
   rules: () => 'Rules applied', 'rules-reset': () => 'Rules reset', bootfile: (b) => `Boot file → ${FILES[b?.file]?.label ?? b?.file ?? ''}`,
-  lightsroute: (b) => `Lighting port → ${b?.route === 'direct' ? "bitcube's LIGHTS port" : b?.route === 'router' ? 'the router port' : b?.route ?? ''}`,
+  lightsroute: (b) => `Lighting port → ${b?.route === 'direct' ? "bitcube's LIGHTS port" : b?.route === 'router' ? 'the spare router port' : b?.route ?? ''}`,
   check: () => 'Full check of bitcube', calibrate: (b) => `Calibration ${b?.action === 'cancel' ? 'stopped' : b?.action === 'start' ? 'started' : 'looked at'}`,
   rebuild: () => "Rebuilt the river's year with the new LED map",
 };
@@ -42,8 +43,12 @@ const ACTION_WORDS = {
 // ---- state ------------------------------------------------------------------------------------------------------
 let model = null;
 const openRows = new Set();   // expanded rows, kept across re-renders
-const ctl = {};               // control feedback: name -> { state: 'pending' | 'done' | 'failed', text }
+// Each control's state (model.js ctlStep): name -> { s, text, applyText, expectS, o (what it was asked to do), result, key (the
+// pressed button's focus key), host (its .ctl's id), asking (the open confirm), refreshAt }. Rules and its reset share the form.
+const ctl = {};
+const SHARE = { rules: ['rules-reset'], 'rules-reset': ['rules'] };
 const stillTried = { gallery: 0, river: 0 }, stillBusy = { gallery: false, river: false };   // Date.now() of the last try; one at a time
+const stillNet = { gallery: false, river: false };   // the last try failed for want of a network (not "no picture"): try again on contact
 const stills = { gallery: { url: null, age_s: null, fetchedAt: null, missing: null }, river: { url: null, age_s: null, fetchedAt: null, missing: null } };
 const lastHTML = new Map();   // section -> the HTML it holds (no churn when nothing changed)
 let hubDraft = null;          // the brightness stepper, before "Set"
@@ -51,14 +56,22 @@ const targetDraft = { season: null, intensity: null };
 const rulesDraft = {};        // what was typed into the rules form, kept across re-renders and a failed Apply
 let riverWatch = null;
 let tels = {};                // contact key -> tel, from GET /api/contacts (never in the repo)
-let checkState = null;        // "Check now": { state, text }
+let deepLinked = false;       // a link to /status#r-<item> (the System map's sheets) is followed once, after the first answer
 
 // ---- helpers -------------------------------------------------------------------------------------------------------
 function cap(s) { return s && !/^bitcube/.test(s) ? s[0].toUpperCase() + s.slice(1) : s ?? ''; }
 const nb = fmt.nb;
 const rid = (id) => 'r-' + id.replace(/\s+/g, '-');
 const elapsedS = () => (p.last ? p.elapsed() / 1000 : 0);
-const pend = (name) => ctl[name]?.state === 'pending';
+const C = (name) => (ctl[name] ??= { s: ctlInit(), text: '' });
+/** A request of this control is in flight or awaiting bitcube's reading: it, its siblings and its inputs are locked. */
+const busy = (name) => !!ctl[name] && ctlView(ctl[name].s).busy;
+/** Why a control can't run now (the model's words; "wait: <label> is being applied" while another change blocks it), or null. */
+function whyOf(name) {
+  if (name === 'check') return lostContact(model) ? "this page can't reach mission control" : null;
+  return model ? model.controls[name]?.why ?? null : "this page can't reach mission control";
+}
+const off = (name) => !!whyOf(name) || busy(name);
 const op = (id) => (openRows.has(id) ? ' open' : '');   // rendered into the markup: a replaced section keeps its height
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const fileLabel = (f) => FILES[f]?.label ?? f;
@@ -85,14 +98,14 @@ function sinceSpan(id, level, texts = [], x = null) {
 const sinceAgrees = (s, texts, behindBitcube) => sinceAgreesWith(s, texts, behindBitcube, model?.show.uptime_s);
 // Volatile attributes: values that change between answers without the row changing. When only these differ, the
 // existing elements are patched in place instead of re-created, so a row under a thumb stays put.
-const VOL = /\b(data-(?:age|for|next))="[^"]*"/g;
+const VOL = /\b(data-(?:age|for|next|el))="[^"]*"/g;
 function setHTML(el, html) {
   const prev = lastHTML.get(el);
   if (prev === html) return;
   lastHTML.set(el, html);
   if (prev != null && prev.replace(VOL, '$1=""') === html.replace(VOL, '$1=""')) {
     const vals = [...html.matchAll(VOL)];
-    const els = el.querySelectorAll('[data-age],[data-for],[data-next]');
+    const els = el.querySelectorAll('[data-age],[data-for],[data-next],[data-el]');
     if (els.length === vals.length) {
       els.forEach((e, i) => { const [, name] = vals[i]; e.setAttribute(name, vals[i][0].slice(name.length + 2, -1)); });
       refreshAges(el);
@@ -124,6 +137,18 @@ function refreshAges(root = document) {
     const a = stillAge(s.dataset.still);
     if (a != null) s.textContent = nb(`${dur(a)} ago`);
   });
+  // another phone's change in flight (the band): "Applying: the switch to the live river · 0:23 · usually about 1 min"
+  root.querySelectorAll('[data-el]').forEach((s) => {
+    const t = applyingLine({ label: s.dataset.label, expect_s: Number(s.dataset.exp) }, Number(s.dataset.el) + el);
+    if (s.textContent !== t) s.textContent = t;
+  });
+  // a control applying or confirming: its line ticks (m:ss) without re-rendering the control under a thumb
+  root.querySelectorAll('[data-ctl-line]').forEach((s) => {
+    const c = ctl[s.dataset.ctlLine];
+    if (!c || !ctlView(c.s).busy) return;
+    const t = controlLine(c, Date.now()).text;
+    if (s.textContent !== t) s.textContent = t;
+  });
 }
 /** A still's age now: its age when fetched plus the time since, by the larger of the monotonic and the wall clock (a phone
  *  that slept never shows an hour-old picture as seconds old). */
@@ -134,15 +159,18 @@ const shell = mountShell({ page: 'status', title: 'Status' });
 const p = poll('/api/status', { every: 5000,
   onData: () => {
     shell.setAge(0); shell.setStale(null); render();
-    // contact is back (a phone waking with no network missed the wake-up fetch): a picture older than its interval is fetched now
-    if (Date.now() - stillTried.gallery > STILL_MS) fetchStill('gallery');
+    // contact is back: the room's picture is fetched now when the last try failed for want of a network (a phone waking with
+    // none: its wake-up try failed) or is older than its interval
+    if (stillDue({ now: Date.now(), tried: stillTried.gallery, netFailed: stillNet.gallery }, STILL_MS)) fetchStill('gallery');
+    // a link to /status#r-<item> (the System map's sheets): that row, opened, once the first answer has drawn it
+    if (!deepLinked && model) { deepLinked = true; const id = rowFromHash(location.hash); if (id && document.getElementById(id)) jump(id); }
   },
   onError: () => render() });   // before any answer, watchContact's header says "No answer yet · N s" from the first try
 document.addEventListener('mc:check', () => p.refresh());
 document.addEventListener('mc:theme', () => render());
 // the shared rule (ui.js): from the time since the last answer, so a hung request greys the page as surely as an error
 watchContact(p, shell, () => render());
-tick(() => refreshAges());
+tick(() => { tickControls(); refreshAges(); });
 fetch('/api/contacts', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
   const list = Array.isArray(j?.contacts) ? j.contacts : j?.contacts && typeof j.contacts === 'object' ? Object.entries(j.contacts).map(([k, v]) => ({ key: k, ...(typeof v === 'string' ? { tel: v } : v) })) : [];
   for (const c of list) if (c.tel && (c.key || c.name)) tels[String(c.key ?? c.name).toLowerCase()] = String(c.tel);
@@ -150,12 +178,14 @@ fetch('/api/contacts', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : nul
 }).catch(() => {});
 
 // ---- stills ----------------------------------------------------------------------------------------------------------
+/** One still at a time per camera, with a time limit (a request that hangs never keeps the next one waiting: R5 #0). */
 async function fetchStill(cam) {
   if (stillBusy[cam]) return;
   stillBusy[cam] = true; stillTried[cam] = Date.now();
   const s = stills[cam];
+  const ctrl = new AbortController(), limit = setTimeout(() => ctrl.abort(), POLL_TIMEOUT_MS);
   try {
-    const r = await fetch(`/api/camera/${cam}.jpg`, { cache: 'no-store' });
+    const r = await fetch(`/api/camera/${cam}.jpg`, { cache: 'no-store', signal: ctrl.signal });
     if (r.status === 401) return;
     if (!r.ok) { if (s.url) URL.revokeObjectURL(s.url); stills[cam] = { url: null, age_s: null, fetchedAt: null, missing: true }; }
     else {
@@ -169,8 +199,9 @@ async function fetchStill(cam) {
       const big = cam === 'gallery' ? document.querySelector('dialog.sheet[open] img.still-img') : null;
       if (big) big.src = stills[cam].url;
     }
-  } catch { stills[cam] = { ...s, missing: s.url ? s.missing : true }; }
-  finally { stillBusy[cam] = false; }
+    stillNet[cam] = false;
+  } catch { stills[cam] = { ...s, missing: s.url ? s.missing : true }; stillNet[cam] = true; }
+  finally { clearTimeout(limit); stillBusy[cam] = false; }
   render();
 }
 
@@ -178,6 +209,7 @@ async function fetchStill(cam) {
 function render() {
   model = p.last ? derive(p.last, p.last.now + p.elapsed()) : null;
   const m = model;
+  const { withdrawn, ended } = settleControls();
   art.setSeason(m?.show.weights ?? null);
   const pageStale = lostContact(m);
   const banner = $('#banner');
@@ -197,15 +229,9 @@ function render() {
   setHTML($('#problems'), m ? problemsHTML(m) : '');
   setHTML($('#fine'), m ? fineHTML(m) : '');
   setHTML($('#installer'), m ? installerHTML(m) : '');
-  // a confirm still open for a control that became impossible (bitcube went offline, contact lost, a calibration began)
-  if (asking && !m?.controls[asking.name]?.possible) {
-    const { name, pr } = asking, w = m?.controls[name]?.why ?? "this page can't reach mission control";
-    asking = null;
-    ctl[name] = { state: 'failed', text: `Not sent: ${w} (${fmt.clock(Date.now())}).` };
-    announce(ctl[name].text);
-    pr.close();
-    render();
-  }
+  // a withdrawn confirm: focus goes to its control's status line, never to the page
+  for (const name of withdrawn) focusStatus(name);
+  for (const name of ended) afterEnd(name);
 }
 
 function bannerHTML(m) {
@@ -240,7 +266,14 @@ function bandHTML(m) {
   const staleNote = lostContact(m) ? '' : o.stale && lv !== 'unknown' ? `<p class="stale-note">Some of this is older than it should be: ${esc(staleWords(m))}.</p>` : '';
   return `<div class="chip-row">${chip(lv)}${since}</div>
     <h1>${esc(nb(big))}</h1>${o.cause === 'page' ? `<p class="rest">No answer for <span data-for="0" data-pre="">${dur(elapsedS())}</span></p>` : rest ? `<p class="rest">${esc(nb(cap(rest)))}</p>` : ''}
-    <p class="detail">${esc(nb(o.detail))}</p>${staleNote}${checkLine(m)}${todo}${also}${lastDone()}`;   // Check now above WHAT TO DO: on the first screen even in the busiest bands
+    <p class="detail">${esc(nb(o.detail))}</p>${staleNote}${applyingHTML(m)}${checkLine(m)}${todo}${also}${lastDone()}`;   // Check now above WHAT TO DO: on the first screen even in the busiest bands
+}
+/** Changes in flight from another phone or the studio chat (status.applying): a quiet ticking line each, so a greyed control's
+ *  "Wait: …" has its cause in view. This page's own change in flight is said on its control instead. */
+function applyingHTML(m) {
+  const others = (m.show.applying ?? []).filter((a) => ctl[a.action]?.s.state !== 'applying');
+  if (!others.length || lostContact(m)) return '';
+  return `<div class="applying-now">${others.map((a) => `<div class="applying-line"><span class="spin" aria-hidden="true"></span><span data-el="${a.started_at != null ? Math.max(0, Math.round((p.last.now - a.started_at) / 1000)) : a.elapsed_s}" data-label="${esc(a.label)}" data-exp="${a.expect_s ?? ''}"></span></div>`).join('')}</div>`;
 }
 function staleWords(m) {
   const s = m.sources, out = [];
@@ -260,6 +293,7 @@ function jumpButtons(o, m) {
   else if (['coming-up', 'not-checked'].includes(c)) b.push(['Open the studio chat', 'href', '/chat']);
   else if (['page', 'bitcube-unchecked', 'probe-stale', 'bitcube-offline', 'check-failed', 'unknown', 'td-unknown'].includes(c)) return '';
   else if (c === 'calibrating') b.push(['Open Lights', 'href', '/lights']);
+  else if (c === 'sender' || c === 'sender-taken') b.push(['Open Ropes →', 'goto', rid('ropes')]);   // the sender's words and both boxes
   else if (first && m.items.some((x) => x.id === first && x.level !== 'ok')) b.push([`Open ${NAME[first] ?? first} →`, 'goto', `g-${c}`]);
   if (!b.length) return '';
   return `<div class="row-btns">${b.map(([l, act, t]) => act === 'href' ? `<a class="btn primary" href="${esc(t)}">${esc(l)}</a>`
@@ -282,11 +316,9 @@ function checkLine(m) {
     : pa == null ? "bitcube's full check hasn't answered yet"
     : failed ? `bitcube's full check failed ${ageSpan(pa)}`
     : `Checked from bitcube ${ageSpan(pa)}${m.overall.stale || lostContact(m) ? '' : `<span data-next="${pa}"></span>`}`;
-  const off = lostContact(m) || checkState?.state === 'pending';
-  const st = checkState ? `<div class="ctl-status ${checkState.state}">${checkState.state === 'pending' ? '<span class="spin" aria-hidden="true"></span>' : ''}<span>${esc(checkState.text)}</span></div>` : '';
   // while bitcube is offline there is no full check to start: the button asks the quick check again, and says so
-  const label = checkState?.state === 'pending' ? 'Checking…' : offline ? 'Try bitcube again' : 'Check now';
-  return `<div class="check-line"><span>${txt}</span><button type="button" class="btn link" data-act="checknow" ${off ? 'disabled' : ''}>${label}</button></div>${st}`;
+  const label = busy('check') ? 'Checking…' : offline ? 'Try bitcube again' : 'Check now';
+  return `<div class="check-line" id="ctl-check" data-ctl="check"><span>${txt}</span><button type="button" class="btn link" id="ctl-check-go" data-act="checknow" ${off('check') ? 'disabled' : ''}>${label}</button>${statusLine('ctl-check', ['check'])}</div>`;
 }
 /** "Last done: Ropes → Dark · 21:04 · from mission control", from the server's history (never a name). */
 function lastDone() {
@@ -314,7 +346,7 @@ function nowHTML(m) {
       <div class="strip dim"><span class="w"></span><span class="sp"></span><span class="su"></span><span class="au"></span></div>
       <div class="strip-labels">${SEASONS.map((x) => `<span>${x}</span>`).join('')}</div>
       <div class="intensity"><span class="lbl">The river</span><b>${esc(cap(s.river.words))}</b></div>
-      <div class="switch-host" id="switch-now">${showfileCtlHTML(m, 'year')}</div>`;
+      <div class="switch-host" id="switch-now">${showfileCtlHTML(m, 'year', 'now')}</div>`;
   } else {
     const why = item(m, 'seasons')?.summary ?? 'not known';
     head = `<div class="season-row"><div class="season-word muted">Season not known</div></div>
@@ -332,22 +364,18 @@ function tile(id, label, level, state, words, x = null) {
   const second = stale ? `Last seen ${ageSpan(x.age_s)}` : esc(nb(cap(words)));
   return `<button type="button" class="tile lv-${lv}${stale ? ' stale' : ''}" data-act="goto" data-target="${rid(id)}"><span class="eyebrow">${label}</span><span class="tile-h">${mark(lv)}<span class="state">${esc(nb(state))}</span></span><span class="words">${second}</span></button>`;
 }
+/** The tiles: a state word and a second line that adds something (status-words.js: never the state word again; a calibration
+ *  says how long it has left and where to stop it). */
 function ropesTile(m) {
-  const x = item(m, 'ropes'), r = m.show.ropes;
+  const x = item(m, 'ropes');
   const bothDown = item(m, 'rope box 1')?.level === 'down' && item(m, 'rope box 2')?.level === 'down';
-  const state = r.state === 'not-reaching' && bothDown ? 'Not connected' : r.state === 'river' && m.show.file?.kind === 'live' ? cap(r.words.replace(/^the ropes show /, 'showing ')) : ROPES_STATE[r.state] ?? 'Not known';
-  // the second line adds something the state word doesn't say
-  // the power is a measurement: it stays in the row's Power line (copy rules: a number in a summary only when it is the reason)
-  const words = r.state === 'dark' ? 'Someone pressed Dark; nothing is broken'
-    : r.state === 'river' && x.level === 'ok' ? (m.show.file?.kind === 'live' && !m.show.river.live ? 'No live frames; sender open' : 'Sender open')
-    : x.summary;
+  const { state, words } = ropesTileWords(m, x, bothDown);
   return tile('ropes', 'Ropes', x.level, state, words, x);
 }
 function panelsTile(m) {
-  const x = item(m, 'hub75 panels'), pn = m.show.panels;
-  // the state word from the model's own words (the river, the live river or the rain fallback), as the Ropes tile does
-  const state = pn.state === 'river' ? cap(pn.words.replace(/^the panels show /, 'showing ')) : PANELS_STATE[pn.state] ?? 'Not known';
-  return tile('hub75 panels', 'Panels', x.level, state, pn.state === 'river' && x.level === 'ok' ? 'Panel sender connected' : x.summary, x);
+  const x = item(m, 'hub75 panels');
+  const { state, words } = panelsTileWords(m, x);
+  return tile('hub75 panels', 'Panels', x.level, state, words, x);
 }
 function roomHTML(m) {
   const g = stills.gallery, cam = item(m, 'gallery camera'), bc = item(m, 'bitcube');
@@ -364,50 +392,66 @@ function roomHTML(m) {
 function steerHTML(m) {
   const s = m.show, c = m.controls;
   if (!s.season) return '';
-  const modeBtn = (id, label) => { const poss = id === 'dynamic' ? c.mode.dynamic.possible : c.mode.possible; const lit = s.mode?.id === id; return `<button type="button" data-act="mode" data-mode="${id}" class="${lit ? 'lit' : ''}" aria-pressed="${lit}" ${poss && !pend('mode') ? '' : 'disabled'}>${label}</button>`; };
+  const rules = p.last?.seasons?.value?.rules ?? null;
+  const modeOff = off('mode');
+  const modeBtn = (id, label) => { const poss = id === 'dynamic' ? !c.mode.dynamic.why : true; const lit = s.mode?.id === id; return `<button type="button" id="ctl-mode-${id}" data-act="mode" data-mode="${id}" class="${lit ? 'lit' : ''}" aria-pressed="${lit}" ${poss && !modeOff ? '' : 'disabled'}>${label}</button>`; };
   const manual = s.mode?.id === 'manual';
-  const tSeason = targetDraft.season ?? s.target?.season ?? null;
-  const tInt = targetDraft.intensity ?? s.target?.intensity ?? s.intensity?.value ?? 0.5;
-  const tOff = !c.target.possible || !manual || pend('target');
-  const modeWhy = c.mode.why ? why(c.mode.why) : c.mode.dynamic.why ? `<div class="effect">Dynamic can't be chosen: ${esc(c.mode.dynamic.why)}.</div>` : '';
-  const rules = p.last?.seasons?.value?.rules ? rulesHTML(p.last.seasons.value.rules, c) : '';
+  const t = targetForm(s.target, targetDraft, s.intensity?.value ?? 0.5);
+  const tOff = off('target') || !manual;
+  const modeWhy = whyLine('mode') || (c.mode.dynamic.why && !c.mode.why ? `<div class="effect">Dynamic can't be chosen: ${esc(c.mode.dynamic.why)}.</div>` : '');
   return `<details class="sub" data-id="steer" id="steer"${op('steer')}><summary><span>Steer the year</span><span class="chev" aria-hidden="true">›</span></summary><div class="sub-body">
-    <div class="ctl ${c.mode.possible ? '' : 'off'}" data-ctl="mode"><div class="ctl-h">Mode: who steers</div>${modeWhy}
+    <div class="ctl ${whyOf('mode') && !busy('mode') ? 'off' : ''}" id="ctl-mode" data-ctl="mode"${busy('mode') ? ' aria-busy="true"' : ''}><div class="ctl-h">Mode: who steers</div>${modeWhy}
       <div class="seg" role="group" aria-label="Mode">${modeBtn('automatic', 'Automatic')}${modeBtn('dynamic', 'Dynamic')}${modeBtn('manual', 'Manual')}</div>
-      <div class="effect">Automatic turns the year by itself, one season a minute. Dynamic lets the people in the room steer it. Manual takes over by hand: the river travels forward to your target.</div>
-      ${statusLine('mode')}</div>
-    <div class="ctl ${tOff ? 'off' : ''}" data-ctl="target"><div class="ctl-h">Target</div>${!c.target.possible ? why(c.target.why) : ''}
-      <div class="target-grid">${SEASONS.map((x) => `<button type="button" class="btn ${tSeason === x ? 'primary' : ''}" data-act="tseason" data-season="${x}" ${tOff ? 'disabled' : ''}>${x}</button>`).join('')}</div>
-      <div class="stepper"><button type="button" class="btn step" data-act="tint" data-d="-0.1" ${tOff || tInt <= 0 ? 'disabled' : ''} aria-label="Less intensity">−</button><output aria-label="Target intensity">${esc(M.intensityWord(tInt) ?? '')} (${tInt.toFixed(1)})</output><button type="button" class="btn step" data-act="tint" data-d="0.1" ${tOff || tInt >= 1 ? 'disabled' : ''} aria-label="More intensity">+</button>
-        <button type="button" class="btn primary" data-act="target-set" ${tOff || !tSeason ? 'disabled' : ''}>Send target</button></div>
-      <div class="effect">${manual ? 'The river travels forward through the calendar to the target; it never jumps. Takes over by hand.' : 'Choose Manual first; the target then steers the river by hand.'}</div>
-      ${statusLine('target')}</div>
-    ${rules}</div></details>`;
+      <div class="effect">${esc(modeEffect(rules))}</div>
+      ${statusLine('ctl-mode', ['mode'])}</div>
+    <div class="ctl ${(whyOf('target') && !busy('target')) || !manual ? 'off' : ''}" id="ctl-target" data-ctl="target"${busy('target') ? ' aria-busy="true"' : ''}><div class="ctl-h">Target</div>${whyLine('target')}
+      <div class="target-grid" role="group" aria-label="Target season">${M.SEASONS.map((x) => `<button type="button" id="ctl-target-${x}" class="btn ${t.season === x ? 'primary' : ''}" aria-pressed="${t.season === x}" data-act="tseason" data-season="${x}" ${tOff ? 'disabled' : ''}>${x}</button>`).join('')}</div>
+      ${t.nowSeason ? `<div class="now-on">${esc(t.nowSeason)}</div>` : ''}
+      <div class="stepper"><button type="button" class="btn step" id="ctl-target-less" data-act="tint" data-d="-0.1" ${tOff || t.intensity <= 0 ? 'disabled' : ''} aria-label="Less intensity">−</button><output id="target-int" aria-label="Target intensity, 0 (stillness) to 1 (torrent)">${esc(M.intensityWord(t.intensity) ?? '')} (${t.intensity.toFixed(1)})</output><button type="button" class="btn step" id="ctl-target-more" data-act="tint" data-d="0.1" ${tOff || t.intensity >= 1 ? 'disabled' : ''} aria-label="More intensity">+</button></div>
+      ${t.nowIntensity ? `<div class="now-on">${esc(t.nowIntensity)}</div>` : ''}
+      <div class="row-btns"><button type="button" class="btn primary" id="ctl-target-apply" data-act="target-set" ${tOff || !t.canApply ? 'disabled' : ''}>${esc(t.label)}</button></div>
+      <div class="effect">${manual ? 'Intensity runs from 0 (stillness) to 1 (torrent). The river travels forward through the calendar to the target; it never jumps. Takes over by hand.' : 'Choose Manual first; the target then steers the river by hand.'}</div>
+      ${statusLine('ctl-target', ['target'])}</div>
+    ${rules ? rulesHTML(rules) : ''}</div></details>`;
 }
-/** A rule's label in plain words: "Length of the year (automatic)" → "Length of the year, in Automatic"; "median of the
- *  last" → "the middle value over the last"; never two parentheses or maths. */
-function ruleLabel(l) {
-  return String(l ?? '').replace(/\s*\((automatic|dynamic|manual)\)/i, (_m, mode) => `, in ${cap(mode.toLowerCase())}`)
-    .replace(/\s*=\s*median of the last/i, ' is the middle value over the last').replace(/median of the last/i, 'the middle value over the last')
-    .replace(/\s*\(([^()]*)\)\s*$/, ', $1');
-}
-/** Its range on a muted second line: "60 s to 30 min", "1.05× to 3× usual". */
-function ruleRange(r) {
-  const u = String(r.unit ?? '').trim();
-  if (u === 's') return `${dur(Number(r.min))} to ${dur(Number(r.max))}`;
-  const x = u.match(/^×\s*(.*)$/);
-  if (x) return `${r.min}× to ${r.max}×${x[1] ? ` ${x[1]}` : ''}`;
-  return `${r.min} to ${r.max}${u ? ` ${u}` : ''}`;
-}
-function rulesHTML(rules, c) {
-  const off = !c.rules.possible || pend('rules');
-  const rows = Object.entries(rules).map(([k, r]) => `<label class="rule"><span>${esc(ruleLabel(r.label))}<span class="unit">${esc(nb(ruleRange(r)))}</span></span>
-    <input type="number" name="${esc(k)}" value="${esc(String(rulesDraft[k] ?? r.value))}" data-server="${esc(String(r.value))}" data-default="${esc(String(r.default))}" min="${esc(String(r.min))}" max="${esc(String(r.max))}" step="any" ${off ? 'disabled' : ''}></label>`).join('');
+/** The Rules form (docs/mission-ui.md "Forms"): the unit beside every box, the range in the box's unit, an out-of-range value
+ *  said under its box with aria-invalid, Apply only when something changed and all is valid ("Apply 2 changes"), the boxes
+ *  locked while a change applies; what was typed is kept on a failure and through another phone's change ("now 240 s on
+ *  bitcube" under it), and cleared once applied. patchRules() keeps it current as you type, without re-rendering the boxes. */
+function rulesHTML(rules) {
+  const f = rulesForm(rules, rulesDraft);
+  const either = busy('rules') || busy('rules-reset');
+  const inOff = either || !!whyOf('rules');
+  const w = either ? '' : whyOf('rules') ? whyLine('rules') : whyLine('rules-reset');
+  const rows = Object.entries(f.fields).map(([k, fd]) => `<div class="rule${fd.error ? ' bad' : ''}" data-rule="${esc(k)}">
+      <div class="rule-l"><label for="rule-${esc(k)}">${esc(fd.label)}</label><span class="range" id="rule-${esc(k)}-range">${esc(nb(fd.range))}</span></div>
+      <div class="box"><input type="text" inputmode="decimal" autocomplete="off" id="rule-${esc(k)}" name="${esc(k)}" value="${esc(fd.shown)}" aria-describedby="rule-${esc(k)}-range rule-${esc(k)}-err rule-${esc(k)}-now"${fd.error ? ' aria-invalid="true"' : ''} ${inOff ? 'disabled' : ''}><span class="u" aria-hidden="true">${esc(fd.unit)}</span></div>
+      <div class="err" id="rule-${esc(k)}-err">${fd.error ? esc(nb(fd.error)) : ''}</div><div class="now-on" id="rule-${esc(k)}-now">${fd.now ? esc(nb(fd.now)) : ''}</div></div>`).join('');
   return `<details class="sub" data-id="rules" id="rules"${op('rules')}><summary><span>Rules</span><span class="chev" aria-hidden="true">›</span></summary>
-    <form class="ctl rules-form ${off ? 'off' : ''}" data-ctl="rules" onsubmit="return false"><div class="ctl-h">The year's rules</div>${c.rules.why ? why(c.rules.why) : ''}<div class="rules">${rows}</div>
-    <div class="row-btns"><button type="button" class="btn primary" data-act="rules-apply" ${off ? 'disabled' : ''}>Apply the changed ones</button><button type="button" class="btn" data-act="rules-reset" ${off ? 'disabled' : ''}>Reset all to defaults</button></div>
-    <div class="effect">A rule changes the behaviour from now on; it does not move the river. Reset confirms first.</div>
-    ${statusLine('rules')}</form></details>`;
+    <form class="ctl rules-form ${(whyOf('rules') && !either) ? 'off' : ''}" id="ctl-rules" data-ctl="rules" onsubmit="return false"${either ? ' aria-busy="true"' : ''}><div class="ctl-h">The year's rules</div>${w}<div class="rules">${rows}</div>
+    <div class="row-btns"><button type="button" class="btn primary" id="ctl-rules-apply" data-act="rules-apply" ${inOff || !f.canApply ? 'disabled' : ''}>${esc(f.label)}</button><button type="button" class="btn" id="ctl-rules-reset" data-act="rules-reset" ${either || whyOf('rules-reset') ? 'disabled' : ''}>Reset all to defaults</button></div>
+    <div class="effect">A rule changes the behaviour from now on; it does not move the river. Reset asks first.</div>
+    ${statusLine('ctl-rules', ['rules', 'rules-reset'])}</form></details>`;
+}
+/** As you type: each box's error and "now N on bitcube", and Apply's count, patched in place (the box under your fingers is
+ *  never re-created); the section's remembered markup follows, so the next answer doesn't redraw it either. */
+function patchRules() {
+  const form = $('#ctl-rules'), rules = p.last?.seasons?.value?.rules;
+  if (!form || !rules || !model) return;
+  const f = rulesForm(rules, rulesDraft), inOff = busy('rules') || busy('rules-reset') || !!whyOf('rules');
+  for (const [k, fd] of Object.entries(f.fields)) {
+    const row = form.querySelector(`[data-rule="${CSS.escape(k)}"]`), inp = $(`#rule-${CSS.escape(k)}`);
+    if (!row || !inp) continue;
+    row.classList.toggle('bad', !!fd.error);
+    if (fd.error) inp.setAttribute('aria-invalid', 'true'); else inp.removeAttribute('aria-invalid');
+    inp.setAttribute('value', fd.shown);
+    $(`#rule-${CSS.escape(k)}-err`).textContent = fd.error ? nb(fd.error) : '';
+    $(`#rule-${CSS.escape(k)}-now`).textContent = fd.now ? nb(fd.now) : '';
+  }
+  const apply = $('#ctl-rules-apply');
+  if (apply) { apply.textContent = f.label; apply.disabled = inOff || !f.canApply; }
+  const steer = $('#now-steer');
+  if (steer && model.show.season) lastHTML.set(steer, steerHTML(model));
 }
 
 // ---- Not OK, grouped by cause ------------------------------------------------------------------------------------------
@@ -453,9 +497,11 @@ function rowHTML(x, m) {
       : x.id === 'river camera' ? riverStillHTML(x) : x.id === 'modal agent' ? daveHTML(m) : '',
     addrHTML(x, m),
   ].join('');
+  // from a last answer the since already ends "when last seen": the tag isn't said twice (R5 #25)
+  const since = x.level !== 'ok' ? sinceSpan(x.id, x.level, [x.summary, x.detail], x) : '';
   return `<details class="row lv-${x.level}${x.stale ? ' stale' : ''}" data-id="${esc(x.id)}" id="${rid(x.id)}"${op(x.id)}><summary>
       ${mark(x.level)}<div><div class="name">${esc(NAME[x.id] ?? x.name)} <span class="state">· ${WORD[x.level]}</span></div>
-      <div class="sum">${esc(nb(x.summary))}</div><div class="from">from ${FROM[x.checked_from]} · ${ageSpan(x.age_s)}${x.stale ? ' · last seen' : ''}${x.level !== 'ok' ? sinceSpan(x.id, x.level, [x.summary, x.detail], x) : ''}</div></div><span class="chev" aria-hidden="true">›</span></summary>
+      <div class="sum">${esc(nb(x.summary))}</div><div class="from">from ${FROM[x.checked_from]} · ${ageSpan(x.age_s)}${x.stale && !since ? ' · last seen' : ''}${since}</div></div><span class="chev" aria-hidden="true">›</span></summary>
     <div class="row-body">${body}</div></details>`;
 }
 /** Dave's card: the clip ages (from Clips to Dave) and whether tonight's file uses his scene. */
@@ -470,7 +516,8 @@ function addrHTML(x, m) {
   const src = x.id === 'bitcube' ? m.sources.bitcube : x.id === 'seasons' ? m.sources.seasons : x.id === 'modal agent' ? m.sources.modal : x.checked_from === 'bitcube' ? m.sources.probe : null;
   const lines = [x.address ? `Address: <code>${esc(x.address)}</code>` : '', `Checked from ${FROM[x.checked_from]} · ${ageSpan(x.age_s)}`,
     src?.error ? `raw: <code>${esc(src.error)}</code>` : '', x.raw ? `raw: <code>${esc(x.raw)}</code>` : ''].filter(Boolean);
-  const links = [...(LINKS[x.id] ?? []), ['Show on the system map', `/map#${encodeURIComponent(x.id)}`, `Show ${NAME[x.id] ?? x.name} on the system map`]];   // map.js opens that box's sheet
+  // map.js opens that box's sheet; the name starts with the visible words, so a voice command for what is seen matches (R5 #15)
+  const links = [...(LINKS[x.id] ?? []), ['Show on the system map', `/map#${encodeURIComponent(x.id)}`, `Show on the system map: ${NAME[x.id] ?? x.name}`]];
   return `<div class="addr"><div class="label">Addresses and links (for Will)</div>${lines.map((l) => `<div>${l}</div>`).join('')}
     <div class="links">${links.map(([l, h, aria]) => `<a href="${esc(h)}"${aria ? ` aria-label="${esc(aria)}"` : ''} ${h.startsWith('/') ? '' : 'target="_blank" rel="noopener"'}>${esc(l)}</a>`).join('')}</div></div>`;
 }
@@ -493,119 +540,189 @@ function fineHTML(m) {
     <div class="fine-list">${ok.map((x) => rowHTML(x, m)).join('')}${muted.map((x) => `<div class="muted-row"><span class="mk lv-unknown" aria-hidden="true">·</span><div><div class="name">${esc(NAME[x.id])}</div><div class="sum">${esc(x.summary)}</div></div></div>`).join('')}</div></details>`;
 }
 function installerHTML(m) {
-  const c = m.controls, s = m.show, route = s.ropes.route, boot = s.boot_file?.name;
+  const s = m.show, route = s.ropes.route, boot = s.boot_file?.name;
   const files = s.show_files.length ? s.show_files : Object.keys(FILES).slice(0, 2);
-  const lrOff = !c.lightsroute.possible || pend('lightsroute'), bfOff = !c.bootfile.possible || pend('bootfile');
-  return `<details class="card installer" data-id="installer" id="installer-card"${op('installer')}><summary><span class="tool" aria-hidden="true">🛠</span><span>Installer</span><span class="note">changes cabling settings · confirms every change</span><span class="chev" aria-hidden="true">›</span></summary><div class="body">
-    <div class="ctl ${lrOff ? 'off' : ''}" data-ctl="lightsroute"><div class="ctl-h">Lighting network port on bitcube</div>${c.lightsroute.why ? why(c.lightsroute.why) : ''}
-      <div class="seg" role="group" aria-label="Lighting network port"><button type="button" data-act="lightsroute" data-route="direct" class="${route === 'direct' ? 'lit' : ''}" aria-pressed="${route === 'direct'}" ${lrOff ? 'disabled' : ''}>LIGHTS port (white)</button><button type="button" data-act="lightsroute" data-route="router" class="${route === 'router' ? 'lit' : ''}" aria-pressed="${route === 'router'}" ${lrOff ? 'disabled' : ''}>Router port (fallback)</button></div>
-      <div class="effect">Now: <b>${route === 'direct' ? "bitcube's LIGHTS port" : route === 'router' ? 'the router port' : 'not known'}</b>. The wrong port leaves all 20 ropes dark. Only change it after moving the cable; it asks first.</div>
-      ${statusLine('lightsroute')}</div>
-    <div class="ctl ${bfOff ? 'off' : ''}" data-ctl="bootfile"><div class="ctl-h">Boot file: the show file that opens at boot</div>${c.bootfile.why ? why(c.bootfile.why) : ''}
-      <div class="seg" role="group" aria-label="Boot file">${files.map((f) => `<button type="button" data-act="bootfile" data-file="${esc(f)}" class="${boot === f ? 'lit' : ''}" aria-pressed="${boot === f}" ${bfOff ? 'disabled' : ''}>${esc(cap(fileLabel(f)))}</button>`).join('')}</div>
-      <div class="effect">Takes effect at bitcube's next restart; it does not change what is showing now. It asks first.</div>
-      ${statusLine('bootfile')}</div>
+  const lrOff = off('lightsroute'), bfOff = off('bootfile');
+  return `<details class="card installer" data-id="installer" id="installer-card"${op('installer')}><summary><span class="tool" aria-hidden="true">🛠</span><span>Installer</span><span class="note">changes cabling and boot settings · confirms every change</span><span class="chev" aria-hidden="true">›</span></summary><div class="body">
+    <div class="ctl ${whyOf('lightsroute') && !busy('lightsroute') ? 'off' : ''}" id="ctl-lightsroute" data-ctl="lightsroute"${busy('lightsroute') ? ' aria-busy="true"' : ''}><div class="ctl-h">Lighting network port on bitcube</div>${whyLine('lightsroute')}
+      <div class="seg" role="group" aria-label="Lighting network port"><button type="button" id="ctl-lightsroute-direct" data-act="lightsroute" data-route="direct" class="${route === 'direct' ? 'lit' : ''}" aria-pressed="${route === 'direct'}" ${lrOff ? 'disabled' : ''}>LIGHTS port (white)</button><button type="button" id="ctl-lightsroute-router" data-act="lightsroute" data-route="router" class="${route === 'router' ? 'lit' : ''}" aria-pressed="${route === 'router'}" ${lrOff ? 'disabled' : ''}>Router port (spare)</button></div>
+      <div class="effect">Now: <b>${route === 'direct' ? "bitcube's LIGHTS port" : route === 'router' ? 'the spare router port' : 'not known'}</b>. The wrong port leaves all 20 ropes dark. Only change it after moving the cable; it asks first.</div>
+      ${statusLine('ctl-lightsroute', ['lightsroute'])}</div>
+    <div class="ctl ${whyOf('bootfile') && !busy('bootfile') ? 'off' : ''}" id="ctl-bootfile" data-ctl="bootfile"${busy('bootfile') ? ' aria-busy="true"' : ''}><div class="ctl-h">Boot file: the show file that opens at boot</div>${whyLine('bootfile')}
+      <div class="seg" role="group" aria-label="Boot file">${files.map((f) => `<button type="button" id="ctl-bootfile-${FILES[f]?.kind ?? 'other'}" data-act="bootfile" data-file="${esc(f)}" class="${boot === f ? 'lit' : ''}" aria-pressed="${boot === f}" ${bfOff ? 'disabled' : ''}>${esc(cap(fileLabel(f)))}</button>`).join('')}</div>
+      <div class="effect">Now: <b>${esc(bootWords(s.boot_file))}</b> opens at boot. A change takes effect at bitcube's next restart and does not change what is showing now; a show-file switch sets it too. It asks first.</div>
+      ${statusLine('ctl-bootfile', ['bootfile'])}</div>
     <div class="links"><a class="btn" href="/lights">Calibrate the lights → Lights</a></div>
   </div></details>`;
 }
 
-// ---- controls: before / confirm / pending / result / failure, on the thing they change -----------------------------------
-const why = (w) => `<div class="ctl-why">Not possible now: ${esc(w)}.</div>`;
-function statusLine(name) {
-  const c = ctl[name];
-  return `<div class="ctl-status ${c?.state ?? ''}" data-ctl-status="${name}">${c ? `${c.state === 'pending' ? '<span class="spin" aria-hidden="true"></span>' : ''}<span>${esc(c.text)}</span>` : ''}</div>`;
+// ---- controls: the contract's states on the thing they change (docs/mission-ui.md "Applying a change") ------------------
+/** "Not possible now: bitcube is offline." or "Wait: the switch to the live river is being applied." above the greyed control;
+ *  never while its own change is in flight (its status line says that). */
+function whyLine(name) { const w = busy(name) ? null : whyOf(name); return w ? `<div class="ctl-why">${esc(whyText(w))}</div>` : ''; }
+/** One status line per control host (its id: st-<host>), for whichever of its controls is in flight or acted last. Its ticking
+ *  time is filled in by refreshAges(); it is not a live region (announce() speaks for it), and focus waits on it (tabindex -1)
+ *  while its button is disabled. */
+function statusLine(host, names) {
+  const live = names.filter((n) => ctl[n]);
+  const name = live.find(busy) ?? live.sort((a, b) => (ctl[b].s.at ?? 0) - (ctl[a].s.at ?? 0))[0] ?? names[0];
+  const c = ctl[name], v = c ? controlLine(c, Date.now()) : { cls: '', spin: false, text: '' };
+  const inner = !c || (!v.spin && !v.text) ? '' : v.spin ? `<span class="spin" aria-hidden="true"></span><span class="t" data-ctl-line="${esc(name)}"></span>` : `<span class="t">${esc(v.text)}</span>`;
+  return `<div class="ctl-status ${v.cls}" id="st-${host}" data-ctl-status="${esc(name)}" tabindex="-1">${inner}</div>`;
 }
 function ropesCtlHTML(m) {
-  const c = m.controls.ropes, r = m.show.ropes, st = r.state, off = !c.possible || pend('ropes');
+  const r = m.show.ropes, st = r.state, o = off('ropes');
   const boxes = ['rope box 1', 'rope box 2'].map((id) => item(m, id)).filter(Boolean);
   const watts = r.open && Array.isArray(r.watts) && r.watts.every((w) => w != null) ? `<div class="effect">Power: <b>${nb(`${r.watts.join(' + ')} W`)}</b>${r.cap ? ` of ${nb(`${r.cap} W`)} per box` : ''}.</div>` : '';
-  return `<div class="ctl ${c.possible ? '' : 'off'}" data-ctl="ropes"><div class="ctl-h">Ropes</div>${c.possible ? '' : why(c.why)}
-    <div class="seg" role="group" aria-label="Ropes"><button type="button" data-act="ropes" data-dark="0" class="${st === 'river' ? 'lit' : ''}" aria-pressed="${st === 'river'}" ${off ? 'disabled' : ''}>On · showing the river</button><button type="button" data-act="ropes" data-dark="1" class="${st === 'dark' ? 'lit' : ''}" aria-pressed="${st === 'dark'}" ${off ? 'disabled' : ''}>Dark</button></div>
+  return `<div class="ctl ${whyOf('ropes') && !busy('ropes') ? 'off' : ''}" id="ctl-ropes" data-ctl="ropes"${busy('ropes') ? ' aria-busy="true"' : ''}><div class="ctl-h">Ropes</div>${whyLine('ropes')}
+    <div class="seg" role="group" aria-label="Ropes"><button type="button" id="ctl-ropes-on" data-act="ropes" data-dark="0" class="${st === 'river' ? 'lit' : ''}" aria-pressed="${st === 'river'}" ${o ? 'disabled' : ''}>On · showing the river</button><button type="button" id="ctl-ropes-dark" data-act="ropes" data-dark="1" class="${st === 'dark' ? 'lit' : ''}" aria-pressed="${st === 'dark'}" ${o ? 'disabled' : ''}>Dark</button></div>
     <div class="effect">Now: <b>${esc(r.words)}</b>. Dark sends black to all 20 ropes; they follow within a few seconds. Dark asks first.</div>
     ${watts}
     <div class="boxes">${boxes.map((b) => `<div class="box lv-${b.level}">${mark(b.level)}<div><b>${esc(NAME[b.id])}</b> <span class="state">· ${WORD[b.level]}</span><div class="sum">${esc(nb(b.summary))}</div></div></div>`).join('')}</div>
-    ${statusLine('ropes')}
+    ${statusLine('ctl-ropes', ['ropes'])}
     <div class="links"><a href="/lights">See every LED → Lights</a></div></div>`;
 }
 function hubCtlHTML(m) {
-  const c = m.controls.hub75, b = m.show.panels.brightness, cur = b == null ? null : Math.round(b * 100);
-  const draft = hubDraft ?? cur, off = !c.possible || pend('hub75');
-  return `<div class="ctl ${c.possible ? '' : 'off'}" data-ctl="hub75"><div class="ctl-h">Panels brightness</div>${c.possible ? '' : why(c.why)}
+  const b = m.show.panels.brightness, cur = b == null ? null : Math.round(b * 100);
+  const draft = hubDraft ?? cur, o = off('hub75');
+  return `<div class="ctl ${whyOf('hub75') && !busy('hub75') ? 'off' : ''}" id="ctl-hub75" data-ctl="hub75"${busy('hub75') ? ' aria-busy="true"' : ''}><div class="ctl-h">Panels brightness</div>${whyLine('hub75')}
     <div class="readout">Now <b>${cur == null ? 'not known' : nb(`${cur} %`)}</b>${cur != null && m.show.panels.state === 'no-sender' ? ' (no panel sender, so dark)' : ''}</div>
-    <div class="stepper"><button type="button" class="btn step" data-act="hub-step" data-d="-10" ${off || draft == null || draft <= 0 ? 'disabled' : ''} aria-label="Darker">−</button><output aria-label="Brightness to set">${draft == null ? '?' : nb(`${draft} %`)}</output><button type="button" class="btn step" data-act="hub-step" data-d="10" ${off || draft == null || draft >= 100 ? 'disabled' : ''} aria-label="Brighter">+</button>
-      <button type="button" class="btn primary" data-act="hub-set" ${off || draft == null || draft === cur ? 'disabled' : ''}>${draft == null ? 'Set brightness' : `Set ${nb(`${draft} %`)}`}</button>
-      <button type="button" class="btn danger" data-act="hub-off" ${off || cur === 0 ? 'disabled' : ''}>Panels off</button></div>
+    <div class="stepper"><button type="button" class="btn step" id="ctl-hub75-less" data-act="hub-step" data-d="-10" ${o || draft == null || draft <= 0 ? 'disabled' : ''} aria-label="Darker">−</button><output id="hub-draft" aria-label="Brightness to set, 0 to 100 %">${draft == null ? '?' : nb(`${draft} %`)}</output><button type="button" class="btn step" id="ctl-hub75-more" data-act="hub-step" data-d="10" ${o || draft == null || draft >= 100 ? 'disabled' : ''} aria-label="Brighter">+</button>
+      <button type="button" class="btn primary" id="ctl-hub75-set" data-act="hub-set" ${o || draft == null || draft === cur ? 'disabled' : ''}>${draft == null ? 'Set brightness' : `Set ${nb(`${draft} %`)}`}</button>
+      <button type="button" class="btn danger" id="ctl-hub75-off" data-act="hub-off" ${o || cur === 0 ? 'disabled' : ''}>Panels off</button></div>
     <div class="effect">A change shows on the panels within a few seconds. Panels off sets ${nb('0 %')} and asks first.</div>
-    ${statusLine('hub75')}</div>`;
+    ${statusLine('ctl-hub75', ['hub75'])}</div>`;
 }
-/** The show-file control: every file (the TouchDesigner row), or only the files of one kind (the Season card: the river's year). */
-function showfileCtlHTML(m, onlyKind = null) {
-  const c = m.controls.switch, s = m.show, all = s.show_files.length ? s.show_files : Object.keys(FILES).slice(0, 2);
+/** The show-file control: every file (the TouchDesigner row: where 'td'), or only the files of one kind (the Season card and
+ *  the year's row: the river's year). A switch also sets the boot file (probe.ps1 writes boot-file.txt), and says so. */
+function showfileCtlHTML(m, onlyKind = null, where = onlyKind ? 'year' : 'td') {
+  const s = m.show, all = s.show_files.length ? s.show_files : Object.keys(FILES).slice(0, 2);
   // only the river's year and the live river: model.js leaves old show files out of show_files (execution plan D27)
   const files = onlyKind ? all.filter((f) => FILES[f]?.kind === onlyKind) : all;
-  const running = s.file?.name, off = !c.possible || pend('switch');
-  const btns = files.map((f) => `<button type="button" class="btn ${f === running ? '' : 'primary'}" data-act="switch" data-file="${esc(f)}" ${off ? 'disabled' : ''}>${f === running ? `Restart on ${esc(fileLabel(f))}` : `Switch to ${esc(fileLabel(f))}`}</button>`).join('');
-  return `<div class="ctl ${c.possible ? '' : 'off'}" data-ctl="switch"><div class="ctl-h">Show file</div>${c.possible ? '' : why(c.why)}
-    <div class="readout">${s.file ? `Showing <b>${esc(s.file.label)}</b>` : "What is showing <b>isn't known</b>"}${s.boot_file ? ` · opens at boot: ${esc(s.boot_file.label)}` : ''}</div>
+  const running = s.file?.name, o = off('switch'), host = `ctl-switch-${where}`;
+  const btns = files.map((f) => `<button type="button" id="${host}-${FILES[f]?.kind ?? 'other'}" class="btn ${f === running ? '' : 'primary'}" data-act="switch" data-file="${esc(f)}" ${o ? 'disabled' : ''}>${f === running ? `Restart on ${esc(fileLabel(f))}` : `Switch to ${esc(fileLabel(f))}`}</button>`).join('');
+  return `<div class="ctl ${whyOf('switch') && !busy('switch') ? 'off' : ''}" id="${host}" data-ctl="switch"${busy('switch') ? ' aria-busy="true"' : ''}><div class="ctl-h">Show file</div>${whyLine('switch')}
+    <div class="readout">${s.file ? `Now showing <b>${esc(s.file.label)}</b>` : "What is showing <b>isn't known</b>"}${s.boot_file ? ` · opens at boot: ${esc(bootWords(s.boot_file))}` : ''}</div>
     <div class="row-btns">${btns}</div>
-    <div class="effect">Switching restarts TouchDesigner on that file: the lights go dark for about a minute and unsaved changes in TouchDesigner are lost. It asks first.</div>
-    ${statusLine('switch')}</div>`;
+    <div class="effect">Switching restarts TouchDesigner on that file: the lights go dark for about a minute and unsaved changes in TouchDesigner are lost. That file then also opens at boot. It asks first.</div>
+    ${statusLine(host, ['switch'])}</div>`;
 }
-/** One polite live region for the whole page (status.html #ctl-live): what a control is doing and how it ended, and a
- *  stepper's new value. The status lines themselves are re-rendered with the markup, so they can't be live regions. */
-function announce(text) { const l = $('#ctl-live'); if (!l) return; l.textContent = ''; setTimeout(() => { l.textContent = text; }, 50); }
-/** Confirm if asked, then post; the control shows pending, the result with a time, or the failure and the next step. */
-let asking = null;   // the confirm on screen: { name, pr }, withdrawn by render() when its control becomes impossible
-async function runControl(name, path, body, { ask = null, done, fail, pending = 'Sending to bitcube…' }) {
-  if (ask) {
-    asking = { name, pr: confirm(ask) };
-    const yes = await asking.pr;
-    asking = null;
-    if (!yes) return;
-  }
-  // the confirm may have been open for a while: judge again now, and send nothing if the control became impossible
-  model = p.last ? derive(p.last, p.last.now + p.elapsed()) : null;
-  const now = model?.controls[name];
-  if (!now?.possible) {
-    ctl[name] = { state: 'failed', text: `Not sent: ${now?.why ?? "this page can't reach mission control"} (${fmt.clock(Date.now())}).` };
-    announce(ctl[name].text); render(); return;
-  }
-  ctl[name] = { state: 'pending', text: pending };
-  announce(pending);
-  render();
-  try {
-    const r = await api(path, body);
-    const text = typeof done === 'function' ? done(r) : done;
-    ctl[name] = { state: 'done', text: `${text} · ${fmt.clock(Date.now())}${r?.fixture ? ' (fixture mode: nothing really changed)' : ''}` };
-    if (name === 'hub75') hubDraft = null;
-    if (name === 'target') { targetDraft.season = null; targetDraft.intensity = null; }
-    if (name === 'rules') for (const k of Object.keys(rulesDraft)) delete rulesDraft[k];
-    setTimeout(() => p.refresh(), 1500);
-  } catch (e) {
-    const why = plainError(e);
-    ctl[name] = { state: 'failed', text: e?.noAnswer ? noAnswerText(e, 'the Now line shows what bitcube reports') : `${fail}: ${why} (${fmt.clock(Date.now())}).${/refused it/.test(why) ? '' : ' Try again, or see the verdict above.'}` };
-    if (e?.noAnswer) setTimeout(() => p.refresh(), 500);
-  }
-  announce(ctl[name].text);
-  render();
+
+/** Where focus waits for a control: its host's status line (the host the press came from). */
+function statusEl(name) {
+  const c = ctl[name];
+  return (c?.host && document.getElementById(`st-${c.host}`)) || document.querySelector(`.ctl-status[data-ctl-status="${CSS.escape(name)}"]`);
 }
-async function checkNow() {
-  if (checkState?.state === 'pending') return;
-  const offline = !!model && item(model, 'bitcube')?.level === 'down';
-  checkState = { state: 'pending', text: offline ? 'Asking bitcube again…' : 'Asking bitcube to check everything now…' };
-  announce(checkState.text);
-  shell.setChecking(true);
+function focusStatus(name) { const st = statusEl(name); if (st && st.isConnected) st.focus({ preventScroll: true }); }
+/** A change ended: focus that waited on its status line (or was nowhere) goes back to the button that started it, when it can
+ *  hold it again; a failure keeps focus on the control. A change that ends never pulls focus from elsewhere on the page. */
+function afterEnd(name) {
+  const c = ctl[name], a = document.activeElement, st = statusEl(name);
+  if (!c || busy(name)) return;
+  if (!(a === st || !a || a === document.body)) return;
+  if (document.querySelector('dialog[open]')) return;
+  if (c.key) refocus(c.key, document, st);
+}
+/** Before every render: a change confirming is done when a reading taken after it answered shows it; a confirm left open for a
+ *  control that became impossible is withdrawn ("Not sent: <why>"). Returns the controls withdrawn (focus goes to their status
+ *  line) and ended (focus that waited there goes back to the button). */
+function settleControls() {
+  const withdrawn = [], ended = [], now = Date.now();
+  for (const [name, c] of Object.entries(ctl)) {
+    if (c.s.state === 'confirming' && typeof c.o?.confirmed === 'function' && model && p.receivedAt != null && c.refreshAt != null && p.receivedAt > c.refreshAt) {
+      let yes = false;
+      try { yes = !!c.o.confirmed(model); } catch (e) { console.warn('confirmed', e); }
+      if (yes) { c.s = ctlStep(c.s, { type: 'model', confirmed: true, now }); finish(name); ended.push(name); }
+    } else if (c.s.state === 'confirm' && c.asking) {
+      const w = whyOf(name);
+      const next = ctlStep(c.s, { type: 'why', why: w, now });
+      if (next.effect === 'withdraw') {
+        const a = c.asking; c.asking = null;
+        c.s = next; c.text = notSentText(w, fmt.clock(now));
+        announce(c.text);
+        a.close();
+        withdrawn.push(name);
+      }
+    }
+  }
+  return { withdrawn, ended };
+}
+/** Every second: a change confirming too long turns unconfirmed (never "unchanged": it may yet show). */
+function tickControls() {
+  let changed = false;
+  for (const [name, c] of Object.entries(ctl)) {
+    if (c.s.state !== 'confirming') continue;
+    const n = ctlStep(c.s, { type: 'tick', expectS: c.expectS, now: Date.now() });
+    if (n.state === c.s.state) continue;
+    c.s = n;
+    c.text = `Sent at ${fmt.clock(c.s.sentAt ?? Date.now())}, but bitcube doesn't show it yet: ${c.o?.unconfirmed ?? 'look at the Now line, or call Gavin'}.`;
+    announce(c.text);
+    changed = true;
+    queueMicrotask(() => afterEnd(name));
+  }
+  if (changed) render();
+}
+/** Done: "<done> · 21:04", said once; the form's draft cleared. */
+function finish(name) {
+  const c = ctl[name], r = c.result;
+  const d = typeof c.o.done === 'function' ? c.o.done(r) : c.o.done;
+  c.text = `${d} · ${fmt.clock(Date.now())}${r?.fixture ? ' (fixture mode: nothing really changed)' : ''}`;
+  announce(c.text);
+  try { c.o.onDone?.(r); } catch (e) { console.warn('onDone', e); }
+}
+/** Press → (confirm) → applying → done, or confirming until bitcube's reading shows it, or failed / unconfirmed; on the control
+ *  itself, with one announcement each. o: { btn, ask, what, pending, done, fail, confirmed(model), noAnswer, unconfirmed, onDone }. */
+async function runControl(name, path, body, o) {
+  const c = C(name);
+  if (c.asking || busy(name)) return;
+  c.key = o.btn ? focusKey(o.btn) : null;
+  c.host = o.btn?.closest('[data-ctl]')?.id ?? null;
+  const ask = typeof o.ask === 'function' ? o.ask() : o.ask;
+  let next = ctlStep(c.s, { type: 'press', why: whyOf(name), confirm: !!ask, now: Date.now() });
+  if (next.effect === 'confirm') {
+    c.s = next;
+    const pr = confirm(ask);
+    c.asking = pr;
+    const yes = await pr;
+    if (c.asking !== pr) return;               // withdrawn meanwhile (settleControls): it already says "Not sent"
+    c.asking = null;
+    // judged again now it is answered: a control that became impossible meanwhile sends nothing
+    model = p.last ? derive(p.last, p.last.now + p.elapsed()) : null;
+    next = ctlStep(c.s, { type: yes ? 'yes' : 'no', why: whyOf(name), now: Date.now() });
+    if (next.notSent) { c.s = next; c.text = notSentText(next.notSent, fmt.clock(Date.now())); announce(c.text); render(); focusStatus(name); return; }
+  }
+  if (next.effect !== 'send') { c.s = next; render(); return; }
+  // applying: the control, its siblings and its inputs locked; focus waits on its status line
+  Object.assign(c, { s: next, text: '', o, result: null, refreshAt: null, expectS: EXPECT_S[name] ?? null,
+    applyText: o.pending ?? `Applying: ${o.what}…` });
+  for (const other of SHARE[name] ?? []) if (ctl[other] && !busy(other)) ctl[other] = { s: ctlInit(), text: '' };
+  const a = document.activeElement, idle = !a || a === document.body, here = !!(a && c.host && document.getElementById(c.host)?.contains(a));
+  announce(c.applyText.replace(/…$/, ''));     // said once, never with a ticking time
+  if (name === 'check') shell.setChecking(true);
   render();
-  try {
-    await api('/api/control/check', {});
-    checkState = { state: 'done', text: offline ? `Asked bitcube again · ${fmt.clock(Date.now())}; the page updates if it answers` : `Check started · ${fmt.clock(Date.now())}; the page updates as answers come in` };
-    setTimeout(() => p.refresh(), 1500);
-    setTimeout(() => { if (checkState?.state === 'done') { checkState = null; render(); } }, 20_000);
-  } catch (e) {
-    checkState = { state: 'failed', text: `The check didn't start: ${plainError(e)} (${fmt.clock(Date.now())}).` };
-  } finally { shell.setChecking(false); }
-  announce(checkState.text);
-  render();
+  if (idle || here) focusStatus(name);
+  // the server records the change as it arrives: ask for the status at once, so the lock (and "Wait: …" on what it blocks)
+  // shows on this page within a second, not at the next poll
+  setTimeout(() => p.refresh(), 300);
+  let r;
+  try { r = await api(path, body); }
+  catch (e) {
+    const maybe = !!(e?.maybe || (e?.noAnswer && e?.posted));
+    c.s = ctlStep(c.s, { type: 'error', maybe, now: Date.now() });
+    c.text = maybe ? noAnswerText(e, o.noAnswer ?? 'the Now line shows what bitcube reports') : failText(o.fail, e, fmt.clock(Date.now()));
+    announce(c.text);
+    if (name === 'check') shell.setChecking(false);
+    c.refreshAt = performance.now(); p.refresh();
+    render(); afterEnd(name);
+    return;
+  }
+  if (name === 'check') shell.setChecking(false);
+  c.result = r;
+  c.s = ctlStep(c.s, { type: 'ok', confirmed: typeof o.confirmed === 'function' ? false : null, now: Date.now() });
+  if (c.s.state === 'done') finish(name);
+  // a reading asked for from now on is taken after the answer: only such a reading can confirm the change
+  c.refreshAt = performance.now(); p.refresh();
+  render(); afterEnd(name);
 }
 
 // ---- sheets and jumps -----------------------------------------------------------------------------------------------------
@@ -644,61 +761,87 @@ function syncRiverWatch() {
 document.addEventListener('input', (e) => {
   const inp = e.target;
   if (inp instanceof HTMLInputElement && inp.closest('form.rules-form') && inp.name) {
-    if (inp.value === '' || inp.value === inp.dataset.server) delete rulesDraft[inp.name]; else rulesDraft[inp.name] = inp.value;
+    const server = p.last?.seasons?.value?.rules?.[inp.name]?.value;
+    // what is typed is kept as typed (an empty box too: it says what it must be); back to bitcube's value, it is no change
+    if (server != null && inp.value.trim() !== '' && Number(inp.value) === Number(server)) delete rulesDraft[inp.name]; else rulesDraft[inp.name] = inp.value;
+    patchRules();
   }
 });
 document.addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.closest?.('[data-act="still"]')) { e.preventDefault(); openStill(); }
+  // Enter in a rule's box applies the form when it can, as a form would
+  if (e.key === 'Enter' && e.target instanceof HTMLInputElement && e.target.closest('form.rules-form')) { e.preventDefault(); const b = $('#ctl-rules-apply'); if (b && !b.disabled) b.click(); }
 });
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 document.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');
   if (!b || b.disabled) return;
-  const act = b.dataset.act;
+  const act = b.dataset.act, m = model;
   switch (act) {
     case 'goto': jump(b.dataset.target); break;
     case 'goto-switch': jumpSwitch(); break;
-    case 'checknow': checkNow(); break;
     case 'still': openStill(); break;
-    case 'ropes': {
-      const dark = b.dataset.dark === '1';
-      runControl('ropes', '/api/control/ropes', { dark }, {
-        ask: dark ? { title: 'Make the ropes dark?', body: 'The ropes in the gallery go black now and stay black until someone presses On. The panels keep showing the river.', ok: 'Go dark', cancel: 'Keep showing the river' } : null,
-        done: dark ? 'Dark: the ropes go black within a few seconds' : 'On: the ropes show the river again within a few seconds', fail: 'The ropes are unchanged' });
+    case 'checknow': {
+      const offline = !!m && item(m, 'bitcube')?.level === 'down';
+      runControl('check', '/api/control/check', {}, { btn: b, pending: offline ? 'Asking bitcube again…' : 'Asking bitcube to check everything now…',
+        done: offline ? 'Asked bitcube again; the page updates if it answers' : 'Check started; the page updates as answers come in', fail: "The check didn't start",
+        noAnswer: 'the page updates if it ran',
+        onDone: () => setTimeout(() => { if (ctl.check?.s.state === 'done') { ctl.check = { s: ctlInit(), text: '' }; render(); } }, 20_000) });
       break;
     }
-    case 'hub-step': { const cur = model?.show.panels.brightness == null ? null : Math.round(model.show.panels.brightness * 100); if (cur == null && hubDraft == null) break; hubDraft = clamp((hubDraft ?? cur) + Number(b.dataset.d), 0, 100); render(); announce(`${hubDraft} %`); break; }
-    case 'hub-set': runControl('hub75', '/api/control/hub75', { brightness: hubDraft / 100 }, { done: `Panels set to ${nb(`${hubDraft} %`)}; it shows within a few seconds`, fail: 'The panels are unchanged' }); break;
-    case 'hub-off': runControl('hub75', '/api/control/hub75', { brightness: 0 }, { ask: { title: 'Switch the panels off?', body: `The panels in the gallery go dark now (brightness ${nb('0 %')}). Set a brightness to bring them back.`, ok: 'Panels off', cancel: 'Keep them on' },
-      done: `Panels off (${nb('0 %')}); set a brightness to bring them back`, fail: 'The panels are unchanged' }); break;
-    case 'mode': runControl('mode', '/api/control/mode', { mode: b.dataset.mode }, { done: `Mode → ${cap(b.dataset.mode)}${b.dataset.mode === 'manual' ? ': taken over by hand' : ''}`, fail: 'The mode is unchanged' }); break;
+    case 'ropes': {
+      const dark = b.dataset.dark === '1';
+      runControl('ropes', '/api/control/ropes', { dark }, { btn: b,
+        ask: dark ? { title: 'Make the ropes dark?', body: 'The ropes in the gallery go black now and stay black until someone presses On. The panels keep showing the river.', ok: 'Go dark', cancel: 'Keep showing the river' } : null,
+        what: dark ? 'ropes dark' : 'ropes on', done: dark ? 'Now dark: the ropes go black within a few seconds' : 'Now on: the ropes show the river again within a few seconds', fail: 'The ropes are unchanged' });
+      break;
+    }
+    case 'hub-step': { const cur = m?.show.panels.brightness == null ? null : Math.round(m.show.panels.brightness * 100); if (cur == null && hubDraft == null) break; hubDraft = clamp((hubDraft ?? cur) + Number(b.dataset.d), 0, 100); render(); announce(`${hubDraft} %`); break; }
+    case 'hub-set': { const v = hubDraft; runControl('hub75', '/api/control/hub75', { brightness: v / 100 }, { btn: b, what: `panels at ${nb(`${v} %`)}`, done: `Now ${nb(`${v} %`)}: it shows on the panels within a few seconds`, fail: 'The panels are unchanged', onDone: () => { hubDraft = null; } }); break; }
+    case 'hub-off': runControl('hub75', '/api/control/hub75', { brightness: 0 }, { btn: b, ask: { title: 'Switch the panels off?', body: `The panels in the gallery go dark now (brightness ${nb('0 %')}). Set a brightness to bring them back.`, ok: 'Panels off', cancel: 'Keep them on' },
+      what: 'panels off', done: `Now off (${nb('0 %')}); set a brightness to bring them back`, fail: 'The panels are unchanged', onDone: () => { hubDraft = null; } }); break;
+    case 'mode': { const md = b.dataset.mode; runControl('mode', '/api/control/mode', { mode: md }, { btn: b, what: `mode ${cap(md)}`, done: `Now ${cap(md)}${md === 'manual' ? ': taken over by hand' : ''}`, fail: 'The mode is unchanged' }); break; }
     case 'tseason': targetDraft.season = b.dataset.season; render(); break;
-    case 'tint': { const cur = targetDraft.intensity ?? model?.show.target?.intensity ?? model?.show.intensity?.value ?? 0.5; targetDraft.intensity = Math.round(clamp(cur + Number(b.dataset.d), 0, 1) * 10) / 10; render(); announce(`${M.intensityWord(targetDraft.intensity)} (${targetDraft.intensity.toFixed(1)})`); break; }
+    case 'tint': { const t = targetForm(m?.show.target, targetDraft, m?.show.intensity?.value ?? 0.5); targetDraft.intensity = Math.round(clamp(t.intensity + Number(b.dataset.d), 0, 1) * 10) / 10; render(); announce(`${M.intensityWord(targetDraft.intensity)} (${targetDraft.intensity.toFixed(1)})`); break; }
     case 'target-set': {
-      const season = targetDraft.season ?? model?.show.target?.season, intensity = targetDraft.intensity ?? model?.show.target?.intensity ?? model?.show.intensity?.value ?? 0.5;
-      runControl('target', '/api/control/target', { season, intensity }, { done: `Target sent: ${season}, ${M.intensityWord(intensity)}; the river travels there by hand`, fail: 'The target is unchanged' });
+      const t = targetForm(m?.show.target, targetDraft, m?.show.intensity?.value ?? 0.5);
+      if (!t.canApply) break;
+      const word = M.intensityWord(t.intensity);
+      runControl('target', '/api/control/target', { season: t.season, intensity: t.intensity }, { btn: b, what: `target ${t.season}, ${word}`,
+        done: `Now heading for ${t.season}, ${word}: the river travels there by hand`, fail: 'The target is unchanged; your choice is kept',
+        onDone: () => { targetDraft.season = null; targetDraft.intensity = null; } });
       break;
     }
     case 'rules-apply': {
-      const form = b.closest('form'), changed = {};
-      for (const inp of form.querySelectorAll('input[name]')) if (inp.value !== '' && Number(inp.value) !== Number(inp.dataset.server)) changed[inp.name] = Number(inp.value);
-      if (!Object.keys(changed).length) { ctl.rules = { state: 'done', text: 'Nothing changed.' }; render(); break; }
-      runControl('rules', '/api/control/rules', { rules: changed }, { done: `${Object.keys(changed).length} rule${Object.keys(changed).length === 1 ? '' : 's'} saved`, fail: 'The rules are unchanged; what you typed is kept' });
+      const f = rulesForm(p.last?.seasons?.value?.rules, rulesDraft);
+      if (!f.canApply) break;
+      const n = Object.keys(f.changed).length, sent = { ...rulesDraft };
+      runControl('rules', '/api/control/rules', { rules: f.changed }, { btn: b, what: plural(n, 'rule change'), done: `Now ${plural(n, 'rule')} changed, from now on`,
+        fail: 'The rules are unchanged; what you typed is kept',
+        // only what was sent is cleared: a box typed into meanwhile keeps its draft
+        onDone: () => { for (const [k, v] of Object.entries(sent)) if (rulesDraft[k] === v) delete rulesDraft[k]; } });
       break;
     }
-    case 'rules-reset': runControl('rules', '/api/control/rules-reset', {}, { ask: { title: 'Reset every rule to its default?', body: 'All the numbers go back to their defaults from now on. The river itself does not move.', ok: 'Reset all', cancel: 'Keep them' },
-      done: 'Rules reset to their defaults', fail: 'The rules are unchanged' }); break;
+    case 'rules-reset': runControl('rules-reset', '/api/control/rules-reset', {}, { btn: b, ask: { title: 'Reset every rule to its default?', body: 'All the numbers go back to their defaults from now on. The river itself does not move.', ok: 'Reset all', cancel: 'Keep them' },
+      what: 'the rules reset', done: 'Now every rule is at its default', fail: 'The rules are unchanged', onDone: () => { for (const k of Object.keys(rulesDraft)) delete rulesDraft[k]; } }); break;
     case 'switch': {
-      const f = b.dataset.file, label = fileLabel(f), verb = f === model?.show.file?.name ? 'Restart on' : 'Switch to';   // the button's own words
-      runControl('switch', '/api/control/switch', { file: f }, { ask: { title: `${verb} ${label} now?`, body: 'Restarts TouchDesigner on that file: the lights go dark for about a minute, and unsaved changes in TouchDesigner are lost.', ok: `${verb} ${label}`, cancel: 'Leave it' },
-        done: `TouchDesigner is restarting on ${label}: about a minute dark`, fail: 'The show file is unchanged', pending: `Restarting on ${label}, about a minute…` });
+      const f = b.dataset.file, w = switchWords(f, m?.show.file?.name, m?.show.boot_file);   // the button's own words
+      runControl('switch', '/api/control/switch', { file: f }, { btn: b, ask: () => { const x = switchWords(f, model?.show.file?.name, model?.show.boot_file); return { title: x.title, body: x.body, ok: x.ok, cancel: 'Leave it' }; },
+        what: w.what, done: w.done, fail: 'The show file is unchanged', confirmed: (mm) => switchShows(mm, f),
+        noAnswer: 'the Now line shows what bitcube reports', unconfirmed: 'look at the Now line, or call Gavin' });
       break;
     }
-    case 'bootfile': { const f = b.dataset.file; runControl('bootfile', '/api/control/bootfile', { file: f }, { ask: { title: `Open ${fileLabel(f)} at boot?`, body: 'From the next restart of bitcube, TouchDesigner opens this file. What is showing now does not change.', ok: 'Change the boot file', cancel: 'Leave it' },
-      done: `${cap(fileLabel(f))} opens at the next restart`, fail: 'The boot file is unchanged' }); break; }
+    case 'bootfile': {
+      const f = b.dataset.file, label = fileLabel(f);
+      runControl('bootfile', '/api/control/bootfile', { file: f }, { btn: b, ask: { title: `Open ${label} at boot?`, body: 'From the next restart of bitcube, TouchDesigner opens this file. What is showing now does not change.', ok: 'Change the boot file', cancel: 'Leave it' },
+        what: `the boot file change to ${label}`, done: `Now ${label} opens at boot, from bitcube's next restart`, fail: 'The boot file is unchanged', confirmed: (mm) => bootShows(mm, f),
+        noAnswer: 'the Now line shows what bitcube reports' });
+      break;
+    }
     case 'lightsroute': {
-      const route = b.dataset.route;
-      runControl('lightsroute', '/api/control/lightsroute', { route }, { ask: { title: route === 'direct' ? "Use bitcube's LIGHTS port?" : 'Use the router port?', body: 'Moves the lighting network to that port. If the lighting switch is plugged into the other one, all 20 ropes go dark until it is moved back.', ok: 'Change the port', cancel: 'Leave it' },
-        done: `Lighting network on ${route === 'direct' ? "bitcube's LIGHTS port" : 'the router port'}`, fail: 'The port is unchanged' });
+      const route = b.dataset.route, where = route === 'direct' ? "bitcube's LIGHTS port" : 'the spare router port';
+      runControl('lightsroute', '/api/control/lightsroute', { route }, { btn: b, ask: { title: route === 'direct' ? "Use bitcube's LIGHTS port?" : 'Use the spare router port?', body: 'Moves the lighting network to that port. If the lighting switch is plugged into the other one, all 20 ropes go dark until it is moved back.', ok: 'Change the port', cancel: 'Leave it' },
+        what: 'the lighting port change', done: `Now the lighting network is on ${where}`, fail: 'The port is unchanged' });
       break;
     }
     default: break;
