@@ -285,7 +285,16 @@ autogrow();
 // the composer's height sets the room the thread leaves at the bottom
 const composer = $('composer');
 // (and the page's scroll padding: a focused link is scrolled out from under it, R7 #11)
-new ResizeObserver(() => { for (const el of [document.querySelector('main.chat'), document.documentElement]) el.style.setProperty('--composer-h', `${composer.offsetHeight}px`); }).observe(composer);
+// A taller composer (the applying line over the bar, a longer request) keeps a reader who was at the bottom of the thread there,
+// as a new message does: the newest reply's last line never ends up under it (R8 #4)
+let composerH = null;
+new ResizeObserver(() => {
+  const h = composer.offsetHeight, grew = composerH != null && h > composerH;
+  const stick = grew && atBottom();          // judged before the room it leaves follows its new height
+  composerH = h;
+  for (const el of [document.querySelector('main.chat'), document.documentElement]) el.style.setProperty('--composer-h', `${h}px`);
+  if (stick) scrollToEnd();
+}).observe(composer);
 
 // ---- a change being applied anywhere: the band's quiet line over the pinned bar (R7 #5) ---------------------------------------
 // The chat is where a teammate asks for the next change, so it says what is being applied now, from a phone or from the chat's own

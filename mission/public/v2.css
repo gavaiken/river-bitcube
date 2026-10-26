@@ -182,8 +182,9 @@ main > *, .col-a > *, .col-b > * { min-width: 0; }
   box-shadow: 0 0 0 1px var(--text);   /* the ring: an edge even for amber on a light panel */
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
+/* a working mark pulses in size, never in opacity: it keeps its full contrast at every moment of the pulse (R8 #15) */
 .mk.live { animation: pulse 1.4s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: 0.45; } }
+@keyframes pulse { 50% { transform: scale(1.22); } }
 .chip {
   display: inline-flex; align-items: center; gap: 8px; padding: 5px 14px 5px 6px; border-radius: 999px; min-height: 32px;
   background: var(--lv); color: var(--lv-ink); font-weight: 800; font-size: 16px; letter-spacing: 0.01em; line-height: 1.2;
