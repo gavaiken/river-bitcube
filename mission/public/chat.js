@@ -2,7 +2,7 @@
 // turns the chat's events (GET /api/chat/history, the SSE /api/chat/events) into one card per request, pairs replies with
 // their request by id, and keeps the pinned status bar and the composer. Server API unchanged: history, events, send, stop.
 import { mountShell, tick, art, fmt, control, confirm, api, esc, md, chip, mark, plainError, noAnswerText, WARN_MS, LOST_MS, poll, announce, setLive,
-  serverNow, serverClock, sclock, noteServerTime } from '/ui.js';
+  serverNow, serverClock, sclock, noteServerTime, speakBy } from '/ui.js';
 import { TZ, applyingWords, derive, entryWords, entrySaid, entriesAt, endedOnce, notSentWords } from '/model.js';
 import { stateOf as judge, stepWords, stepsToggle, excerpt } from '/chat-words.js';
 
@@ -124,18 +124,33 @@ function cardHtml(r) {
 }
 /** The id of a request's ask paragraph: its card (an <article>) is named by it, for a screen reader's list of articles. */
 const askId = (id) => `ask-${String(id).replace(/[^A-Za-z0-9_-]/g, '_')}`;
+const BUSY = new Set(['working', 'waiting']);   // a card in these states is aria-busy: the log reads it once it settles
 function renderCard(r) {
   const [cls, html] = cardHtml(r);
   let el = cards.get(r.id);
   if (!el) { el = document.createElement('article'); el.dataset.id = r.id; cards.set(r.id, el); if (r.text) el.setAttribute('aria-labelledby', askId(r.id)); el.addEventListener('toggle', (e) => { if (e.target.matches('details.more')) { if (e.target.open) S.open.add(r.id); else S.open.delete(r.id); } }, true); }
   if (el.className !== cls) el.className = cls;
   // while it works the card changes at every step: busy, so the log (role="log") reads it once when it settles, not each time
-  const busy = /\b(working|waiting)\b/.test(cls);
+  const busy = BUSY.has(stateOf(r).s);
   if (busy) el.setAttribute('aria-busy', 'true'); else el.removeAttribute('aria-busy');
   if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
   return el;
 }
+let layoutQueued = false, layoutAll = false;
 function layout({ all = false } = {}) {
+  layoutAll ||= all;
+  if (layoutQueued) return;              // its turn in the page's queue is coming: everything dirty is drawn then
+  // the log speaks when a card (or a divider) is added, or a card settles (its aria-busy goes, with the reply): that change takes its
+  // turn in the page's one queue, in order, never within a second of another region's words (R9 #10). Not while the conversation
+  // loads (the thread is busy: nothing is read out then).
+  const live = !thread.getAttribute('aria-busy');
+  const settles = (r) => { const el = cards.get(r.id); return !!el && (layoutAll || S.dirty.has(r.id)) && el.getAttribute('aria-busy') === 'true' && !BUSY.has(stateOf(r).s); };
+  const speaks = live && (reqs().some((r) => !cards.has(r.id) || settles(r)) || S.markers.some((m) => !markerEls.has(m)));
+  if (speaks) { layoutQueued = true; speakBy(() => { layoutQueued = false; draw(); }); return; }
+  draw();
+}
+function draw() {
+  const all = layoutAll; layoutAll = false;
   const list = reqs();
   const stick = atBottom();
   const nodes = [];

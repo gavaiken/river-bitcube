@@ -521,6 +521,15 @@ export function setLive(region, words, { once = [] } = {}) {
   const parts = [...news.map((text) => ({ text })), ...extra.map((text) => ({ text, once: true }))];
   if (parts.length) say(joinSaid(parts.map((p) => p.text)), region, null, parts);
 }
+/** speakBy(fn): the page's other speech takes its turn in the one queue (R9 #10). The chat thread is a log (role="log") that speaks by
+ *  its own change to the page, when a card is added or settles: fn makes that change when its turn comes, alone, in the order it was
+ *  asked, and nothing is said within SAY_GAP_MS of it either way (the agent's reply is never cut off by "Ready" 60 ms later, and never
+ *  overtaken by it). */
+export function speakBy(fn) {
+  if (typeof fn !== 'function') return;
+  speech.queue.push({ run: fn });
+  schedule();
+}
 /** Sentences said together: each ends with its own stop ("Ready" becomes "Ready."). */
 const joinSaid = (list) => list.map((x) => (/[.!?:;]$/.test(x) ? x : `${x}.`)).join(' ');
 /** unannounce(text): what was queued but not said yet goes (a control's done whose block the next view replaces: the new view
@@ -533,22 +542,37 @@ function say(text, region = null, key = null, parts = null) {
   const t = String(text ?? '').trim();
   if (!t || typeof document === 'undefined') return;
   if (speech.queue.at(-1)?.text !== t) speech.queue.push({ text: t, region, key, ...(parts ? { parts } : {}) });
+  schedule();
+}
+/** The queue's next turn: after its short pause, and never sooner than SAY_GAP_MS after the last words said. */
+function schedule() {
   clearTimeout(speech.timer);
   speech.timer = setTimeout(flushSpeech, Math.max(SAY_PAUSE_MS, speech.lastAt + SAY_GAP_MS - performance.now()));
 }
 function flushSpeech() {
   speech.timer = null;
-  const q = speech.queue;
-  speech.queue = [];
-  if (!q.length) return;
+  if (!speech.queue.length) return;
+  // the log's turn (speakBy): it speaks alone, by its own change to the page; what waits behind it is said a gap later
+  if (speech.queue[0].run) {
+    const { run } = speech.queue.shift();
+    speech.lastAt = performance.now();
+    try { run(); } catch (e) { console.warn('speakBy', e); }
+    if (speech.queue.length) schedule();
+    return;
+  }
+  // the words up to the log's next turn, said together
+  const cut = speech.queue.findIndex((x) => x.run), q = cut < 0 ? speech.queue : speech.queue.slice(0, cut);
+  speech.queue = cut < 0 ? [] : speech.queue.slice(cut);
   const regions = new Set(q.map((x) => x.region));
   const sheetUp = document.querySelector('dialog[open]');
   const l = sheetUp ? sheetRegion(sheetUp) : regions.size === 1 && q[0].region?.isConnected ? q[0].region : liveRegion();
-  if (!l) return;
-  const msg = q.length === 1 ? q[0].text : q.map((x) => (/[.!?:;]$/.test(x.text) ? x.text : `${x.text}.`)).join(' ');
-  speech.lastAt = performance.now();
-  // the same words twice are read twice: emptied first, then written a moment later
-  if (l.textContent === msg) { l.textContent = ''; setTimeout(() => { l.textContent = msg; }, 50); } else l.textContent = msg;
+  if (l) {
+    const msg = q.length === 1 ? q[0].text : q.map((x) => (/[.!?:;]$/.test(x.text) ? x.text : `${x.text}.`)).join(' ');
+    speech.lastAt = performance.now();
+    // the same words twice are read twice: emptied first, then written a moment later
+    if (l.textContent === msg) { l.textContent = ''; setTimeout(() => { l.textContent = msg; }, 50); } else l.textContent = msg;
+  }
+  if (speech.queue.length) schedule();
 }
 function liveRegion() {
   if (typeof document === 'undefined' || !document.body) return null;

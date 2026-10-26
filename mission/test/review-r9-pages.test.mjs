@@ -69,3 +69,20 @@ test('R9 #9: Send pressed by keyboard hands focus to the box before it is disabl
   assert.match(send, /if \(text\.value\.trim\(\) === t\) text\.value = '';/, 'what was typed into the box during the send is kept');
   assert.ok(send.indexOf("const keep = document.activeElement === sendBtn;") < send.indexOf("sendShow('pending'"));
 });
+
+// ---- #10: the chat thread's log speaks through the page's one queue ------------------------------------------------------------
+
+test('R9 #10: a card added to the chat\'s log, or one that settles, takes its turn in the page\'s one queue: alone, in order, a second from any other words', () => {
+  const ui = page('ui.js'), chat = page('chat.js');
+  const speakBy = /export function speakBy\(fn\) \{[\s\S]*?\n\}/.exec(ui)[0];
+  assert.match(speakBy, /speech\.queue\.push\(\{ run: fn \}\);/);
+  const flush = /function flushSpeech\(\) \{[\s\S]*?\n\}/.exec(ui)[0];
+  assert.match(flush, /if \(speech\.queue\[0\]\.run\) \{[\s\S]*?speech\.lastAt = performance\.now\(\);[\s\S]*?run\(\);/, 'the log\'s turn: alone, and it counts as speech');
+  assert.match(flush, /const cut = speech\.queue\.findIndex\(\(x\) => x\.run\)/, 'words queued after the log\'s turn wait for it: never said before it');
+  assert.ok(flush.lastIndexOf('speech.lastAt = performance.now();') < flush.lastIndexOf('if (speech.queue.length) schedule();'), 'the next turn is timed from these words');
+  assert.match(ui, /speech\.timer = setTimeout\(flushSpeech, Math\.max\(SAY_PAUSE_MS, speech\.lastAt \+ SAY_GAP_MS - performance\.now\(\)\)\);/);
+  const layout = /function layout\(\{ all = false \} = \{\}\) \{[\s\S]*?\n\}/.exec(chat)[0];
+  assert.match(layout, /const speaks = live && \(reqs\(\)\.some\(\(r\) => !cards\.has\(r\.id\) \|\| settles\(r\)\) \|\| S\.markers\.some\(\(m\) => !markerEls\.has\(m\)\)\);/);
+  assert.match(layout, /if \(speaks\) \{ layoutQueued = true; speakBy\(\(\) => \{ layoutQueued = false; draw\(\); \}\); return; \}/);
+  assert.match(chat, /const busy = BUSY\.has\(stateOf\(r\)\.s\);/, 'what settles is what was busy');
+});
