@@ -630,7 +630,7 @@ export function control(target, opts = {}) {
   button._mcStatus = status;     // refocus() and the sheet: where focus goes when this button is disabled under it
   const box = host.closest('.ctl') ?? (host.classList.contains('ctl') ? host : null);
   let s = ctlInit(o.why), text = '', applyText = null, result = null, asking = null, untick = null, judgedAt = null, parked = false, entryId = null, sent = null,
-    requestId = null, saidExpired = false, sentServer = null, held = false;
+    requestId = null, saidExpired = false, sentServer = null, held = false, lost = false, sendToken = null;
   const now = () => Date.now();
   const elapsedS = () => (s.sentAt == null ? 0 : (now() - s.sentAt) / 1000);
   const lockEls = () => { const l = typeof o.lock === 'function' ? o.lock() : o.lock; return l ? Array.from(l instanceof Element ? [l] : l).filter((x) => x instanceof Element) : []; };
@@ -647,7 +647,8 @@ export function control(target, opts = {}) {
     beforeEl.hidden = !o.before;
     // while its own change is applying the model may already say "wait: <its own change>": the applying line says it
     // nor a "Wait: …" about this control's own change, whose lock still holds after bitcube didn't answer it (R8 #18)
-    const own = (!!entryId && !!o.whyBy && o.whyBy === entryId) || o.whyOwn === true;
+    // (only while its own line says when it unlocks: a greyed control always has its reason, R9 #29)
+    const own = (!!entryId && !!o.whyBy && o.whyBy === entryId && held) || o.whyOwn === true;
     const w = o.why && !v.busy && !own ? whyText(o.why) : '';
     if (whyEl.textContent !== w) whyEl.textContent = w;
     whyEl.hidden = !w;
@@ -730,20 +731,24 @@ export function control(target, opts = {}) {
   /** The failure in model.js's words, the same as Status's; this page has no verdict of its own, so it points at Status. */
   const failText = (e) => failWords(o.fail, plainError(e), sclock(), { tail: 'Try again, or check Status.' });
   async function send(next) {
-    applyText = null; entryId = null; saidExpired = false; held = false; sentServer = serverNow();
+    applyText = null; entryId = null; saidExpired = false; held = false; lost = false; sentServer = serverNow();
     requestId = newRequestId();          // this press's own id, sent with it (R8 #2)
+    const token = sendToken = {};        // this press: an answer that comes after the server's verdict ended it changes nothing (R9 #1)
     // what was sent, and when on the server's clock (its last answer carried forward), for when its verdict can't be known (CR7 #4)
     try { sent = typeof o.sent === 'function' ? { ...o.sent(), sentAt: serverClock() } : null; } catch { sent = null; }
     go(next);
     try {
       const r = await o.run?.({ requestId });
+      if (sendToken !== token) return;   // ended meanwhile on the server's verdict (R9 #1)
       if (typeof r?.applying_id === 'string') entryId = r.applying_id;
       if (r && r.ok === false && r.maybe === true) throw Object.assign(new Error(r.error || "bitcube didn't answer in time"), { status: 200, maybe: true, posted: true, serverMaybe: true });
       if (r && r.ok === false) throw Object.assign(new Error(r.error || "bitcube didn't answer"), { status: 200 });
       result = r;
     } catch (e) {
+      if (sendToken !== token) return;   // ended meanwhile on the server's verdict (R9 #1)
       if (typeof e?.applyingId === 'string') entryId = e.applyingId;     // a maybe answer still names its entry
       const maybe = !!(e?.maybe || (e?.noAnswer && e?.posted));
+      lost = maybe && !e?.serverMaybe;   // lost on the network, or no answer in time: its entry may still say where it is (R9 #29)
       try { o.onFail?.(e); } catch (x) { console.warn('onFail', x); }
       // bitcube didn't answer a change whose lock holds (its entry stays to its limit): one state, when the buttons unlock (R8 #18);
       // by its action, the rule Status and the server follow too (model.js heldMaybe, CR8 #10)
@@ -779,9 +784,21 @@ export function control(target, opts = {}) {
     // it is in, so its line and every "Wait: …" agree (R8 #18); the server's verdict on its own entry, by its id: confirmed
     // (done), expired (unconfirmed now), else waiting; when it can't be known, a reading taken after the send that shows it
     // (CR7 #4; sent: only a control that says what it sent, o.sent)
-    const own = 'model' in n ? ownVerdict(n.model, { state: s.state, entryId, requestId, sent, serverConfirms: !!o.serverConfirms, held, saidExpired }) : null;
+    const own = 'model' in n ? ownVerdict(n.model, { state: s.state, entryId, requestId, sent, serverConfirms: !!o.serverConfirms, held, saidExpired, lost }) : null;
     if (own) entryId = own.entryId;
-    if (own?.unlockAt != null) text = heldWords(o.what, sclock(own.unlockAt));
+    if (own?.unlockAt != null && own.step !== 'held') text = heldWords(o.what, sclock(own.unlockAt));
+    // its answer still on the way: the server's verdict on its entry ends it now, never at the POST's own limit (R9 #1)
+    if (own?.judged && s.state === 'applying') {
+      sendToken = null; judgedAt = typeof readAt === 'number' ? readAt : now();
+      if (own.step === 'done' || own.step === 'confirming') { try { o.onSent?.(null); } catch (e) { console.warn('onSent', e); } }
+      if (own.step === 'done') return go(ctlStep(s, { type: 'model', confirmed: true, now: now() }));
+      if (own.step === 'expired') return go(ctlStep(s, { type: 'expired', now: now() }));
+      if (own.step === 'confirming') return go(ctlStep(s, { type: 'pending', now: now() }));
+      if (own.step === 'held') { held = true; return go(ctlStep(s, { type: 'error', maybe: true, now: now() }), heldWords(o.what, sclock(own.unlockAt))); }
+    }
+    // its answer was lost, but its entry shows the server answered it: under way (R9 #29)
+    if (own?.judged && own.step === 'confirming') { lost = false; text = ''; return go(ctlStep(s, { type: 'pending', now: now() })); }
+    if (own?.judged && own.step === 'held') { lost = false; held = true; text = heldWords(o.what, sclock(own.unlockAt)); say(text); paint(); return; }
     if (own?.judged) {
       judgedAt = typeof readAt === 'number' ? readAt : now();
       if (own.step === 'done') return go(ctlStep(s, { type: 'model', confirmed: true, now: now() }));

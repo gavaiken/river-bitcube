@@ -931,9 +931,11 @@ export const DONE_HOLD_S = 60;
  *    why { why }             the model's reason changed: ready ↔ blocked; an open confirm is withdrawn (failed, notSent)
  *    ok { confirmed }        applying → done, or confirming when confirmed === false (the reading doesn't show it yet)
  *    error { maybe }         applying → failed, or unconfirmed when it may have happened (no answer, an unreadable one)
- *    model { confirmed }     confirming or unconfirmed → done when bitcube's reading shows it (a phone that slept through
+ *    model { confirmed }     confirming, unconfirmed or applying → done when the server's verdict or bitcube's reading shows it (a phone that slept through
  *                            confirming, or a request whose answer was lost, still ends done when the change shows: R6 #0)
- *    expired {}              confirming → unconfirmed: the server gave up on it (its entry is in status.expired)
+ *    expired {}              confirming (or applying) → unconfirmed: the server gave up on it (its entry is in status.expired)
+ *    pending {}              applying or unconfirmed → confirming: the server's entry for it (found by its request id while its
+ *                            answer stalls or after it was lost) shows the server answered and is waiting for bitcube (R9 #1, #29)
  *    tick { expectS, readAt } confirming → unconfirmed after max(3 × expectS, 120) s since it was answered, but only once a reading
  *                            taken after that limit has been judged (readAt: the wall time of the newest reading judged; null:
  *                            none yet, so a phone waking from sleep, or out of contact, never turns it unconfirmed by its clock
@@ -961,8 +963,11 @@ export function ctlStep(s, ev) {
       return same;
     case 'ok': return s.state !== 'applying' ? same : ev.confirmed === false ? to('confirming', { answeredAt: now }) : to('done', { answeredAt: now });
     case 'error': return s.state !== 'applying' ? same : to(ev.maybe ? 'unconfirmed' : 'failed', { answeredAt: now });
-    case 'model': return (s.state === 'confirming' || s.state === 'unconfirmed') && ev.confirmed === true ? to('done', { seen: true }) : same;
-    case 'expired': return s.state === 'confirming' ? to('unconfirmed') : same;
+    // the server's verdict ends it whenever it is known: also while its own answer is still on the way (R9 #1)
+    case 'model': return (s.state === 'confirming' || s.state === 'unconfirmed' || s.state === 'applying') && ev.confirmed === true ? to('done', { seen: true }) : same;
+    case 'expired': return s.state === 'confirming' || s.state === 'applying' ? to('unconfirmed') : same;
+    // the server's entry shows it answered (still confirming): an answer that stalls or was lost is no reason to say less (R9 #1, #29)
+    case 'pending': return s.state === 'applying' || s.state === 'unconfirmed' ? to('confirming', { answeredAt: now }) : same;
     case 'tick': {
       if (s.state !== 'confirming' || now == null) return same;
       // from the answer, as the server counts its lock (a slow rebuild keeps its whole limit); from the press before one
@@ -1202,7 +1207,10 @@ export function heldMaybe(action, { maybe = false, serverMaybe = false, entryId 
   return !!maybe && !!serverMaybe && typeof entryId === 'string' && entryId !== '' && MAYBE_HOLDS.includes(action);
 }
 /** A page's own change judged on a new reading: one rule for Status (status.js settleControls) and ui.js control().update (CR8 #10).
- *  c: { state (its control's), entryId, requestId, sent, serverConfirms, held, saidExpired }. Returns
+ *  c: { state (its control's), entryId, requestId, sent, serverConfirms, held, saidExpired, lost (its answer was lost on the network) }.
+ *  While its POST is in flight (applying) or after its answer was lost, its entry found by the request id it sent decides (R9 #1, #29):
+ *  step 'done', 'expired', 'confirming' (the server answered it and waits for bitcube's reading), 'held' (bitcube didn't answer it
+ *  in time and the lock holds: unlockAt). Otherwise returns
  *    entryId   its entry: the one its answer named, else, while it waits, the one that carries the request id it sent (R8 #2)
  *    unlockAt  when a held change's lock ends, by the server's own entry once it is in (its line and every "Wait: …" agree, R8 #18)
  *    judged    whether its verdict is the server's to give: a change the server confirms (serverConfirms), or one unconfirmed whose
@@ -1211,10 +1219,22 @@ export function heldMaybe(action, { maybe = false, serverMaybe = false, entryId 
  *              server gave up on it while it was confirming: unconfirmed now), 'gave-up' (one that may or may not have happened,
  *              which the server then gave up on: said once, saidExpired), or null (waiting) */
 export function ownVerdict(m, c = {}) {
-  const state = c?.state, waiting = state === 'confirming' || state === 'unconfirmed';
-  const entryId = (typeof c?.entryId === 'string' && c.entryId) || (waiting && c?.requestId ? entryIdOf(m, c.requestId) : null) || null;
-  const unlockAt = c?.held && state === 'unconfirmed' && entryId ? num((m?.show?.applying ?? []).find((x) => x.id === entryId)?.unlock_at) : null;
-  const judged = waiting && (!!c?.serverConfirms || (state === 'unconfirmed' && !!entryId));
+  const state = c?.state, waiting = state === 'confirming' || state === 'unconfirmed', flying = state === 'applying';
+  const entryId = (typeof c?.entryId === 'string' && c.entryId) || ((waiting || flying) && c?.requestId ? entryIdOf(m, c.requestId) : null) || null;
+  const pend = entryId ? (m?.show?.applying ?? []).find((x) => x.id === entryId) ?? null : null;
+  // the server holds its lock: bitcube didn't answer it in time, and it could still be under way (MAYBE_HOLDS)
+  const holds = !!pend && pend.maybe === true && pend.phase === 'confirming' && MAYBE_HOLDS.includes(pend.action);
+  // its answer still on the way (R9 #1), or lost on the network (R9 #29: lost, never a server's maybe): its entry, found by the request
+  // id it sent, says where it is: confirmed (done), given up (unconfirmed), answered and waiting for bitcube (confirming), or held
+  if (flying || (state === 'unconfirmed' && c?.lost && !c?.held)) {
+    const v = !entryId ? null : flying ? entryVerdict(m, entryId) : serverJudged(m, entryId, c?.sent ?? null);
+    const step = v === 'confirmed' ? 'done' : v === 'expired' ? (flying ? 'expired' : c?.saidExpired ? null : 'gave-up')
+      : v === 'pending' && holds ? 'held' : v === 'pending' && !pend.maybe && (!flying || pend.phase === 'confirming') ? 'confirming' : null;
+    return { entryId, unlockAt: step === 'held' ? num(pend.unlock_at) : null, judged: !!step, step };
+  }
+  const unlockAt = c?.held && state === 'unconfirmed' && pend ? num(pend.unlock_at) : null;
+  // the server's verdict decides a change it confirms, and any change whose entry is known (a quick one found by its request id)
+  const judged = waiting && (!!c?.serverConfirms || !!entryId);
   if (!judged) return { entryId, unlockAt, judged, step: null };
   const v = serverJudged(m, entryId, c?.sent ?? null);
   const step = v === 'confirmed' ? 'done' : v === 'expired' && state === 'confirming' ? 'expired' : v === 'expired' && !c?.saidExpired ? 'gave-up' : null;

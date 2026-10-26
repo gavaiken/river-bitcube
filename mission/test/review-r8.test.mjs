@@ -238,7 +238,7 @@ test('R8 #18: this page\'s own change that bitcube didn\'t answer in time says o
   const st = readFileSync(new URL('../public/status.js', import.meta.url), 'utf8'), ui = readFileSync(new URL('../public/ui.js', import.meta.url), 'utf8');
   assert.match(st, /const w = busy\(name\) \|\| ownBlock\(name\) \? null : whyOf\(name\)/, 'Status: no "Wait: …" about its own change');
   assert.match(st, /model\.controls\[name\]\?\.by === ctl\[name\]\.entryId/);
-  assert.match(ui, /o\.whyBy === entryId\) \|\| o\.whyOwn === true/, 'control(): the same, and for a sibling on the page (Dry run under Start)');
+  assert.match(ui, /o\.whyBy === entryId && held\) \|\| o\.whyOwn === true/, 'control(): the same (while its line says when it unlocks, R9 #29), and for a sibling on the page (Dry run under Start)');
 });
 
 test('R8 #2: every page sends its own request id with a control and finds a lost answer\'s entry by it', () => {
@@ -250,7 +250,7 @@ test('R8 #2: every page sends its own request id with a control and finds a lost
   assert.match(ui, /o\.run\?\.\(\{ requestId \}\)/);
   assert.match(ui, /ownVerdict\(n\.model, \{ state: s\.state, entryId, requestId,/);
   assert.match(ui, /if \(own\) entryId = own\.entryId/);
-  assert.match(readFileSync(new URL('../public/model.js', import.meta.url), 'utf8'), /\(waiting && c\?\.requestId \? entryIdOf\(m, c\.requestId\) : null\)/, 'found by its request id while it waits');
+  assert.match(readFileSync(new URL('../public/model.js', import.meta.url), 'utf8'), /\(\(waiting \|\| flying\) && c\?\.requestId \? entryIdOf\(m, c\.requestId\) : null\)/, 'found by its request id while it waits, and while its answer is on the way (R9 #1)');
   assert.equal((lights.match(/request_id: requestId/g) ?? []).length, 2, 'Lights: a start (or dry run) and a rebuild send theirs');
 });
 

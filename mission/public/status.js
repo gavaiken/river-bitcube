@@ -684,8 +684,9 @@ function installerHTML(m) {
  *  never while its own change is in flight (its status line says that). */
 function whyLine(name, host = `ctl-${name}`) { const w = busy(name) || ownBlock(name) ? null : whyOf(name); return w ? `<div class="ctl-why" id="why-${host}" tabindex="-1">${esc(whyText(w))}</div>` : ''; }
 /** The change that blocks this control is its own (its entry still holds the lock: bitcube didn't answer it in time): its status
- *  line says so, never a "Wait: …" line about itself beside it (R8 #18). */
-const ownBlock = (name) => !!model && !!ctl[name]?.entryId && model.controls[name]?.by === ctl[name].entryId;
+ *  line says so, never a "Wait: …" line about itself beside it (R8 #18); only while that line says when it unlocks (held), never a
+ *  greyed control with no reason (R9 #29). */
+const ownBlock = (name) => !!model && !!ctl[name]?.entryId && model.controls[name]?.by === ctl[name].entryId && !!ctl[name].held;
 /** A readout's lead-in: "Now" from a fresh reading; from a last answer (its item stale: an old full check, or contact lost) "Last
  *  seen", with its age after the value, never "Now" (R8 #33). */
 const nowOr = (x) => (x?.stale ? { pre: 'Last seen', tail: ` · ${ageSpan(x.age_s)}` } : { pre: 'Now', tail: '' });
@@ -777,6 +778,21 @@ function afterEnd(name) {
 function settleControls() {
   const withdrawn = [], ended = [], now = Date.now();
   for (const [name, c] of Object.entries(ctl)) {
+    // its answer is still on the way: the server's own entry, found by the request id this page sent, ends it on the server's
+    // verdict now, never at the POST's own limit (R9 #1): done, given up, confirming (the server answered it), held (a maybe)
+    if (c.s.state === 'applying') {
+      if (!model || lostContact(model) || !c.requestId) continue;
+      const own = ownVerdict(model, { state: 'applying', requestId: c.requestId, serverConfirms: !!c.o?.serverConfirms });
+      if (own.entryId) { c.entryId = own.entryId; mine.id(own.entryId); }
+      if (!own.step) continue;
+      c.sendToken = null;             // its answer, when it comes, changes nothing now
+      c.refreshAt = performance.now(); c.judgedWall = p.receivedWall;
+      if (own.step === 'done') { c.s = ctlStep(c.s, { type: 'model', confirmed: true, now }); finish(name); ended.push(name); }
+      else if (own.step === 'expired') { c.s = ctlStep(c.s, { type: 'expired', now }); unconfirm(name); ended.push(name); }
+      else if (own.step === 'confirming') { c.s = ctlStep(c.s, { type: 'pending', now }); announce(CONFIRMING_SAID); }
+      else if (own.step === 'held') { c.s = ctlStep(c.s, { type: 'error', maybe: true, now }); c.held = true; c.text = heldWords(c.o?.what, sclock(own.unlockAt)); announce(c.text); ended.push(name); }
+      continue;
+    }
     // only a reading taken after the answer can confirm the change or take a done line away
     const fresh = !!model && !lostContact(model) && p.receivedAt != null && c.refreshAt != null && p.receivedAt > c.refreshAt;
     // the page's own change, judged by the one rule ui.js control() follows too (model.js ownVerdict, CR8 #10): its entry (an
@@ -785,7 +801,7 @@ function settleControls() {
     // (by id): never the reading's words, which name the same file before and after a restart (R7 #6, #25). When that can't be
     // known (no id; or no list names it: over 10 min, a restart of the server), a switch to another file or a boot-file change is
     // done once a reading taken after the send shows it (c.sent, CR7 #4); a restart or a rebuild only by its own limit
-    const own = model ? ownVerdict(model, { state: c.s.state, entryId: c.entryId, requestId: c.requestId, sent: c.sent, serverConfirms: !!c.o?.serverConfirms, held: c.held, saidExpired: c.saidExpired }) : null;
+    const own = model ? ownVerdict(model, { state: c.s.state, entryId: c.entryId, requestId: c.requestId, sent: c.sent, serverConfirms: !!c.o?.serverConfirms, held: c.held, saidExpired: c.saidExpired, lost: c.lost }) : null;
     if (own?.unlockAt != null) c.text = heldWords(c.o?.what, sclock(own.unlockAt));
     if (fresh) { c.entryId = own.entryId; mine.id(c.entryId); }
     if (fresh && own.judged) {
@@ -794,6 +810,9 @@ function settleControls() {
       else if (own.step === 'expired') { c.s = ctlStep(c.s, { type: 'expired', now }); unconfirm(name); ended.push(name); }
       // one that may or may not have happened, which the server then gave up on: bitcube didn't show it (said once)
       else if (own.step === 'gave-up') { c.saidExpired = true; unconfirm(name); ended.push(name); }
+      // its answer was lost, but its entry shows the server answered it: under way, never "may or may not" with grey buttons (R9 #29)
+      else if (own.step === 'confirming') { c.s = ctlStep(c.s, { type: 'pending', now }); c.text = ''; c.lost = false; announce(CONFIRMING_SAID); }
+      else if (own.step === 'held') { c.held = true; c.lost = false; c.text = heldWords(c.o?.what, sclock(own.unlockAt)); announce(c.text); }
     } else if (fresh && (c.s.state === 'confirming' || c.s.state === 'unconfirmed') && typeof c.o?.confirmed === 'function') {
       let yes = false;
       try { yes = !!c.o.confirmed(model); } catch (e) { console.warn('confirmed', e); }
@@ -880,7 +899,8 @@ async function runControl(name, path, body, o) {
   // the page's own id for this press, sent with it: a page whose answer is lost still finds its entry and verdict by it (R8 #2)
   const requestId = name === 'check' ? null : newRequestId();
   mine.request(requestId);
-  Object.assign(c, { s: next, text: '', o: { holds: o.confirmed, ...o }, result: null, refreshAt: null, judgedWall: null, entryId: null, requestId, saidExpired: false, held: false, sent,
+  const token = {};                   // this press: an answer that comes after the server's verdict ended it changes nothing (R9 #1)
+  Object.assign(c, { s: next, text: '', o: { holds: o.confirmed, ...o }, result: null, refreshAt: null, judgedWall: null, entryId: null, requestId, saidExpired: false, held: false, lost: false, sent, sendToken: token,
     sentServer: serverNow(), expectS: EXPECT_S[name] ?? null, usual: name === 'bootfile' ? BOOT_USUAL : null, applyText: o.pending ?? M.applyingText(o.what) });
   for (const other of SHARE[name] ?? []) if (ctl[other] && !busy(other)) ctl[other] = { s: ctlInit(), text: '' };
   const a = document.activeElement, idle = !a || a === document.body, here = !!(a && c.host && document.getElementById(c.host)?.contains(a));
@@ -896,9 +916,11 @@ async function runControl(name, path, body, o) {
   let r;
   try { r = await api(path, requestId ? { ...body, request_id: requestId } : body); }
   catch (e) {
+    if (c.sendToken !== token) return;   // the server's verdict already ended it (R9 #1)
     c.entryId = typeof e?.applyingId === 'string' ? e.applyingId : null;   // a maybe answer still names its entry
     mine.id(c.entryId);
     const maybe = !!(e?.maybe || (e?.noAnswer && e?.posted));
+    c.lost = maybe && !e?.serverMaybe;   // lost on the network (or no answer in time): its entry may still say where it is (R9 #29)
     c.s = ctlStep(c.s, { type: 'error', maybe, now: Date.now() });
     // bitcube didn't answer a change whose lock holds (the server keeps its entry to its limit): one state on the control, when
     // the buttons unlock, never a "Wait: …" about itself above it (R8 #18; model.js heldMaybe, the rule control() follows: CR8 #10)
@@ -913,6 +935,7 @@ async function runControl(name, path, body, o) {
     return;
   }
   if (name === 'check') shell.setChecking(false);
+  if (c.sendToken !== token) return;     // the server's verdict already ended it (R9 #1)
   c.result = r;
   c.entryId = typeof r?.applying_id === 'string' ? r.applying_id : null;
   mine.id(c.entryId);

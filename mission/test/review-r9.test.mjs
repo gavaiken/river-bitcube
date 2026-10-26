@@ -98,3 +98,46 @@ test('R9 #6, #31: a phone\'s earlier change stays its own after the same control
   assert.match(page('status.js'), /M\.ownEntries\(model, [^\n]*mine\.mine\)/);
   assert.match(page('lights.js'), /ownEntries\(S\.m, ctls, Date\.now\(\), \{ ids: S\.ownIds, requestIds: S\.ownRequestIds \}\)/);
 });
+
+// ---- #1, #29: a page's own change found by its request id while its answer is on the way, or after it was lost -----------------
+
+test('R9 #1: while its POST is in flight, the server\'s verdict found by its request id ends the control: done, confirming, held, expired', async () => {
+  const { ownVerdict, ctlStep, ctlInit } = await import('../public/model.js');
+  const t = T0 + 20_000;
+  const done = derive(payload({ t, extra: { confirmed: [{ ...entry('s.1', { request_id: 'rq.1' }), at: t - 2000 }] } }), t);
+  assert.deepEqual(ownVerdict(done, { state: 'applying', requestId: 'rq.1', serverConfirms: true }), { entryId: 's.1', unlockAt: null, judged: true, step: 'done' });
+  assert.equal(ownVerdict(done, { state: 'applying', requestId: 'rq.1' }).step, 'done', 'a quick change too: the server confirmed it');
+  const conf = derive(payload({ t, applying: [entry('s.2', { request_id: 'rq.2', phase: 'confirming', answered_at: t - 3000 })] }), t);
+  assert.equal(ownVerdict(conf, { state: 'applying', requestId: 'rq.2', serverConfirms: true }).step, 'confirming', 'the server answered it: it is confirming');
+  const flying = derive(payload({ t, applying: [entry('s.3', { request_id: 'rq.3' })] }), t);
+  assert.deepEqual(ownVerdict(flying, { state: 'applying', requestId: 'rq.3', serverConfirms: true }), { entryId: 's.3', unlockAt: null, judged: false, step: null }, 'still applying on the server: wait');
+  const held = derive(payload({ t, applying: [entry('s.4', { request_id: 'rq.4', phase: 'confirming', maybe: true, answered_at: t - 3000 })] }), t);
+  assert.deepEqual(ownVerdict(held, { state: 'applying', requestId: 'rq.4', serverConfirms: true }), { entryId: 's.4', unlockAt: t - 3000 + 180_000, judged: true, step: 'held' });
+  const exp = derive(payload({ t, extra: { expired: [{ ...entry('s.5', { request_id: 'rq.5' }), at: t - 1000 }] } }), t);
+  assert.equal(ownVerdict(exp, { state: 'applying', requestId: 'rq.5', serverConfirms: true }).step, 'expired');
+  assert.equal(ownVerdict(done, { state: 'applying' }).step, null, 'no request id: nothing to find');
+  // the control's own steps: applying → done, confirming, unconfirmed
+  const a = ctlStep(ctlInit(), { type: 'press', now: 1 });
+  assert.equal(ctlStep(a, { type: 'model', confirmed: true, now: 2 }).state, 'done');
+  assert.equal(ctlStep(a, { type: 'pending', now: 2 }).state, 'confirming');
+  assert.equal(ctlStep(a, { type: 'pending', now: 2 }).answeredAt, 2, 'its own limit counts from now');
+  assert.equal(ctlStep(a, { type: 'expired', now: 2 }).state, 'unconfirmed');
+  assert.equal(ctlStep(ctlStep(a, { type: 'ok', now: 2 }), { type: 'pending', now: 3 }).state, 'done', 'a done change stays done');
+});
+
+test('R9 #29: an answer lost on the way back: the entry found by its request id says the change is under way, never "may or may not" with grey buttons', async () => {
+  const { ownVerdict, ctlStep, ctlInit } = await import('../public/model.js');
+  const t = T0 + 20_000;
+  const conf = derive(payload({ t, applying: [entry('s.2', { request_id: 'rq.2', phase: 'confirming', answered_at: t - 3000 })] }), t);
+  assert.equal(ownVerdict(conf, { state: 'unconfirmed', requestId: 'rq.2', serverConfirms: true, lost: true }).step, 'confirming');
+  assert.equal(ownVerdict(conf, { state: 'unconfirmed', requestId: 'rq.2', serverConfirms: true }).step, null, 'a server maybe or its own limit: as before');
+  const held = derive(payload({ t, applying: [entry('s.4', { request_id: 'rq.4', phase: 'confirming', maybe: true, answered_at: t - 3000 })] }), t);
+  assert.deepEqual(ownVerdict(held, { state: 'unconfirmed', requestId: 'rq.4', serverConfirms: true, lost: true }), { entryId: 's.4', unlockAt: t - 3000 + 180_000, judged: true, step: 'held' });
+  const lost = ctlStep(ctlStep(ctlInit(), { type: 'press', now: 1 }), { type: 'error', maybe: true, now: 2 });
+  assert.equal(ctlStep(lost, { type: 'pending', now: 3 }).state, 'confirming');
+  // and a quick change found that way is judged on the server's verdict from then on
+  const ropes = derive(payload({ t, extra: { confirmed: [{ id: 'q.1', request_id: 'rq.9', action: 'ropes', label: 'the change of the ropes to dark', source: 'mission control', at: t - 1000 }] } }), t);
+  assert.equal(ownVerdict(ropes, { state: 'confirming', entryId: 'q.1' }).step, 'done');
+  // Status hides its own Wait line only while its line says when it unlocks
+  assert.match(page('status.js'), /const ownBlock = \(name\) => !!model && !!ctl\[name\]\?\.entryId && model\.controls\[name\]\?\.by === ctl\[name\]\.entryId && !!ctl\[name\]\.held;/);
+});
