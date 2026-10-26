@@ -230,7 +230,7 @@ export class Mission {
    *  that isn't a clear refusal but whose run hasn't shown up yet (calibrate.ps1's first write can take longer than its 6 s wait,
    *  or the call timed out) keeps its lock as 'starting' while the progress is read every CAL_POLL_MS, for about a minute,
    *  until the new run's file shows up: the run's own state then holds the lock (calBlocked), from its first second. */
-  async calibrate(action, body = {}, { source = 'mission control' } = {}) {
+  async calibrate(action, body = {}, { source = 'mission control', requestId = null } = {}) {
     const checked = checkedCalibrate(action, body);
     if (!this.lights) throw Object.assign(new Error('no calibration here'), { status: 503 });
     const before = typeof this.calibration()?.started === 'number' ? this.calibration().started : null;   // bitcube's clock
@@ -240,7 +240,7 @@ export class Mission {
       this.noteCalibration(r?.calibration);
       if (action === 'start') isNew = newRunTest(r, before, this.now());
       return r;
-    }, { source, awaits: (r) => action === 'start' && startPending(r, isNew), onPending: (e) => this.#watchStart(e.id, isNew) });
+    }, { source, requestId, awaits: (r) => action === 'start' && startPending(r, isNew), onPending: (e) => this.#watchStart(e.id, isNew) });
   }
 
   /** A start whose run hasn't shown up: read the progress every CAL_POLL_MS until the run's file is there (its lock then holds
@@ -302,7 +302,7 @@ export class Mission {
   }
 
   // ---- controls (fixed actions) ----------------------------------------------------------------------
-  async control(action, body = {}, _scenario = null, { source = 'mission control' } = {}) {
+  async control(action, body = {}, _scenario = null, { source = 'mission control', requestId = null } = {}) {
     const plan = planControl(action, body);
     const checked = checkedControl(action, body);     // only what the whitelist read goes into status.applying
     // a calibration photographs the ropes and the panels: anything that changes them, restarts TouchDesigner or moves the
@@ -321,7 +321,7 @@ export class Mission {
       const r = await this.#probeAction(plan.args, plan.timeout, action);
       if (action === 'rebuild' && (rebuildSucceeded(r) || r?.maybe === true)) baked = this.#rebuildOf(checked.file, r);
       return r;
-    }, { running: this.data.probe?.value?.td?.file ?? null, source, awaits: (r) => awaitsReading(action, r), onPending: () => this.#recheckSoon(),
+    }, { running: this.data.probe?.value?.td?.file ?? null, source, requestId, awaits: (r) => awaitsReading(action, r, checked), onPending: () => this.#recheckSoon(),
          onConfirmed: () => { if (baked) this.#recordRebuilt(baked); } });
   }
 
@@ -350,9 +350,19 @@ export class Mission {
 }
 
 /** Whether a control's answer leaves the change to be confirmed by bitcube's reading: a switch that answered OK, a rebuild that
- *  went all the way (both restart TouchDesigner, which then opens the file). */
-export function awaitsReading(action, r) {
-  return (action === 'switch' && !!r && r.ok !== false) || (action === 'rebuild' && rebuildSucceeded(r));
+ *  went all the way (both restart TouchDesigner, which then opens the file); a boot-file change whose answer's own reading doesn't
+ *  show the boot file asked for (probe.ps1 reads boot-file.txt back after writing it: an OK answer that still names the old one
+ *  is no proof, R8 #32), and a lighting port change whose answer reads another port (R8 #31). Those wait for a full check that
+ *  shows them (Applying.confirm). body: the request's checked fields. */
+export function awaitsReading(action, r, body = {}) {
+  if (!r || typeof r !== 'object' || r.ok === false) return false;
+  switch (action) {
+    case 'switch': return true;
+    case 'rebuild': return rebuildSucceeded(r);
+    case 'bootfile': return r.boot_file !== body?.file;
+    case 'lightsroute': return typeof r.lights_route === 'string' && r.lights_route !== body?.route;
+    default: return false;
+  }
 }
 
 /** A calibration start's answer -> isNew(progress): whether a progress file is the run this start launched. By bitcube's clock:

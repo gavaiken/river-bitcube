@@ -193,7 +193,7 @@ export class FixtureMission {
   /** Whether anything is in flight or confirming in any world (the server's self-update waits for none). */
   busy() { return [...this.worlds.values()].some((w) => w.applying.list().length > 0); }
 
-  async control(action, body = {}, scenario = null, { source = 'mission control' } = {}) {
+  async control(action, body = {}, scenario = null, { source = 'mission control', requestId = null } = {}) {
     const checked = checkedControl(action, body);         // only what the whitelist read is logged, recorded and echoed
     // the scenario's own scripted run blocks what the live server blocks (Mission.control)
     const blocked = calBlocked(action, this.calibFor(scenario).status());
@@ -220,8 +220,10 @@ export class FixtureMission {
         baked = { map: (done.ok === true && done.result?.map) || (this.pixelmapDir ? readLocalPixelmap(this.pixelmapDir)?.file : null) || null, file: checked.file };
       }
       const changed = HOLD[action] ? "fixture mode: nothing on bitcube was changed; only this scenario's world (in memory)" : 'fixture mode: nothing was changed';
-      return { ok: true, fixture: true, action, body: checked, note: changed, ...(action === 'rebuild' ? { rebuilt: true, saved: true, switched: true } : {}) };
-    }, { clock: () => this.clock(scenario), running, source, awaits: (r) => awaitsReading(action, r),
+      // a switch's or boot-file change's answer carries the boot file as probe.ps1's reading does (it reads boot-file.txt back)
+      return { ok: true, fixture: true, action, body: checked, note: changed, ...(action === 'rebuild' ? { rebuilt: true, saved: true, switched: true } : {}),
+               ...(action === 'bootfile' || action === 'switch' ? { boot_file: w.boot_file } : {}) };
+    }, { clock: () => this.clock(scenario), running, source, requestId, awaits: (r) => awaitsReading(action, r, checked),
          onConfirmed: () => { if (baked) w.rebuilt = { at: this.now(), ...baked }; } });
   }
 
@@ -236,7 +238,7 @@ export class FixtureMission {
 
   /** POST /api/control/calibrate: the scripted run, refused for the reasons the real one would give in this scenario
    *  (bitcube offline, TouchDesigner not answering, the gallery camera unreachable). outcome: 'ok' | 'drift' | 'decode'. */
-  async calibrate(action, body = {}, { scenario, outcome = 'ok', source = 'mission control' } = {}) {
+  async calibrate(action, body = {}, { scenario, outcome = 'ok', source = 'mission control', requestId = null } = {}) {
     const args = checkedCalibrate(action, body);   // the live whitelist, so a page sending bad arguments fails here exactly as it would live
     try { this.snapshot(scenario); } catch { /* a half-edited scenario */ }    // a switch whose restart is over is confirmed first
     this.#log('calibrate', args);
@@ -246,7 +248,7 @@ export class FixtureMission {
     if (action !== 'start') throw Object.assign(new Error('action is start, cancel or status'), { status: 400 });
     // a start waits for a switch, rebuild or boot-file change in flight in this world (409), as live
     return this.worldFor(scenario).applying.run('calibrate', args, async () => this.#startCalibration(scenario, args, outcome),
-                                                { clock: () => this.clock(scenario), source });
+                                                { clock: () => this.clock(scenario), source, requestId });
   }
 
   #startCalibration(scenario, args, outcome) {

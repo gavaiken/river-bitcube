@@ -386,5 +386,6 @@ test('round 6 #40, #18: only the checked fields reach the history and the pages;
   // a switch to the file TouchDesigner runs is the button's "Restart on …", in the history too
   assert.equal((await post('/api/control/switch', { file: 'river-local-oct-22-seasons.toe' }, on)).status, 200);
   const last = (await (await fetch(base + '/api/status', { headers: on })).json()).last_action;
-  assert.deepEqual([last.label, last.words], ["the restart on the river's year", "Restarted TouchDesigner on the river's year from mission control"]);
+  // while the server still confirms it, the history says it was asked for, never that it happened (R8 #19)
+  assert.deepEqual([last.label, last.words], ["the restart on the river's year", "Asked to restart TouchDesigner on the river's year from mission control"]);
 });

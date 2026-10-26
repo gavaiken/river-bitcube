@@ -18,7 +18,8 @@ function fakeSeasons() {
 test('controls are fixed actions with checked arguments', async () => {
   const { srv, calls, url } = await fakeSeasons();
   const probes = [];
-  const m = new Mission({ seasonsUrl: url, probe: async (_h, args) => { probes.push(args); return { ok: true, td: {} }; }, later: () => {} });
+  // as probe.ps1: its answer reads the boot file back after setting it (an answer that doesn't show it waits for a full check, R8 #32)
+  const m = new Mission({ seasonsUrl: url, probe: async (_h, args) => { probes.push(args); const bf = /-Action bootfile -BootFile (\S+)/.exec(args ?? '')?.[1]; return { ok: true, td: {}, ...(bf ? { boot_file: bf } : {}) }; }, later: () => {} });
   await m.control('mode', { mode: 'manual' });
   await m.control('target', { season: 'summer', intensity: 0.8 });
   await m.control('ropes', { dark: true });
@@ -188,7 +189,7 @@ test('what blocks what: a boot-file change, a lighting port change, and two phon
   assert.deepEqual(m.snapshot().applying.map((e) => [e.label, e.blocks]), [['the boot file change to the live river', ['switch', 'rebuild', 'bootfile', 'calibrate']]]);
   for (const [a, b] of [['switch', { file: LIVE }], ['rebuild', { file: YEAR }], ['bootfile', { file: YEAR }]]) await assert.rejects(m.control(a, b), (e) => e.status === 409 && /^wait: the boot file change to the live river is being applied/.test(e.message), a);
   assert.equal((await m.control('ropes', { dark: false })).ok, true, 'the ropes are not held up by it');
-  gates.bootfile.release({ ok: true }); await bf;
+  gates.bootfile.release({ ok: true, boot_file: LIVE }); await bf;     // as probe.ps1, the answer reads the boot file back (R8 #32)
   gates.lightsroute = gated();
   const lr = m.control('lightsroute', { route: 'router' });
   for (const [a, b] of [['ropes', { dark: true }], ['hub75', { brightness: 1 }], ['lightsroute', { route: 'direct' }]]) await assert.rejects(m.control(a, b), (e) => e.status === 409 && /^wait: the lighting port change to the spare router port/.test(e.message), a);
@@ -215,7 +216,7 @@ test('a calibration cannot start while a switch, rebuild or boot-file change is 
     await assert.rejects(m.calibrate('start', {}), (e) => e.status === 409 && /^wait: /.test(e.message), action);
     assert.deepEqual(lights.calls, [], 'nothing reached bitcube');
     assert.equal((await m.calibrate('cancel', {})).cancelled, true, 'Stop is never held up');
-    g.release({ ok: true, rebuilt: true, saved: true }); await p;
+    g.release({ ok: true, rebuilt: true, saved: true, boot_file: body.file }); await p;   // a boot file the answer shows (R8 #32)
     file = body.file; await m.pollProbe();               // a switch or rebuild holds until TouchDesigner answers on its file
     assert.equal((await m.calibrate('start', {})).started, true);
   }
@@ -451,7 +452,8 @@ test('round 6 #39: a calibration start that launched but has not reported holds 
   assert.equal(r.maybe, true);
   assert.deepEqual(c.m.snapshot().applying.map((e) => [e.action, e.phase, e.label]), [['calibrate', 'confirming', 'the start of a calibration']]);
   for (const [action, body] of [['ropes', { dark: true }], ['switch', { file: LIVE }], ['rebuild', { file: YEAR }]]) {
-    await assert.rejects(c.m.control(action, body), (e) => e.status === 409 && /^wait: the start of a calibration is being applied/.test(e.message), action);
+    // a start bitcube didn't answer in full (maybe) says when its lock ends at the latest (R8 #17)
+    await assert.rejects(c.m.control(action, body), (e) => e.status === 409 && /^wait: the start of a calibration got no answer from bitcube in time; it unlocks by \d\d:\d\d$/.test(e.message), action);
   }
   // the first reads still find the old run's file: the lock stays
   c.t += 5000; assert.deepEqual(await c.fire(), [5000]);

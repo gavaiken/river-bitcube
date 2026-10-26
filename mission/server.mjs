@@ -25,9 +25,11 @@
 //   GET  /api/status                           lib/mission.mjs snapshot + studio + now (the server's clock) + since + last_action;
 //                                              applying: every control in flight (lib/applying.mjs; docs/mission-ui.md "Applying
 //                                              a change"); confirmed / expired: the changes it confirmed or gave up on in the last
-//                                              10 min ([{ id, action, file?, started_at, at }]; a page confirms its own switch,
-//                                              restart, rebuild or boot-file change by its id there); probe.value.calibration the
-//                                              newest copy of the calibration job
+//                                              10 min ([{ id, request_id?, action, label, source, file?, started_at, at, maybe? }];
+//                                              a page confirms its own switch, restart, rebuild or boot-file change by its id
+//                                              there); verdicts: the history's verdicts on the last changes that waited for one
+//                                              ([{ id, request_id?, verdict }], hours, across a restart: R8 #0);
+//                                              probe.value.calibration the newest copy of the calibration job
 //   GET  /api/lights                           what TouchDesigner sends the lights now (lib/lights.mjs CONTRACT); 503 in plain words
 //   GET  /api/pixelmap                         { map, screens, still }: the newest LED map and screens file (lib/lights.mjs)
 //   GET  /api/calibration                      the calibration job's progress file, or { running: false, none: true }; plus
@@ -39,14 +41,20 @@
 //   POST /api/control/<action>                 the whitelist in lib/mission.mjs planControl, plus calibrate (lib/lights.mjs
 //                                              planCalibrate), check (the full check now, at most once per 20 s) and rebuild.
 //                                              The answer (a maybe answer too) carries applying_id, its entry in status.applying.
+//                                              request_id in the body (a page's own id for the press: [A-Za-z0-9._-]{1,40}) is kept
+//                                              on the entry, so a page whose answer was lost finds its entry and verdict (R8 #2).
 //                                              A refusal is { ok: false, error }: 400 bad request, 409 "wait: <label> is being
 //                                              applied (started 21:04)" or "a calibration is running: ...", 429 checked too recently
 //   GET  /api/chat/history  /api/chat/events (SSE)   POST /api/chat/send  /api/chat/stop { clear? } (clear drops the waiting requests too)
 //
 // The local control socket (MISSION_CONTROL_SOCKET; no cookie: the file's mode is the lock), for the studio agent (bin/mc.mjs):
-//   GET  /status                               { ok, now, overall { level, cause, headline }, applying [{ action, label, phase,
-//                                              source, file?, started_at, maybe? }], calibration { running, stage, mode, stale,
-//                                              ok } | null, show_file { file, label } | null, boot_file, blocked { <action>: why } }
+//   GET  /status                               { ok, now, overall { level, cause, headline }, applying [{ id, request_id?, action,
+//                                              label, phase, source, file?, started_at, answered_at?, maybe? }], confirmed, expired
+//                                              ([{ id, request_id?, action, label, source, file?, started_at, at, maybe? }], as
+//                                              /api/status), verdicts ([{ id, request_id?, verdict }]), calibration { running, stage,
+//                                              mode, stale, ok } | null, show_file { file, label } | null, boot_file, blocked
+//                                              { <action>: why } }: a change is done when confirmed (or verdicts) names its
+//                                              applying_id, not shown when expired does (R8 #30)
 //   POST /control/<action>                     exactly POST /api/control/<action>: the same whitelist, locks and 409 "wait: …",
 //                                              recorded with source 'studio chat' (Applying line, Last done and Recent say so);
 import { createServer } from 'node:http';
@@ -59,6 +67,7 @@ import { fileURLToPath } from 'node:url';
 import { Auth, readPasswordFile, parseCookies, clientOf, SESSION_MAX_AGE_S } from './lib/auth.mjs';
 import { Studio } from './lib/studio.mjs';
 import { Mission, checkedControl } from './lib/mission.mjs';
+import { REQUEST_ID } from './lib/applying.mjs';
 import { FixtureMission, CALIBRATION_OUTCOMES } from './lib/fixtures.mjs';
 import { Lights, readLocalPixelmap, readLocalScreens, checkedCalibrate } from './lib/lights.mjs';
 import { History, describeEvent, feed } from './lib/history.mjs';
@@ -174,11 +183,11 @@ setInterval(observeAll, OBSERVE_EVERY_MS).unref();
  *  added), where it came from (mission control or the studio chat: never a person's name, MD4), its label (a restart on the
  *  running file reads as one), whether it may or may not have happened (maybe: no answer in time) and its entry's id (while the
  *  entry is still confirming, the band says "Last sent … waiting for bitcube to show it", not "Last done"). */
-function recordAction(scenario, action, checked, result, error, { source = 'mission control', label = null } = {}) {
+function recordAction(scenario, action, checked, result, error, { source = 'mission control', label = null, requestId = null } = {}) {
   try {
     historyFor(scenario).action({ action, body: checked, ok: !error && result?.ok !== false, maybe: !error && result?.maybe === true,
                                   note: error ? String(error.message ?? error) : result?.error ?? result?.note ?? null, source, label,
-                                  applying_id: !error && typeof result?.applying_id === 'string' ? result.applying_id : null });
+                                  applying_id: !error && typeof result?.applying_id === 'string' ? result.applying_id : null, request_id: requestId });
   } catch (e) { console.warn(`history: ${e.message}`); }
 }
 
@@ -186,37 +195,44 @@ function recordAction(scenario, action, checked, result, error, { source = 'miss
  *  the 409s, the history line. -> { status, body }. A refused request (400, 409, 429) is not something that happened: not recorded. */
 async function runControl(action, b, { scenario, source = 'mission control', calib = 'ok' } = {}) {
   let checked = null, label = null;
+  // the page's own id for this press (R8 #2): kept on the entry and in the history, never part of what the control does
+  const requestId = typeof b?.request_id === 'string' && REQUEST_ID.test(b.request_id) ? b.request_id : null;
   try {
     let r;
     if (action === 'calibrate') {
       checked = checkedCalibrate(b.action, b);
       // through the mission, which records a start as a change in flight and keeps the job's answer as its newest state
-      r = await mission.calibrate(b.action, b, { scenario, outcome: calib, source });
+      r = await mission.calibrate(b.action, b, { scenario, outcome: calib, source, requestId });
     } else if (action === 'check') { checked = {}; r = await checkNow(scenario); }
     else {
       checked = checkedControl(action, b);
       label = mission.label(action, checked, scenario);          // before it runs: "the restart on …" when its file runs now
-      r = await mission.control(action, b, scenario, { source });   // fixture mode: that scenario's own world
+      r = await mission.control(action, b, scenario, { source, requestId });   // fixture mode: that scenario's own world
     }
-    recordAction(scenario, action, checked, r, null, { source, label });
+    recordAction(scenario, action, checked, r, null, { source, label, requestId });
     return { status: 200, body: r };
   } catch (e) {
-    if (!e.status || e.status >= 500) recordAction(scenario, action, checked, null, e, { source, label });
+    if (!e.status || e.status >= 500) recordAction(scenario, action, checked, null, e, { source, label, requestId });
     return { status: e.status || 502, body: { ok: false, error: e.message } };
   }
 }
 
-/** GET /status on the control socket: what the agent reads before it changes anything (derive() on the snapshot, as a page). */
+/** GET /status on the control socket: what the agent reads before it changes anything (derive() on the snapshot, as a page), and
+ *  after: every entry's id, and the server's verdicts (confirmed, expired, the history's), so the agent tells a change done from
+ *  one the server gave up on by the applying_id its own answer named (R8 #30). */
 function localStatus(scenario) {
   const snap = mission.snapshot(scenario);
+  historyFor(scenario).judge(snap);
   const now = snap.now ?? Date.now();
   const m = derive({ ...snap, now }, now);
   const pv = snap.probe?.value, cal = pv?.calibration && typeof pv.calibration === 'object' ? pv.calibration : null;
   return {
     ok: true, now,
     overall: { level: m.overall.level, cause: m.overall.cause, headline: m.overall.headline },
-    applying: (snap.applying ?? []).map((a) => ({ action: a.action, label: a.label, phase: a.phase, source: a.source, ...(a.file ? { file: a.file } : {}),
-                                                started_at: a.started_at, ...(a.maybe ? { maybe: true } : {}) })),
+    applying: (snap.applying ?? []).map((a) => ({ id: a.id, ...(a.request_id ? { request_id: a.request_id } : {}), action: a.action, label: a.label, phase: a.phase, source: a.source,
+                                                ...(a.file ? { file: a.file } : {}), started_at: a.started_at, ...(a.answered_at != null ? { answered_at: a.answered_at } : {}),
+                                                ...(a.maybe ? { maybe: true } : {}) })),
+    confirmed: snap.confirmed ?? [], expired: snap.expired ?? [], verdicts: historyFor(scenario).verdicts(),
     calibration: cal ? { running: cal.running === true && cal.stale !== true, stage: cal.stage ?? null, mode: cal.mode ?? null, stale: cal.stale === true, ok: cal.ok ?? null } : null,
     show_file: m.show.file ? { file: m.show.file.name, label: m.show.file.label } : null,
     boot_file: typeof pv?.boot_file === 'string' ? pv.boot_file : null,
@@ -437,12 +453,16 @@ const server = createServer(async (req, res) => {
     if (path === '/api/status') {
       // now: the server's clock, so a phone's skew can't age or freshen anything (fixture mode: the scenario's own moment, see
       // lib/fixtures.mjs). since and last_action come from the history (durations in for_s / ago_s, on the real clock).
-      const snap = mission.snapshot(scenario);
-      const summary = historyFor(scenario).summary();
-      return send(res, 200, { ...snap, studio: studio.status(), now: snap.now ?? Date.now(), since: summary.since, last_action: withWords(summary.last_action) });
+      const snap = mission.snapshot(scenario), h = historyFor(scenario);
+      h.judge(snap);                   // a verdict in these lists is said at once, never one look of the history later
+      const summary = h.summary();
+      // verdicts: the history's verdicts on the last changes that waited for one, for hours (status.confirmed keeps 10 min, R8 #0)
+      return send(res, 200, { ...snap, studio: studio.status(), now: snap.now ?? Date.now(), since: summary.since, last_action: withWords(summary.last_action),
+                              verdicts: h.verdicts() });
     }
     if (path === '/api/history') {
       const h = historyFor(scenario);
+      try { h.judge(mission.snapshot(scenario)); } catch { /* a half-edited fixture */ }
       const kinds = url.searchParams.get('kinds');
       const sinceT = Number(url.searchParams.get('since'));
       const events = h.recent({ limit: Math.min(500, Number(url.searchParams.get('limit')) || 50), kinds: kinds ? kinds.split(',').map((k) => k.trim()).filter(Boolean) : undefined,
@@ -500,8 +520,8 @@ const local = createServer(async (req, res) => {
     if (m && req.method === 'POST') {
       const b = await body(req);
       if (!isObject(b)) return send(res, 400, { ok: false, error: NOT_OBJECT });
-      // a calibration is stopped on the Lights page, by a person (STUDIO.md): the chat can't end a teammate's run halfway
-      // through a capture, whatever it was asked (R7 #36). A refusal: not recorded
+      // every control a page has, Stop of a calibration included (Gavin, 26 Oct: the studio chat does what it is asked), recorded
+      // "from the studio chat"
       const r = await runControl(m[1], b, { scenario, source: 'studio chat' });
       return send(res, r.status, r.body);
     }

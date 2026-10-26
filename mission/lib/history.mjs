@@ -11,8 +11,10 @@
 //   action(entry) -> event               a control was used: { action, body, ok, note, source, t? }
 //   since(id, nowMs) -> { level, since, for_s, at_least } | null      id: an item id or 'overall' (adds cause, stale)
 //   sinceShow(field, nowMs) -> { value, since, for_s, at_least } | null   field: file | mode | season | ropes
-//   recent({ limit = 50, kinds, sinceT }) -> events, newest first (default window: the last keepMs)
+//   recent({ limit = 50, kinds, sinceT }) -> events, newest first (default window: the last keepMs); an action that waited for
+//                                        the server's verdict carries it (verdict: 'confirmed' | 'expired'), so its words do
 //   summary(nowMs) -> { since: { overall, items: { id }, show: { field } }, last_action, count }
+//   verdicts(nowMs, { limit, withinMs }) -> [{ id, request_id?, verdict }]   the server's verdicts kept, newest first (status.verdicts)
 // describeEvent(ev) -> one plain sentence for a feed (glossary words, no jargon; never throws).
 //
 // Events (all carry t, ms epoch on the server's clock; `from` is null the first time something is seen):
@@ -25,17 +27,22 @@
 //                                                          state seen again after a long unseen stretch (since restarts)
 //   { kind: 'show', t, field, from, to }                   file (the .toe name) | mode | season | ropes (the state word)
 //   { kind: 'calibration', t, running, stage, ok, cancelled, mode, error, stale, from: { running, stage } | null }
-//   { kind: 'action', t, action, body, ok, note, source, label?, maybe?, applying_id? }   source: 'mission control' | 'studio chat' (never a
+//   { kind: 'action', t, action, body, ok, note, source, label?, maybe?, applying_id?, request_id? }   source: 'mission control' | 'studio chat' (never a
 //                                                          person: MD4); body: the request's checked fields (what the
 //                                                          whitelist read), cut to BODY_MAX chars of JSON; label: the change's
 //                                                          own words ("the restart on the river's year"); maybe: no answer in
 //                                                          time, so it may or may not have happened; applying_id: its entry
 //                                                          (lib/applying.mjs), so a page can tell it is still being confirmed
-//                                                          (status.applying), confirmed or expired. Logins are scrubbed.
-//   { kind: 'verdict', t, applying_id, verdict }           the server's verdict on the last action's entry ('confirmed' or
-//                                                          'expired'), read from status.confirmed / status.expired: kept with the
-//                                                          history, so Last done knows it after those 10 min and after a restart
-//                                                          (summary().last_action.verdict, CR7 #5). Bookkeeping: not in recent().
+//                                                          (status.applying), confirmed or expired; request_id: the page's own
+//                                                          id for the press (R8 #2). Logins are scrubbed.
+//   { kind: 'verdict', t, applying_id, request_id?, verdict }   the server's verdict on an action's entry ('confirmed' or 'expired'),
+//                                                          for every action with an entry (the words of those that wait for it,
+//                                                          awaitsVerdict: a switch, a rebuild, a boot-file or lighting port change,
+//                                                          a calibration start, a maybe, follow it), read from status.confirmed /
+//                                                          status.expired: kept with the
+//                                                          history, so Last done, Recent and a page that slept know it after those
+//                                                          10 min and after a restart (summary().last_action.verdict, CR7 #5;
+//                                                          verdicts(), R8 #0, #19). Bookkeeping: not in recent().
 //
 // Rules, and why:
 // - 'unknown' is the absence of knowledge, not a state. A piece that can't be checked (bitcube offline, the server
@@ -66,6 +73,10 @@ export const BODY_MAX = 300;                 // an action's body, as JSON: a fee
 export const UNSEEN_GAP_MS = 5 * 60e3;        // unseen for longer than this, a state seen again is a first sighting again
 export const RESTART_MARK_MS = 10 * 60e3;     // a piece last seen dark while TouchDesigner restarted, unseen since for longer: its mark lapses
 export const SOURCES = ['mission control', 'studio chat'];
+export const AWAIT_MS = 60 * 60e3;            // an action waits this long at most for its verdict (the server forgets an entry 10 min after its limit)
+export const VERDICTS_SERVED = 20;            // status.verdicts: the newest this many …
+export const VERDICTS_MS = 12 * 3600e3;       // … from the last this long (a phone locked for an evening still learns its own)
+const VERDICTS_KEPT = 500;                    // in memory, newest kept
 const SHOW_FIELDS = ['file', 'mode', 'season', 'ropes'];
 const BLIND = ['page', 'bitcube-offline', 'bitcube-unchecked', 'probe-stale', 'not-checked', 'check-failed'];   // causes that hide what is behind them
 const obj = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : null);
@@ -79,6 +90,13 @@ export const reasonOf = (summary) => String(summary ?? '').replace(/\d+(?:[.:]\d
 const forS = (t, now) => Math.max(0, Math.round((now - t) / 1000));
 /** Where a control was used: one of SOURCES, never a person's name (MD4: the chat is unattributed). */
 const sourceOf = (s) => (/studio|chat|agent/i.test(String(s ?? '')) ? 'studio chat' : 'mission control');
+/** Whether an action's entry waits for the server's verdict before it is done (status.confirmed / status.expired): a switch, a
+ *  rebuild, a boot-file or lighting port change, a calibration's start, or any change bitcube didn't answer in time (maybe).
+ *  Until the verdict, Recent says it was asked for, never that it happened (R8 #19, #28). */
+export function awaitsVerdict(ev) {
+  return !!ev && ev.kind === 'action' && typeof ev.applying_id === 'string' && (ev.ok !== false || ev.maybe === true)
+    && (ev.maybe === true || ['switch', 'rebuild', 'bootfile', 'lightsroute'].includes(ev.action) || (ev.action === 'calibrate' && obj(ev.body)?.action === 'start'));
+}
 const warn = (what, e) => console.warn(`history: ${what}: ${e?.message ?? e}`);
 
 export class History {
@@ -92,6 +110,8 @@ export class History {
     this.prevObs = null;         // the observation before this one
     this.restarted = new Map();  // piece id -> when it was last seen dark while TouchDesigner restarted (no lines of their own), until
                                  // seen fresh after it, or RESTART_MARK_MS without (CR7 #8)
+    this.awaiting = new Map();   // applying_id -> { t, request_id }: actions whose entry has no verdict from the server yet
+    this.verdictOf = new Map();  // applying_id -> { verdict, t, request_id }: the verdicts kept, oldest first (the newest VERDICTS_KEPT)
     this.#load();
   }
 
@@ -158,15 +178,8 @@ export class History {
         if (to == null || to === 'calibrating' || to === 'restarting' || (p && p.value === to)) continue;
         rec({ kind: 'show', field, from: p?.value ?? null, to });
       }
+      out.push(...this.judge(st, t));
       // The calibration job (lib/lights.mjs: the full check carries its progress file while one ran in the last 24 h).
-      // The server's verdict on the last action's entry (status.confirmed / status.expired keep it 10 min): kept once, with the
-      // history, so Last done still knows it later (CR7 #5)
-      const la = this.state.last_action, lid = typeof la?.applying_id === 'string' ? la.applying_id : null;
-      if (lid && !la.verdict) {
-        const named = (list) => Array.isArray(list) && list.some((e) => obj(e)?.id === lid);
-        const verdict = named(st.confirmed) ? 'confirmed' : named(st.expired) ? 'expired' : null;
-        if (verdict) rec({ kind: 'verdict', applying_id: lid, verdict });
-      }
       const cal = obj(obj(obj(st.probe)?.value)?.calibration);
       if (cal && (typeof cal.running === 'boolean' || typeof cal.stage === 'string')) {
         const running = cal.running === true, stage = str(cal.stage, 40), calStale = cal.stale === true, p = this.state.calibration;
@@ -179,6 +192,26 @@ export class History {
     return out;
   }
 
+  /** The server's verdict on every action whose entry has none yet (status.confirmed / status.expired keep it 10 min): kept once,
+   *  with the history, so Last done, Recent and a page that slept past those 10 min still know it later (CR7 #5, R8 #0, #19). Run
+   *  by observe() and before every answer that says it (/api/status, /api/history, the socket's status), so a line never says
+   *  "Asked to …" once the lists say it is done. Returns the verdict events it recorded. Never throws. */
+  judge(status, nowMs) {
+    const out = [];
+    try {
+      const t = num(nowMs) ?? this.now(), st = obj(status) ?? {};
+      for (const [id, w] of this.awaiting) if (t - w.t > AWAIT_MS) this.awaiting.delete(id);
+      if (!this.awaiting.size) return out;
+      const ids = (list) => new Set((Array.isArray(list) ? list : []).map((e) => obj(e)?.id).filter((x) => typeof x === 'string'));
+      const conf = ids(st.confirmed), exp = ids(st.expired);
+      for (const [id, w] of [...this.awaiting]) {
+        const verdict = conf.has(id) ? 'confirmed' : exp.has(id) ? 'expired' : null;
+        if (verdict) out.push(this.#record({ kind: 'verdict', t, applying_id: id, ...(w.request_id ? { request_id: w.request_id } : {}), verdict }));
+      }
+    } catch (e) { warn('judge failed', e); }
+    return out;
+  }
+
   /** A control was used, from mission control or the studio chat: kept so "was that on purpose?" has an answer. The body is
    *  what the caller checked (server.mjs passes the whitelist's fields only); a login in it or in the note is scrubbed anyway. */
   action(entry) {
@@ -188,7 +221,9 @@ export class History {
                           body: smallBody(scrubCreds(e.body)), ok: e.ok !== false, note: e.note == null ? null : scrubCreds(String(e.note)).slice(0, 200),
                           source: sourceOf(e.source), ...(label ? { label } : {}), ...(e.maybe === true ? { maybe: true } : {}),
                           // the change's entry in status.applying: while it is still there (confirming), Last done says "Last sent"
-                          ...(typeof e.applying_id === 'string' && e.applying_id ? { applying_id: e.applying_id.slice(0, 40) } : {}) });
+                          ...(typeof e.applying_id === 'string' && e.applying_id ? { applying_id: e.applying_id.slice(0, 40) } : {}),
+                          // the page's own id for the press (R8 #2): a page whose answer was lost finds its verdict by it
+                          ...(typeof e.request_id === 'string' && /^[A-Za-z0-9._-]{1,40}$/.test(e.request_id) ? { request_id: e.request_id } : {}) });
   }
 
   /** When the current level began. `level` is the last KNOWN level: while the page's model says unknown (not checked,
@@ -213,8 +248,26 @@ export class History {
     const from = num(sinceT) ?? this.now() - this.keepMs;
     const ks = kinds == null ? null : new Set([].concat(kinds));
     const out = [];
-    for (let i = this.events.length - 1; i >= 0; i--) { const e = this.events[i]; if (e.t > from && (ks ? ks.has(e.kind) : e.kind !== 'verdict')) out.push(e); }
+    for (let i = this.events.length - 1; i >= 0; i--) {
+      const e = this.events[i];
+      if (!(e.t > from && (ks ? ks.has(e.kind) : e.kind !== 'verdict'))) continue;
+      // an action carries the server's verdict on its entry, once there is one: its words wait for it (R8 #19)
+      const v = e.kind === 'action' && typeof e.applying_id === 'string' ? this.verdictOf.get(e.applying_id) : null;
+      out.push(v ? { ...e, verdict: v.verdict } : e);
+    }
     return out.sort((a, b) => b.t - a.t).slice(0, Math.max(0, num(limit) ?? 50));
+  }
+
+  /** The server's verdicts kept, newest first: [{ id, request_id?, verdict }] for the last `limit` changes that waited for one,
+   *  within `withinMs` (status.verdicts: a phone that slept past status.confirmed's 10 min, or a restart of the server, still
+   *  learns the verdict on its own change, R8 #0). */
+  verdicts(nowMs, { limit = VERDICTS_SERVED, withinMs = VERDICTS_MS } = {}) {
+    const now = num(nowMs) ?? this.now(), out = [];
+    for (const [id, v] of [...this.verdictOf].reverse()) {
+      if (out.length >= limit || now - v.t > withinMs) break;
+      out.push({ id, ...(v.request_id ? { request_id: v.request_id } : {}), verdict: v.verdict });
+    }
+    return out;
   }
 
   /** For GET /api/history: since when, per piece and for the show, the last thing done, and how much is kept. */
@@ -245,9 +298,18 @@ export class History {
       case 'item': if (typeof ev.id === 'string') S.items[ev.id] = { level: ev.to, reason: reasonOf(ev.summary), t: ev.t, at_least: ev.from == null || ev.gap === true }; break;
       case 'show': if (typeof ev.field === 'string') S.show[ev.field] = { value: ev.to, t: ev.t, at_least: ev.from == null }; break;
       case 'calibration': S.calibration = { running: ev.running === true, stage: ev.stage ?? null, stale: ev.stale === true, t: ev.t }; break;
-      case 'action': S.last_action = ev; break;
+      case 'action':
+        S.last_action = ev;
+        // every change with an entry gets the server's verdict kept (a quick one too: Last done reads it, CR7 #5)
+        if (typeof ev.applying_id === 'string') this.awaiting.set(ev.applying_id, { t: ev.t, request_id: ev.request_id ?? null });
+        break;
       case 'verdict':
-        if (S.last_action && S.last_action.applying_id === ev.applying_id && ['confirmed', 'expired'].includes(ev.verdict)) S.last_action = { ...S.last_action, verdict: ev.verdict };
+        if (typeof ev.applying_id !== 'string' || !['confirmed', 'expired'].includes(ev.verdict)) break;
+        this.awaiting.delete(ev.applying_id);
+        this.verdictOf.delete(ev.applying_id);
+        this.verdictOf.set(ev.applying_id, { verdict: ev.verdict, t: ev.t, request_id: typeof ev.request_id === 'string' ? ev.request_id : null });
+        if (this.verdictOf.size > VERDICTS_KEPT) this.verdictOf.delete(this.verdictOf.keys().next().value);
+        if (S.last_action && S.last_action.applying_id === ev.applying_id) S.last_action = { ...S.last_action, verdict: ev.verdict };
         break;
     }
   }
@@ -500,8 +562,16 @@ export function describeEvent(ev) {
       case 'calibration': line = calibrationWords(e); break;
       case 'action': {
         const [past, inf, what] = actionPhrase(e), from = `from ${e.source === 'studio chat' ? 'the studio chat' : 'mission control'}`;
-        line = e.maybe === true ? `Tried to ${inf} ${what} ${from}: no answer in time, so it may or may not have happened`
-          : e.ok === false ? `Tried to ${inf} ${what} ${from}, but ${plainNote(e.note) ?? 'it failed'}` : `${past} ${what} ${from}`;
+        // a change done only on the server's verdict (awaitsVerdict) is never said done from its answer alone: "Asked to …" until
+        // the verdict, then done, or "… but bitcube didn't show it in time" (R8 #19, #28); recent() puts the verdict on it
+        const waits = awaitsVerdict(e);
+        line = e.maybe === true ? (e.verdict === 'confirmed' ? `${past} ${what} ${from}, though bitcube answered late`
+            : e.verdict === 'expired' ? `Tried to ${inf} ${what} ${from}: no answer in time, and bitcube didn't show it`
+            : `Tried to ${inf} ${what} ${from}: no answer in time, so it may or may not have happened`)
+          : e.ok === false ? `Tried to ${inf} ${what} ${from}, but ${plainNote(e.note) ?? 'it failed'}`
+          : waits && e.verdict === 'expired' ? `Asked to ${inf} ${what} ${from}, but bitcube didn't show it in time`
+          : waits && e.verdict !== 'confirmed' ? `Asked to ${inf} ${what} ${from}`
+          : `${past} ${what} ${from}`;
         break;
       }
       default: line = e.headline || e.summary || 'Something happened';

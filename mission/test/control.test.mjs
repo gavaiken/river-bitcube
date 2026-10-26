@@ -63,7 +63,8 @@ test('the control socket: 0600 in the state folder, the same controls and locks 
   // status: what the agent reads before it acts
   const s = await mc(socket, 'status');
   assert.equal(s.code, 0, s.out);
-  assert.deepEqual(Object.keys(s.json).sort(), ['applying', 'blocked', 'boot_file', 'calibration', 'now', 'ok', 'overall', 'show_file']);
+  // R8 #30: with the server's verdicts (confirmed, expired, the history's), so the agent can tell done from given up by its applying_id
+  assert.deepEqual(Object.keys(s.json).sort(), ['applying', 'blocked', 'boot_file', 'calibration', 'confirmed', 'expired', 'now', 'ok', 'overall', 'show_file', 'verdicts']);
   assert.deepEqual([s.json.overall.level, s.json.applying, s.json.calibration, s.json.show_file], ['ok', [], null, { file: 'river-local-oct-22-seasons.toe', label: "the river's year" }]);
 
   // a change from the chat: through the whitelist, and recorded as the studio chat's (Recent and Last done say so)
@@ -86,13 +87,19 @@ test('the control socket: 0600 in the state folder, the same controls and locks 
   const chatRopes = await mc(socket, 'ropes', '{"dark":true}');
   assert.deepEqual([chatRopes.code, chatRopes.json.status, chatRopes.json.ok], [1, 409, false]);
   assert.match(chatRopes.json.error, /^wait: the switch to the live river is being applied/);
-  assert.equal((await sw).code, 0);
+  const swDone = await sw;
+  assert.equal(swDone.code, 0);
   const during = await mc(socket, 'status');
-  assert.deepEqual(during.json.applying.map((x) => [x.action, x.phase, x.source]), [['switch', 'confirming', 'studio chat']]);
+  assert.deepEqual(during.json.applying.map((x) => [x.id, x.action, x.phase, x.source]), [[swDone.json.applying_id, 'switch', 'confirming', 'studio chat']], 'the entry by the id its answer named');
   assert.match(during.json.blocked.ropes, /^wait: the switch to the live river is being applied/);
   for (let i = 0; i < 150 && (await status()).applying.length; i++) await sleep(20);
   a = await lastAction();
   assert.deepEqual([a.action, a.source, a.words], ['switch', 'studio chat', 'Switched TouchDesigner to the live river from the studio chat']);
+  // and the agent reads the verdict on its own change by that id: done (R8 #30)
+  const after = await mc(socket, 'status');
+  assert.ok(after.json.confirmed.some((x) => x.id === swDone.json.applying_id && x.action === 'switch' && x.source === 'studio chat'));
+  assert.ok(after.json.verdicts.some((x) => x.id === swDone.json.applying_id && x.verdict === 'confirmed'));
+  assert.ok(!after.json.expired.some((x) => x.id === swDone.json.applying_id));
 
   // while a calibration runs, what it would spoil is refused for the chat as for a phone
   assert.equal((await post('/api/control/calibrate', { action: 'start' }, phone)).status, 200);

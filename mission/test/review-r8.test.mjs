@@ -1,0 +1,230 @@
+// Round 8 (critics on dd38ad2, fixed on 1373e81): the server's verdict kept with the history for every change, a page's own request
+// id on its entry, the lighting port and the boot file confirmed by a reading that shows them, the ended lists capped and named;
+// on the pages a maybe switch that holds the lock while TouchDesigner is seen down, the usual times on other phones, and how
+// another phone's change ended said once.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Applying, ENDED_MAX } from '../lib/applying.mjs';
+import { Mission, awaitsReading } from '../lib/mission.mjs';
+import { History, describeEvent } from '../lib/history.mjs';
+import { derive, entryVerdict, entryIdOf, entryWords, bandSaid, endedSaid, notSentWords, failWords, ENDED_SAID_S, clock } from '../public/model.js';
+import { lastDoneParts } from '../public/status-words.js';
+
+const YEAR = 'river-local-oct-22-seasons.toe', LIVE = 'river-online-oct-23.toe';
+const T0 = Date.UTC(2026, 9, 26, 4, 4, 0);          // 21:04 Pacific
+const SERVER = fileURLToPath(new URL('../server.mjs', import.meta.url));
+const FIXTURES = fileURLToPath(new URL('./fixtures/', import.meta.url));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function payload({ t, td, applying = [], extra = {} } = {}) {
+  return { now: t, bitcube: { ok: true, at: t, value: { online: true } }, seasons: { ok: true, at: t, value: { season: 'winter', mode: 'automatic', intensity: 0.2, presence: { available: false } } },
+    modal: { ok: true, at: t, value: { ok: true, tick: 1, next_tick_epoch: t / 1000 + 200, finished_at: new Date(t - 60_000).toISOString() } },
+    probe: { ok: true, at: t, value: { ok: true, uptime_h: 30, time: '2026-10-25T21:04:00', boot_file: YEAR, show_files: [YEAR, LIVE], displays: ['M14', 'LED 1920X1080'],
+      devices: { psac10_1: true, psac10_2: true, gallery_cam: true, river_cam: true, router: true, internet: true },
+      td: td ?? { ok: true, file: YEAR, fps: 60, errors: 0, ropes: { source: 'canvas', status: { open: true, active: true, watts: [100, 100] } }, hub75: { brightness: 1, output: true } } } },
+    applying, ...extra };
+}
+
+// ---- the server -----------------------------------------------------------------------------------------------------------
+
+test('R8 #2: a page\'s own request id is kept on its entry and in status.confirmed / status.expired; one that isn\'t an id is not', async () => {
+  let t = T0;
+  const a = new Applying({ now: () => t });
+  const sw = a.run('switch', { file: LIVE }, async () => ({ ok: true }), { awaits: () => true, requestId: 'rkx1.ab12' });
+  assert.equal(a.list()[0].request_id, 'rkx1.ab12', 'on the entry while it is in flight');
+  const r = await sw;
+  t += 20_000;
+  a.confirm({ td: { ok: true, file: LIVE } }, t);
+  assert.deepEqual(a.ended().confirmed.map((e) => [e.id, e.request_id]), [[r.applying_id, 'rkx1.ab12']]);
+  const bad = await a.run('ropes', { dark: true }, async () => ({ ok: true }), { requestId: '<img src=x>' });
+  assert.equal(a.ended().confirmed.find((e) => e.id === bad.applying_id).request_id, undefined);
+});
+
+test('R8 #39: status.confirmed and status.expired keep at most ENDED_MAX entries, the quick changes confirmed at their answer going first', async () => {
+  let t = T0;
+  const a = new Applying({ now: () => t });
+  const sw = await a.run('switch', { file: LIVE }, async () => ({ ok: true }), { awaits: () => true });
+  t += 1000; a.confirm({ td: { ok: true, file: LIVE } }, t);
+  for (let i = 0; i < ENDED_MAX + 150; i++) { t += 10; await a.run('ropes', { dark: i % 2 === 0 }, async () => ({ ok: true })); }
+  const e = a.ended();
+  assert.equal(e.confirmed.length + e.expired.length, ENDED_MAX);
+  assert.ok(e.confirmed.some((x) => x.id === sw.applying_id), 'the switch a page waits on outlives a burst of quick changes');
+  assert.ok(JSON.stringify(e).length < 20_000, 'every phone downloads it on every poll');
+});
+
+test('R8 #31: a lighting port change bitcube didn\'t answer in time is confirmed by a reading asked after it that shows the port', async () => {
+  let t = T0, lr = 'direct';
+  const reads = [];
+  const m = new Mission({ now: () => t, later: (fn, ms) => reads.push({ fn, ms }),
+                          probe: async (_h, args) => (args ? { ok: false, maybe: true, error: 'bitcube took too long to answer' } : { ok: true, lights_route: lr, td: { ok: true, file: YEAR } }) });
+  await m.pollProbe();
+  const r = await m.control('lightsroute', { route: 'router' });
+  assert.equal(r.maybe, true);
+  assert.deepEqual(m.snapshot().applying.map((e) => [e.action, e.phase, e.maybe]), [['lightsroute', 'confirming', true]]);
+  await assert.rejects(m.control('ropes', { dark: true }), (e) => e.status === 409 && /^wait: the lighting port change to the spare router port got no answer from bitcube in time; it unlocks by 21:06$/.test(e.message));
+  t += 5000; await m.pollProbe();
+  assert.equal(m.snapshot().applying.length, 1, 'a reading that still shows the old port: not yet');
+  lr = 'router'; t += 15_000; await m.pollProbe();
+  assert.deepEqual(m.snapshot().applying, [], 'the reading shows the port: confirmed, the ropes free again');
+  assert.deepEqual(m.snapshot().confirmed.map((e) => [e.id, e.action]), [[r.applying_id, 'lightsroute']]);
+  assert.equal((await m.control('ropes', { dark: true }).catch((e) => e)).status, undefined);
+});
+
+test('R8 #32: a boot-file change is confirmed by its answer only when that answer shows the new boot file; else by a reading that does', async () => {
+  assert.equal(awaitsReading('bootfile', { ok: true, boot_file: LIVE }, { file: LIVE }), false);
+  assert.equal(awaitsReading('bootfile', { ok: true, boot_file: YEAR }, { file: LIVE }), true, 'the answer still names the old one');
+  assert.equal(awaitsReading('bootfile', { ok: false, boot_file: YEAR }, { file: LIVE }), false, 'a failure is a failure');
+  assert.equal(awaitsReading('lightsroute', { ok: true, lights_route: 'direct' }, { route: 'router' }), true);
+  assert.equal(awaitsReading('lightsroute', { ok: true, lights_route: 'router' }, { route: 'router' }), false);
+  let t = T0, boot = YEAR;
+  const m = new Mission({ now: () => t, later: () => {}, probe: async (_h, args) => ({ ok: true, boot_file: boot, td: { ok: true, file: YEAR } }) });
+  await m.pollProbe();
+  const r = await m.control('bootfile', { file: LIVE });            // probe.ps1's Set-Content failed without an error: the old one
+  assert.deepEqual(m.snapshot().confirmed, [], 'never confirmed by an OK answer that shows the old boot file');
+  assert.deepEqual(m.snapshot().applying.map((e) => [e.id, e.phase]), [[r.applying_id, 'confirming']]);
+  t += 20_000; await m.pollProbe();
+  assert.equal(m.snapshot().applying.length, 1);
+  boot = LIVE; t += 20_000; await m.pollProbe();
+  assert.deepEqual(m.snapshot().confirmed.map((e) => e.id), [r.applying_id]);
+  // one whose reading never shows it expires at its limit: "bitcube didn't show it in time", never "Now … opens at boot"
+  boot = YEAR;
+  const r2 = await m.control('bootfile', { file: LIVE });
+  t += 121_000;
+  assert.deepEqual(m.snapshot().expired.map((e) => e.id), [r2.applying_id]);
+});
+
+test('R8 #0, #1, #28: the history keeps the server\'s verdict on every change with an entry, not only the last one, with its request id', () => {
+  let t = T0;
+  const h = new History({ file: null, now: () => t });
+  h.action({ action: 'switch', body: { file: LIVE }, ok: true, source: 'mission control', label: 'the switch to the live river', applying_id: 'ax.1', request_id: 'rq.1' });
+  t += 1000;
+  h.action({ action: 'ropes', body: { dark: true }, ok: true, source: 'mission control', applying_id: 'ax.2' });
+  // the switch expires after the ropes change: the last action is not its own, but its verdict is kept all the same
+  t += 200_000;
+  h.observe({ ...payload({ t }), confirmed: [{ id: 'ax.2', action: 'ropes', at: t - 199_000 }], expired: [{ id: 'ax.1', action: 'switch', file: LIVE, at: t - 1000 }] });
+  assert.deepEqual(h.verdicts(t).sort((x, y) => (x.id < y.id ? -1 : 1)), [{ id: 'ax.1', request_id: 'rq.1', verdict: 'expired' }, { id: 'ax.2', verdict: 'confirmed' }]);
+  // hours later (the server's lists are long empty) the page still learns it, by its entry or by its request id
+  t += 3 * 3600e3;
+  const m = derive({ ...payload({ t }), verdicts: h.verdicts(t) }, t);
+  assert.equal(entryVerdict(m, 'ax.1'), 'expired');
+  assert.equal(entryIdOf(m, 'rq.1'), 'ax.1');
+  assert.equal(entryVerdict(m, 'ax.9'), null);
+  // and the band's Last line never says done for a change bitcube never showed (R8 #1, #28: verify)
+  const la = { ...h.events.find((e) => e.applying_id === 'ax.1'), verdict: 'expired' };
+  assert.deepEqual(lastDoneParts(la, { applying: [], confirmed: [], expired: [] }), { head: 'Last sent', tail: " · bitcube didn't show it in time" });
+  assert.deepEqual(lastDoneParts({ ...la, verdict: undefined }, { applying: [], confirmed: [], expired: [] }), { head: 'Last sent', tail: '' }, 'no verdict known: never "Last done"');
+  assert.deepEqual(lastDoneParts({ ...la, maybe: true, ok: false, verdict: 'confirmed' }, { applying: [], confirmed: [], expired: [] }), { head: 'Last done', tail: '' }, 'a maybe later confirmed stays done after the 10 min');
+});
+
+test('R8 #19, #28: Recent says a switch, rebuild, boot-file change or start was asked for until the server\'s verdict, then done or not shown', () => {
+  let t = T0;
+  const h = new History({ file: null, now: () => t });
+  h.action({ action: 'switch', body: { file: LIVE }, ok: true, source: 'studio chat', label: 'the switch to the live river', applying_id: 'ax.1' });
+  h.action({ action: 'rebuild', body: { file: YEAR }, ok: true, source: 'mission control', applying_id: 'ax.2' });
+  h.action({ action: 'ropes', body: { dark: true }, ok: true, source: 'mission control', applying_id: 'ax.3' });
+  const words = () => Object.fromEntries(h.recent({ kinds: 'action' }).map((e) => [e.applying_id, describeEvent(e)]));
+  assert.deepEqual(words(), { 'ax.1': 'Asked to switch TouchDesigner to the live river from the studio chat', 'ax.2': "Asked to rebuild the river's year with the new LED map from mission control",
+                              'ax.3': 'Turned the ropes dark from mission control' });
+  t += 200_000;
+  h.observe({ ...payload({ t }), confirmed: [{ id: 'ax.2', action: 'rebuild', at: t }], expired: [{ id: 'ax.1', action: 'switch', at: t }] });
+  assert.deepEqual(words(), { 'ax.1': "Asked to switch TouchDesigner to the live river from the studio chat, but bitcube didn't show it in time",
+                              'ax.2': "Rebuilt the river's year with the new LED map from mission control", 'ax.3': 'Turned the ropes dark from mission control' });
+  // a maybe the server later confirmed or gave up on
+  h.action({ action: 'bootfile', body: { file: LIVE }, ok: false, maybe: true, source: 'mission control', applying_id: 'ax.4' });
+  assert.match(describeEvent(h.recent({ kinds: 'action', limit: 1 })[0]), /may or may not have happened$/);
+  h.observe({ ...payload({ t }), confirmed: [{ id: 'ax.4', action: 'bootfile', at: t }] });
+  assert.equal(describeEvent(h.recent({ kinds: 'action', limit: 1 })[0]), 'Set the boot file to the live river from mission control, though bitcube answered late');
+});
+
+test('R8 #2, #30: over HTTP, a request id rides on the entry and its verdict; the socket\'s status names ids and verdicts', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'r8-'));
+  writeFileSync(join(dir, 'pw'), 'NOT-A-REAL-PW\n');
+  const base = { ...process.env }; delete base.MISSION_CONTROL_SOCKET;
+  const p = spawn(process.execPath, [SERVER], { env: { ...base, MISSION_PORT: '0', MISSION_STATE_DIR: join(dir, 'state'), MISSION_PASSWORD_FILE: join(dir, 'pw'), MISSION_FIXTURES: FIXTURES,
+                                                       MISSION_FAKE_AGENT: '1', MISSION_FIXTURE_APPLY_S: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  t.after(() => p.kill());
+  const url = await new Promise((resolve, reject) => {
+    let out = '';
+    p.stdout.on('data', (d) => { out += d; const m = out.match(/http:\/\/127\.0\.0\.1:\d+/); if (m) resolve(m[0]); });
+    p.on('exit', () => reject(new Error(out)));
+  });
+  const cookie = (await fetch(url + '/login', { method: 'POST', body: JSON.stringify({ password: 'NOT-A-REAL-PW' }), headers: { 'content-type': 'application/json' } })).headers.get('set-cookie').split(';')[0];
+  const h = { cookie: `${cookie}; scenario=all-good`, 'content-type': 'application/json' };
+  const status = async () => (await fetch(url + '/api/status', { headers: h })).json();
+  // the answer is lost on the way back: the page only knows the id it sent
+  const sent = fetch(url + '/api/control/switch', { method: 'POST', headers: h, body: JSON.stringify({ file: LIVE, request_id: 'rq-lost.1' }) });
+  let e;
+  for (let i = 0; i < 100 && !e; i++) { e = (await status()).applying.find((x) => x.request_id === 'rq-lost.1'); if (!e) await sleep(20); }
+  assert.ok(e, 'its entry carries the request id');
+  await sent;
+  let st;
+  for (let i = 0; i < 200; i++) { st = await status(); if (!st.applying.length) break; await sleep(25); }
+  assert.ok(st.confirmed.some((x) => x.id === e.id && x.request_id === 'rq-lost.1'), 'and its verdict');
+  assert.ok(st.verdicts.some((x) => x.id === e.id && x.request_id === 'rq-lost.1' && x.verdict === 'confirmed'), 'kept with the history too');
+  const m = derive(st, st.now);
+  assert.equal(entryIdOf(m, 'rq-lost.1'), e.id);
+  assert.equal(entryVerdict(m, entryIdOf(m, 'rq-lost.1')), 'confirmed');
+  assert.equal(st.last_action.request_id, 'rq-lost.1');
+  assert.equal(st.last_action.words, 'Switched TouchDesigner to the live river from mission control');
+});
+
+// ---- the pages ---------------------------------------------------------------------------------------------------------------
+
+const maybeSwitch = (t, extra = {}) => ({ id: 'ax.5', action: 'switch', label: "the restart on the river's year", file: YEAR, source: 'mission control', phase: 'confirming', maybe: true,
+                                         started_at: t - 93_000, answered_at: t - 30_000, expect_s: 60, blocks: ['ropes', 'hub75', 'switch', 'rebuild', 'bootfile', 'calibrate'], ...extra });
+
+test('R8 #16: while a maybe restart holds the lock and TouchDesigner is seen not running, the advice says when it got no answer and what to do when the buttons unlock', () => {
+  const t = T0;
+  for (const [err, word, fix] of [['TouchDesigner is not running', 'running', /press Switch to the river's year below/], ['no answer from the TD bridge in 15 s', 'answering', /answer the dialog, or press Switch to the river's year/]]) {
+    const m = derive(payload({ t, td: { ok: false, error: err }, applying: [maybeSwitch(t)] }), t + 1000);
+    const want = new RegExp(`^The restart on the river's year got no answer from bitcube at ${clock(t - 30_000)}; if TouchDesigner still isn't ${word} when the buttons unlock \\(about ${clock(t - 30_000 + 180_000)}\\), `);
+    assert.match(m.overall.action, want, err);
+    assert.match(m.overall.action, fix);
+    assert.match(m.items.find((x) => x.id === 'touchdesigner').action, want, 'the TouchDesigner row says the same');
+    assert.equal(m.overall.level, 'down', 'a maybe explains nothing: the fault is said as it is');
+    assert.match(m.controls.switch.why, /^wait: the restart on the river's year got no answer from bitcube in time; it unlocks by \d\d:\d\d$/);
+    assert.equal(m.controls.switch.by, 'ax.5');
+    assert.deepEqual(m.show.held, { label: "the restart on the river's year", on: "the river's year", answered_at: t - 30_000, unlock_at: t - 30_000 + 180_000 });
+  }
+  // without a maybe holding the lock, the plain advice (and no held restart)
+  const plain = derive(payload({ t, td: { ok: false, error: 'TouchDesigner is not running' } }), t + 1000);
+  assert.equal(plain.overall.action, "Start it with Switch to the river's year below (about a minute).");
+  assert.equal(plain.show.held, null);
+});
+
+test('R8 #17: every "Wait: …" for a change bitcube didn\'t answer in time says when it unlocks, and a refusal or withdrawn confirm says it in the past', () => {
+  const t = T0;
+  const m = derive(payload({ t, applying: [maybeSwitch(t, { label: 'the switch to the live river', file: LIVE })] }), t + 1000);
+  for (const k of ['ropes', 'hub75', 'switch', 'rebuild', 'bootfile', 'calibrate']) assert.equal(m.controls[k].why, `wait: the switch to the live river got no answer from bitcube in time; it unlocks by ${clock(t + 150_000)}`, k);
+  assert.equal(notSentWords(m.controls.ropes.why, '21:05'), `Not sent at 21:05: the switch to the live river had got no answer from bitcube; the buttons unlock by ${clock(t + 150_000)}. Press again then.`);
+  assert.equal(failWords('The panels are unchanged', m.controls.hub75.why, '21:05'), `The panels are unchanged: the switch to the live river had got no answer from bitcube; the buttons unlock by ${clock(t + 150_000)}. Press again then.`);
+  // an ordinary change in flight reads as before
+  const n = derive(payload({ t, applying: [maybeSwitch(t, { maybe: false })] }), t + 1000);
+  assert.equal(n.controls.ropes.why, "wait: the restart on the river's year is being applied");
+});
+
+test('R8 #22: another phone says the same usual time as the sending phone for a calibration start and a boot-file change', () => {
+  const c = { action: 'calibrate', label: 'the start of a calibration', phase: 'confirming', expect_s: 10 };
+  assert.equal(entryWords(c, 15), 'Waiting for bitcube to show the start of a calibration · 0:15 · a run usually shows within a minute');
+  assert.equal(entryWords({ ...c, action: 'bootfile', label: 'the boot file change to the live river', expect_s: 15 }, 43), "Waiting for bitcube to show the boot file change to the live river · 0:43 · bitcube's full check shows it within a minute");
+  assert.equal(entryWords({ ...c, phase: 'applying' }, 3), 'Applying: the start of a calibration · 0:03 · usually a few seconds', 'while its request is in flight, as before');
+});
+
+test('R8 #9: another phone\'s change that ended is said once by the band\'s region: done, or not shown in time; never this phone\'s own', () => {
+  const t = T0;
+  const st = payload({ t, extra: { confirmed: [{ id: 'ax.1', action: 'bootfile', label: 'the boot file change to the live river', source: 'studio chat', at: t - 5000 },
+                                                { id: 'ax.2', action: 'ropes', label: 'the ropes change to dark', source: 'mission control', at: t - 4000 }],
+                                    expired: [{ id: 'ax.3', action: 'switch', label: 'the switch to the live river', source: 'mission control', at: t - 2000 }] } });
+  const m = derive(st, t);
+  assert.deepEqual(endedSaid(m, {}, t), ['Done: the boot file change to the live river, from the studio chat.', "The switch to the live river: bitcube didn't show it in time."]);
+  assert.match(bandSaid(m, {}, t), /^\w+\. [^.]+\. Done: the boot file change to the live river, from the studio chat\. The switch to the live river: bitcube didn't show it in time\.$/);
+  assert.deepEqual(endedSaid(m, { ownIds: ['ax.3'] }, t), ['Done: the boot file change to the live river, from the studio chat.'], 'this phone\'s own is said on its control');
+  assert.deepEqual(endedSaid(m, {}, t + ENDED_SAID_S * 1000 + 5000), [], 'said once, then gone');
+  assert.equal(bandSaid(m, {}), bandSaid(m, {}, null), 'without the server\'s clock: nothing extra');
+});
+
