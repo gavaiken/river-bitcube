@@ -74,7 +74,7 @@ button { font: inherit; color: inherit; }
 .results p { margin: 0; padding: 8px 10px; color: var(--muted); font-size: 14px; }
 .icon-btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 14px; white-space: nowrap; }
 .tabs { display: flex; gap: 2px; overflow-x: auto; margin-top: 8px; scrollbar-width: none; }
-.tabs button { border: 0; background: none; padding: 8px 12px; border-bottom: 2px solid transparent; cursor: pointer; color: var(--muted); white-space: nowrap; font-size: 14px; }
+.tabs button { flex: none; border: 0; background: none; padding: 8px 12px; border-bottom: 2px solid transparent; cursor: pointer; color: var(--muted); white-space: nowrap; font-size: 14px; }
 .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
 @media (pointer: coarse), (max-width: 600px) {   /* a finger: 44 px targets, 8 px apart (mission control's map embeds this page) */
   .icon-btn, .tabs button, .seg button { min-height: 44px; min-width: 44px; }
@@ -454,7 +454,9 @@ body.panel-open footer { margin-right: 420px; }
     for (const n of vis) {
       const r = rects[n.id];
       const rope = n.kind === 'rope';
+      // data-name/kind/status/verified: mission control's live layer (map-live.js) names the box with its live state first
       const g = sv('g', { class: `node${rope ? ' rope' : ''} ${n.status}${n.verified === 'confirmed' ? '' : ' unverified'}`, 'data-id': n.id, tabindex: 0, role: 'button',
+        'data-name': n.name, 'data-kind': n.kind, 'data-status': n.status, 'data-verified': n.verified,
         'aria-label': `${n.name}, ${n.kind}, ${n.status}${n.verified === 'confirmed' ? '' : ', ' + n.verified}` }, gNodes);
       sv('title', {}, g).textContent = `${n.name}\n${n.summary}`;
       sv('rect', { class: 'box', x: r.x, y: r.y, width: r.w, height: r.h, rx: rope ? 5 : 7 }, g);
