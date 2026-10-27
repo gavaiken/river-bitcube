@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** nobody: free for Will
-- **Where:** bitcube free; Combined v0 left on Auto framing with the screens-only look cycle
-- **Updated:** 2026-10-26 22:04 PT
+- **Holder:** Will (Codex)
+- **Where:** bitcube: adding Recorded river to the screens-only look mix/cycle
+- **Updated:** 2026-10-26 22:10 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
 ## Running now
