@@ -110,3 +110,16 @@ def test_framing_pixel_orientation_mask_and_crossfade():
     a = module.render(pixels, mask, 'channel-multi', 17.999)
     b = module.render(pixels, mask, 'channel-multi', 18)
     assert np.max(np.abs(a - b)) < .001
+
+
+def test_auto_uses_detector_only_for_live_input(runtime, monkeypatch):
+    detected = {'profile': 'pool-multi'}
+    comp = SimpleNamespace(par=SimpleNamespace(Framing=SimpleNamespace(eval=lambda: 'auto')),
+                           op=lambda name: SimpleNamespace(module=SimpleNamespace(status=lambda: detected)))
+    monkeypatch.setattr(runtime, 'live_source', lambda: True)
+    assert runtime.effective_framing(comp) == 'pool-multi'
+    detected['profile'] = 'original'
+    assert runtime.effective_framing(comp) == 'original'
+    detected['profile'] = 'pool-multi'
+    monkeypatch.setattr(runtime, 'live_source', lambda: False)
+    assert runtime.effective_framing(comp) == 'original'

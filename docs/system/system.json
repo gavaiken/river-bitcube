@@ -510,7 +510,7 @@
     "22 Oct: loopMIDI (virtual MIDI cable from the 2023 BitCube setup) no longer opens at login (HKCU Run value removed; still installed).",
     "22 Oct: Ethernet 2 had DHCP turned off with no address, which is why a cable to any router never got it online; the lighting NIC's stale 192.168.1.99 was removed; gray-river set to Private.",
     "23 Oct: a power cut of bitcube, router and cam together: Windows up in about 50 s, TD on its show file, online over the cable 70 s later; its cable pulled with Wi-Fi idle: back over Wi-Fi in 3 s.",
-    "26 Oct: Will's combined-v0 show uses the baseline's camera relay and pinned calibration, fixed summer effects and Dave's canvas from the existing local Modal mirror on 8770. Overlay strength and reversible Channel/Pool framing profiles persist in combined-v0.json; no new service or port."
+    "26 Oct: Will's combined-v0 show uses the baseline's camera relay and pinned calibration, fixed summer effects and Dave's canvas from the existing local Modal mirror on 8770. Overlay strength and automatic or manual Channel/Pool framing profiles persist in combined-v0.json; no new service or port."
    ]
   },
   {

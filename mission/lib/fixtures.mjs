@@ -168,7 +168,7 @@ export class FixtureMission {
     if (out.probe?.value?.td?.file === 'river-combined-v0.toe') {
       const td = out.probe.value.td;
       out.probe.value.td = { ...td, combined: { season: 'summer', intensity: 0.85, overlay: w.overlay ?? 0.25,
-        framing: w.framing ?? 'original', effective_framing: w.framing ?? 'original', effective_overlay: w.overlay ?? 0.25, river_source: 'live', scene: { animation: 'flow', palette: 'fixture' }, scene_age_s: 5 } };
+        framing: w.framing ?? 'original', effective_framing: w.framing === 'auto' ? 'pool-multi' : w.framing ?? 'original', auto_view: w.framing === 'auto' ? { view: 'pool', reason: 'matched' } : null, effective_overlay: w.overlay ?? 0.25, river_source: 'live', scene: { animation: 'flow', palette: 'fixture' }, scene_age_s: 5 } };
     }
     if (out.probe?.value) w.applying.confirm(out.probe.value, this.now());
     out.applying = w.applying.list(clock);

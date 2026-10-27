@@ -1,7 +1,7 @@
 """Preset river windows and masks. TOP arrays are bottom-up; mask coordinates are top-down.
 
 The profiles were chosen with the offline still-image heuristic, not semantic water detection.
-Three windows gently crossfade; camera movement still requires choosing the matching profile.
+Three windows gently crossfade; Auto recognition or manual selection chooses the profile.
 Pure numpy, at most 10 Hz, with a GPU bypass for Original and recorded fallback.
 """
 from pathlib import Path

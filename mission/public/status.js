@@ -706,9 +706,9 @@ function combinedHTML(m) {
     <p>River: ${esc(s?.river_source ?? 'not known')}. Summer stays fixed; live video runs at camera speed.</p>
     <label for="river-framing">River framing</label>
     <select id="river-framing" ${disabled || s?.framing == null ? 'disabled' : ''}>
-      ${[['original','Original (bypass)'],['channel','Channel: one window'],['channel-multi','Channel: three windows'],['pool','Pool: one window'],['pool-multi','Pool: three windows']].map(([v,label]) => `<option value="${v}" ${(framingDraft ?? s?.framing ?? 'original') === v ? 'selected' : ''}>${label}</option>`).join('')}
+      ${[['auto','Auto: recognize camera view'],['original','Original (bypass)'],['channel','Channel: one window'],['channel-multi','Channel: three windows'],['pool','Pool: one window'],['pool-multi','Pool: three windows']].map(([v,label]) => `<option value="${v}" ${(framingDraft ?? s?.framing ?? 'original') === v ? 'selected' : ''}>${label}</option>`).join('')}
     </select>
-    <p>Choose the matching view after moving the camera. Three windows crossfade slowly. Profiles mask foreground and lift shadows; recorded fallback uses Original. Now: ${esc(s?.effective_framing ?? 'original')}.</p>
+    <p>Auto recognizes either saved camera view and uses three crossfading windows. While moving or unrecognized, it uses Original. Manual profiles remain available. Profiles mask foreground and lift shadows; recorded fallback uses Original. Now: ${esc(s?.effective_framing ?? 'original')}.${s?.framing === 'auto' ? ' Automatic view: ' + esc(s?.auto_view?.view ?? s?.auto_view?.reason ?? 'waiting') + '.' : ''}</p>
     <label for="overlay-strength">Dave's overlay strength</label>
     <div class="row-btns"><input type="range" min="0" max="100" step="1" id="overlay-strength" value="${draft}" aria-describedby="overlay-help overlay-now" ${disabled ? 'disabled' : ''}>
     <output id="overlay-draft" for="overlay-strength">${draft} %</output>

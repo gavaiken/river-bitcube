@@ -16,7 +16,7 @@ RIVER = Path('C:/Users/user/River')
 SETTINGS = RIVER / 'combined-v0.json'
 SCENE = RIVER / 'gallery_state/state.json'
 DEFAULT_STRENGTH = 0.25
-FRAMING = ('original', 'channel', 'channel-multi', 'pool', 'pool-multi')
+FRAMING = ('auto', 'original', 'channel', 'channel-multi', 'pool', 'pool-multi')
 # Same phase speeds as td/seasons/seasons_td.py; summer holds while its water keeps moving.
 PHASES = {'torrent': (0.15, 2.6), 'glint': (0.2, 1.2), 'drift': (0.01, 0.06)}
 
@@ -99,6 +99,10 @@ def frame(comp):
         comp.par.Canvasmix = load_strength()
         if hasattr(comp.par, 'Framing'):
             comp.par.Framing = load_framing()
+    if hasattr(comp.par, 'Framing') and comp.par.Framing.eval() == 'auto':
+        detector = comp.op('view_detector')
+        if detector is not None:
+            detector.module.poll(comp, now, live_source())
     dt = 0 if st['last'] is None else max(0, min(0.25, now - st['last']))
     st['last'] = now
     for k, (lo, hi) in PHASES.items():
@@ -139,7 +143,13 @@ def live_source():
 
 
 def effective_framing(comp):
-    return comp.par.Framing.eval() if live_source() else 'original'
+    if not live_source():
+        return 'original'
+    selected = comp.par.Framing.eval()
+    if selected == 'auto':
+        detector = comp.op('view_detector')
+        return detector.module.status()['profile'] if detector is not None else 'original'
+    return selected
 
 
 def status(comp):
@@ -149,6 +159,7 @@ def status(comp):
     return {'season': 'summer', 'intensity': float(comp.par.Intensity),
             'overlay': float(comp.par.Canvasmix), 'effective_overlay': effective_strength(comp),
             'framing': comp.par.Framing.eval() if hasattr(comp.par, 'Framing') else 'original',
+            'auto_view': comp.op('view_detector').module.status() if hasattr(comp.par, 'Framing') and comp.par.Framing.eval() == 'auto' and comp.op('view_detector') is not None else None,
             'effective_framing': effective_framing(comp) if hasattr(comp.par, 'Framing') else 'original',
             'scene': st['scene'], 'scene_age_s': st['scene_age_s'],
             'river_source': 'live' if live and not forced else 'recorded fallback'}

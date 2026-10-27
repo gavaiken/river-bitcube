@@ -29,7 +29,7 @@ viz.par.Canvasmix = mod.module.load_strength()
 if not hasattr(viz.par, 'Framing'):
     pg.appendMenu('Framing', label='River framing')
 viz.par.Framing.menuNames = list(mod.module.FRAMING)
-viz.par.Framing.menuLabels = ['Original (bypass)', 'Channel: one window', 'Channel: three windows', 'Pool: one window', 'Pool: three windows']
+viz.par.Framing.menuLabels = ['Auto: recognize camera view', 'Original (bypass)', 'Channel: one window', 'Channel: three windows', 'Pool: one window', 'Pool: three windows']
 viz.par.Framing = mod.module.load_framing()
 M = "op('combined_mod').module"
 I = f"{M}.intensity()"
@@ -45,6 +45,9 @@ small = get(fitTOP, 'framing_input', -600, 450)
 small.inputConnectors[0].connect(viz.op('river_in'))
 small.par.fit = 'fill'
 res(small, 640, 360)
+detector = get(textDAT, 'view_detector', -600, 850)
+detector.par.file = REPO + '/td/combined/view_detector.py'
+detector.par.syncfile = True
 callbacks = get(textDAT, 'framing_callbacks', -600, 650)
 callbacks.par.file = REPO + '/td/combined/framing.py'
 callbacks.par.syncfile = True
@@ -192,7 +195,7 @@ run("op('/project1/viz/modal_canvas').par.active = True", delayFrames=60)
 note(viz, "COMBINED V0: live river (recorded fallback), fixed summer, additive Modal canvas.\n"
           "Canvasmix: 0 = summer alone; 1 = full additive overlay, clamped before calibrated outputs.\n"
           "Mission control adjusts and saves Canvasmix in River/combined-v0.json.\n"
-          "Framing: Original bypass, Channel/Pool one or three crossfading windows; live video only.\n"
+          "Framing: Auto recognizes Channel/Pool; Original bypass; manual one/three windows; live video only.\n"
           "Gallery video is available at gallery_in but does not influence v0. No audio.\n"
           "Live footage runs at camera speed: seasonal playback-speed changes are deferred.")
 rd.text = "COMBINED V0: inputs -> summer + additive Dave canvas -> calibrated outputs.\n" + viz.op('NOTE').text

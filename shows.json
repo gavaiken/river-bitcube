@@ -79,7 +79,7 @@
         "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",
         "screens": "tools/pixelmap/screens-2026-10-23.json"
       },
-      "description": "Live river with recorded fallback, Gavin's fixed summer palette, torrent streaks and glints, plus Dave's additive Modal canvas. Status controls overlay strength and optional Channel/Pool foreground masks, shadow lift and single or three crossfading crop windows. Original bypass restores the previous river look; fallback footage always bypasses profiles. Choose the matching profile after moving the camera. Gallery influence and audio remain deferred.",
+      "description": "Live river with recorded fallback, Gavin's fixed summer palette, torrent streaks and glints, plus Dave's additive Modal canvas. Status controls overlay strength and river framing. Auto recognizes either saved camera view and selects masked, shadow-lifted crops with three slow crossfades. Unknown views and recorded fallback use Original. Manual Channel/Pool profiles and Original bypass remain available. Gallery influence and audio are deferred.",
       "inputs": [
         "river camera (recorded river-normal.mp4 as fallback)",
         "Dave's Modal canvas and mirrored scene",
@@ -89,7 +89,7 @@
       "created": "2026-10-26",
       "updated_by": "will",
       "updated": "2026-10-26",
-      "last_change": "Reversible river framing: two masked camera profiles, one or three crossfading windows, and Original bypass in mission control"
+      "last_change": "Automatic recognition of the two river-camera views; conservative Original bypass for uncertain or moving views"
     }
   ]
 }

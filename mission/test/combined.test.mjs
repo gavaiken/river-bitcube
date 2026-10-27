@@ -55,3 +55,17 @@ test('river framing is whitelisted and keeps legacy overlay requests valid', () 
   for (const framing of [null, true, 'pool; shutdown', 'unknown', {}])
     assert.throws(() => planControl('overlay', { strength: .1, framing }), /framing/);
 });
+
+test('automatic framing uses the same guarded action and fixture readback', async () => {
+  assert.deepEqual(planControl('overlay', { strength: .1, framing: 'auto' }),
+    { kind: 'probe', args: '-Action overlay -Overlay 0.10 -Framing auto' });
+  const dir = new URL('./fixtures/', import.meta.url).pathname;
+  const f = JSON.parse(readFileSync(join(dir, 'all-good.json'), 'utf8'));
+  const m = new FixtureMission({ dir, stateDir: mkdtempSync(join(tmpdir(), 'auto-')), now: () => f._scenario.now, applyS: 0 });
+  m.worldFor('all-good').file = 'river-combined-v0.toe';
+  await m.control('overlay', { strength: .1, framing: 'auto' }, 'all-good');
+  const s = m.snapshot('all-good').probe.value.td.combined;
+  assert.equal(s.framing, 'auto');
+  assert.equal(s.effective_framing, 'pool-multi');
+  assert.equal(s.auto_view.view, 'pool');
+});

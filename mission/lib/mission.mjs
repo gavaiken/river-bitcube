@@ -464,7 +464,7 @@ export function planControl(action, body = {}) {
     case 'overlay': {
       const x = num(body.strength);
       if (!(x >= 0 && x <= 1)) throw bad('overlay strength is 0 to 1');
-      if (body.framing !== undefined && !['original', 'channel', 'channel-multi', 'pool', 'pool-multi'].includes(body.framing)) throw bad('unknown river framing profile');
+      if (body.framing !== undefined && !['auto', 'original', 'channel', 'channel-multi', 'pool', 'pool-multi'].includes(body.framing)) throw bad('unknown river framing profile');
       return { kind: 'probe', args: `-Action overlay -Overlay ${x.toFixed(2)}${body.framing !== undefined ? ' -Framing ' + body.framing : ''}` };
     }
     case 'hub75': {
