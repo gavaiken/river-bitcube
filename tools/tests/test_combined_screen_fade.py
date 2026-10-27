@@ -78,3 +78,41 @@ def test_manual_recorded_share_and_mode_transition_preserve_all_weights():
 def test_invalid_recorded_weight_is_refused(recorded):
     with pytest.raises(ValueError):
         fade.checked({'mode':'manual','blend':0,'recorded':recorded,'hold':30})
+
+
+def test_four_screens_delay_the_same_cycle_and_zero_restores_sync():
+    s=fade.checked({'mode':'cycle','blend':0,'hold':30,'offset':10})
+    for k in range(4):
+        all_weights=fade.screen_targets(s,34+10*k)
+        assert all_weights[k] == pytest.approx((.5,.5,0))
+    assert fade.screen_targets(s,34)[1:] == ((1,0,0),)*3
+    for elapsed in [0,34,72,110,148,230]:
+        for k,w in enumerate(fade.screen_targets(s,elapsed)):
+            assert w == pytest.approx(fade.weights(s,elapsed-10*k))
+            assert sum(w) == pytest.approx(1)
+    sync=fade.screen_targets(dict(s,offset=0),72)
+    assert sync == ((0,.5,.5),)*4
+    for mode in ('manual','current','gavin','recorded'):
+        values=fade.screen_targets(dict(s,mode=mode),34)
+        assert all(w==values[0] for w in values)
+
+
+def test_offset_change_and_interrupted_fade_remain_continuous_on_every_screen():
+    st={}
+    s={'mode':'cycle','blend':0,'hold':30,'offset':10}
+    fade.step(st,s,0)
+    fade.step(st,s,54)
+    previous=st['screen_weights_all']
+    fade.step(st,dict(s,offset=0),55)
+    assert st['screen_weights_all']==previous
+    fade.step(st,dict(s,offset=0),59)
+    for w in st['screen_weights_all']:
+        assert sum(w)==pytest.approx(1)
+    fade.step(st,dict(s,offset=0),63)
+    assert st['screen_weights_all']==((1,0,0),)*4
+
+
+@pytest.mark.parametrize('offset',[True,None,-1,30.1,float('nan'),float('inf'),'10'])
+def test_bad_offset_is_refused(offset):
+    with pytest.raises(ValueError):
+        fade.checked({'mode':'cycle','blend':0,'hold':30,'offset':offset})

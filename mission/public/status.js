@@ -700,8 +700,8 @@ function showingHTML(m) {
     ${statusLine('ctl-showing', ['switch', 'bootfile'])}</div>${combinedHTML(m)}`;
 }
 /** Change: every offered show (shows.json), its kind, and which is showing and which is the default; a tap opens its card. */
-function screenChoice(s) { return { mode: s?.mode ?? 'current', blend: s?.blend ?? 0, hold: s?.hold ?? 30, recorded: s?.recorded ?? 0 }; }
-function sameScreens(a, b) { return a.mode === b.mode && a.blend === b.blend && a.hold === b.hold && a.recorded === b.recorded; }
+function screenChoice(s) { return { mode: s?.mode ?? 'current', blend: s?.blend ?? 0, hold: s?.hold ?? 30, recorded: s?.recorded ?? 0, offset: s?.offset ?? 0 }; }
+function sameScreens(a, b) { return a.mode === b.mode && a.blend === b.blend && a.hold === b.hold && a.recorded === b.recorded && a.offset === b.offset; }
 function combinedChanged(s) {
   return (overlayDraft ?? Math.round((s?.overlay ?? .25) * 100)) !== Math.round((s?.overlay ?? .25) * 100)
     || (framingDraft ?? s?.framing) !== s?.framing
@@ -730,16 +730,20 @@ function combinedHTML(m) {
     <p id="overlay-now">Now ${current == null ? 'not known' : current + ' %'} on bitcube. ${esc(state)}.${s && s.effective_overlay === 0 && s.overlay > 0 ? ' Overlay is unavailable; the summer river continues alone.' : ''}${s?.scene_age_s != null ? ' Scene set ' + esc(dur(s.scene_age_s)) + ' ago.' : ''}</p>
     <label for="screen-mode">Screen look (four screens only)</label>
     <select id="screen-mode" ${screenDisabled ? 'disabled' : ''}>
-      ${[['current','Current look'],['gavin','Gavin style (live)'],['recorded','Recorded river'],['manual','Manual blend'],['cycle','Automatic cycle']].map(([v,label]) => `<option value="${v}" ${screens.mode === v ? 'selected' : ''}>${label}</option>`).join('')}
+      ${[['current','Current look'],['gavin','Gavin style (live)'],['recorded','Gavin style (recorded)'],['manual','Manual blend'],['cycle','Automatic cycle']].map(([v,label]) => `<option value="${v}" ${screens.mode === v ? 'selected' : ''}>${label}</option>`).join('')}
     </select>
     <label for="screen-blend">Live blend toward Gavin style (manual mix)</label>
     <div class="row-btns"><input type="range" min="0" max="100" step="1" id="screen-blend" value="${Math.round(screens.blend * 100)}" ${screenDisabled ? 'disabled' : ''}><output id="screen-blend-value">${Math.round(screens.blend * 100)} %</output></div>
-    <label for="screen-recorded">Recorded footage in manual mix</label>
+    <label for="screen-recorded">Processed recording in manual mix</label>
     <div class="row-btns"><input type="range" min="0" max="100" step="1" id="screen-recorded" value="${Math.round(screens.recorded * 100)}" ${screenDisabled ? 'disabled' : ''}><output id="screen-recorded-value">${Math.round(screens.recorded * 100)} %</output></div>
     <label for="screen-hold">Time on each look (automatic cycle)</label>
     <select id="screen-hold" ${screenDisabled ? 'disabled' : ''}>${[15,30,60,120].map(v => `<option value="${v}" ${screens.hold === v ? 'selected' : ''}>${v} seconds</option>`).join('')}</select>
-    <p>The ropes keep their current look. Gavin style uses his seasonal colours and river effects on live footage. Recorded river uses Gavin's original river recording. The cycle runs Current → Gavin live → Recorded, with an 8-second fade between each. Moving either slider selects Manual blend: Recorded sets its share; Live blend divides the remainder.</p>
-    <p>On the screens now: ${Math.round((s?.screens?.gavin_mix ?? 0) * 100)} % Gavin live, ${Math.round((s?.screens?.recorded_mix ?? 0) * 100)} % Recorded${s?.screens ? '; mode: ' + esc(s.screens.mode) : '; screen controls need the updated show'}.</p>
+    <label for="screen-offset">Delay between screens (automatic cycle)</label>
+    <div class="row-btns"><input type="range" min="0" max="30" step="1" id="screen-offset" value="${screens.offset}" ${screenDisabled ? 'disabled' : ''}><output id="screen-offset-value">${screens.offset} s</output></div>
+    <p>0 seconds synchronizes all screens. With 10 seconds, screens 1–4 start each transition 10 seconds apart.</p>
+    <p>The ropes keep their current look. Gavin style uses his seasonal colours and river effects on live footage. Gavin style (recorded) uses his three-speed recording blend, seasonal colours, contrast and animated effects. The cycle runs Current → Gavin live → Recorded, with an 8-second fade between each. Moving either slider selects Manual blend: Recorded sets its share; Live blend divides the remainder.</p>
+    <p>First screen now: ${Math.round((s?.screens?.gavin_mix ?? 0) * 100)} % Gavin live, ${Math.round((s?.screens?.recorded_mix ?? 0) * 100)} % Processed recording${s?.screens ? '; mode: ' + esc(s.screens.mode) : '; screen controls need the updated show'}.</p>
+    ${s?.screens?.per_screen ? '<p>' + s.screens.per_screen.map((w,k) => `Screen ${k+1}: ${Math.round(w.current_mix*100)} % Current / ${Math.round(w.gavin_mix*100)} % Gavin live / ${Math.round(w.recorded_mix*100)} % Recorded`).join('<br>') + '</p>' : ''}
     <button type="button" class="btn primary" id="ctl-overlay-set" data-act="overlay-set" ${disabled || !combinedChanged(s) ? 'disabled' : ''}>Apply river settings</button>
     ${statusLine('ctl-overlay', ['overlay'])}</div>`;
 }
@@ -1232,11 +1236,15 @@ document.addEventListener('input', (e) => {
   }
 });
 document.addEventListener('input', (e) => {
-  if (['screen-mode', 'screen-hold', 'screen-blend', 'screen-recorded'].includes(e.target.id)) {
+  if (['screen-mode', 'screen-hold', 'screen-blend', 'screen-recorded', 'screen-offset'].includes(e.target.id)) {
     screensDraft = screenChoice(screensDraft ?? model?.show.combined?.screens);
     if (e.target.id === 'screen-mode') screensDraft.mode = e.target.value;
     if (e.target.id === 'screen-hold') screensDraft.hold = Number(e.target.value);
-    if (['screen-blend', 'screen-recorded'].includes(e.target.id)) {
+    if (e.target.id === 'screen-offset') {
+      screensDraft.offset = Number(e.target.value);
+      $('#screen-offset-value').textContent = e.target.value + ' s';
+      $('#ctl-overlay-set').disabled = off('overlay') || !combinedChanged(model?.show.combined);
+    } else if (['screen-blend', 'screen-recorded'].includes(e.target.id)) {
       screensDraft[e.target.id === 'screen-blend' ? 'blend' : 'recorded'] = Number(e.target.value) / 100;
       screensDraft.mode = 'manual';
       $('#screen-mode').value = 'manual';

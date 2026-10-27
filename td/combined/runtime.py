@@ -68,31 +68,35 @@ def apply_screens(comp, settings):
     comp.par.Screenhold = settings['hold']
     if hasattr(comp.par, 'Screenrecorded'):
         comp.par.Screenrecorded = settings.get('recorded', 0.0)
+    if hasattr(comp.par, 'Screenoffset'):
+        comp.par.Screenoffset = settings.get('offset', 0.0)
 
 
 def screen_settings(comp):
     return {'mode': comp.par.Screenmode.eval(), 'blend': float(comp.par.Screenblend),
             'hold': int(comp.par.Screenhold),
-            'recorded': float(comp.par.Screenrecorded) if hasattr(comp.par, 'Screenrecorded') else 0.0}
+            'recorded': float(comp.par.Screenrecorded) if hasattr(comp.par, 'Screenrecorded') else 0.0,
+            'offset': float(comp.par.Screenoffset) if hasattr(comp.par, 'Screenoffset') else 0.0}
 
 
-def screen_weights():
+def screen_weights(index=0):
     st = state()
     g = st.get('screen_mix', 0.0)
-    return st.get('screen_weights', (1 - g, g, 0.0))
+    first = st.get('screen_weights', (1 - g, g, 0.0))
+    return st.get('screen_weights_all', (first,) * 4)[index]
 
 
 def screen_mix():
     return screen_weights()[1]
 
 
-def screen_live_mix():
-    current, gavin, _ = screen_weights()
+def screen_live_mix(index=0):
+    current, gavin, _ = screen_weights(index)
     return gavin / (current + gavin) if current + gavin > 1e-8 else 0.0
 
 
-def screen_record_mix():
-    return screen_weights()[2]
+def screen_record_mix(index=0):
+    return screen_weights(index)[2]
 
 
 def save_strength(value, path=SETTINGS, profile=None, screens=None):
@@ -126,7 +130,11 @@ def set_strength(comp, value, project_name, profile=None, screens=None):
     if screens is not None:
         if isinstance(screens, dict) and 'recorded' not in screens and hasattr(comp.par, 'Screenrecorded'):
             screens = dict(screens, recorded=float(comp.par.Screenrecorded))
+        if isinstance(screens, dict) and 'offset' not in screens and hasattr(comp.par, 'Screenoffset'):
+            screens = dict(screens, offset=float(comp.par.Screenoffset))
         screens = screen_fade.checked(screens)
+        if screens['offset'] > 0 and not hasattr(comp.par, 'Screenoffset'):
+            raise ValueError('this show needs the screen timing update before using offsets')
         if (screens['mode'] == 'recorded' or screens['recorded'] > 0) and not hasattr(comp.par, 'Screenrecorded'):
             raise ValueError('this show needs the recorded screen update before using that look')
         if not all(hasattr(comp.par, name) for name in ('Screenmode', 'Screenblend', 'Screenhold')):
@@ -223,7 +231,7 @@ def status(comp):
     return {'season': 'summer', 'intensity': float(comp.par.Intensity),
             'overlay': float(comp.par.Canvasmix), 'effective_overlay': effective_strength(comp),
             'framing': comp.par.Framing.eval() if hasattr(comp.par, 'Framing') else 'original',
-            'screens': dict(screen_settings(comp), gavin_mix=round(screen_mix(), 4), current_mix=round(screen_weights()[0], 4), recorded_mix=round(screen_record_mix(), 4), fade_s=screen_fade.FADE_S) if hasattr(comp.par, 'Screenmode') else None,
+            'screens': dict(screen_settings(comp), gavin_mix=round(screen_mix(), 4), current_mix=round(screen_weights()[0], 4), recorded_mix=round(screen_record_mix(), 4), fade_s=screen_fade.FADE_S, per_screen=[dict(current_mix=round(screen_weights(k)[0],4), gavin_mix=round(screen_weights(k)[1],4), recorded_mix=round(screen_weights(k)[2],4)) for k in range(4)]) if hasattr(comp.par, 'Screenmode') else None,
             'auto_view': comp.op('view_detector').module.status() if hasattr(comp.par, 'Framing') and comp.par.Framing.eval() == 'auto' and comp.op('view_detector') is not None else None,
             'effective_framing': effective_framing(comp) if hasattr(comp.par, 'Framing') else 'original',
             'scene': st['scene'], 'scene_age_s': st['scene_age_s'],

@@ -37,8 +37,11 @@ if not hasattr(viz.par, 'Screenmode'):
     pg.appendInt('Screenhold', label='Seconds on each screen look')
 if not hasattr(viz.par, 'Screenrecorded'):
     pg.appendFloat('Screenrecorded', label='Recorded footage in manual screen mix')
+if not hasattr(viz.par, 'Screenoffset'):
+    pg.appendFloat('Screenoffset', label='Delay between screen cycles (seconds)')
+viz.par.Screenoffset.normMin, viz.par.Screenoffset.normMax, viz.par.Screenoffset.default = 0, 30, 0
 viz.par.Screenmode.menuNames = ['current', 'gavin', 'recorded', 'manual', 'cycle']
-viz.par.Screenmode.menuLabels = ['Current look', 'Gavin style (live)', 'Recorded river', 'Manual blend', 'Automatic cycle']
+viz.par.Screenmode.menuLabels = ['Current look', 'Gavin style (live)', 'Gavin style (recorded)', 'Manual blend', 'Automatic cycle']
 viz.par.Screenblend.normMin, viz.par.Screenblend.normMax, viz.par.Screenblend.default = 0, 1, 0
 viz.par.Screenrecorded.normMin, viz.par.Screenrecorded.normMax, viz.par.Screenrecorded.default = 0, 1, 0
 viz.par.Screenhold.normMin, viz.par.Screenhold.normMax, viz.par.Screenhold.default = 15, 120, 30
@@ -215,7 +218,8 @@ wire(live_mix, [clamp, gavin])
 res(live_mix, FIELD_W, FIELD_H)
 live_mix.par.cross.expr = f"{M}.screen_live_mix(){T}"
 recorded = get(selectTOP, 'recorded_screen_in', 1500, -400)
-recorded.par.top = '/project1/inputs/river_clip_fit'
+exec(open(REPO + '/td/combined/build_screen_seasons.py', encoding='utf-8').read(), dict(globals(), SCREEN_VARIANT='recorded'))
+recorded.par.top = '/project1/viz/gavin_recorded/field_out'
 screen_mix = get(crossTOP, 'screen_mix', 1800, 250)
 wire(screen_mix, [live_mix, recorded])
 res(screen_mix, FIELD_W, FIELD_H)
@@ -223,9 +227,21 @@ screen_mix.par.cross.expr = f"{M}.screen_record_mix(){T}"
 screen_field = maker(out_c)(selectTOP, 'screen_field', 450, 150)
 screen_field.par.top = screen_mix.path
 for k in range(1, 5):
+    field = screen_field
+    if k > 1:
+        per_live = get(crossTOP, f'screen{k}_live_mix', 1650, -550 - 200 * k)
+        wire(per_live, [clamp, gavin])
+        res(per_live, FIELD_W, FIELD_H)
+        per_live.par.cross.expr = f"{M}.screen_live_mix({k - 1}){T}"
+        per_mix = get(crossTOP, f'screen{k}_mix', 1800, -550 - 200 * k)
+        wire(per_mix, [per_live, recorded])
+        res(per_mix, FIELD_W, FIELD_H)
+        per_mix.par.cross.expr = f"{M}.screen_record_mix({k - 1}){T}"
+        field = maker(out_c)(selectTOP, f'screen{k}_field', 450, 150 - 120 * k)
+        field.par.top = per_mix.path
     sampler = out_c.op(f'screen{k}_pin') or out_c.op(f'screen{k}_window')
     assert sampler is not None, f'missing screen sampler {k}'
-    sampler.inputConnectors[0].connect(screen_field)
+    sampler.inputConnectors[0].connect(field)
 note(out_c, "ROPES: field_out -> existing pinned rope sampler.\n"
             "SCREENS: screen_field -> Current/Gavin-live/Recorded screen blend -> existing pinned screen samplers.\n"
             "Mapping, screen orientation, panel gain and power limits remain as built by the baseline.\n"

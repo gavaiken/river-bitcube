@@ -465,7 +465,7 @@ export function planControl(action, body = {}) {
       const x = num(body.strength);
       if (!(x >= 0 && x <= 1)) throw bad('overlay strength is 0 to 1');
       if (body.framing !== undefined && !['auto', 'original', 'channel', 'channel-multi', 'pool', 'pool-multi'].includes(body.framing)) throw bad('unknown river framing profile');
-      const screens = body.screens === undefined ? '' : (() => { const s = checkedScreens(body.screens); return ` -Screenmode ${s.mode} -Screenblend ${s.blend.toFixed(2)} -Screenhold ${s.hold}${s.recorded === undefined ? '' : ` -Screenrecorded ${s.recorded.toFixed(2)}`}`; })();
+      const screens = body.screens === undefined ? '' : (() => { const s = checkedScreens(body.screens); return ` -Screenmode ${s.mode} -Screenblend ${s.blend.toFixed(2)} -Screenhold ${s.hold}${s.recorded === undefined ? '' : ` -Screenrecorded ${s.recorded.toFixed(2)}`}${s.offset === undefined ? '' : ` -Screenoffset ${s.offset.toFixed(2)}`}`; })();
       return { kind: 'probe', args: `-Action overlay -Overlay ${x.toFixed(2)}${body.framing !== undefined ? ' -Framing ' + body.framing : ''}${screens}` };
     }
     case 'hub75': {
@@ -501,7 +501,9 @@ function checkedScreens(value) {
   if (![15, 30, 60, 120].includes(hold)) throw bad('screen hold is 15, 30, 60 or 120 seconds');
   const recorded = value.recorded === undefined ? undefined : num(value.recorded);
   if (recorded !== undefined && !(recorded >= 0 && recorded <= 1)) throw bad('recorded blend is 0 to 1');
-  return { mode: value.mode, blend: Number(blend.toFixed(2)), hold, ...(recorded === undefined ? {} : { recorded: Number(recorded.toFixed(2)) }) };
+  const offset = value.offset === undefined ? undefined : num(value.offset);
+  if (offset !== undefined && !(offset >= 0 && offset <= 30)) throw bad('screen offset is 0 to 30 seconds');
+  return { mode: value.mode, blend: Number(blend.toFixed(2)), hold, ...(recorded === undefined ? {} : { recorded: Number(recorded.toFixed(2)) }), ...(offset === undefined ? {} : { offset: Number(offset.toFixed(2)) }) };
 }
 
 export function checkedControl(action, body = {}) {

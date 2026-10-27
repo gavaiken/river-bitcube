@@ -168,7 +168,7 @@ export class FixtureMission {
     if (out.probe?.value?.td?.file === 'river-combined-v0.toe') {
       const td = out.probe.value.td;
       out.probe.value.td = { ...td, combined: { season: 'summer', intensity: 0.85, overlay: w.overlay ?? 0.25,
-        screens: { recorded: 0, ...(w.screens ?? { mode: 'current', blend: 0, hold: 30 }), gavin_mix: w.screens?.mode === 'gavin' ? 1 : w.screens?.mode === 'manual' ? w.screens.blend * (1 - (w.screens.recorded ?? 0)) : 0, recorded_mix: w.screens?.mode === 'recorded' ? 1 : w.screens?.mode === 'manual' ? (w.screens.recorded ?? 0) : 0, fade_s: 8 }, framing: w.framing ?? 'original', effective_framing: w.framing === 'auto' ? 'pool-multi' : w.framing ?? 'original', auto_view: w.framing === 'auto' ? { view: 'pool', reason: 'matched' } : null, effective_overlay: w.overlay ?? 0.25, river_source: 'live', scene: { animation: 'flow', palette: 'fixture' }, scene_age_s: 5 } };
+        screens: { offset: 0, recorded: 0, ...(w.screens ?? { mode: 'current', blend: 0, hold: 30 }), gavin_mix: w.screens?.mode === 'gavin' ? 1 : w.screens?.mode === 'manual' ? w.screens.blend * (1 - (w.screens.recorded ?? 0)) : 0, recorded_mix: w.screens?.mode === 'recorded' ? 1 : w.screens?.mode === 'manual' ? (w.screens.recorded ?? 0) : 0, fade_s: 8 }, framing: w.framing ?? 'original', effective_framing: w.framing === 'auto' ? 'pool-multi' : w.framing ?? 'original', auto_view: w.framing === 'auto' ? { view: 'pool', reason: 'matched' } : null, effective_overlay: w.overlay ?? 0.25, river_source: 'live', scene: { animation: 'flow', palette: 'fixture' }, scene_age_s: 5 } };
     }
     if (out.probe?.value) w.applying.confirm(out.probe.value, this.now());
     out.applying = w.applying.list(clock);
@@ -239,7 +239,7 @@ export class FixtureMission {
           return { ok: false, error: 'overlay control is only available while combined-v0 is running', fixture: true };
         w.overlay = checked.strength;
         if (checked.framing !== undefined) w.framing = checked.framing;
-        if (checked.screens !== undefined) w.screens = { recorded: w.screens?.recorded ?? 0, ...checked.screens };
+        if (checked.screens !== undefined) w.screens = { offset: w.screens?.offset ?? 0, recorded: w.screens?.recorded ?? 0, ...checked.screens };
       }
       if (action === 'test') {       // as probe.ps1 -Action test: through TouchDesigner, refused when it doesn't answer
         if (!td || td.ok === false) return { ok: false, error: 'TouchDesigner is not running', fixture: true };

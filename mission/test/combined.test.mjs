@@ -110,3 +110,18 @@ test('recorded screens are bounded and legacy requests preserve the recorded sha
   assert.equal(s.recorded_mix,.4);
   assert.equal(s.gavin_mix,.15);
 });
+
+test('screen delay is bounded and older clients preserve it', async () => {
+  const screens={mode:'cycle',blend:0,hold:30,offset:10};
+  assert.equal(planControl('overlay',{strength:.18,screens}).args,
+    '-Action overlay -Overlay 0.18 -Screenmode cycle -Screenblend 0.00 -Screenhold 30 -Screenoffset 10.00');
+  for (const offset of [true,null,-1,31,NaN,Infinity,'10; shutdown'])
+    assert.throws(()=>checkedControl('overlay',{strength:.18,screens:{...screens,offset}}));
+  const dir=new URL('./fixtures/',import.meta.url).pathname;
+  const f=JSON.parse(readFileSync(join(dir,'all-good.json'),'utf8'));
+  const m=new FixtureMission({dir,stateDir:mkdtempSync(join(tmpdir(),'offset-')),now:()=>f._scenario.now,applyS:0});
+  m.worldFor('all-good').file='river-combined-v0.toe';
+  await m.control('overlay',{strength:.18,screens},'all-good');
+  await m.control('overlay',{strength:.18,screens:{mode:'cycle',blend:0,hold:30}},'all-good');
+  assert.equal(m.snapshot('all-good').probe.value.td.combined.screens.offset,10);
+});
