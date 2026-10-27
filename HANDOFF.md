@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** nobody: free for Will
-- **Where:** bitcube free; Combined v0 left showing Auto framing at Will's request
-- **Updated:** 2026-10-26 21:35 PT
+- **Holder:** Will (Codex)
+- **Where:** Combined v0 screen fade: inspecting routes and awaiting visual preferences
+- **Updated:** 2026-10-26 21:40 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
 ## Running now
