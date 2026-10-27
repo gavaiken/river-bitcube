@@ -1,38 +1,26 @@
 # Handoff: where things stand
 
-The baton. **Read this first, every session; rewrite it before you stop** (rules: [`AGENTS.md`](AGENTS.md) "Start here"). Keep it to one screen: the current state, not a history. History goes in `docs/sessions/<name>.md`.
+- **Holder:** nobody: free for Will
+- **Where:** repo only (bitcube is free; the default show is running)
+- **Updated:** 2026-10-26 20:12 PT
+- **Next holder:** Will (Codex), for visual tuning.
 
-- **Holder:** Will (Codex)
-- **Where:** bitcube (combined-v0 build and mission-control overlay slider)
-- **Updated:** 2026-10-26 19:49 PT
-- **Next holder:** Will (Codex). **Ready for Will.**
+## Running now
+- **The river's year** (`river-local-oct-22-seasons.toe`) restored after testing; default unchanged. Ropes sending, panels on, no project errors.
+- Original year/live/template `.toe` hashes and all their calibration pins are unchanged.
 
-## The show right now
-- At Gray Area. bitcube boots **the river's year** (`river-local-oct-22-seasons.toe`); **the live river** (`river-online-oct-23.toe`) is the other show file mission control offers.
-- 26 Oct (Gavin, calibration session; [`docs/sessions/calibrate.md`](docs/sessions/calibrate.md)): Calibrate now launches its job through a scheduled task (every run had died with the SSH session; dry run verified, a real run still to do). In the boot file, torrent streaks, leaves and rain now fall down the room (they rose).
-- Mission control v2 is live (round 10 merged; open minor items in [`docs/mission-known-issues.md`](docs/mission-known-issues.md)).
-- Checkpoint `checkpoint-2026-10-26` taken (tags in both repos, bitcube and mini archives): [`docs/checkpoints.md`](docs/checkpoints.md).
+## Combined v0 ready
+- Feature commit **3bbd35f**: `river-combined-v0.toe` is offered in `shows.json`, built from the baseline. Live river (10 s stale -> recorded fallback), fixed summer at 0.85 intensity, Gavin's palette/torrent/glints, additive Dave canvas via the existing local mirror. Camera clock/label cropped. No audio or gallery influence yet; no Dave-repo or deployment changes.
+- Mission control Status shows the overlay slider only while Combined v0 runs. Move it, then **Set overlay**. Starts at 25%; saves to `River/combined-v0.json`, restored on reopening without a rebuild. Missing/placeholder Modal scene suppresses the overlay while the base continues.
+- Verified on bitcube: ~60 fps, no project errors; live input and forced recorded fallback; 0/25/100% overlay; persisted 60% across default -> combined switch, then reset to 25%. Wrong-show overlay request refused. Returned to default.
+- Final saved `.toe` unpacked into a fresh temporary directory: **370 parts, zero secret-value hits**. `tools/check`: **292 Python passed, 3 skipped; 415 mission tests passed**. GitHub check and Pages deployment green for 3bbd35f. Browser slider tested against an isolated local fixture server.
+- bitcube pulled the feature. Mission control `/version` verified **3bbd35f** (running since 20:09 PT). Reload the page to receive the new selector entry and slider.
 
-## Done (Gavin, 26 Oct): ready for Will
-| | Piece | Who |
-|---|---|---|
-| ✅ | Checkpoint | coordinator |
-| ✅ | `AGENTS.md` (one rulebook for Claude and Codex), this baton, the old plans marked as history, studio agent follows the baton | coordinator |
-| ✅ | `shows.json` registry (every show file's description, inputs, editors, pinned calibration); `Start-River.cmd`, mission control and the build scripts read it | helper (repo) |
-| ✅ | Calibration pinned per show, never "newest map wins" | helper (repo) |
-| ✅ | `tools/check` + GitHub Actions (tests, registry, metadata freshness) | helper (repo) |
-| ✅ | Mission control: "What's showing" card (Change → preview card → Switch; Back to default; Set as default, any show); seasons panel only while the river's year runs | helper (repo) |
-| ✅ | Baseline template `river-baseline-template.toe`: river cam (recorded clip as fallback) + gallery cam in, river on the screens and down the ropes. Verified on the lights 14:05–14:07; [page](docs/files/river-baseline-template.md). Offered in mission control | helper (bitcube) |
-| ✅ | Verified 14:37–14:40: bitcube pulled; `shows.ps1`/`probe.ps1` list the three offered shows; switch to the template and back via `probe.ps1`, default unchanged; `tools/check` green, CI green, mission control on 7886e79 | coordinator |
-| ⬜ | Gavin's phone test (optional): Change → Baseline → read card → Switch → Back to default | Gavin |
+## Next
+- Reload mission control, Change -> Combined v0 -> Switch. Adjust overlay; Back to default when finished. Use Set as default only if Will asks.
+- Tune the visual with Will. Gallery influence and further river recording are deferred. Live footage stays at camera speed; no seasonal speed synthesis yet.
 
-## Will's session in progress
-- Building `river-combined-v0.toe` from the baseline: live river with recorded fallback, fixed summer treatment, Dave's locally mirrored canvas as an additive overlay.
-- Mission control gets an overlay-strength slider for this show only. Gallery influence, audio and additional recording are deferred.
-- SSH verified using macOS `/usr/bin/ssh -o UseKeychain=yes`; default show running, cameras reachable, Modal clips uploading.
-- bitcube has pre-existing moved `river_masks/` files and untracked `pixelmap-2026-10-26.json`; preserve them. New show keeps the baseline's 23 Oct calibration pins.
-- Return to the existing default after verification; do not change the default or Dave's deployment.
-
-## Open questions
-- Running **the live river** still shows as a warning on Status ("not the river's year"); a viz running shows OK. Gavin to decide if the live river should be OK too.
-- A switch restarts TouchDesigner, so the river's year comes back with its own saved state (after the 14:40 test it was in winter; it had been set by hand to summer at 14:12).
+## Preserve / access
+- bitcube still has its pre-existing moved `river_masks/` files and untracked `tools/pixelmap/pixelmap-2026-10-26.json` (the status probe calls it unreadable). We did not change these or re-pin any show. Combined v0 uses the template's 23 Oct pins.
+- A recovery stash on bitcube is named `combined-v0 verified staging before deployment 2026-10-26`; the deployed files are committed, so do not apply it over the finished feature.
+- On Will's Mac use macOS `/usr/bin/ssh -o UseKeychain=yes -o BatchMode=yes -o HostKeyAlias=bitcube.tail03bc1a.ts.net user@100.73.68.60`. His key was already accepted; Homebrew SSH could not unlock it. No server auth changes needed. Local tests need modern Node (CI uses 24; mission control uses 26.10), not this Mac's default 20/older 22.
