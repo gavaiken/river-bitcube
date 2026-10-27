@@ -44,11 +44,46 @@
 // only then.
 import { readFileSync, readdirSync, existsSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { CAMERAS, calBlocked, checkedControl, awaitsReading, startingBlocked, testBlocked } from './mission.mjs';
+import { CAMERAS, calBlocked, checkedControl, awaitsReading, startingBlocked, testBlocked, MODAL_INPUT_ONLY } from './mission.mjs';
 import { Applying } from './applying.mjs';
 import { readLocalPixelmap, summarizePixelmap, checkedCalibrate } from './lights.mjs';
 import { atlasFromUprights } from '../public/screens.js';
-import { changeLabel, FILES } from '../public/model.js';
+import { changeLabel, FILES, MODAL_INPUT_FILE, FRAME_ELEMENTS } from '../public/model.js';
+
+// ---- the Modal input show (docs/modal-inputs.md) in fixture mode -------------------------------------------------------------
+// td.modal_input as probe.ps1 reports it while river-combined-modal-inputs.toe runs: the fixtures (test/fixtures/build.mjs) and a
+// world switched to that show both use it; a Modal input change in a world sets its source and strength and the params that
+// source sends. ages: each source's age_s.
+const FRAME_ID = '2026-10-23T09-57-25Z-7f3a';
+const MI_PARAMS = {
+  off: [],
+  canvas: [{ name: 'canvas', value: 'live', drives: "Dave's moving picture, added over the river" }],
+  scene: [
+    { name: 'palette', value: ['#dce7f5', '#8faac4', '#4d6a8a', '#1f2f45'], drives: "the river's colours: its dark parts take the last colour, its bright parts the first" },
+    { name: 'speed', value: 0.19, effective: 0.19, drives: 'how fast the river and its effects move (slow to quick)' },
+    { name: 'turbulence', value: 0.62, effective: 0.55, drives: 'how much the river ripples and breaks up' },
+    { name: 'animation', value: 'froth', drives: 'the kind of movement laid over the river' },
+  ],
+  frames: FRAME_ELEMENTS.map((el, k) => ({ name: el, value: { amount: [0.6, 0.5, 0.7, 0.4, 0.8][k], contrast: 0.5, speed: [1, 0.8, 1.2, 1, 0.6][k], journey: 1 },
+    drives: el === 'ropes' ? 'all 20 ropes: his picture, rippled by the river' : `screen ${k + 1}: his picture, rippled by the river` })),
+};
+export function fixtureModalInput(source = 'scene', { strength = 0.6, ages = { canvas: 3, scene: 42, frames: 95 }, stale = false } = {}) {
+  return { source, strength, effective_source: stale ? 'off' : source, fading: false, stale,
+    stale_reason: stale ? `newest ${source === 'frames' ? 'frame' : source} is older than 900 s` : null, stale_after_s: 900, data_age_s: source === 'off' ? null : ages[source],
+    sources: { canvas: { ok: true, age_s: ages.canvas },
+      scene: { ok: true, age_s: ages.scene, set_at: '2026-10-23T02:58:18-07:00', palette_name: 'froth-deepening', journal: 'The room has gone quiet, so the river slows and cools toward deep water.' },
+      frames: { ok: true, age_s: ages.frames, frame_id: FRAME_ID, note: 'dusk: cooling toward deep blue' } },
+    params: structuredClone(MI_PARAMS[source] ?? []) };
+}
+/** A Modal input change in a world, as the next full check reports it: the chosen source and strength (and its params). */
+function withModalInput(mi, set) {
+  const base = mi && typeof mi === 'object' ? mi : fixtureModalInput();
+  if (!set) return base;
+  const age = base.sources?.[set.source]?.age_s, stale = set.source !== 'off' && typeof age === 'number' && age > (base.stale_after_s ?? 900);
+  return { ...base, source: set.source, strength: set.strength, effective_source: stale ? 'off' : set.source, fading: false, stale,
+           stale_reason: stale ? `newest ${set.source} is older than ${base.stale_after_s ?? 900} s` : null,
+           data_age_s: set.source === 'off' ? null : age ?? null, params: structuredClone(MI_PARAMS[set.source] ?? []) };
+}
 
 const NAME = /^[a-z0-9-]+$/;
 const STILL_AGE_S = 20;
@@ -170,6 +205,9 @@ export class FixtureMission {
       out.probe.value.td = { ...td, combined: { season: 'summer', intensity: 0.85, overlay: w.overlay ?? 0.25,
         screens: { offset: 0, recorded: 0, ...(w.screens ?? { mode: 'current', blend: 0, hold: 30 }), gavin_mix: w.screens?.mode === 'gavin' ? 1 : w.screens?.mode === 'manual' ? w.screens.blend * (1 - (w.screens.recorded ?? 0)) : 0, recorded_mix: w.screens?.mode === 'recorded' ? 1 : w.screens?.mode === 'manual' ? (w.screens.recorded ?? 0) : 0, fade_s: 8 }, framing: w.framing ?? 'original', effective_framing: w.framing === 'auto' ? 'pool-multi' : w.framing ?? 'original', auto_view: w.framing === 'auto' ? { view: 'pool', reason: 'matched' } : null, effective_overlay: w.overlay ?? 0.25, river_source: 'live', scene: { animation: 'flow', palette: 'fixture' }, scene_age_s: 5 } };
     }
+    if (out.probe?.value?.td?.file === MODAL_INPUT_FILE && out.probe.value.td.ok !== false) {
+      out.probe = { ...out.probe, value: { ...out.probe.value, td: { ...out.probe.value.td, modal_input: withModalInput(out.probe.value.td.modal_input, w.modalinput) } } };
+    }
     if (out.probe?.value) w.applying.confirm(out.probe.value, this.now());
     out.applying = w.applying.list(clock);
     const ended = w.applying.ended(clock);
@@ -240,6 +278,10 @@ export class FixtureMission {
         w.overlay = checked.strength;
         if (checked.framing !== undefined) w.framing = checked.framing;
         if (checked.screens !== undefined) w.screens = { offset: w.screens?.offset ?? 0, recorded: w.screens?.recorded ?? 0, ...checked.screens };
+      }
+      if (action === 'modalinput') {     // as probe.ps1 -Action modalinput: only while that show answers
+        if (!td || td.ok === false || running !== MODAL_INPUT_FILE) return { ok: false, error: MODAL_INPUT_ONLY, fixture: true };
+        w.modalinput = { source: checked.source, strength: checked.strength };
       }
       if (action === 'test') {       // as probe.ps1 -Action test: through TouchDesigner, refused when it doesn't answer
         if (!td || td.ok === false) return { ok: false, error: 'TouchDesigner is not running', fixture: true };

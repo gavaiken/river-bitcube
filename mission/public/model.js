@@ -92,6 +92,90 @@ export function showCard(file) {
            created_by: str(sh.created_by), created: str(sh.created), updated_by: str(sh.updated_by), updated: str(sh.updated),
            last_change: str(sh.last_change) };
 }
+// ---- Modal input (river-combined-modal-inputs.toe, docs/modal-inputs.md) ------------------------------------------------
+// One of Dave's inputs at a time drives the river, at a strength 0..1. probe.ps1 reports td.modal_input only while that show
+// runs; -Action modalinput -Source <off|canvas|scene|frames> -Strength <0..1> sets it (lib/mission.mjs planControl).
+export const MODAL_INPUT_FILE = 'river-combined-modal-inputs.toe';
+export const MODAL_SOURCES = ['off', 'canvas', 'scene', 'frames'];
+/** Each choice's button and its one line, in the pages' words (docs/mission-ui.md "Modal input"). */
+export const MODAL_SOURCE_WORDS = {
+  off: { label: 'Off', line: 'The river on its own, without Dave\'s agent' },
+  canvas: { label: 'Canvas', line: "Dave's moving picture added over the river" },
+  scene: { label: 'Scene', line: "Dave's colours and pace recolour the river" },
+  frames: { label: 'Frames', line: "Dave's own pictures for each screen and the ropes, moved by the river" },
+};
+/** Dave's river app (public): the frames' PNGs are at /frames/<frame_id>/<element>.png (modal-frames/SPEC.md §3). */
+export const MODAL_BASE = 'https://to-be-a-river--river.modal.run';
+export const FRAME_ELEMENTS = ['screen-1', 'screen-2', 'screen-3', 'screen-4', 'ropes'];
+const FRAME_ID = /^[A-Za-z0-9._-]{1,80}$/;
+const FRAME_PATH = /^\/frames\/[A-Za-z0-9._-]{1,80}\/(?:screen-[1-4]|ropes)\.png$/;
+const HEX = /^#[0-9a-f]{6}$/i;
+/** A frame element's river settings, in plain words (modal-frames/SPEC.md §4): amount, contrast, speed, journey. */
+export const FRAME_FIELD_WORDS = { amount: 'ripple', contrast: 'ripple strength', speed: 'river speed', journey: 'on its way' };
+const FRAME_FIELD_MAX = { amount: 1, contrast: 1, speed: 2, journey: 1 };
+const paramLabel = (n) => { const s = String(n).replace(/[-_]+/g, ' ').trim(); return s ? s[0].toUpperCase() + s.slice(1) : '?'; };
+/** The minutes after which a source counts as old (TouchDesigner's stale_after_s when it says, else 15). */
+const staleMin = (mi) => { const s = num(mi?.stale_after_s); return s != null && s > 0 ? Math.max(1, Math.round(s / 60)) : 15; };
+/** Why the stale source is missing, in the band's words: "Dave's frames are more than 15 minutes old: showing the river without them". */
+export function modalStaleWords(source, mi) {
+  const n = staleMin(mi);
+  if (source === 'frames') return `Dave's frames are more than ${n} minutes old: showing the river without them`;
+  if (source === 'scene') return `Dave's scene is more than ${n} minutes old: showing the river without it`;
+  if (source === 'canvas') return "Dave's moving picture isn't arriving: showing the river without it";
+  return null;
+}
+/** td.modal_input -> what the page shows (show.modal_input), or null when it isn't an object. later_s: how old the full check is
+ *  (pb.age_s), added to every age so they read on the server's clock (principle 2). Everything is checked: a colour must be
+ *  #rrggbb, a number finite, a frame id or image path Modal's own shape, so nothing odd reaches a page or a URL. */
+export function modalInputView(mi, later_s = 0) {
+  const o = obj(mi);
+  if (!o) return null;
+  const add = (a) => (num(a) == null ? null : Math.max(0, Math.round(a + (num(later_s) ?? 0))));
+  const source = MODAL_SOURCES.includes(o.source) ? o.source : null;
+  const effective = MODAL_SOURCES.includes(o.effective_source) ? o.effective_source : source;
+  const strength = num(o.strength) != null ? Math.min(1, Math.max(0, o.strength)) : null;
+  const srcs = obj(o.sources) ?? {};
+  const sources = ['canvas', 'scene', 'frames'].map((id) => {
+    const s = obj(srcs[id]);
+    return { id, label: MODAL_SOURCE_WORDS[id].label, ok: s ? s.ok !== false : null, age_s: s ? add(s.age_s) : null, known: !!s };
+  });
+  const fr = obj(srcs.frames), sc = obj(srcs.scene);
+  const activeAge = sources.find((x) => x.id === effective)?.age_s ?? null;   // a parameter with no age of its own: its source's
+  const frameId = typeof fr?.frame_id === 'string' && FRAME_ID.test(fr.frame_id) ? fr.frame_id : null;
+  const params = (Array.isArray(o.params) ? o.params : []).map(obj).filter((p) => p && typeof p.name === 'string' && p.name).slice(0, 24).map((p) => {
+    const v = p.value, base = { name: p.name, label: paramLabel(p.name), drives: typeof p.drives === 'string' ? p.drives.slice(0, 200) : null, age_s: add(p.age_s) ?? activeAge };
+    if (Array.isArray(v) && v.length && v.every((c) => typeof c === 'string' && HEX.test(c))) return { ...base, kind: 'palette', colors: v.slice(0, 12) };
+    if (num(v) != null) {
+      const min = num(p.min) ?? 0, max = num(p.max) ?? Math.max(1, v), eff = num(p.effective);
+      return { ...base, kind: 'number', value: v, effective: eff != null && Math.abs(eff - v) > 1e-6 ? eff : null, min, max,
+               frac: max > min ? Math.min(1, Math.max(0, (v - min) / (max - min))) : 0 };
+    }
+    if (obj(v)) {
+      const fields = Object.keys(FRAME_FIELD_WORDS).filter((k) => num(v[k]) != null)
+        .map((k) => ({ key: k, words: FRAME_FIELD_WORDS[k], value: v[k], frac: Math.min(1, Math.max(0, v[k] / FRAME_FIELD_MAX[k])) }));
+      const image = typeof p.image === 'string' && FRAME_PATH.test(p.image) ? MODAL_BASE + p.image
+        : FRAME_ELEMENTS.includes(p.name) && frameId ? `${MODAL_BASE}/frames/${frameId}/${p.name}.png` : null;
+      return { ...base, kind: 'frame', fields, image };
+    }
+    if (typeof v === 'string' || typeof v === 'boolean') return { ...base, kind: 'text', text: String(v).slice(0, 120) };
+    return { ...base, kind: 'text', text: 'not known' };
+  });
+  const images = frameId ? FRAME_ELEMENTS.map((el) => params.find((p) => p.name === el && p.image)?.image ?? `${MODAL_BASE}/frames/${frameId}/${el}.png`)
+    .map((url, k) => ({ element: FRAME_ELEMENTS[k], url })) : [];
+  const stale = o.stale === true && source != null && source !== 'off';   // Off has nothing to go old
+  const fresh = sources.filter((s) => s.known).map((s) => s.ok === false ? `${s.label} not arriving`
+    : s.id === 'canvas' ? (s.age_s != null && s.age_s > 120 ? `${s.label} ${dur(s.age_s)} ago` : `${s.label} live`) : s.age_s == null ? `${s.label} age not known` : `${s.label} ${dur(s.age_s)} ago`);
+  return {
+    source, effective_source: effective, strength, fading: o.fading === true, stale,
+    stale_words: stale ? modalStaleWords(source, o) : null,
+    stale_raw: stale && typeof o.stale_reason === 'string' ? o.stale_reason.slice(0, 200) : null,
+    age_s: add(o.data_age_s),
+    sources, fresh_words: fresh.join(' · '),
+    params,
+    scene: sc ? { palette_name: typeof sc.palette_name === 'string' ? sc.palette_name.slice(0, 80) : null, journal: typeof sc.journal === 'string' ? sc.journal.slice(0, 400) : null } : null,
+    frames: fr ? { frame_id: frameId, note: typeof fr.note === 'string' ? fr.note.slice(0, 280) : null, images } : null,
+  };
+}
 export const CAL_STAGE_S = { 'ropes-capture': 170, 'ropes-decode': 40, 'hub75-capture': 35, 'hub75-locate': 10 };   // calibrate.py EXPECTED_S
 export const CAL_TOTAL_S = Object.values(CAL_STAGE_S).reduce((a, b) => a + b, 0);
 export const CAL_STAGE_WORDS = { 'ropes-capture': 'photographing the ropes', 'ropes-decode': 'working out where each rope is', 'hub75-capture': 'photographing the panels', 'hub75-locate': 'finding the panels' };
@@ -119,11 +203,11 @@ export const calNoLights = (c) => calDryRun(c) || (!!c && typeof c === 'object' 
 // Applying a change (docs/mission-ui.md): what a change in flight blocks, when the server's entry names no blocks of its own.
 // A switch or a rebuild restarts TouchDesigner on the year: everything that touches either waits; a boot-file change only
 // the file controls (and a calibration's start); a lighting port change the lights; the rest only a second copy of itself.
-const TD_TOUCHING = ['overlay', 'ropes', 'hub75', 'test', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
+const TD_TOUCHING = ['overlay', 'modalinput', 'ropes', 'hub75', 'test', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
 export const APPLY_BLOCKS = {
   switch: TD_TOUCHING, rebuild: TD_TOUCHING, bootfile: ['switch', 'rebuild', 'bootfile', 'calibrate'], lightsroute: ['ropes', 'hub75', 'test', 'lightsroute', 'calibrate'],
-  overlay: ['overlay'], ropes: ['ropes', 'test'], hub75: ['hub75'], test: ['test', 'ropes', 'calibrate'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
-  calibrate: ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'calibrate', 'overlay'],   // a calibration's start: what a running one blocks, and a second start
+  overlay: ['overlay'], modalinput: ['modalinput'], ropes: ['ropes', 'test'], hub75: ['hub75'], test: ['test', 'ropes', 'calibrate'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
+  calibrate: ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'calibrate', 'overlay', 'modalinput'],   // a calibration's start: what a running one blocks, and a second start
 };
 /** The changes that wait for the server's verdict before they are done, and what shows each on bitcube: a full check's reading
  *  (TouchDesigner answering on its file, the boot file, the lighting port: R8 #31, #32) or the run's own progress (a calibration,
@@ -140,7 +224,7 @@ export const dryStart = (action, body) => action === 'calibrate' && !!body && ty
   && (body.dry_run === true || (typeof body.decode_only === 'string' && body.decode_only !== ''));
 /** The team's words for a change in flight when the server's entry has no label of its own (an older server). */
 export const APPLY_LABEL = { switch: 'a show-file switch', rebuild: "the rebuild of the river's year", bootfile: 'the change of the default', lightsroute: 'the change of the lighting port',
-  overlay: 'the change of the overlay', ropes: 'the change of the ropes', hub75: 'the change of the panels', mode: 'the change of the mode', target: 'the change of the target', rules: 'the change of the rules',
+  overlay: 'the change of the overlay', modalinput: 'the change of the Modal input', ropes: 'the change of the ropes', hub75: 'the change of the panels', mode: 'the change of the mode', target: 'the change of the target', rules: 'the change of the rules',
   'rules-reset': 'the reset of the rules', calibrate: 'the calibration start', test: 'the test pattern' };
 /** One name per change (R7 #19), made here for the server's entries (lib/applying.mjs), this phone's own applying
  *  line, every other phone's band, Last done and the unconfirmed line: a noun phrase that names what it changes to, and reads in
@@ -160,6 +244,7 @@ export function changeLabel(action, body = {}, { running = null } = {}) {
     case 'ropes': return b.dark === true ? 'the change of the ropes to dark' : 'the change of the ropes to the river';   // as planControl: only a real true goes dark
     case 'test': return b.on === true ? 'the test pattern start' : 'the test pattern stop';   // as planControl: only a real true starts it
     case 'overlay': return `the change of Dave's overlay to ${Math.round(Number(b.strength) * 100)} %${b.framing ? '; river framing: ' + b.framing : ''}${b.screens ? '; screens: ' + b.screens.mode + (b.screens.mode === 'cycle' ? ', ' + b.screens.hold + ' s per look' + (b.screens.offset !== undefined ? ', ' + b.screens.offset + ' s between screens' : '') : '') : ''}`;
+    case 'modalinput': return MODAL_SOURCES.includes(b.source) ? `the change of the Modal input to ${MODAL_SOURCE_WORDS[b.source].label}${b.source !== 'off' && num(b.strength) != null ? ` at ${Math.round(Math.min(1, Math.max(0, b.strength)) * 100)} %` : ''}` : 'the change of the Modal input';
     case 'hub75': return x != null ? `the change of the panels to ${Math.round(Math.min(1, Math.max(0, x)) * 100)} %` : 'the change of the panels';
     case 'mode': return typeof b.mode === 'string' && b.mode ? `the change of the mode to ${cap(b.mode)}` : 'the change of the mode';
     case 'target': {
@@ -177,7 +262,7 @@ export function changeLabel(action, body = {}, { running = null } = {}) {
 }
 /** The usual time of each change, in seconds, until bitcube's reading shows it: the server's own table (lib/applying.mjs EXPECT_S,
  *  kept equal by test/model.test.mjs), so a page can say "usually about 1 min" for its own change before status.applying has it. */
-export const EXPECT_S = { overlay: 15, switch: 60, rebuild: 150, bootfile: 15, lightsroute: 20, ropes: 15, hub75: 15, test: 15, mode: 3, target: 3, rules: 3, 'rules-reset': 3, calibrate: 10,
+export const EXPECT_S = { overlay: 15, modalinput: 15, switch: 60, rebuild: 150, bootfile: 15, lightsroute: 20, ropes: 15, hub75: 15, test: 15, mode: 3, target: 3, rules: 3, 'rules-reset': 3, calibrate: 10,
   check: 30 };   // the full check (an SSH round trip): never a lock (lib/applying.mjs records only what APPLY_BLOCKS names), only its usual time
 /** What the boot file's confirming line says in place of a usual time: its reading comes with bitcube's next full check. */
 export const BOOT_USUAL = "bitcube's full check shows it within a minute";
@@ -233,7 +318,7 @@ export const CONTACTS = {
 const CONTACT_BY_CAUSE = {
   page: 'gavin', 'bitcube-unchecked': 'gavin', 'bitcube-offline': 'gavin', 'check-failed': 'gavin', 'probe-stale': 'gavin',
   'td-unknown': 'gavin', 'td-frozen': 'gavin', 'td-off': 'gavin', 'td-slow': 'gavin', 'year-page': 'gavin', 'sender-off': 'gavin', 'sender-taken': 'gavin',
-  'link-off': 'gavin', 'link-failing': 'gavin', recorder: 'gavin', disk: 'gavin', 'modal-stale': 'gavin', 'seasons-stale': 'gavin',
+  'link-off': 'gavin', 'link-failing': 'gavin', recorder: 'gavin', disk: 'gavin', 'modal-stale': 'gavin', 'seasons-stale': 'gavin', 'modal-input-stale': 'dave',
   lights: 'lilian', sender: 'lilian', box: 'lilian',
   panels: 'andi', 'panels-off': 'andi', 'panels-dark': 'andi',
   'ropes-dark': 'colin', 'online-file': 'colin', 'old-file': 'gavin',
@@ -479,6 +564,7 @@ export function derive(status, nowMs) {
   const kind = file?.kind ?? null, label = file?.label ?? null;
   // a show the registry offers that is neither the year nor the live river (a new visualization, the template): not a fault
   const listedShow = kind === 'other' && file?.offered === true;
+  const modalInput = tdOk && td.file === MODAL_INPUT_FILE ? modalInputView(td.modal_input, pb.age_s ?? 0) : null;
   // One name for the button the advice points at: the show-file control says "Restart on the river's year" when it already
   // runs, and "Switch to the river's year" when another file (or nothing known) runs. status.js labels its jump the same way.
   const YEAR_PRESS = yearPress(kind);
@@ -744,6 +830,11 @@ export function derive(status, nowMs) {
   else if (nextMs != null && nextMs < now) it('modal agent', 'ok', `${inRest(now) ? 'Resting overnight' : 'Update due'}; last update ${Number.isFinite(finMs) ? clockDay(finMs, now) : 'not known'}`,
     inRest(now) ? 'It rests from 23:55 to 07:00 Pacific, so a missed update is normal at this hour.' : 'An update is due; it gets 15 minutes of daytime before that counts as a fault.', { source: 'modal' });
   else it('modal agent', 'ok', 'Updating on schedule', `${Number.isFinite(finMs) ? `Last updated at ${clockDay(finMs, now)}` : 'Last update time not known'}${nextMs != null ? `; next update due at ${clockDay(nextMs, now)}` : ''}${obj(m.scene) ? `; its scene is ${m.scene.animation} / ${m.scene.palette}` : ''}.`, { source: 'modal', raw: `tick ${m.tick}, mood ${m.mood ?? 'none'}` });
+  // the Modal input show with its chosen source gone old: Dave's agent answers, but what the show uses from it doesn't arrive
+  { const x = items.find((v) => v.id === 'modal agent');
+    if (modalInput?.stale && x?.level === 'ok') Object.assign(x, { level: 'warning',
+      summary: modalInput.source === 'frames' ? `Its frames are over ${staleMin(td.modal_input)} min old for the show` : modalInput.source === 'scene' ? `Its scene is over ${staleMin(td.modal_input)} min old for the show` : "Its moving picture isn't arriving for the show",
+      detail: `${modalInput.stale_words}. ${x.detail}`, action: "Tell Dave if it lasts, or pick another Modal input under What's showing." }); }
 
   const sinceWords = (c) => (c.since ? `since ${c.since}` : 'for a while');
   if (behind) unknown('modal link', behind);
@@ -849,6 +940,11 @@ export function derive(status, nowMs) {
         "Press Switch to the river's year below; the lights go dark for about a minute.", ['seasons']);
       else if (kind === 'year' && !y && se.present) add('year-page', 'warning', 46, "The river's year page isn't answering, though TouchDesigner runs it", `${cap(fetchWords(se.error))}; the year's controls come back when it answers properly.`,
         `Wait a minute; if it stays down, press ${YEAR_PRESS} (about a minute dark).`, ['seasons']);
+      // the Modal input show runs on: only Dave's part is missing (TouchDesigner shows the river without it), so a warning, never a fault
+      if (modalInput?.stale) add('modal-input-stale', 'warning', 36, modalInput.stale_words,
+        `${MODAL_SOURCE_WORDS[modalInput.source].label} is chosen under Modal input${modalInput.age_s != null ? `; what Dave's agent sent last is ${dur(modalInput.age_s)} old` : ''}. The rest of the show is running as usual.`,
+        inRest(now) ? "Dave's agent rests overnight (23:55 to 07:00), so this is normal at this hour; it picks up again in the morning."
+          : "Nothing is broken here. Tell Dave if it lasts, or pick another Modal input under What's showing.", ['modal agent']);
       if (riverStale) add('river-stale', 'warning', 55, `The river camera has sent no frames for ${dur(relayAgeNow)}: the show is running on the rain fallback`,
         `The camera answers but sends nothing${clips.river.present && clips.river.failing ? `; no clips to Dave ${sinceWords(clips.river)}` : ''}.`,
         "Ask Will to restart the river camera, or wait for the Starlink link to settle. If the live river isn't needed tonight, switch to the river's year, which doesn't use it.",
@@ -988,6 +1084,8 @@ export function derive(status, nowMs) {
   const show = {
     file: tdOk ? { name: td.file, kind, label, words: `TouchDesigner is showing ${label}` } : null,
     combined: tdOk && td.file === 'river-combined-v0.toe' ? obj(td.combined) : null,
+    // the Modal input show's choice, its sources' freshness and what Dave's agent is sending (modalInputView), only while it runs
+    modal_input: modalInput,
     boot_file: bootNow,
     // the files a switch or "Set as default" offers (shows.json offered, and on bitcube)
     show_files: showFiles,
@@ -1062,6 +1160,8 @@ export function derive(status, nowMs) {
     test: ctl(first('test') ?? cantTd ?? cantCal ?? (tdOk ? null : "TouchDesigner isn't answering")),
     overlay: ctl(first('overlay') ?? cantTd ?? cantCal ?? (testOn ? TEST_ON : null)
       ?? (td?.file === 'river-combined-v0.toe' && typeof td.combined?.overlay === 'number' ? null : 'combined-v0 is not running or has not answered')),
+    modalinput: ctl(first('modalinput') ?? cantTd ?? cantCal ?? (testOn ? TEST_ON : null)
+      ?? (td?.file === MODAL_INPUT_FILE && obj(td.modal_input) ? null : `${FILES[MODAL_INPUT_FILE]?.label ?? 'the Modal input show'} isn't running or hasn't answered`)),
     hub75: ctl(first('hub75') ?? cantTd ?? cantCal),   // the camera is photographing the panels and ropes
     // never while TouchDesigner is restarting (a second switch kills the half-opened file: another minute dark), and never on
     // a full check too old to say what runs now (the buttons' labels come from it)

@@ -253,6 +253,8 @@ function localStatus(scenario) {
     confirmed: snap.confirmed ?? [], expired: snap.expired ?? [], verdicts: historyFor(scenario).verdicts(),
     calibration: cal ? { running: cal.running === true && cal.stale !== true, stage: cal.stage ?? null, mode: cal.mode ?? null, stale: cal.stale === true, ok: cal.ok ?? null } : null,
     show_file: m.show.file ? { file: m.show.file.name, label: m.show.file.label } : null,
+    // the Modal input show: which of Dave's inputs drives the river and what his agent is sending (model.js modalInputView)
+    ...(m.show.modal_input ? { modal_input: m.show.modal_input } : {}),
     boot_file: typeof pv?.boot_file === 'string' ? pv.boot_file : null,
     blocked: Object.fromEntries(Object.entries(m.controls).filter(([, c]) => !c.possible).map(([k, c]) => [k, c.why])),
   };

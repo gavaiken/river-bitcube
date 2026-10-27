@@ -8,16 +8,18 @@ import { join } from 'node:path';
 import { scrubCreds } from './scrub.mjs';
 import { Applying } from './applying.mjs';
 import { checkedCalibrate, noAnswer } from './lights.mjs';
-import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights, TEST_ON, testShowing, FILES } from '../public/model.js';
+import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights, TEST_ON, testShowing, FILES, MODAL_INPUT_FILE, MODAL_SOURCES } from '../public/model.js';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 const PROBE = PS + 'probe.ps1';
 export const CAMERAS = ['gallery', 'river'];
 const SNAP_CACHE_MS = 45_000;
+/** The 409 a Modal input change gets while another show runs (shared with fixture mode). */
+export const MODAL_INPUT_ONLY = 'the Modal input is only available while the Modal input show (Combined with Modal Input Selector) is running';
 /** Controls refused while a calibration runs (model.js refuses the same ones on the pages). A rebuild ends in the switch
  *  path (TouchDesigner stopped and restarted), so it spoils a run as surely as a switch. A dry run (or a decode of earlier
  *  photos) touches no lights, camera or TouchDesigner: it refuses none of them (R7 #20). */
-export const CAL_BLOCKED = ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'overlay'];
+export const CAL_BLOCKED = ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'overlay', 'modalinput'];
 /** The 409 a switch or a rebuild gets while TouchDesigner is starting or restarting (model.js tdStartingWhy, the pages' words; shared
  *  with fixture mode), or null. probe: the full check's reading as kept ({ at, value } or { at, error }), judged by itself, never
  *  the whole page model; a reading the rule can't read, or a slip in it, refuses (closed, CR9 #11). */
@@ -32,7 +34,7 @@ export function startingBlocked(action, probe) {
  *  decode of earlier photos) touches no lights: never refused. probe: the full check's reading as kept ({ at, value }). */
 export function testBlocked(action, body, probe) {
   const start = action === 'calibrate' && body?.action === 'start' && body.dry_run !== true && !body.decode_only;
-  if (action !== 'ropes' && action !== 'overlay' && !start) return null;
+  if (action !== 'ropes' && action !== 'overlay' && action !== 'modalinput' && !start) return null;
   const p = probe && typeof probe === 'object' && !probe.error ? probe.value : null;
   return testShowing(p) ? Object.assign(new Error(TEST_ON), { status: 409 }) : null;
 }
@@ -329,7 +331,9 @@ export class Mission {
     const plan = planControl(action, body);
     const checked = checkedControl(action, body);
     if (action === 'overlay' && this.data.probe?.value?.td?.file !== 'river-combined-v0.toe')
-      throw Object.assign(new Error('overlay control is only available while combined-v0 is running'), { status: 409 });     // only what the whitelist read goes into status.applying
+      throw Object.assign(new Error('overlay control is only available while combined-v0 is running'), { status: 409 });
+    if (action === 'modalinput' && this.data.probe?.value?.td?.file !== MODAL_INPUT_FILE)
+      throw Object.assign(new Error(MODAL_INPUT_ONLY), { status: 409 });     // only what the whitelist read goes into status.applying
     // a calibration photographs the ropes and the panels: anything that changes them, restarts TouchDesigner or moves the
     // lighting port spoils the run (the pages refuse these too; this covers the studio chat and a stale page)
     const blocked = calBlocked(action, this.calibration()) ?? testBlocked(action, checked, this.data.probe);
@@ -423,7 +427,7 @@ export function startPending(r, isNew) {
 /** Ropes and panels act through TouchDesigner: when its own answer says it failed, the action failed, whatever the probe's
  *  top-level ok says (a probe.ps1 from before 24 Oct reported ok: true with td.ok false). */
 export function actionResult(action, r) {
-  if ((action === 'ropes' || action === 'hub75' || action === 'test' || action === 'overlay') && r && r.ok !== false && r.td && r.td.ok === false) {
+  if ((action === 'ropes' || action === 'hub75' || action === 'test' || action === 'overlay' || action === 'modalinput') && r && r.ok !== false && r.td && r.td.ok === false) {
     return { ...r, ok: false, error: String(r.td.error || 'TouchDesigner did not answer') };
   }
   return r;
@@ -467,6 +471,13 @@ export function planControl(action, body = {}) {
       if (body.framing !== undefined && !['auto', 'original', 'channel', 'channel-multi', 'pool', 'pool-multi'].includes(body.framing)) throw bad('unknown river framing profile');
       const screens = body.screens === undefined ? '' : (() => { const s = checkedScreens(body.screens); return ` -Screenmode ${s.mode} -Screenblend ${s.blend.toFixed(2)} -Screenhold ${s.hold}${s.recorded === undefined ? '' : ` -Screenrecorded ${s.recorded.toFixed(2)}`}${s.offset === undefined ? '' : ` -Screenoffset ${s.offset.toFixed(2)}`}`; })();
       return { kind: 'probe', args: `-Action overlay -Overlay ${x.toFixed(2)}${body.framing !== undefined ? ' -Framing ' + body.framing : ''}${screens}` };
+    }
+    case 'modalinput': {
+      // one of Dave's inputs at a time (docs/modal-inputs.md): a listed source and a strength 0..1, nothing else on the command line
+      if (!MODAL_SOURCES.includes(body.source)) throw bad('source is off, canvas, scene or frames');
+      const x = num(body.strength);
+      if (!(x >= 0 && x <= 1)) throw bad('modal input strength is 0 to 1');
+      return { kind: 'probe', args: `-Action modalinput -Source ${body.source} -Strength ${x.toFixed(2)}` };
     }
     case 'hub75': {
       const x = num(body.brightness);
@@ -515,6 +526,7 @@ export function checkedControl(action, body = {}) {
     case 'ropes': return { dark: body.dark === true };
     case 'hub75': return { brightness: num(body.brightness) };
     case 'overlay': return { strength: Number(num(body.strength).toFixed(2)), ...(body.framing !== undefined ? { framing: body.framing } : {}), ...(body.screens !== undefined ? { screens: checkedScreens(body.screens) } : {}) };
+    case 'modalinput': return { source: body.source, strength: Number(num(body.strength).toFixed(2)) };
     case 'test': return { on: body.on === true };
     case 'bootfile': case 'switch': case 'rebuild': return { file: body.file };
     case 'lightsroute': return { route: body.route };

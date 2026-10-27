@@ -6,6 +6,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fixtureModalInput } from '../../lib/fixtures.mjs';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
 const RECORDED = join(DIR, '_recorded-2026-10-23.json');
@@ -30,6 +31,18 @@ export const VIZ_ENTRY = {
   inputs: ['river camera (recorded clip as fallback)', 'gallery camera'],
   created_by: 'will', created: '2026-10-26', updated_by: 'will', updated: '2026-10-26', last_change: 'Slower drift; fewer lights at once',
 };
+// The Modal input show (docs/modal-inputs.md): until it is in the real shows.json, _shows.extra.json adds it for the tests and
+// fixture mode, as it adds the test viz. Its status (td.modal_input) comes from lib/fixtures.mjs fixtureModalInput, the same data a
+// world switched to it in fixture mode reports.
+export const MODAL_FILE = 'river-combined-modal-inputs.toe';
+export const MODAL_ENTRY = {
+  file: MODAL_FILE, title: 'Combined with Modal Input Selector', label: 'the Modal input show', kind: 'viz', offered: true, build: 'td/build/build_combined_modal_inputs.py',
+  calibration: { pixelmap: 'tools/pixelmap/pixelmap-2026-10-23.json', screens: 'tools/pixelmap/screens-2026-10-23.json' },
+  description: "Combined v0 with a Modal input selector: one of Dave's inputs at a time (his moving picture, his scene's colours and pace, or his own pictures for each screen and the ropes) drives the river, at a strength chosen in mission control.",
+  inputs: ['river camera (recorded clip as fallback)', "Dave's Modal canvas, scene and frames"],
+  created_by: 'gavin', created: '2026-10-27', updated_by: 'gavin', updated: '2026-10-27', last_change: 'Fixture entry until the show is in shows.json',
+};
+const REAL_SHOWS = JSON.parse(readFileSync(join(DIR, '..', '..', '..', 'shows.json'), 'utf8')).shows.map((x) => x.file);
 const RULES = recorded.seasons.value.rules;            // the defaults, as served by the control page
 const ADDRESSES = recorded.probe.value.addresses;      // bitcube's addresses at Gray Area
 const SCENE_COLORS = recorded.modal.value.scene.colors;
@@ -354,6 +367,30 @@ const SCENARIOS = {
     },
   },
 
+  // ---- the Modal input show: one of Dave's inputs drives the river (docs/modal-inputs.md) ---------------------------------
+  ...Object.fromEntries([
+    ['scene', "Scene: Dave's colours and pace recolour the river", { ages: { canvas: 3, scene: 42, frames: 95 } }],
+    ['frames', "Frames: Dave's own pictures for each screen and the ropes", { ages: { canvas: 3, scene: 42, frames: 95 } }],
+    ['canvas', "Canvas: Dave's moving picture over the river", { ages: { canvas: 2, scene: 300, frames: 95 } }],
+    ['off', 'Off: the river on its own', { strength: 0.6, ages: { canvas: 3, scene: 42, frames: 95 } }],
+  ].map(([source, title, o]) => [`modal-input-${source}`, {
+    title: `Modal input show: ${title}`,
+    description: `TouchDesigner runs ${MODAL_FILE} (Combined with Modal Input Selector, kind viz), chosen on purpose; the Modal input is ${source}${source === 'off' ? '' : ' at 60 %'}. Every source is fresh (canvas seconds old, the scene minutes at most, the latest frame under two minutes). No year page (the show has none); the default is still the river's year.`,
+    expect: { headline: 'Everything is up: the Modal input show is showing; lights and cameras fine', severity: 'ok',
+      items: items({ touchdesigner: 'ok: the Modal input show at 60 fps', seasons: 'ok: not used (this show has no year)', ropes: 'ok: showing the show, sender open, 140 + 150 W' }),
+      action: "Nothing to do. The Modal input under What's showing changes which of Dave's inputs drives the river." },
+    build: () => modalShow(fixtureModalInput(source, o)),
+  }])),
+
+  'modal-input-frames-stale': {
+    title: "Modal input show: Dave's frames are old",
+    description: `TouchDesigner runs ${MODAL_FILE} with the Modal input on frames at 60 %, but Dave's newest frame is 21 minutes old (TouchDesigner calls a source stale after 15 minutes): it has gone back to the river on its own. The canvas and the scene are fresh. The rest of the show is fine.`,
+    expect: { headline: "Dave's frames are more than 15 minutes old: showing the river without them", severity: 'warning',
+      items: items({ 'modal agent': 'warning: answers, but its frames for the show are 21 min old', touchdesigner: 'ok: the Modal input show at 60 fps', seasons: 'ok: not used (this show has no year)', ropes: 'ok: showing the show, sender open, 140 + 150 W' }),
+      action: "Nothing is broken: tell Dave if it lasts, or pick another Modal input under What's showing." },
+    build: () => modalShow(fixtureModalInput('frames', { ages: { canvas: 3, scene: 42, frames: 1260 }, stale: true })),
+  },
+
   'no-internet': {
     title: 'No internet at Gray Area',
     description: 'bitcube can\'t open connections to the internet (1.1.1.1:443 fails) while the install router answers: the router\'s uplink (the venue\'s staff Wi-Fi) has dropped. bitcube\'s existing Tailscale tunnel to the mini still carries traffic, so the mini can still probe it. Dave\'s agent is fine as seen from the mini, but the Modal link on bitcube can\'t upload: its last successful clips (the last INFO lines) are from 02:38, 20 minutes ago, and every clip since has failed with an ERROR line, so the log files are still fresh; the sync has logged nothing since its last update. The river camera (via Starlink and Will\'s tailnet) is unreachable, and the recorder\'s current run can\'t connect. The show is unaffected: the seasons file needs no network.',
@@ -373,6 +410,17 @@ const SCENARIOS = {
   },
 };
 
+/** The Modal input show running (like viz-running), with td.modal_input as given. */
+function modalShow(mi) {
+  const st = base();
+  st.seasons = err(SEASONS_AT, 'fetch failed');
+  st.probe.value.show_files = [...SHOW_FILES, TEMPLATE_FILE, MODAL_FILE];
+  st.probe.value.td = td({ file: MODAL_FILE, fps: 60.0, ropes: { active: true, source: 'canvas', box_watts_cap: 600, status: sender({ watts: [140, 150], seq: 92 }) },
+                           seasons: null, river_cam: relay(), modal_input: mi });
+  st.probe.value.devices.seasons_page = false;
+  return { status: st, ...CAMS_GOOD };
+}
+
 export function buildAll() {
   const out = {};
   for (const [name, s] of Object.entries(SCENARIOS)) {
@@ -385,6 +433,6 @@ export function buildAll() {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const all = buildAll();
   for (const [name, fixture] of Object.entries(all)) writeFileSync(join(DIR, `${name}.json`), JSON.stringify(fixture, null, 2) + '\n');
-  writeFileSync(join(DIR, '_shows.extra.json'), JSON.stringify({ shows: [VIZ_ENTRY] }, null, 2) + '\n');
+  writeFileSync(join(DIR, '_shows.extra.json'), JSON.stringify({ shows: [VIZ_ENTRY, ...(REAL_SHOWS.includes(MODAL_FILE) ? [] : [MODAL_ENTRY])] }, null, 2) + '\n');
   console.log(`wrote ${Object.keys(all).length} fixtures to ${DIR}`);
 }

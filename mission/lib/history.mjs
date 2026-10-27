@@ -69,7 +69,7 @@
 //   nothing here ever throws: history never stops the show.
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { derive, FILES, intensityWord, awaited, changeLabel, confirmLimitS, EXPECT_S, calDryRun, calStep, CAL_STAGE_WORDS } from '../public/model.js';
+import { derive, FILES, intensityWord, awaited, changeLabel, confirmLimitS, EXPECT_S, calDryRun, calStep, CAL_STAGE_WORDS, MODAL_SOURCE_WORDS } from '../public/model.js';
 import { scrubCreds } from './scrub.mjs';
 import { REQUEST_ID } from './applying.mjs';
 
@@ -619,6 +619,7 @@ export function actionPhrase(ev) {
     case 'ropes': return ['Turned', 'turn', b.dark === true ? 'the ropes dark' : 'the ropes on'];   // as planControl: only a real true goes dark
     case 'hub75': return ['Set', 'set', `the panel brightness to ${pct}`];
     case 'overlay': return ['Set', 'set', `Dave's overlay to ${Math.round(Number(b.strength) * 100)} %${b.framing ? '; river framing: ' + b.framing : ''}${b.screens ? '; screens: ' + b.screens.mode + (b.screens.mode === 'cycle' ? ', ' + b.screens.hold + ' s per look' + (b.screens.offset !== undefined ? ', ' + b.screens.offset + ' s between screens' : '') : '') : ''}`];
+    case 'modalinput': return ['Set', 'set', `the Modal input to ${MODAL_SOURCE_WORDS[b.source]?.label ?? 'a new source'}${b.source !== 'off' && Number.isFinite(Number(b.strength)) ? ` at ${Math.round(Number(b.strength) * 100)} %` : ''}`];
     case 'test': return b.on === true ? ['Started', 'start', 'the test pattern on the ropes and panels'] : ['Stopped', 'stop', 'the test pattern'];
     // a switch to the file TouchDesigner was running is the button's "Restart on …" (its label says so, model.js changeLabel)
     case 'switch': return /^the restart on /.test(String(ev.label ?? '')) ? ['Restarted', 'restart', `TouchDesigner on ${fileLabel(b.file)}`]
