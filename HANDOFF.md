@@ -1,13 +1,19 @@
 # Handoff: where things stand
 
-- **Holder:** Will (Codex)
-- **Where:** bitcube: recover blank panels after sender power cycle
-- **Updated:** 2026-10-26 23:39 PT
+- **Holder:** nobody (free)
+- **Where:** bitcube: sender power-cycle blank output recovered; Combined left showing
+- **Updated:** 2026-10-26 23:43 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
 ## Running now
 - `river-combined-v0.toe`: **Auto**, currently detecting Channel and using **Channel: three windows**, live river, fixed summer intensity 0.85, Dave overlay 18%. Four screens cycle Current → Gavin style (live) → Gavin style (recorded) → Current, with 30-second holds and 8-second fades per screen (114-second cycle), spread evenly across the full cycle (28.5-second spacing; phases 0/28.5/57/85.5). Will requested this be left showing.
 - Verified after reopening: 60 fps, zero project errors, ropes sending, panels on. The boot default remains `river-local-oct-22-seasons.toe`; no other show, build or calibration pin changed. Dave's repo/deployment untouched.
+
+## Sender power-cycle recovery (26 Oct)
+- Will power-cycled the HDMI send card; all four screens went blank. TouchDesigner **had not stopped**: same Combined process, rendering at 60 fps, zero errors, panels Output=true/Source=canvas/brightness1, ropes active. Windows reported the reconnected 1920×1080 LED display as `DISPLAY2` (previously `DISPLAY1`), TD monitor index 0. The output Window COMP still reported isOpen=true.
+- Closed `/project1/panels/window` with `winclose.pulse()`, reopened three frames later with `winopen.pulse()` (equivalent to reopening as a separate window). **Will confirmed the physical image returned.** This supports a stale presentation/display connection after hotplug; an open flag alone was insufficient evidence of working physical output.
+- Verified window open on index 0,1920×1080, panel_out 256×512 with nonzero RGB, 60 fps / zero errors, ropes/panels active. No show restart, rebuild, save, mapping/default/settings changes, new service or driver/network changes. Prior shared solid-colour flicker remains unresolved; this recovery does not establish a flicker fix.
+- If the sender is power-cycled again and screens stay blank despite TD running, verify the LED display is detected, then close/reopen the existing panel Window COMP. Do not start a second output window or use RDP. Full source/controls remain 6a23775; this session changes documentation only.
 
 ## Evenly spread looks + unresolved flicker diagnosis: 6a23775
 - Will clarified that the screens should hold different looks simultaneously, rather than cluster transitions with short delays. Enabled **Spread looks evenly**: hold 30 / fade 8, full 114-second cycle, phase spacing 28.5 s. Phases wrap from startup, so screens occupy different holds after the initial 8-second mode blend. A live check showed Current / Recorded / Gavin→Recorded / Gavin. Ropes, overlay18%, Auto/Channel and boot default preserved.
