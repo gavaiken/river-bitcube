@@ -465,7 +465,7 @@ export function planControl(action, body = {}) {
       const x = num(body.strength);
       if (!(x >= 0 && x <= 1)) throw bad('overlay strength is 0 to 1');
       if (body.framing !== undefined && !['auto', 'original', 'channel', 'channel-multi', 'pool', 'pool-multi'].includes(body.framing)) throw bad('unknown river framing profile');
-      const screens = body.screens === undefined ? '' : (() => { const s = checkedScreens(body.screens); return ` -Screenmode ${s.mode} -Screenblend ${s.blend.toFixed(2)} -Screenhold ${s.hold}`; })();
+      const screens = body.screens === undefined ? '' : (() => { const s = checkedScreens(body.screens); return ` -Screenmode ${s.mode} -Screenblend ${s.blend.toFixed(2)} -Screenhold ${s.hold}${s.recorded === undefined ? '' : ` -Screenrecorded ${s.recorded.toFixed(2)}`}`; })();
       return { kind: 'probe', args: `-Action overlay -Overlay ${x.toFixed(2)}${body.framing !== undefined ? ' -Framing ' + body.framing : ''}${screens}` };
     }
     case 'hub75': {
@@ -495,11 +495,13 @@ export function planControl(action, body = {}) {
 /** A control request as the whitelist reads it, and nothing else (a 400 for a bad request, as planControl): what the history
  *  keeps, status.applying names and a page reads back. Extra keys a client sends never go further. */
 function checkedScreens(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || !['current', 'gavin', 'manual', 'cycle'].includes(value.mode)) throw bad('unknown screen look mode');
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !['current', 'gavin', 'recorded', 'manual', 'cycle'].includes(value.mode)) throw bad('unknown screen look mode');
   const blend = num(value.blend), hold = num(value.hold);
   if (!(blend >= 0 && blend <= 1)) throw bad('screen blend is 0 to 1');
   if (![15, 30, 60, 120].includes(hold)) throw bad('screen hold is 15, 30, 60 or 120 seconds');
-  return { mode: value.mode, blend: Number(blend.toFixed(2)), hold };
+  const recorded = value.recorded === undefined ? undefined : num(value.recorded);
+  if (recorded !== undefined && !(recorded >= 0 && recorded <= 1)) throw bad('recorded blend is 0 to 1');
+  return { mode: value.mode, blend: Number(blend.toFixed(2)), hold, ...(recorded === undefined ? {} : { recorded: Number(recorded.toFixed(2)) }) };
 }
 
 export function checkedControl(action, body = {}) {

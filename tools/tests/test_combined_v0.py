@@ -128,7 +128,7 @@ def test_auto_uses_detector_only_for_live_input(runtime, monkeypatch):
 def test_screen_controls_preserve_framing_overlay_and_reject_before_writing(runtime, tmp_path):
     dest = tmp_path / 'settings.json'
     runtime.save_strength(.18, dest, profile='auto')
-    settings = {'mode':'cycle','blend':.25,'hold':30}
+    settings = {'mode':'cycle','blend':.25,'hold':30,'recorded':0.0}
     runtime.save_strength(.18, dest, screens=settings)
     assert runtime.load_strength(dest) == .18
     assert runtime.load_framing(dest) == 'auto'
@@ -139,3 +139,15 @@ def test_screen_controls_preserve_framing_overlay_and_reject_before_writing(runt
     assert dest.read_bytes() == before
     runtime.save_strength(.2, dest)
     assert runtime.load_screens(dest) == settings
+
+
+def test_old_screen_client_preserves_recorded_share_and_invalid_value_never_writes(runtime, monkeypatch):
+    writes=[]
+    monkeypatch.setattr(runtime,'save_strength',lambda value, **kw: writes.append(kw) or value)
+    comp=SimpleNamespace(par=SimpleNamespace(Canvasmix=.18,Screenmode='manual',Screenblend=.25,Screenhold=30,Screenrecorded=.4))
+    runtime.set_strength(comp,.18,runtime.SHOW,screens={'mode':'manual','blend':.5,'hold':30})
+    assert writes[-1]['screens']['recorded'] == .4
+    assert comp.par.Screenrecorded == .4
+    with pytest.raises(ValueError):
+        runtime.set_strength(comp,.9,runtime.SHOW,screens={'mode':'manual','blend':0,'hold':30,'recorded':True})
+    assert len(writes)==1 and comp.par.Canvasmix==.18

@@ -91,3 +91,22 @@ test('screen fades use bounded fixed probe arguments and preserve legacy setting
   assert.equal(s.framing, 'auto');
   assert.equal(s.overlay, .2);
 });
+
+test('recorded screens are bounded and legacy requests preserve the recorded share', async () => {
+  const screens = {mode:'recorded',blend:.25,hold:30,recorded:.4};
+  assert.deepEqual(planControl('overlay',{strength:.18,screens}),
+    {kind:'probe',args:'-Action overlay -Overlay 0.18 -Screenmode recorded -Screenblend 0.25 -Screenhold 30 -Screenrecorded 0.40'});
+  for (const recorded of [true, null, -1, 1.1, NaN, Infinity, '0.4; shutdown'])
+    assert.throws(() => planControl('overlay',{strength:.18,screens:{...screens,recorded}}));
+  const dir = new URL('./fixtures/', import.meta.url).pathname;
+  const f = JSON.parse(readFileSync(join(dir,'all-good.json'),'utf8'));
+  const m = new FixtureMission({dir,stateDir:mkdtempSync(join(tmpdir(),'recorded-')),now:()=>f._scenario.now,applyS:0});
+  m.worldFor('all-good').file='river-combined-v0.toe';
+  await m.control('overlay',{strength:.18,screens},'all-good');
+  assert.equal(m.snapshot('all-good').probe.value.td.combined.screens.recorded_mix,1);
+  await m.control('overlay',{strength:.18,screens:{mode:'manual',blend:.25,hold:30}},'all-good');
+  const s=m.snapshot('all-good').probe.value.td.combined.screens;
+  assert.equal(s.recorded,.4);
+  assert.equal(s.recorded_mix,.4);
+  assert.equal(s.gavin_mix,.15);
+});

@@ -35,9 +35,12 @@ if not hasattr(viz.par, 'Screenmode'):
     pg.appendMenu('Screenmode', label='Screen look')
     pg.appendFloat('Screenblend', label='Screen blend toward Gavin')
     pg.appendInt('Screenhold', label='Seconds on each screen look')
-viz.par.Screenmode.menuNames = ['current', 'gavin', 'manual', 'cycle']
-viz.par.Screenmode.menuLabels = ['Current look', 'Gavin style', 'Manual blend', 'Automatic cycle']
+if not hasattr(viz.par, 'Screenrecorded'):
+    pg.appendFloat('Screenrecorded', label='Recorded footage in manual screen mix')
+viz.par.Screenmode.menuNames = ['current', 'gavin', 'recorded', 'manual', 'cycle']
+viz.par.Screenmode.menuLabels = ['Current look', 'Gavin style (live)', 'Recorded river', 'Manual blend', 'Automatic cycle']
 viz.par.Screenblend.normMin, viz.par.Screenblend.normMax, viz.par.Screenblend.default = 0, 1, 0
+viz.par.Screenrecorded.normMin, viz.par.Screenrecorded.normMax, viz.par.Screenrecorded.default = 0, 1, 0
 viz.par.Screenhold.normMin, viz.par.Screenhold.normMax, viz.par.Screenhold.default = 15, 120, 30
 mod.module.apply_screens(viz, mod.module.load_screens())
 M = "op('combined_mod').module"
@@ -204,10 +207,19 @@ viz.op('viz_out').inputConnectors[0].connect(clamp)
 exec(open(REPO + '/td/combined/build_screen_seasons.py', encoding='utf-8').read(), dict(globals()))
 gavin = get(selectTOP, 'gavin_screen_in', 1500, -200)
 gavin.par.top = '/project1/viz/gavin_screens/field_out'
-screen_mix = get(crossTOP, 'screen_mix', 1650, 250)
-wire(screen_mix, [clamp, gavin])
+# Preserve the final screen_mix path while migrating the old two-input mixer.
+if viz.op('screen_live_mix') is None and viz.op('screen_mix') is not None:
+    viz.op('screen_mix').name = 'screen_live_mix'
+live_mix = get(crossTOP, 'screen_live_mix', 1650, 250)
+wire(live_mix, [clamp, gavin])
+res(live_mix, FIELD_W, FIELD_H)
+live_mix.par.cross.expr = f"{M}.screen_live_mix(){T}"
+recorded = get(selectTOP, 'recorded_screen_in', 1500, -400)
+recorded.par.top = '/project1/inputs/river_clip_fit'
+screen_mix = get(crossTOP, 'screen_mix', 1800, 250)
+wire(screen_mix, [live_mix, recorded])
 res(screen_mix, FIELD_W, FIELD_H)
-screen_mix.par.cross.expr = f"{M}.screen_mix(){T}"
+screen_mix.par.cross.expr = f"{M}.screen_record_mix(){T}"
 screen_field = maker(out_c)(selectTOP, 'screen_field', 450, 150)
 screen_field.par.top = screen_mix.path
 for k in range(1, 5):
@@ -215,7 +227,7 @@ for k in range(1, 5):
     assert sampler is not None, f'missing screen sampler {k}'
     sampler.inputConnectors[0].connect(screen_field)
 note(out_c, "ROPES: field_out -> existing pinned rope sampler.\n"
-            "SCREENS: screen_field -> Gavin/current screen blend -> existing pinned screen samplers.\n"
+            "SCREENS: screen_field -> Current/Gavin-live/Recorded screen blend -> existing pinned screen samplers.\n"
             "Mapping, screen orientation, panel gain and power limits remain as built by the baseline.\n"
             "screens_preview shows the live blend alongside the unchanged rope feed.")
 run("op('/project1/viz/modal_canvas').par.active = True", delayFrames=60)
@@ -223,7 +235,7 @@ note(viz, "COMBINED V0: live river (recorded fallback), fixed summer, additive M
           "Canvasmix: 0 = summer alone; 1 = full additive overlay, clamped before calibrated outputs.\n"
           "Mission control adjusts and saves Canvasmix in River/combined-v0.json.\n"
           "Framing: Auto recognizes Channel/Pool; Original bypass; manual one/three windows; live video only.\n"
-          "Screenmode: current/Gavin style/manual/cycle. Screens only; ropes keep combined_clamp.\n"
+          "Screenmode: current/Gavin live/recorded/manual/three-look cycle. Screens only; ropes keep combined_clamp.\n"
           "Gallery video is available at gallery_in but does not influence v0. No audio.\n"
           "Live footage runs at camera speed: seasonal playback-speed changes are deferred.")
 rd.text = "COMBINED V0: inputs -> summer + additive Dave canvas -> calibrated outputs.\n" + viz.op('NOTE').text

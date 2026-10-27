@@ -9,7 +9,7 @@ fade = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fade)
 
 
-def test_cycle_holds_each_look_and_has_two_smooth_eight_second_fades():
+def test_cycle_holds_each_look_and_has_three_smooth_eight_second_fades():
     s = {'mode': 'cycle', 'blend': 0, 'hold': 30}
     for t, expected in [(0,0),(29,0),(30,0),(34,.5),(38,1),(67,1),(68,1),(72,.5),(76,0),(106,0)]:
         assert fade.amount(s, t) == pytest.approx(expected)
@@ -42,3 +42,39 @@ def test_invalid_controls_are_refused(value):
     with pytest.raises(ValueError):
         fade.checked(value)
 
+
+def test_three_look_cycle_and_wrap_have_normalized_continuous_weights():
+    s = fade.checked({'mode': 'cycle', 'blend': 0, 'hold': 30})
+    for t, expected in [(0,(1,0,0)), (34,(.5,.5,0)), (38,(0,1,0)),
+                        (72,(0,.5,.5)), (76,(0,0,1)), (105,(0,0,1)),
+                        (110,(.5,0,.5)), (114,(1,0,0))]:
+        assert fade.weights(s, t) == pytest.approx(expected)
+    for t in range(3420):
+        w = fade.weights(s, t / 10)
+        assert sum(w) == pytest.approx(1)
+        assert all(0 <= x <= 1 for x in w)
+    for t in (30,38,68,76,106,114):
+        assert fade.weights(s,t-.0001) == pytest.approx(fade.weights(s,t+.0001),abs=.00001)
+
+
+def test_manual_recorded_share_and_mode_transition_preserve_all_weights():
+    s = fade.checked({'mode':'manual','blend':.25,'recorded':.4,'hold':30})
+    assert fade.weights(s,0) == pytest.approx((.45,.15,.4))
+    st = {}
+    fade.step(st,s,0)
+    fade.step(st,s,8)
+    assert st['screen_weights'] == pytest.approx((.45,.15,.4))
+    recorded = dict(s,mode='recorded')
+    fade.step(st,recorded,10)
+    assert st['screen_weights'] == pytest.approx((.45,.15,.4))
+    fade.step(st,recorded,14)
+    assert st['screen_weights'] == pytest.approx((.225,.075,.7))
+    fade.step(st,recorded,18)
+    assert st['screen_weights'] == (0,0,1)
+    assert fade.checked({'mode':'current','blend':0,'hold':30})['recorded'] == 0
+
+
+@pytest.mark.parametrize('recorded', [True, None, -1, 1.1, float('nan'), float('inf'), '0.5'])
+def test_invalid_recorded_weight_is_refused(recorded):
+    with pytest.raises(ValueError):
+        fade.checked({'mode':'manual','blend':0,'recorded':recorded,'hold':30})
