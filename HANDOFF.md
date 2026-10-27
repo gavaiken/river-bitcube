@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** nobody: free for Will
-- **Where:** bitcube free; Combined v0 deliberately left showing Channel framing at Will's request
-- **Updated:** 2026-10-26 21:21 PT
+- **Holder:** Will (Codex)
+- **Where:** bitcube: automatic selection of the two river framing profiles
+- **Updated:** 2026-10-26 21:26 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
 ## Running now
