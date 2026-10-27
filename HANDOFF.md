@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** nobody (free)
-- **Where:** bitcube + mission control: staggered/processed screen cycle deployed; Combined left showing
-- **Updated:** 2026-10-26 22:46 PT
+- **Holder:** Will (Codex)
+- **Where:** bitcube: diagnose solid-colour screen flashes and spread screen looks across the cycle
+- **Updated:** 2026-10-26 22:50 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
 ## Running now
