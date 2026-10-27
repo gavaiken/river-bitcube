@@ -10,6 +10,8 @@ Children (each logs to C:/Users/user/River/logs/modal-<name>.log):
   gallery   river-agent's capture/capture.py --video: 10 s clips (640 px, 10 fps, with sound) from the gallery
             cam's sub-stream, back to back, POSTed to /ingest/gallery/video.
   river     the same for the river cam: /ingest/river/video.
+  frames    tools/modal/frames_sync.py: mirrors Modal Frames (modal-frames/SPEC.md §9) into
+            C:/Users/user/River/gallery_state/frames for the "Combined with Modal Input Selector" show.
 
 Started at login by Start-Modal.cmd (Startup folder). Dave's scripts are used unmodified from
 C:/Users/user/River/river-agent; this file only adds the camera URLs and the token, read from the untracked
@@ -34,7 +36,7 @@ STATE_DIR = RIVER / 'gallery_state'
 SITE = 'https://to-be-a-river--river.modal.run'   # Dave's Modal app (public URL; not a secret)
 PORT = 8770                              # 8765 is RopeLights
 FFMPEG_DIRS = [r'C:\Program Files\WinGet\Links']
-CHILDREN = ('sync', 'gallery', 'river')
+CHILDREN = ('sync', 'gallery', 'river', 'frames')
 RESTART_SECONDS = 15
 LOCK_PORT = 8771                         # held by the running supervisor, so a second one exits at once
 
@@ -100,6 +102,13 @@ def run_sync():
     sys.argv = ['sync.py', '--site', SITE, '--dir', str(STATE_DIR), '--port', str(PORT)]
     import runpy
     runpy.run_path(str(AGENT / 'gallery' / 'sync.py'), run_name='__main__')
+
+
+def run_frames():
+    sys.path.insert(0, str(REPO / 'tools' / 'modal'))
+    import frames_sync
+    sys.argv = ['frames_sync.py']
+    frames_sync.main()
 
 
 def run_capture(cam):
@@ -169,7 +178,7 @@ def status():
         f = LOGS / f'modal-{name}.log'
         lines = f.read_text(encoding='utf-8', errors='replace').splitlines()[-3:] if f.exists() else ['(no log)']
         print(f'--- {name}'), [print('  ' + line) for line in lines]
-    for name in ('state.json', 'reflex.json'):
+    for name in ('state.json', 'reflex.json', 'frames/latest.json'):
         f = STATE_DIR / name
         print(f'{name}: ' + (f'{time.time() - f.stat().st_mtime:.0f} s old' if f.exists() else 'missing'))
 
@@ -179,6 +188,9 @@ if __name__ == '__main__':
     if arg == 'sync':
         die_with_parent()
         run_sync()
+    elif arg == 'frames':
+        die_with_parent()
+        run_frames()
     elif arg in ('gallery', 'river'):
         die_with_parent()
         run_capture(arg)
