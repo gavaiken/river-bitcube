@@ -1,13 +1,23 @@
 # Handoff: where things stand
 
-- **Holder:** Will (Codex)
-- **Where:** Combined v0 screen fade: inspecting routes and awaiting visual preferences
-- **Updated:** 2026-10-26 21:40 PT
+- **Holder:** nobody: free for Will
+- **Where:** bitcube free; Combined v0 left on Auto framing with the screens-only look cycle
+- **Updated:** 2026-10-26 22:04 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
 ## Running now
-- `river-combined-v0.toe`: **Auto**, currently detecting Pool and using **Pool: three windows**, live river, fixed summer intensity 0.85, Dave overlay 10%. Will explicitly requested this be left showing.
+- `river-combined-v0.toe`: **Auto**, currently detecting Channel and using **Channel: three windows**, live river, fixed summer intensity 0.85, Dave overlay 18%. Four screens cycle between Current and Gavin style with 30-second holds and 8-second fades. Will requested this be left showing.
 - Verified after reopening: 60 fps, zero project errors, ropes sending, panels on. The boot default remains `river-local-oct-22-seasons.toe`; no other show, build or calibration pin changed. Dave's repo/deployment untouched.
+
+## Screens-only look fade: 06978a6
+- Will chose screens only, Gavin's existing appearance versus current Combined appearance, ~30 seconds on each with slow fades. **Enabled: Automatic cycle, hold 30 s, fade 8 s** (76-second full cycle). The ropes keep the Combined output. Current overlay 18% and Auto framing preserved.
+- Mission control Status: **Screen look** = Current look / Gavin style / Manual blend / Automatic cycle; blend slider 0% Current → 100% Gavin; cycle hold 15/30/60/120 s. Apply river settings persists all settings together. Changing modes or applying a blend fades over 8 s. Unchanged screen settings do not restart the cycle when overlay/framing changes.
+- **Gavin style is applied to live river video**, retaining the recorded fallback and camera speed. Reuses his grade/effects section verbatim at build time, plus a scoped copy of his year glue and the original year engine. Independent live state, no server, no writes to seasonal rules. It retains Gavin's existing presence-driven seasonal behavior: currently winter because presence is zero. No new gallery-video steering or audio. Original Gavin show/build/glue, shared screens builder and calibration pins unchanged.
+- Own graph: `viz/gavin_screens` (640×360 seasonal branch) → `viz/gavin_screen_in`; `viz/screen_mix` crossfades this against `combined_clamp`. `outputs/screen_field` selects that for the four existing screen samplers. `viz_out`, `outputs/field_out` and the rope sampler stay on Combined. All panel orientation, screen sampling coordinates, HDMI routing and rope power caps retained.
+- Verified: full rebuild repeatable; screen routing separated from rope routing; an actual cycle midpoint reported ~0.579 both in runtime and the Cross TOP; current/Gavin output previews; saved/reopened with Auto, 18% overlay, cycle/30 s settings intact, no project errors. Runtime verified 60 fps before and after reload. Midpoint pixel equality was not used as proof (live sources changed between reads).
+- Validation: **314 Python passed, 3 skipped; 418 mission tests passed**. Saved .toe expanded fresh: **519 parts, zero UTF-8/UTF-16/URL-encoded secret hits**. GitHub check and Pages green for 06978a6. Browser fixture tested cycle, 60/30 s timing, manual 40% blend and readback. Test tab/server closed.
+- Mission control deployed **06978a6adbb44384f6abc8973edff061570956b4** at 22:04 PT, verified `/version`. Reload Status to get the screen controls.
+- Revert the screens: **Screen look → Current look → Apply river settings** (8-second fade). Framing Original is separate and does not stop the screen cycle. Full pre-feature .toe/settings backup: `C:\Users\user\River\checkpoints\combined-v0-before-screen-fade-20261026\`; source `191e70d`. Staging recovery stash `combined-v0 screen fades verified staging 2026-10-26` is already deployed; do not apply over main.
 
 ## Automatic camera-view selection: c9bcc88
 - Will asked for the framing to follow his camera-position changes. **Auto: recognize camera view** is now enabled and persisted, preserving the overlay at 10%. Manual Channel/Pool choices and Original bypass still work.
@@ -39,5 +49,5 @@
 - Tests need modern Node (CI 24, mission control 26.10), not this Mac's default Node 20. Session's temporary Node: `/tmp/river-npm-cache/_npx/fd0ad82db56a14ec/node_modules/node/bin`.
 
 ## Next
-- Tune framing/masks, exposure and Auto recognition under daylight with Will; Original available at any point. Motion-aware masks and new arbitrary-angle crops remain future work.
+- Tune screen looks/cycle timing, framing/masks, exposure and Auto recognition under daylight with Will; Original available at any point. Motion-aware masks and new arbitrary-angle crops remain future work.
 - Gallery influence, audio and further river recordings remain deferred.
