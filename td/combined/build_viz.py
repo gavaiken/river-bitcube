@@ -1,6 +1,6 @@
 # combined-v0 visual layer. Executed by build_combined_v0.py after the baseline inputs/outputs exist.
 # Gavin's summer palette, natural tint, torrent and sun glints; Dave's canvas is added over the result.
-# Uses established built-in TOPs only. Never rebuilds or modifies an original show.
+# Uses built-in TOPs and a 10 Hz numpy Script TOP for optional framing. Never rebuilds or modifies an original show.
 # Match the recording pre-render's removal of the camera clock (top 6%) and label (bottom 5%).
 # Crop only live river video; the recorded fallback is already cropped.
 camcrop = maker(inp)(cropTOP, 'river_cam_crop', 225, 150)
@@ -26,6 +26,11 @@ mod = get(textDAT, 'combined_mod', 0, 900)
 mod.par.file = REPO + '/td/combined/runtime.py'
 mod.par.syncfile = True
 viz.par.Canvasmix = mod.module.load_strength()
+if not hasattr(viz.par, 'Framing'):
+    pg.appendMenu('Framing', label='River framing')
+viz.par.Framing.menuNames = list(mod.module.FRAMING)
+viz.par.Framing.menuLabels = ['Original (bypass)', 'Channel: one window', 'Channel: three windows', 'Pool: one window', 'Pool: three windows']
+viz.par.Framing = mod.module.load_framing()
 M = "op('combined_mod').module"
 I = f"{M}.intensity()"
 T = ' + 0 * absTime.frame'
@@ -35,7 +40,21 @@ ex.par.framestart = True
 ex.par.active = True
 
 lv = get(levelTOP, 'river_level', 150, 450)
-lv.inputConnectors[0].connect(viz.op('river_in'))
+# Exact original route remains on switch input 0; only live footage uses the new branch.
+small = get(fitTOP, 'framing_input', -600, 450)
+small.inputConnectors[0].connect(viz.op('river_in'))
+small.par.fit = 'fill'
+res(small, 640, 360)
+callbacks = get(textDAT, 'framing_callbacks', -600, 650)
+callbacks.par.file = REPO + '/td/combined/framing.py'
+callbacks.par.syncfile = True
+framed = get(scriptTOP, 'framed_river', -450, 450)
+framed.par.callbacks = callbacks
+framed.inputConnectors[0].connect(small)
+select = get(switchTOP, 'framing_select', -150, 450)
+wire(select, [viz.op('river_in'), framed])
+select.par.index.expr = f"int({M}.effective_framing(parent()) != 'original'){T}"
+lv.inputConnectors[0].connect(select)
 lv.par.brightness1.expr = 'parent().par.Rivergain'
 lv.par.contrast.expr = 'parent().par.Rivercontrast'
 lv.par.clamp = True
@@ -173,6 +192,7 @@ run("op('/project1/viz/modal_canvas').par.active = True", delayFrames=60)
 note(viz, "COMBINED V0: live river (recorded fallback), fixed summer, additive Modal canvas.\n"
           "Canvasmix: 0 = summer alone; 1 = full additive overlay, clamped before calibrated outputs.\n"
           "Mission control adjusts and saves Canvasmix in River/combined-v0.json.\n"
+          "Framing: Original bypass, Channel/Pool one or three crossfading windows; live video only.\n"
           "Gallery video is available at gallery_in but does not influence v0. No audio.\n"
           "Live footage runs at camera speed: seasonal playback-speed changes are deferred.")
 rd.text = "COMBINED V0: inputs -> summer + additive Dave canvas -> calibrated outputs.\n" + viz.op('NOTE').text

@@ -464,7 +464,8 @@ export function planControl(action, body = {}) {
     case 'overlay': {
       const x = num(body.strength);
       if (!(x >= 0 && x <= 1)) throw bad('overlay strength is 0 to 1');
-      return { kind: 'probe', args: `-Action overlay -Overlay ${x.toFixed(2)}` };
+      if (body.framing !== undefined && !['original', 'channel', 'channel-multi', 'pool', 'pool-multi'].includes(body.framing)) throw bad('unknown river framing profile');
+      return { kind: 'probe', args: `-Action overlay -Overlay ${x.toFixed(2)}${body.framing !== undefined ? ' -Framing ' + body.framing : ''}` };
     }
     case 'hub75': {
       const x = num(body.brightness);
@@ -500,7 +501,7 @@ export function checkedControl(action, body = {}) {
     case 'rules': return { rules: { ...plan.body } };
     case 'ropes': return { dark: body.dark === true };
     case 'hub75': return { brightness: num(body.brightness) };
-    case 'overlay': return { strength: Number(num(body.strength).toFixed(2)) };
+    case 'overlay': return { strength: Number(num(body.strength).toFixed(2)), ...(body.framing !== undefined ? { framing: body.framing } : {}) };
     case 'test': return { on: body.on === true };
     case 'bootfile': case 'switch': case 'rebuild': return { file: body.file };
     case 'lightsroute': return { route: body.route };

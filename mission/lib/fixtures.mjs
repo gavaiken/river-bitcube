@@ -168,7 +168,7 @@ export class FixtureMission {
     if (out.probe?.value?.td?.file === 'river-combined-v0.toe') {
       const td = out.probe.value.td;
       out.probe.value.td = { ...td, combined: { season: 'summer', intensity: 0.85, overlay: w.overlay ?? 0.25,
-        effective_overlay: w.overlay ?? 0.25, river_source: 'live', scene: { animation: 'flow', palette: 'fixture' }, scene_age_s: 5 } };
+        framing: w.framing ?? 'original', effective_framing: w.framing ?? 'original', effective_overlay: w.overlay ?? 0.25, river_source: 'live', scene: { animation: 'flow', palette: 'fixture' }, scene_age_s: 5 } };
     }
     if (out.probe?.value) w.applying.confirm(out.probe.value, this.now());
     out.applying = w.applying.list(clock);
@@ -238,6 +238,7 @@ export class FixtureMission {
         if (!td || td.ok === false || running !== 'river-combined-v0.toe')
           return { ok: false, error: 'overlay control is only available while combined-v0 is running', fixture: true };
         w.overlay = checked.strength;
+        if (checked.framing !== undefined) w.framing = checked.framing;
       }
       if (action === 'test') {       // as probe.ps1 -Action test: through TouchDesigner, refused when it doesn't answer
         if (!td || td.ok === false) return { ok: false, error: 'TouchDesigner is not running', fixture: true };

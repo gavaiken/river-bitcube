@@ -18,7 +18,7 @@
 #   ropes, hub75, test, switch, rebuild and lightsroute are refused while a calibration runs ({ ok: false, error: "a calibration is
 #   running. Stop it on the Lights page first", refused: <action> } with the status), whoever runs this script; a dry run (or a
 #   decode of earlier photos) touches no lights and refuses nothing.
-param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25)
+param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25, [ValidateSet('original','channel','channel-multi','pool','pool-multi')][string]$Framing)
 $ErrorActionPreference = 'Continue'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $river = Split-Path $repo -Parent
@@ -159,7 +159,7 @@ elseif (Get-Process TouchDesigner -ErrorAction SilentlyContinue) {
     if ($Action -eq 'ropes') { $req.dark = [bool]$Dark }
     if ($Action -eq 'hub75') { $req.brightness = $Brightness }
     if ($Action -eq 'test') { $req.on = [bool]$On }
-    if ($Action -eq 'overlay') { $req.strength = $Overlay }
+    if ($Action -eq 'overlay') { $req.strength = $Overlay; if ($Framing) { $req.framing = $Framing } }
     $req | ConvertTo-Json -Compress | Set-Content -Path (Join-Path $env:TEMP 'mission_args.json') -Encoding utf8
     $raw = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'tools\td.ps1') -File (Join-Path $PSScriptRoot 'td_mission.py') -Timeout 15 2>$null
     $line = ($raw | Where-Object { $_ -match '^\{' } | Select-Object -Last 1)

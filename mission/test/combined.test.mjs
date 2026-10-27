@@ -35,10 +35,23 @@ test('fixture exercises switch, overlay setting and returning to default indepen
   assert.equal((await m.control('overlay', { strength: 0.6 }, 'all-good')).ok, true);
   let status = m.snapshot('all-good');
   assert.equal(status.probe.value.td.combined.overlay, 0.6);
+  assert.equal((await m.control('overlay', { strength: .6, framing: 'pool-multi' }, 'all-good')).ok, true);
+  assert.equal(m.snapshot('all-good').probe.value.td.combined.framing, 'pool-multi');
+  await m.control('overlay', { strength: .2 }, 'all-good');
+  assert.equal(m.snapshot('all-good').probe.value.td.combined.framing, 'pool-multi');
   assert.equal(derive(status, status.now).controls.overlay.possible, true);
   world.file = 'river-local-oct-22-seasons.toe';
   assert.equal((await m.control('overlay', { strength: 1 }, 'all-good')).ok, false);
   status = m.snapshot('all-good');
   assert.equal(derive(status, status.now).controls.overlay.possible, false);
   assert.equal(status.probe.value.boot_file, f.status.probe.value.boot_file);
+});
+
+test('river framing is whitelisted and keeps legacy overlay requests valid', () => {
+  assert.deepEqual(planControl('overlay', { strength: .1, framing: 'pool-multi' }),
+    { kind: 'probe', args: '-Action overlay -Overlay 0.10 -Framing pool-multi' });
+  assert.deepEqual(checkedControl('overlay', { strength: .1, framing: 'original', extra: 'drop' }),
+    { strength: .1, framing: 'original' });
+  for (const framing of [null, true, 'pool; shutdown', 'unknown', {}])
+    assert.throws(() => planControl('overlay', { strength: .1, framing }), /framing/);
 });

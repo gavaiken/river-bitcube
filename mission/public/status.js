@@ -51,7 +51,7 @@ const stillTried = { gallery: 0, river: 0 }, stillBusy = { gallery: false, river
 const stillNet = { gallery: false, river: false };   // the last try failed for want of a network (not "no picture"): try again on contact
 const stills = { gallery: { url: null, age_s: null, fetchedAt: null, missing: null }, river: { url: null, age_s: null, fetchedAt: null, missing: null } };
 const lastHTML = new Map();   // section -> the HTML it holds (no churn when nothing changed)
-let overlayDraft = null;
+let overlayDraft = null, framingDraft = null;
 let hubDraft = null;          // the brightness stepper, before "Set"
 const targetDraft = { season: null, intensity: null };
 const rulesDraft = {};        // what was typed into the rules form, kept across re-renders and a failed Apply
@@ -129,6 +129,8 @@ function setHTML(el, html) {
   // patched in place, never drawn anew (ui.js morph): the focused tile, button, row or line stays the same node, so a screen reader
   // doesn't read it again at every poll (R9 #7), and the box being typed in keeps its caret and what was typed (R8 #29)
   morph(el, html);
+  const riverFraming = el.querySelector('#river-framing');
+  if (riverFraming) riverFraming.value = framingDraft ?? model?.show.combined?.framing ?? 'original';
   el.querySelectorAll('details[data-id]').forEach((d) => { d.open = openRows.has(d.dataset.id); });
   refreshAges(el);
   // a control under the user's finger or keyboard focus keeps it; when it went, or can't hold it now (disabled, in a closed row), it
@@ -695,18 +697,23 @@ function showingHTML(m) {
 }
 /** Change: every offered show (shows.json), its kind, and which is showing and which is the default; a tap opens its card. */
 function combinedHTML(m) {
-  if (m.show.file?.name !== 'river-combined-v0.toe') { overlayDraft = null; return ''; }
+  if (m.show.file?.name !== 'river-combined-v0.toe') { overlayDraft = null; framingDraft = null; return ''; }
   const s = m.show.combined, current = typeof s?.overlay === 'number' ? Math.round(s.overlay * 100) : null;
   const draft = overlayDraft ?? current ?? 25, disabled = off('overlay') || current == null;
   const state = s?.scene ? `${s.scene.animation ?? '?'} / ${s.scene.palette ?? '?'}` : 'Waiting for a usable Modal scene';
   return `<div class="ctl" id="ctl-overlay" data-ctl="overlay">
     <div class="ctl-h">Summer river + Dave's overlay</div>${whyLine('overlay')}
     <p>River: ${esc(s?.river_source ?? 'not known')}. Summer stays fixed; live video runs at camera speed.</p>
+    <label for="river-framing">River framing</label>
+    <select id="river-framing" ${disabled || s?.framing == null ? 'disabled' : ''}>
+      ${[['original','Original (bypass)'],['channel','Channel: one window'],['channel-multi','Channel: three windows'],['pool','Pool: one window'],['pool-multi','Pool: three windows']].map(([v,label]) => `<option value="${v}" ${(framingDraft ?? s?.framing ?? 'original') === v ? 'selected' : ''}>${label}</option>`).join('')}
+    </select>
+    <p>Choose the matching view after moving the camera. Three windows crossfade slowly. Profiles mask foreground and lift shadows; recorded fallback uses Original. Now: ${esc(s?.effective_framing ?? 'original')}.</p>
     <label for="overlay-strength">Dave's overlay strength</label>
     <div class="row-btns"><input type="range" min="0" max="100" step="1" id="overlay-strength" value="${draft}" aria-describedby="overlay-help overlay-now" ${disabled ? 'disabled' : ''}>
     <output id="overlay-draft" for="overlay-strength">${draft} %</output>
-    <button type="button" class="btn primary" id="ctl-overlay-set" data-act="overlay-set" ${disabled || draft === current ? 'disabled' : ''}>Set overlay</button></div>
-    <p id="overlay-help">0 %: summer river alone. Higher values add Dave's bright forms. Move the slider, then press Set overlay. The setting survives show switches.</p>
+    <button type="button" class="btn primary" id="ctl-overlay-set" data-act="overlay-set" ${disabled || (draft === current && (framingDraft ?? s?.framing) === s?.framing) ? 'disabled' : ''}>Apply river settings</button></div>
+    <p id="overlay-help">0 %: summer river alone. Higher values add Dave's bright forms. Move the slider, then press Apply river settings. Original restores the previous river look. The setting survives show switches.</p>
     <p id="overlay-now">Now ${current == null ? 'not known' : current + ' %'} on bitcube. ${esc(state)}.${s && s.effective_overlay === 0 && s.overlay > 0 ? ' Overlay is unavailable; the summer river continues alone.' : ''}${s?.scene_age_s != null ? ' Scene set ' + esc(dur(s.scene_age_s)) + ' ago.' : ''}</p>
     ${statusLine('ctl-overlay', ['overlay'])}</div>`;
 }
@@ -1199,11 +1206,16 @@ document.addEventListener('input', (e) => {
   }
 });
 document.addEventListener('input', (e) => {
+  if (e.target.id === 'river-framing') {
+    framingDraft = e.target.value;
+    render();
+    return;
+  }
   if (e.target.id !== 'overlay-strength') return;
   overlayDraft = Number(e.target.value);
   const out = $('#overlay-draft'), set = $('#ctl-overlay-set');
   if (out) out.textContent = `${overlayDraft} %`;
-  if (set) set.disabled = off('overlay') || overlayDraft === Math.round((model?.show.combined?.overlay ?? -1) * 100);
+  if (set) set.disabled = off('overlay') || (overlayDraft === Math.round((model?.show.combined?.overlay ?? -1) * 100) && (framingDraft ?? model?.show.combined?.framing) === model?.show.combined?.framing);
 });
 document.addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.closest?.('[data-act="still"]')) { e.preventDefault(); openStill(); }
@@ -1236,13 +1248,13 @@ document.addEventListener('click', async (e) => {
       break;
     }
     case 'overlay-set': {
-      if (overlayDraft == null) break;
-      const sent = overlayDraft;
-      runControl('overlay', '/api/control/overlay', { strength: sent / 100 }, { btn: b,
-        what: changeLabel('overlay', { strength: sent / 100 }), done: `Dave's overlay is now ${sent} %`,
+      const sent = overlayDraft ?? Math.round((model?.show.combined?.overlay ?? 0.25) * 100);
+      const profile = framingDraft ?? model?.show.combined?.framing ?? 'original';
+      runControl('overlay', '/api/control/overlay', { strength: sent / 100, framing: profile }, { btn: b,
+        what: changeLabel('overlay', { strength: sent / 100, framing: profile }), done: `River framing: ${profile}; Dave's overlay: ${sent} %`,
         fail: 'The overlay could not be set', kept: 'Your slider choice is kept.',
-        holds: (mm) => Math.round((mm.show.combined?.overlay ?? -1) * 100) === sent,
-        onDone: () => { if (overlayDraft === sent) overlayDraft = null; } });
+        holds: (mm) => Math.round((mm.show.combined?.overlay ?? -1) * 100) === sent && mm.show.combined?.framing === profile,
+        onDone: () => { if (overlayDraft === sent) overlayDraft = null; if (framingDraft === profile) framingDraft = null; } });
       break;
     }
     case 'hub-step': { const cur = m?.show.panels.brightness == null ? null : Math.round(m.show.panels.brightness * 100); if (cur == null && hubDraft == null) break; hubDraft = clamp((hubDraft ?? cur) + Number(b.dataset.d), 0, 100); render(); announce(`${hubDraft} %`, 'hub-step'); break; }

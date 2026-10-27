@@ -67,3 +67,46 @@ def test_opening_saved_show_restores_slider_once_without_rebuilding(runtime, mon
     comp.par.Canvasmix = 0.4
     runtime.frame(comp)
     assert comp.par.Canvasmix == 0.4
+
+
+def test_framing_and_overlay_share_settings_without_erasing_each_other(runtime, tmp_path):
+    dest = tmp_path / 'settings.json'
+    runtime.save_strength(.1, dest, profile='channel-multi')
+    assert runtime.load_framing(dest) == 'channel-multi'
+    runtime.save_strength(.4, dest)
+    assert runtime.load_framing(dest) == 'channel-multi'
+    assert runtime.load_strength(dest) == .4
+    before = dest.read_bytes()
+    with pytest.raises(ValueError):
+        runtime.save_strength(.9, dest, profile='pool; restart')
+    assert dest.read_bytes() == before
+    runtime.save_strength(.4, dest, profile='original')
+    assert runtime.load_framing(dest) == 'original'
+
+
+def test_recorded_fallback_bypasses_selected_camera_profile(runtime, monkeypatch):
+    comp = SimpleNamespace(par=SimpleNamespace(Framing=SimpleNamespace(eval=lambda: 'pool-multi')))
+    monkeypatch.setattr(runtime, 'live_source', lambda: False)
+    assert runtime.effective_framing(comp) == 'original'
+    monkeypatch.setattr(runtime, 'live_source', lambda: True)
+    assert runtime.effective_framing(comp) == 'pool-multi'
+
+
+def test_framing_pixel_orientation_mask_and_crossfade():
+    import numpy as np
+    path = Path(__file__).resolve().parents[2] / 'td/combined/framing.py'
+    spec = importlib.util.spec_from_file_location('framing_under_test', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    pixels = np.ones((360, 640, 4), dtype=np.float32) * .2
+    mask = np.ones((360, 640), dtype=np.float32)
+    mask[144:180] = 0
+    out = module.render(pixels, mask, 'channel', 0)
+    assert out.flags.c_contiguous and out.shape == (360, 640, 4)
+    assert np.max(out[-30:, :, :3]) == 0  # masked top becomes bottom-up array's last rows
+    assert np.min(out[:30, :, :3]) > .1
+    mask[:] = 1
+    pixels[:, :, 0] = np.linspace(0, 1, 640)
+    a = module.render(pixels, mask, 'channel-multi', 17.999)
+    b = module.render(pixels, mask, 'channel-multi', 18)
+    assert np.max(np.abs(a - b)) < .001
