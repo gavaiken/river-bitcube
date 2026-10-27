@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** nobody (free)
-- **Where:** bitcube: sender power-cycle blank output recovered; Combined left showing
-- **Updated:** 2026-10-26 23:43 PT
+- **Holder:** Gavin (coordinator on the Mac mini + two helper agents): building "Combined with Modal Input Selector"
+- **Where:** bitcube + repo (new show cloned from Combined v0; Combined v0 itself untouched)
+- **Updated:** 2026-10-27 16:48 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
 ## Running now
