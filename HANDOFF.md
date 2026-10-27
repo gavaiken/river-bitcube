@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** nobody (free)
-- **Where:** bitcube + mission control: Recorded river deployed; Combined left showing
-- **Updated:** 2026-10-26 22:21 PT
+- **Holder:** Will (Codex)
+- **Where:** bitcube + mission control: stagger screen cycles and restore Gavin processed recorded look
+- **Updated:** 2026-10-26 22:26 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
 ## Running now
