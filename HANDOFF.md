@@ -1,15 +1,26 @@
 # Handoff: where things stand
 
-- **Holder:** Will (Codex)
-- **Where:** bitcube + mission control: stagger screen cycles and restore Gavin processed recorded look
-- **Updated:** 2026-10-26 22:26 PT
+- **Holder:** nobody (free)
+- **Where:** bitcube + mission control: staggered/processed screen cycle deployed; Combined left showing
+- **Updated:** 2026-10-26 22:46 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
 ## Running now
-- `river-combined-v0.toe`: **Auto**, currently detecting Channel and using **Channel: three windows**, live river, fixed summer intensity 0.85, Dave overlay 18%. Four screens cycle Current → Gavin style (live) → Recorded river → Current, with 30-second holds and 8-second fades (114-second full cycle). Will requested this be left showing.
+- `river-combined-v0.toe`: **Auto**, currently detecting Channel and using **Channel: three windows**, live river, fixed summer intensity 0.85, Dave overlay 18%. Four screens cycle Current → Gavin style (live) → Gavin style (recorded) → Current, with 30-second holds and 8-second fades per screen (114-second cycle), staggered by 10 seconds per screen (0/10/20/30). Will requested this be left showing.
 - Verified after reopening: 60 fps, zero project errors, ropes sending, panels on. The boot default remains `river-local-oct-22-seasons.toe`; no other show, build or calibration pin changed. Dave's repo/deployment untouched.
 
-## Recorded river third screen look: 64c0368
+## Staggered screens + processed recorded river: 6302b01
+- Will corrected the third look: he wanted Gavin's processed show, not its raw source clip, and requested screen transitions at different times. **Gavin style (recorded)** now replaces the raw look; cycle stays Current → Gavin live → processed Recorded → Current. Enabled hold30/fade8/**offset10 seconds per screen**. Ropes keep Combined; boot default unchanged.
+- Mission control **Delay between screens (automatic cycle)**: 0–30 seconds, zero synchronizes. Offset only changes automatic cycle phases; fixed/manual modes remain aligned. Each screen has independent normalized weights and a pair of Cross TOPs, with 8-second continuity on mode/settings changes. Old clients preserve the offset; old files default it to zero. Status reports all four actual mixes.
+- `viz/gavin_recorded` uses the original Gavin library speed-blend expressions and grade/effects section, including palette, contrast, natural tint, torrent, glints, rain, leaves, blur and gain, at640×360. The normal decoder is reused from baseline; two added slow/fast players provide the same three-speed blend as his original show. Separate year holder reads the shared rules/presence; no new server or rule writes. Saved Gavin look overrides were inspected via toeexpand: default look parameters apply. Currently winter/blue because presence is zero; live speed remains camera speed.
+- Per-screen field routing: screen1 uses `viz/screen_live_mix` → `screen_mix` → `outputs/screen_field`; screens2–4 use `viz/screen{k}_live_mix` → `screen{k}_mix` → `outputs/screen{k}_field`. Four pinned samplers/orientation/HDMI remain unchanged. Rope source still `outputs/field_out` from Combined; Forceclip stays false. No changes to other shows/builds/map pins or Dave deployment.
+- Verified a real elapsed35.64 s transition: screen1 ~79% Gavin live while screens2–4 held Current. Also observed screens1–3 fully Recorded while screen4 was still fading from Gavin, and Current on screens1–3 while screen4 held Recorded. All actual live/record Cross TOP parameters matched runtime weights; panel output256×512, ~60fps, zero errors after recovery.
+- **GPU incident:** initial unguarded repeat build caused a fatal Intel Vulkan dialog (console screenshot confirmed it); restarted the last saved Combined show. Own Combined builder now pauses `/project1` cooking in try/finally while rewiring, restores prior cooking state, and avoids reopening unchanged movie files. Normal decoder is reused. Guarded repeat build passed and saved. No driver/system/network changes made. Cooking-paused build log briefly reports128×128 uncooked dimensions; after resume panel output verified256×512.
+- Validation: **333 Python passed, 3 skipped; 420 mission passed**. Fresh saved .toe scan: **679 expanded parts, zero UTF-8/UTF-16/URL-encoded secret hits**. Browser fixture verified offset10/0/apply/reload and corrected labels; test tab/server closed. Production login not accessed.
+- Reopened committed show: Auto/Channel, overlay18%, cycle30/fade8/offset10 restored; four distinct sampler routes and processed recorded source verified, ropes/panels active, zero project errors. Second post-reopen probe60fps with screens1–2 Recorded, screen3 mid-fade and screen4 Gavin live. Mission control `/version` **6302b018bff4e4a0a3427aa591af3d1c9f1217c6**, started22:44:35PT. GitHub check and Pages green.
+- Saved with td_save.ps1. Full pre-change .toe/settings backup: `C:\Users\user\River\checkpoints\combined-v0-before-stagger-processed-20261026\`, source0339e46. Offset0 restores synchronization; Current look→Apply fades back to Combined. Verified staging stash `combined-v0 stagger processed verified staging 2026-10-26` is committed/deployed; do not reapply it.
+
+## Prior raw recorded third look: 64c0368 (replaced by 6302b01)
 - Requested by Will: add Gavin's original recorded river footage to the existing mix/cycle. Added **Recorded river** to Screen look, and a **Recorded footage in manual mix** slider. Cycle now Current → Gavin live → Recorded → Current, with the same 30-second holds and 8-second fades, total 114 seconds. Ropes keep the Combined look. Boot default unchanged.
 - Recorded is the existing looping `inputs/river_clip` → `river_clip_fit` (`River/recordings/river/seasons/river-normal.mp4`), already cropped. Natural recorded video, without the live framing masks or summer/Modal treatment. No second decoder, new footage, new service or Modal change. It remains independent of live availability; Forceclip stays false.
 - Graph: `viz/screen_live_mix` blends Current/Gavin using G/(C+G), then final `viz/screen_mix` blends that result with the Recorded share. `outputs/screen_field` selects final mix; four calibrated samplers unchanged. Rope sampler still `outputs/field_out`, from `combined_clamp`.
