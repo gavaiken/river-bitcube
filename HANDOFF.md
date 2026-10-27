@@ -1,15 +1,26 @@
 # Handoff: where things stand
 
-- **Holder:** Will (Codex)
-- **Where:** bitcube: adding Recorded river to the screens-only look mix/cycle
-- **Updated:** 2026-10-26 22:10 PT
+- **Holder:** nobody (free)
+- **Where:** bitcube + mission control: Recorded river deployed; Combined left showing
+- **Updated:** 2026-10-26 22:21 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
 ## Running now
-- `river-combined-v0.toe`: **Auto**, currently detecting Channel and using **Channel: three windows**, live river, fixed summer intensity 0.85, Dave overlay 18%. Four screens cycle between Current and Gavin style with 30-second holds and 8-second fades. Will requested this be left showing.
+- `river-combined-v0.toe`: **Auto**, currently detecting Channel and using **Channel: three windows**, live river, fixed summer intensity 0.85, Dave overlay 18%. Four screens cycle Current → Gavin style (live) → Recorded river → Current, with 30-second holds and 8-second fades (114-second full cycle). Will requested this be left showing.
 - Verified after reopening: 60 fps, zero project errors, ropes sending, panels on. The boot default remains `river-local-oct-22-seasons.toe`; no other show, build or calibration pin changed. Dave's repo/deployment untouched.
 
-## Screens-only look fade: 06978a6
+## Recorded river third screen look: 64c0368
+- Requested by Will: add Gavin's original recorded river footage to the existing mix/cycle. Added **Recorded river** to Screen look, and a **Recorded footage in manual mix** slider. Cycle now Current → Gavin live → Recorded → Current, with the same 30-second holds and 8-second fades, total 114 seconds. Ropes keep the Combined look. Boot default unchanged.
+- Recorded is the existing looping `inputs/river_clip` → `river_clip_fit` (`River/recordings/river/seasons/river-normal.mp4`), already cropped. Natural recorded video, without the live framing masks or summer/Modal treatment. No second decoder, new footage, new service or Modal change. It remains independent of live availability; Forceclip stays false.
+- Graph: `viz/screen_live_mix` blends Current/Gavin using G/(C+G), then final `viz/screen_mix` blends that result with the Recorded share. `outputs/screen_field` selects final mix; four calibrated samplers unchanged. Rope sampler still `outputs/field_out`, from `combined_clamp`.
+- Manual Recorded sets its share; Live blend divides the remainder. Verified on TD: 40% Recorded + live blend 25% = 45% Current, 15% Gavin, 40% Recorded; Cross TOPs .25/.4. Settings persist together; older screen clients preserve the recorded share, and old settings files default it to zero. Existing guarded overlay action handles the bounded optional field, no new action.
+- Repeated full rebuild, inspected the natural daytime river preview, and checked a real Recorded → Current fade: phase 110.47/114, Current .58735 / Recorded .41265, exactly matching runtime targets and final Cross TOP. Both input branches remained live and ropes separate. Automatic cycle/30 s, Auto framing, overlay18% restored for normal running.
+- Validation: **324 Python passed, 3 skipped; 419 mission passed**. Fresh saved-show expansion: **523 parts, zero UTF-8/UTF-16/URL-encoded secret hits**. Local browser fixture exercised Recorded selection/100% readback, both manual sliders and cycle; test tab/server closed.
+- Saved show reopened on the committed build: Auto detected Channel, overlay18%, cycle/30 s and recorded slider0 restored, zero project errors, ropes/screens correctly separated. GitHub check and Pages green for 64c0368.
+- Mission control `/version`: **64c036870a177fd2f5978fee7de64a5724d5144f**, started 22:19:33 PT. Reload Status for the third look and slider. Production team login not accessed.
+- Full pre-change .toe/settings backup: `C:\Users\user\River\checkpoints\combined-v0-before-recorded-look-20261026\` (prior source c29a371). Current look → Apply river settings fades back in 8 s. Verified staging stash `combined-v0 recorded screens verified staging 2026-10-26` is already committed/deployed; do not apply it over main.
+
+## Prior two-look screen fade: 06978a6 (extended by 64c0368)
 - Will chose screens only, Gavin's existing appearance versus current Combined appearance, ~30 seconds on each with slow fades. **Enabled: Automatic cycle, hold 30 s, fade 8 s** (76-second full cycle). The ropes keep the Combined output. Current overlay 18% and Auto framing preserved.
 - Mission control Status: **Screen look** = Current look / Gavin style / Manual blend / Automatic cycle; blend slider 0% Current → 100% Gavin; cycle hold 15/30/60/120 s. Apply river settings persists all settings together. Changing modes or applying a blend fades over 8 s. Unchanged screen settings do not restart the cycle when overlay/framing changes.
 - **Gavin style is applied to live river video**, retaining the recorded fallback and camera speed. Reuses his grade/effects section verbatim at build time, plus a scoped copy of his year glue and the original year engine. Independent live state, no server, no writes to seasonal rules. It retains Gavin's existing presence-driven seasonal behavior: currently winter because presence is zero. No new gallery-video steering or audio. Original Gavin show/build/glue, shared screens builder and calibration pins unchanged.
