@@ -1,0 +1,9 @@
+{
+  "schema": "modal-frames/1",
+  "layout_version": 99,
+  "frame_id": "sample-bad-layout",
+  "issued_at": "2026-10-27T18:07:00Z",
+  "ttl_s": 120,
+  "elements": {"ropes": {"river": {"amount": 0.5}}},
+  "note": "Sample that bitcube must REJECT (layout_version 99 does not match layout.json): it keeps showing the current frame and reports the mismatch."
+}

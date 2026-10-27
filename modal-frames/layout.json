@@ -1,0 +1,48 @@
+{
+  "layout_version": 1,
+  "about": "The LED elements of A River Becoming as Modal Frames sees them. Published by river-bitcube (modal-frames/layout.json); Modal reads it rather than hard-coding sizes. Every image is 8-bit sRGB RGB, row 0 = the top as the element hangs, column 0 = its left as seen from the front.",
+  "elements": [
+    {
+      "id": "screen-1",
+      "kind": "screen",
+      "width": 128,
+      "height": 256,
+      "up": "row 0 is the top edge of the screen as hung (portrait)",
+      "river_region": [0.0, 0.0, 0.25, 0.5]
+    },
+    {
+      "id": "screen-2",
+      "kind": "screen",
+      "width": 128,
+      "height": 256,
+      "up": "row 0 is the top edge of the screen as hung (portrait)",
+      "river_region": [0.25, 0.0, 0.25, 0.5]
+    },
+    {
+      "id": "screen-3",
+      "kind": "screen",
+      "width": 128,
+      "height": 256,
+      "up": "row 0 is the top edge of the screen as hung (portrait)",
+      "river_region": [0.0, 0.5, 0.25, 0.5]
+    },
+    {
+      "id": "screen-4",
+      "kind": "screen",
+      "width": 128,
+      "height": 256,
+      "up": "row 0 is the top edge of the screen as hung (portrait)",
+      "river_region": [0.25, 0.5, 0.25, 0.5]
+    },
+    {
+      "id": "ropes",
+      "kind": "ropes",
+      "width": 20,
+      "height": 400,
+      "up": "row 0 is the hanging (top) end of every rope; row 399 is its bottom end",
+      "columns": "column c is rope c+1 (ropes 1 to 20); one LED per row",
+      "river_region": [0.5, 0.0, 0.5, 1.0]
+    }
+  ],
+  "river_region_about": "[x, y, w, h] in the river video (0-1, origin top-left): the part of the moving river each element takes its ripples from. Chosen by bitcube; published so a Modal preview can imitate the result. Modal never needs to set it."
+}

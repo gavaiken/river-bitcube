@@ -1,0 +1,12 @@
+{
+  "schema": "modal-frames/1",
+  "layout_version": 1,
+  "frame_id": "sample-dusk-ropes",
+  "issued_at": "2026-10-27T18:05:00Z",
+  "ttl_s": 300,
+  "transition": {"duration_ms": 20000, "easing": "ease-in-out", "space": "oklch", "via": ["#1b3a6b"]},
+  "elements": {
+    "ropes": {"image": "/frames/sample-dusk-ropes/ropes.png", "sha256": "0000000000000000000000000000000000000000000000000000000000000006", "river": {"amount": 0.8, "contrast": 0.6}}
+  },
+  "note": "Sample: a partial frame. Only the ropes change, travelling through deep blue to warm dusk; the screens keep their targets."
+}

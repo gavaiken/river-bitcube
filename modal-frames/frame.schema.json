@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gavaiken/river-bitcube/modal-frames/frame.schema.json",
+  "title": "Modal Frames manifest (modal-frames/1)",
+  "description": "GET /frames/latest.json on Modal. See modal-frames/SPEC.md.",
+  "type": "object",
+  "required": ["schema", "layout_version", "frame_id", "issued_at", "ttl_s", "elements"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "modal-frames/1" },
+    "layout_version": { "type": "integer", "minimum": 1 },
+    "frame_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,80}$",
+      "description": "Unique per frame, never reused. URL-safe."
+    },
+    "issued_at": { "type": "string", "format": "date-time", "description": "UTC, informational only." },
+    "ttl_s": { "type": "integer", "minimum": 10, "maximum": 3600, "description": "How long this frame stays fresh, counted from when bitcube receives it." },
+    "transition": { "$ref": "#/$defs/transition" },
+    "elements": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "enum": ["screen-1", "screen-2", "screen-3", "screen-4", "ropes"] },
+      "additionalProperties": { "$ref": "#/$defs/element" }
+    },
+    "note": { "type": "string", "maxLength": 280, "description": "Optional words for people (mission control, the journal)." }
+  },
+  "$defs": {
+    "hex": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "duration_ms": { "type": "integer", "minimum": 500, "maximum": 60000, "default": 5000 },
+        "easing": { "enum": ["linear", "ease-in", "ease-out", "ease-in-out"], "default": "ease-in-out" },
+        "space": { "const": "oklch", "default": "oklch" },
+        "via": { "type": "array", "maxItems": 3, "items": { "$ref": "#/$defs/hex" }, "default": [] }
+      }
+    },
+    "river": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "amount": { "type": "number", "minimum": 0, "maximum": 1 },
+        "contrast": { "type": "number", "minimum": 0, "maximum": 1 },
+        "speed": { "type": "number", "minimum": 0.25, "maximum": 2 }
+      }
+    },
+    "element": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "image": {
+          "type": "string",
+          "pattern": "^/frames/[A-Za-z0-9._-]{1,80}/(screen-[1-4]|ropes)\\.png$",
+          "description": "Path on the Modal app. Immutable: the bytes at a path never change."
+        },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "river": { "$ref": "#/$defs/river" }
+      },
+      "dependentRequired": { "image": ["sha256"] }
+    }
+  }
+}

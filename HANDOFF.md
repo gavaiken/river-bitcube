@@ -87,6 +87,7 @@
 - Tests need modern Node (CI 24, mission control 26.10), not this Mac's default Node 20. Session's temporary Node: `/tmp/river-npm-cache/_npx/fd0ad82db56a14ec/node_modules/node/bin`.
 
 ## Next
+- **Modal Frames** (Gavin, 27 Oct): contract proposed in [`modal-frames/`](modal-frames/README.md) (spec, layout, schema, samples, prompt for Dave's Claude). Nothing built yet. bitcube side to do: `tools/modal/frames_sync.py`, the mock server and the "Modal Frames" show.
 - Shared physical-screen flicker: inspect HDMI connection/sender/Colorlight status with Will; both Combined and original Gavin flash, while recorded render/display frames were clean. Failed software trials already reverted.
 - Tune screen looks/cycle timing, framing/masks, exposure and Auto recognition under daylight with Will; Original available at any point. Motion-aware masks and new arbitrary-angle crops remain future work.
 - Gallery influence, audio and further river recordings remain deferred.

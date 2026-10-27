@@ -7,6 +7,7 @@ Show machine for **A River Becoming** (Gray Area, Oct 2026). Lives at `C:\Users\
 | `AGENTS.md` | Start here (humans and agents, Claude and Codex): the rules, the baton, key facts. `CLAUDE.md` just points to it |
 | `HANDOFF.md` | Where things stand now and who worked last (the baton) |
 | `shows.json` | Every show file mission control offers: what it does, its inputs, who edited it, its calibration |
+| `modal-frames/` | **Modal Frames** (proposed 27 Oct): the contract for Dave's Modal agent to set every LED's target colour, plus the prompt for Dave's Claude. Self-contained |
 | `tools/check` | Run before every push (tests, registry, calibration); also runs on GitHub |
 | `docs/` | Hardware reference, design notes, show-file pages, [checkpoints](docs/checkpoints.md); the old plans and log are history |
 | `docs/system/` | **System map:** `system.json` (every device, IP, port and connection; source of truth), the interactive page ([live](https://gavaiken.github.io/river-bitcube/system/)) and generated `system.md`. `docs/llms.txt` indexes the docs for agents |

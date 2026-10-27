@@ -1,0 +1,16 @@
+{
+  "schema": "modal-frames/1",
+  "layout_version": 1,
+  "frame_id": "sample-calm-blue",
+  "issued_at": "2026-10-27T18:00:00Z",
+  "ttl_s": 120,
+  "transition": {"duration_ms": 10000, "easing": "ease-in-out", "space": "oklch", "via": []},
+  "elements": {
+    "screen-1": {"image": "/frames/sample-calm-blue/screen-1.png", "sha256": "0000000000000000000000000000000000000000000000000000000000000001", "river": {"amount": 0.6, "contrast": 0.5, "speed": 0.8}},
+    "screen-2": {"image": "/frames/sample-calm-blue/screen-2.png", "sha256": "0000000000000000000000000000000000000000000000000000000000000002", "river": {"amount": 0.6, "contrast": 0.5, "speed": 0.8}},
+    "screen-3": {"image": "/frames/sample-calm-blue/screen-3.png", "sha256": "0000000000000000000000000000000000000000000000000000000000000003", "river": {"amount": 0.6, "contrast": 0.5, "speed": 0.8}},
+    "screen-4": {"image": "/frames/sample-calm-blue/screen-4.png", "sha256": "0000000000000000000000000000000000000000000000000000000000000004", "river": {"amount": 0.6, "contrast": 0.5, "speed": 0.8}},
+    "ropes":    {"image": "/frames/sample-calm-blue/ropes.png",    "sha256": "0000000000000000000000000000000000000000000000000000000000000005", "river": {"amount": 0.5, "contrast": 0.4, "speed": 1.0}}
+  },
+  "note": "Sample: all five elements, a calm blue gradient (light at the top, deep at the bottom)."
+}

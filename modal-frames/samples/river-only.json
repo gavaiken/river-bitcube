@@ -1,0 +1,15 @@
+{
+  "schema": "modal-frames/1",
+  "layout_version": 1,
+  "frame_id": "sample-river-faster",
+  "issued_at": "2026-10-27T18:06:00Z",
+  "ttl_s": 120,
+  "transition": {"duration_ms": 6000, "easing": "linear"},
+  "elements": {
+    "screen-1": {"river": {"speed": 1.6, "contrast": 0.8}},
+    "screen-2": {"river": {"speed": 1.6, "contrast": 0.8}},
+    "screen-3": {"river": {"speed": 1.6, "contrast": 0.8}},
+    "screen-4": {"river": {"speed": 1.6, "contrast": 0.8}}
+  },
+  "note": "Sample: no new images. The screens' river speeds up and ripples harder; colours stay."
+}
