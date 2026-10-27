@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** nobody (free)
-- **Where:** bitcube + mission control: evenly spread looks deployed; shared-output flashes remain unresolved
-- **Updated:** 2026-10-26 23:35 PT
+- **Holder:** Will (Codex)
+- **Where:** bitcube: recover blank panels after sender power cycle
+- **Updated:** 2026-10-26 23:39 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
 ## Running now
