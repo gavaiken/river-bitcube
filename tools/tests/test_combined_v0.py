@@ -123,3 +123,19 @@ def test_auto_uses_detector_only_for_live_input(runtime, monkeypatch):
     detected['profile'] = 'pool-multi'
     monkeypatch.setattr(runtime, 'live_source', lambda: False)
     assert runtime.effective_framing(comp) == 'original'
+
+
+def test_screen_controls_preserve_framing_overlay_and_reject_before_writing(runtime, tmp_path):
+    dest = tmp_path / 'settings.json'
+    runtime.save_strength(.18, dest, profile='auto')
+    settings = {'mode':'cycle','blend':.25,'hold':30}
+    runtime.save_strength(.18, dest, screens=settings)
+    assert runtime.load_strength(dest) == .18
+    assert runtime.load_framing(dest) == 'auto'
+    assert runtime.load_screens(dest) == settings
+    before = dest.read_bytes()
+    with pytest.raises(ValueError):
+        runtime.save_strength(.9, dest, screens=dict(settings, hold=999))
+    assert dest.read_bytes() == before
+    runtime.save_strength(.2, dest)
+    assert runtime.load_screens(dest) == settings

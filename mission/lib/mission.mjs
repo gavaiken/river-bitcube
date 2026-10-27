@@ -465,7 +465,8 @@ export function planControl(action, body = {}) {
       const x = num(body.strength);
       if (!(x >= 0 && x <= 1)) throw bad('overlay strength is 0 to 1');
       if (body.framing !== undefined && !['auto', 'original', 'channel', 'channel-multi', 'pool', 'pool-multi'].includes(body.framing)) throw bad('unknown river framing profile');
-      return { kind: 'probe', args: `-Action overlay -Overlay ${x.toFixed(2)}${body.framing !== undefined ? ' -Framing ' + body.framing : ''}` };
+      const screens = body.screens === undefined ? '' : (() => { const s = checkedScreens(body.screens); return ` -Screenmode ${s.mode} -Screenblend ${s.blend.toFixed(2)} -Screenhold ${s.hold}`; })();
+      return { kind: 'probe', args: `-Action overlay -Overlay ${x.toFixed(2)}${body.framing !== undefined ? ' -Framing ' + body.framing : ''}${screens}` };
     }
     case 'hub75': {
       const x = num(body.brightness);
@@ -493,6 +494,14 @@ export function planControl(action, body = {}) {
 
 /** A control request as the whitelist reads it, and nothing else (a 400 for a bad request, as planControl): what the history
  *  keeps, status.applying names and a page reads back. Extra keys a client sends never go further. */
+function checkedScreens(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !['current', 'gavin', 'manual', 'cycle'].includes(value.mode)) throw bad('unknown screen look mode');
+  const blend = num(value.blend), hold = num(value.hold);
+  if (!(blend >= 0 && blend <= 1)) throw bad('screen blend is 0 to 1');
+  if (![15, 30, 60, 120].includes(hold)) throw bad('screen hold is 15, 30, 60 or 120 seconds');
+  return { mode: value.mode, blend: Number(blend.toFixed(2)), hold };
+}
+
 export function checkedControl(action, body = {}) {
   const plan = planControl(action, body);
   switch (action) {
@@ -501,7 +510,7 @@ export function checkedControl(action, body = {}) {
     case 'rules': return { rules: { ...plan.body } };
     case 'ropes': return { dark: body.dark === true };
     case 'hub75': return { brightness: num(body.brightness) };
-    case 'overlay': return { strength: Number(num(body.strength).toFixed(2)), ...(body.framing !== undefined ? { framing: body.framing } : {}) };
+    case 'overlay': return { strength: Number(num(body.strength).toFixed(2)), ...(body.framing !== undefined ? { framing: body.framing } : {}), ...(body.screens !== undefined ? { screens: checkedScreens(body.screens) } : {}) };
     case 'test': return { on: body.on === true };
     case 'bootfile': case 'switch': case 'rebuild': return { file: body.file };
     case 'lightsroute': return { route: body.route };

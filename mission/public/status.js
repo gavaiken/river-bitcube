@@ -51,7 +51,7 @@ const stillTried = { gallery: 0, river: 0 }, stillBusy = { gallery: false, river
 const stillNet = { gallery: false, river: false };   // the last try failed for want of a network (not "no picture"): try again on contact
 const stills = { gallery: { url: null, age_s: null, fetchedAt: null, missing: null }, river: { url: null, age_s: null, fetchedAt: null, missing: null } };
 const lastHTML = new Map();   // section -> the HTML it holds (no churn when nothing changed)
-let overlayDraft = null, framingDraft = null;
+let overlayDraft = null, framingDraft = null, screensDraft = null;
 let hubDraft = null;          // the brightness stepper, before "Set"
 const targetDraft = { season: null, intensity: null };
 const rulesDraft = {};        // what was typed into the rules form, kept across re-renders and a failed Apply
@@ -129,6 +129,10 @@ function setHTML(el, html) {
   // patched in place, never drawn anew (ui.js morph): the focused tile, button, row or line stays the same node, so a screen reader
   // doesn't read it again at every poll (R9 #7), and the box being typed in keeps its caret and what was typed (R8 #29)
   morph(el, html);
+  for (const [id, value] of [['screen-mode', (screensDraft ?? model?.show.combined?.screens)?.mode], ['screen-hold', (screensDraft ?? model?.show.combined?.screens)?.hold]]) {
+    const select = el.querySelector('#' + id);
+    if (select && value != null) select.value = String(value);
+  }
   const riverFraming = el.querySelector('#river-framing');
   if (riverFraming) riverFraming.value = framingDraft ?? model?.show.combined?.framing ?? 'original';
   el.querySelectorAll('details[data-id]').forEach((d) => { d.open = openRows.has(d.dataset.id); });
@@ -696,14 +700,23 @@ function showingHTML(m) {
     ${statusLine('ctl-showing', ['switch', 'bootfile'])}</div>${combinedHTML(m)}`;
 }
 /** Change: every offered show (shows.json), its kind, and which is showing and which is the default; a tap opens its card. */
+function screenChoice(s) { return { mode: s?.mode ?? 'current', blend: s?.blend ?? 0, hold: s?.hold ?? 30 }; }
+function sameScreens(a, b) { return a.mode === b.mode && a.blend === b.blend && a.hold === b.hold; }
+function combinedChanged(s) {
+  return (overlayDraft ?? Math.round((s?.overlay ?? .25) * 100)) !== Math.round((s?.overlay ?? .25) * 100)
+    || (framingDraft ?? s?.framing) !== s?.framing
+    || !sameScreens(screenChoice(screensDraft ?? s?.screens), screenChoice(s?.screens));
+}
 function combinedHTML(m) {
-  if (m.show.file?.name !== 'river-combined-v0.toe') { overlayDraft = null; framingDraft = null; return ''; }
+  if (m.show.file?.name !== 'river-combined-v0.toe') { overlayDraft = null; framingDraft = null; screensDraft = null; return ''; }
   const s = m.show.combined, current = typeof s?.overlay === 'number' ? Math.round(s.overlay * 100) : null;
   const draft = overlayDraft ?? current ?? 25, disabled = off('overlay') || current == null;
+  const screens = screenChoice(screensDraft ?? s?.screens);
+  const screenDisabled = disabled || !s?.screens;
   const state = s?.scene ? `${s.scene.animation ?? '?'} / ${s.scene.palette ?? '?'}` : 'Waiting for a usable Modal scene';
   return `<div class="ctl" id="ctl-overlay" data-ctl="overlay">
-    <div class="ctl-h">Summer river + Dave's overlay</div>${whyLine('overlay')}
-    <p>River: ${esc(s?.river_source ?? 'not known')}. Summer stays fixed; live video runs at camera speed.</p>
+    <div class="ctl-h">River look and screen fades</div>${whyLine('overlay')}
+    <p>River: ${esc(s?.river_source ?? 'not known')}. The Combined base stays in summer; live video runs at camera speed.</p>
     <label for="river-framing">River framing</label>
     <select id="river-framing" ${disabled || s?.framing == null ? 'disabled' : ''}>
       ${[['auto','Auto: recognize camera view'],['original','Original (bypass)'],['channel','Channel: one window'],['channel-multi','Channel: three windows'],['pool','Pool: one window'],['pool-multi','Pool: three windows']].map(([v,label]) => `<option value="${v}" ${(framingDraft ?? s?.framing ?? 'original') === v ? 'selected' : ''}>${label}</option>`).join('')}
@@ -712,9 +725,20 @@ function combinedHTML(m) {
     <label for="overlay-strength">Dave's overlay strength</label>
     <div class="row-btns"><input type="range" min="0" max="100" step="1" id="overlay-strength" value="${draft}" aria-describedby="overlay-help overlay-now" ${disabled ? 'disabled' : ''}>
     <output id="overlay-draft" for="overlay-strength">${draft} %</output>
-    <button type="button" class="btn primary" id="ctl-overlay-set" data-act="overlay-set" ${disabled || (draft === current && (framingDraft ?? s?.framing) === s?.framing) ? 'disabled' : ''}>Apply river settings</button></div>
+    </div>
     <p id="overlay-help">0 %: summer river alone. Higher values add Dave's bright forms. Move the slider, then press Apply river settings. Original restores the previous river look. The setting survives show switches.</p>
     <p id="overlay-now">Now ${current == null ? 'not known' : current + ' %'} on bitcube. ${esc(state)}.${s && s.effective_overlay === 0 && s.overlay > 0 ? ' Overlay is unavailable; the summer river continues alone.' : ''}${s?.scene_age_s != null ? ' Scene set ' + esc(dur(s.scene_age_s)) + ' ago.' : ''}</p>
+    <label for="screen-mode">Screen look (four screens only)</label>
+    <select id="screen-mode" ${screenDisabled ? 'disabled' : ''}>
+      ${[['current','Current look'],['gavin','Gavin style'],['manual','Manual blend'],['cycle','Automatic cycle']].map(([v,label]) => `<option value="${v}" ${screens.mode === v ? 'selected' : ''}>${label}</option>`).join('')}
+    </select>
+    <label for="screen-blend">Screen blend toward Gavin style</label>
+    <div class="row-btns"><input type="range" min="0" max="100" step="1" id="screen-blend" value="${Math.round(screens.blend * 100)}" ${screenDisabled ? 'disabled' : ''}><output id="screen-blend-value">${Math.round(screens.blend * 100)} %</output></div>
+    <label for="screen-hold">Time on each look (automatic cycle)</label>
+    <select id="screen-hold" ${screenDisabled ? 'disabled' : ''}>${[15,30,60,120].map(v => `<option value="${v}" ${screens.hold === v ? 'selected' : ''}>${v} seconds</option>`).join('')}</select>
+    <p>The ropes keep their current look. Gavin style uses his seasonal colours and river effects on live footage. The cycle holds each look, with an 8-second fade between them. Moving the blend slider selects Manual blend.</p>
+    <p>On the screens now: ${Math.round((s?.screens?.gavin_mix ?? 0) * 100)} % Gavin style${s?.screens ? '; mode: ' + esc(s.screens.mode) : '; screen controls need the updated show'}.</p>
+    <button type="button" class="btn primary" id="ctl-overlay-set" data-act="overlay-set" ${disabled || !combinedChanged(s) ? 'disabled' : ''}>Apply river settings</button>
     ${statusLine('ctl-overlay', ['overlay'])}</div>`;
 }
 function openShowList() {
@@ -1206,6 +1230,19 @@ document.addEventListener('input', (e) => {
   }
 });
 document.addEventListener('input', (e) => {
+  if (['screen-mode', 'screen-hold', 'screen-blend'].includes(e.target.id)) {
+    screensDraft = screenChoice(screensDraft ?? model?.show.combined?.screens);
+    if (e.target.id === 'screen-mode') screensDraft.mode = e.target.value;
+    if (e.target.id === 'screen-hold') screensDraft.hold = Number(e.target.value);
+    if (e.target.id === 'screen-blend') {
+      screensDraft.blend = Number(e.target.value) / 100;
+      screensDraft.mode = 'manual';
+      $('#screen-mode').value = 'manual';
+      $('#screen-blend-value').textContent = e.target.value + ' %';
+      $('#ctl-overlay-set').disabled = off('overlay') || !combinedChanged(model?.show.combined);
+    } else render();
+    return;
+  }
   if (e.target.id === 'river-framing') {
     framingDraft = e.target.value;
     render();
@@ -1215,7 +1252,7 @@ document.addEventListener('input', (e) => {
   overlayDraft = Number(e.target.value);
   const out = $('#overlay-draft'), set = $('#ctl-overlay-set');
   if (out) out.textContent = `${overlayDraft} %`;
-  if (set) set.disabled = off('overlay') || (overlayDraft === Math.round((model?.show.combined?.overlay ?? -1) * 100) && (framingDraft ?? model?.show.combined?.framing) === model?.show.combined?.framing);
+  if (set) set.disabled = off('overlay') || !combinedChanged(model?.show.combined);
 });
 document.addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.closest?.('[data-act="still"]')) { e.preventDefault(); openStill(); }
@@ -1250,11 +1287,12 @@ document.addEventListener('click', async (e) => {
     case 'overlay-set': {
       const sent = overlayDraft ?? Math.round((model?.show.combined?.overlay ?? 0.25) * 100);
       const profile = framingDraft ?? model?.show.combined?.framing ?? 'original';
-      runControl('overlay', '/api/control/overlay', { strength: sent / 100, framing: profile }, { btn: b,
-        what: changeLabel('overlay', { strength: sent / 100, framing: profile }), done: `River framing: ${profile}; Dave's overlay: ${sent} %`,
+      const screens = model?.show.combined?.screens ? screenChoice(screensDraft ?? model.show.combined.screens) : null;
+      runControl('overlay', '/api/control/overlay', { strength: sent / 100, framing: profile, ...(screens ? { screens } : {}) }, { btn: b,
+        what: changeLabel('overlay', { strength: sent / 100, framing: profile, ...(screens ? { screens } : {}) }), done: `River framing: ${profile}; Dave's overlay: ${sent} %${screens ? '; screens: ' + screens.mode : ''}`,
         fail: 'The overlay could not be set', kept: 'Your slider choice is kept.',
-        holds: (mm) => Math.round((mm.show.combined?.overlay ?? -1) * 100) === sent && mm.show.combined?.framing === profile,
-        onDone: () => { if (overlayDraft === sent) overlayDraft = null; if (framingDraft === profile) framingDraft = null; } });
+        holds: (mm) => Math.round((mm.show.combined?.overlay ?? -1) * 100) === sent && mm.show.combined?.framing === profile && (!screens || sameScreens(screenChoice(mm.show.combined?.screens), screens)),
+        onDone: () => { if (overlayDraft === sent) overlayDraft = null; if (framingDraft === profile) framingDraft = null; if (screens && sameScreens(screenChoice(screensDraft), screens)) screensDraft = null; } });
       break;
     }
     case 'hub-step': { const cur = m?.show.panels.brightness == null ? null : Math.round(m.show.panels.brightness * 100); if (cur == null && hubDraft == null) break; hubDraft = clamp((hubDraft ?? cur) + Number(b.dataset.d), 0, 100); render(); announce(`${hubDraft} %`, 'hub-step'); break; }

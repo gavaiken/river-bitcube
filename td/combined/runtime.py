@@ -1,4 +1,4 @@
-"""combined-v0: fixed summer motion, local Modal canvas readiness, and saved overlay/framing settings.
+"""combined-v0: fixed summer motion, local Modal canvas readiness, and saved overlay, framing and screens-only fade settings.
 
 No new service: inputs use river_cam.py, and the canvas uses the existing Modal mirror on 8770.
 Live holders stay in sys.modules, never in saved COMP storage. No camera credentials are read here.
@@ -10,6 +10,12 @@ from pathlib import Path
 import sys
 import time
 import types
+
+# Plain helper shared with tests; no TouchDesigner globals.
+_HELPERS = str(Path(__file__).parent) if '__file__' in globals() and Path(__file__).is_file() else str(Path('C:/Users/user/River/river-bitcube/td/combined'))
+if _HELPERS not in sys.path:
+    sys.path.insert(0, _HELPERS)
+import screen_fade
 
 SHOW = 'river-combined-v0.toe'
 RIVER = Path('C:/Users/user/River')
@@ -49,7 +55,29 @@ def load_framing(path=SETTINGS):
         return 'original'
 
 
-def save_strength(value, path=SETTINGS, profile=None):
+def load_screens(path=SETTINGS):
+    try:
+        return screen_fade.checked(json.loads(path.read_text(encoding='utf-8'))['screens'])
+    except (OSError, ValueError, KeyError, TypeError):
+        return dict(screen_fade.DEFAULT)
+
+
+def apply_screens(comp, settings):
+    comp.par.Screenmode = settings['mode']
+    comp.par.Screenblend = settings['blend']
+    comp.par.Screenhold = settings['hold']
+
+
+def screen_settings(comp):
+    return {'mode': comp.par.Screenmode.eval(), 'blend': float(comp.par.Screenblend),
+            'hold': int(comp.par.Screenhold)}
+
+
+def screen_mix():
+    return state().get('screen_mix', 0.0)
+
+
+def save_strength(value, path=SETTINGS, profile=None, screens=None):
     value = strength(value)
     if profile is not None:
         profile = framing(profile)
@@ -62,24 +90,34 @@ def save_strength(value, path=SETTINGS, profile=None):
     data['overlay'] = value
     if profile is not None:
         data['framing'] = profile
+    if screens is not None:
+        data['screens'] = screen_fade.checked(screens)
     tmp = path.with_suffix('.tmp')
     tmp.write_text(json.dumps(data) + '\n', encoding='utf-8')
     os.replace(tmp, path)
     return value
 
 
-def set_strength(comp, value, project_name, profile=None):
+def set_strength(comp, value, project_name, profile=None, screens=None):
     if project_name != SHOW:
         raise ValueError('overlay control is only available while combined-v0 is running')
-    # Persist first: a disk error must not claim a successful, saved change.
-    if profile is None:
-        comp.par.Canvasmix = save_strength(value)
-    else:
+    if profile is not None:
         framing(profile)
         if not hasattr(comp.par, 'Framing'):
             raise ValueError('this show needs the river framing update before using profiles')
-        comp.par.Canvasmix = save_strength(value, profile=profile)
-        comp.par.Framing = profile
+    if screens is not None:
+        screens = screen_fade.checked(screens)
+        if not all(hasattr(comp.par, name) for name in ('Screenmode', 'Screenblend', 'Screenhold')):
+            raise ValueError('this show needs the screen fade update before using screen controls')
+    # Persist first: a disk error must not claim a successful, saved change.
+    if profile is None and screens is None:
+        comp.par.Canvasmix = save_strength(value)
+    else:
+        comp.par.Canvasmix = save_strength(value, profile=profile, screens=screens)
+        if profile is not None:
+            comp.par.Framing = profile
+        if screens is not None:
+            apply_screens(comp, screens)
 
 
 def state():
@@ -97,8 +135,12 @@ def frame(comp):
         # A show switch opens the saved .toe without running its build script.
         # Restore the last web-slider setting on the first frame of each load.
         comp.par.Canvasmix = load_strength()
+        if hasattr(comp.par, 'Screenmode'):
+            apply_screens(comp, load_screens())
         if hasattr(comp.par, 'Framing'):
             comp.par.Framing = load_framing()
+    if hasattr(comp.par, 'Screenmode'):
+        screen_fade.step(st, screen_settings(comp), now)
     if hasattr(comp.par, 'Framing') and comp.par.Framing.eval() == 'auto':
         detector = comp.op('view_detector')
         if detector is not None:
@@ -159,6 +201,7 @@ def status(comp):
     return {'season': 'summer', 'intensity': float(comp.par.Intensity),
             'overlay': float(comp.par.Canvasmix), 'effective_overlay': effective_strength(comp),
             'framing': comp.par.Framing.eval() if hasattr(comp.par, 'Framing') else 'original',
+            'screens': dict(screen_settings(comp), gavin_mix=round(screen_mix(), 4), fade_s=screen_fade.FADE_S) if hasattr(comp.par, 'Screenmode') else None,
             'auto_view': comp.op('view_detector').module.status() if hasattr(comp.par, 'Framing') and comp.par.Framing.eval() == 'auto' and comp.op('view_detector') is not None else None,
             'effective_framing': effective_framing(comp) if hasattr(comp.par, 'Framing') else 'original',
             'scene': st['scene'], 'scene_age_s': st['scene_age_s'],

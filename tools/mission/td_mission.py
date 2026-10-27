@@ -43,7 +43,7 @@ if act == 'overlay':
             raise ValueError('overlay control is only available while combined-v0 is running')
         if (ropes and ropes.par.Source.eval() == 'test') or (panels and panels.par.Source.eval() == 'test'):
             raise ValueError('stop the test pattern before adjusting the overlay')
-        viz.op('combined_mod').module.set_strength(viz, args.get('strength'), project.name, args.get('framing'))
+        viz.op('combined_mod').module.set_strength(viz, args.get('strength'), project.name, args.get('framing'), args.get('screens'))
     except Exception as e:
         out.update(ok=False, error=str(e))
 elif act == 'ropes':

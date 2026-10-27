@@ -69,3 +69,25 @@ test('automatic framing uses the same guarded action and fixture readback', asyn
   assert.equal(s.effective_framing, 'pool-multi');
   assert.equal(s.auto_view.view, 'pool');
 });
+
+test('screen fades use bounded fixed probe arguments and preserve legacy settings', async () => {
+  const screens = { mode: 'cycle', blend: 0.25, hold: 30 };
+  assert.deepEqual(planControl('overlay', { strength: .18, screens }),
+    { kind: 'probe', args: '-Action overlay -Overlay 0.18 -Screenmode cycle -Screenblend 0.25 -Screenhold 30' });
+  assert.deepEqual(checkedControl('overlay', { strength: .18, screens: { ...screens, file: 'drop' } }),
+    { strength: .18, screens });
+  for (const s of [null, [], {}, { ...screens, mode: 'cycle; shutdown' }, { ...screens, hold: 31 },
+    { ...screens, blend: true }, { ...screens, blend: NaN }, { ...screens, hold: '30; shutdown' }])
+    assert.throws(() => planControl('overlay', { strength: .18, screens: s }));
+  const dir = new URL('./fixtures/', import.meta.url).pathname;
+  const f = JSON.parse(readFileSync(join(dir, 'all-good.json'), 'utf8'));
+  const m = new FixtureMission({ dir, stateDir: mkdtempSync(join(tmpdir(), 'screen-')), now: () => f._scenario.now, applyS: 0 });
+  m.worldFor('all-good').file = 'river-combined-v0.toe';
+  await m.control('overlay', { strength: .18, framing: 'auto', screens }, 'all-good');
+  await m.control('overlay', { strength: .2 }, 'all-good');
+  const s = m.snapshot('all-good').probe.value.td.combined;
+  assert.equal(s.screens.mode, 'cycle');
+  assert.equal(s.screens.hold, 30);
+  assert.equal(s.framing, 'auto');
+  assert.equal(s.overlay, .2);
+});
