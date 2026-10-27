@@ -2,9 +2,9 @@
 
 The baton. **Read this first, every session; rewrite it before you stop** (rules: [`AGENTS.md`](AGENTS.md) "Start here"). Keep it to one screen: the current state, not a history. History goes in `docs/sessions/<name>.md`.
 
-- **Holder:** nobody: free for Will
-- **Where:** repo only (bitcube is free; the boot file is running)
-- **Updated:** 2026-10-26 14:42 PT
+- **Holder:** Will (Codex)
+- **Where:** bitcube (combined-v0 build and mission-control overlay slider)
+- **Updated:** 2026-10-26 19:49 PT
 - **Next holder:** Will (Codex). **Ready for Will.**
 
 ## The show right now
@@ -26,8 +26,12 @@ The baton. **Read this first, every session; rewrite it before you stop** (rules
 | ✅ | Verified 14:37–14:40: bitcube pulled; `shows.ps1`/`probe.ps1` list the three offered shows; switch to the template and back via `probe.ps1`, default unchanged; `tools/check` green, CI green, mission control on 7886e79 | coordinator |
 | ⬜ | Gavin's phone test (optional): Change → Baseline → read card → Switch → Back to default | Gavin |
 
-## Will's first session
- Will's first session: `git pull`, read `AGENTS.md` and this file, take the baton, make his first viz from the template.
+## Will's session in progress
+- Building `river-combined-v0.toe` from the baseline: live river with recorded fallback, fixed summer treatment, Dave's locally mirrored canvas as an additive overlay.
+- Mission control gets an overlay-strength slider for this show only. Gallery influence, audio and additional recording are deferred.
+- SSH verified using macOS `/usr/bin/ssh -o UseKeychain=yes`; default show running, cameras reachable, Modal clips uploading.
+- bitcube has pre-existing moved `river_masks/` files and untracked `pixelmap-2026-10-26.json`; preserve them. New show keeps the baseline's 23 Oct calibration pins.
+- Return to the existing default after verification; do not change the default or Dave's deployment.
 
 ## Open questions
 - Running **the live river** still shows as a warning on Status ("not the river's year"); a viz running shows OK. Gavin to decide if the live river should be OK too.
