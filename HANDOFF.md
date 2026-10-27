@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** nobody: free for Will
-- **Where:** repo only (bitcube is free; the default show is running)
-- **Updated:** 2026-10-26 20:12 PT
+- **Holder:** Will (Codex)
+- **Where:** bitcube: reversible Combined v0 river framing
+- **Updated:** 2026-10-26 21:10 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
 ## Running now
