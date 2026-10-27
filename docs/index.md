@@ -8,21 +8,16 @@ title: A River Becoming: show machine status
 
 **[Show files](show-files.md)** (what the piece is doing) · **[Where things stand](https://github.com/gavaiken/river-bitcube/blob/main/HANDOFF.md)** (the handoff) · **[Rules for agents](https://github.com/gavaiken/river-bitcube/blob/main/AGENTS.md)** · **[Hardware](a-river-becoming-hardware.md)** · **[System map](system/)** (every device, IP and connection; [system.json](system/system.json) for agents) · **[Ceiling install](ceiling.md)** · **[Mission control](mission-ui.md)** (the team's web app: how its pages read and why)
 
-**Status as of Fri 23 Oct 2026, 00:05.** At Gray Area, network done and tested for the ceiling: our router (Wi-Fi `gray-river`, 192.168.9.x) and bitcube come back by themselves after a power cut, bitcube falls back to Wi-Fi in seconds, and VNC works with no monitor. Open before the lift: lights tested on the ground, the gallery cam on Wi-Fi only, the wired drop. [Before the lift](execution-plan.md#before-the-lift-22-oct-night-everything-still-to-resolve) · [Ceiling install](ceiling.md).
+**Status as of Mon 26 Oct 2026.** At Gray Area, the river's year remains the default. Will's new [Combined v0](files/river-combined-v0.md) adds live river video (recorded fallback), a fixed summer treatment and Dave's adjustable canvas overlay. Select it through mission control's What's showing card; its overlay slider appears while it runs.
 
 bitcube is the Windows mini PC that drives **A River Becoming**: 20 LED ropes over Art-Net, the HUB75 panels over HDMI, and the Reolink cameras. It runs TouchDesigner and a Claude Code session.
 
 ## Where we are
-- **Working:**
-  - **Local rain checkpoint** (`river-local-oct-18.toe`, no Modal): one rain/river field in the camera's view, sampled onto every pixel of the 18 working ropes and onto HUB75 quad 1. Every rope pixel's position comes from a camera structured-light pixel map (`tools/pixelmap/`). About 70–200 W in total.
-  - **HUB75:** TouchDesigner's window covers the whole LED display in black, with only the panel image at its top-left, so nothing else can show on the panels.
-  - **Camera calibration:** 18 of 20 ropes located, colour order confirmed. **Ropes 9 and 17 never light** (swap test deferred).
-  - bitcube boots straight into the rain checkpoint (about 1 minute; restart-tested 16:54) and is on Tailscale. The gallery cam is reachable (also through bitcube on Will's tailnet); the river cam went to the river on the evening of 18 Oct.
-  - **[System map](system/):** a clickable diagram of every machine, device and connection at Gray Area (the ceiling grid, the driftwood, the floor, the river site, Modal, the Mac mini), with IPs, ports, usernames and the Modal↔bitcube API. No secrets. The Agape prototype map is in git history (commit bdfe5b6).
-  - **Live river cam across the ropes and HUB75:** the camera at the river streams over Starlink and Tailscale to bitcube (10 fps). It replaces the rain as the image that both the ropes and the HUB75 sample, so the real river flows across the installation. If the stream drops for more than 10 s, it falls back to the rain by itself.
-  - **Connected to Dave's Modal agent:** both cameras post 10 s clips to the agent, and the agent's scene (colours, speed, density, turbulence, brightness, every 5 min, plus fast camera reflexes) now shapes the look on the ropes and HUB75, and Dave's own animation plays as a layer over the live river. The river cam's look switches between day and night (infrared) settings by itself.
-- **Moving to Gray Area** (install Thu 22 Oct, 7 pm). A new local-only **seasons** show file (the river's year, steered by the people in the room) is written and waiting to deploy when bitcube is back online. [What each show file does](show-files.md).
-- **Next** ([execution plan](execution-plan.md#next-steps-22-oct-night)): finish the network (camera address, Tailscale routes, wired cable), deploy the seasons file, connect the lights, re-map the hung piece, tune on the real lights, build the people counter.
+- **The river's year** is the default: recorded river through the seasons, with automatic, people-driven or manual steering. It works without Modal or the live river site.
+- **The live river** combines live river video, Dave's Modal decisions and his animated canvas.
+- **Combined v0** is Will's independent visualization: live video with recorded fallback, fixed summer, and an additive Modal canvas overlay. No audio or gallery interaction yet. The baseline remains available for making other visualizations.
+- **Verified 26 Oct:** combined-v0 built at about 60 fps with no project errors; live input, recorded fallback and overlay values 0%, 25% and 100% exercised. Existing rope brightness and power caps retained. All show files use their own pinned calibration.
+- **Controls:** mission control → Change → choose a show → Switch. Back to default returns to the river's year. Switching leaves the default unchanged.
 
 ![Rain checkpoint on the coiled ropes and HUB75, 18 Oct 15:57](img/rain-checkpoint-2026-10-18.jpg)
 

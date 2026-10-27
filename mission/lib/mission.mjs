@@ -17,7 +17,7 @@ const SNAP_CACHE_MS = 45_000;
 /** Controls refused while a calibration runs (model.js refuses the same ones on the pages). A rebuild ends in the switch
  *  path (TouchDesigner stopped and restarted), so it spoils a run as surely as a switch. A dry run (or a decode of earlier
  *  photos) touches no lights, camera or TouchDesigner: it refuses none of them (R7 #20). */
-export const CAL_BLOCKED = ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild'];
+export const CAL_BLOCKED = ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'overlay'];
 /** The 409 a switch or a rebuild gets while TouchDesigner is starting or restarting (model.js tdStartingWhy, the pages' words; shared
  *  with fixture mode), or null. probe: the full check's reading as kept ({ at, value } or { at, error }), judged by itself, never
  *  the whole page model; a reading the rule can't read, or a slip in it, refuses (closed, CR9 #11). */
@@ -32,7 +32,7 @@ export function startingBlocked(action, probe) {
  *  decode of earlier photos) touches no lights: never refused. probe: the full check's reading as kept ({ at, value }). */
 export function testBlocked(action, body, probe) {
   const start = action === 'calibrate' && body?.action === 'start' && body.dry_run !== true && !body.decode_only;
-  if (action !== 'ropes' && !start) return null;
+  if (action !== 'ropes' && action !== 'overlay' && !start) return null;
   const p = probe && typeof probe === 'object' && !probe.error ? probe.value : null;
   return testShowing(p) ? Object.assign(new Error(TEST_ON), { status: 409 }) : null;
 }
@@ -327,7 +327,9 @@ export class Mission {
   // ---- controls (fixed actions) ----------------------------------------------------------------------
   async control(action, body = {}, _scenario = null, { source = 'mission control', requestId = null } = {}) {
     const plan = planControl(action, body);
-    const checked = checkedControl(action, body);     // only what the whitelist read goes into status.applying
+    const checked = checkedControl(action, body);
+    if (action === 'overlay' && this.data.probe?.value?.td?.file !== 'river-combined-v0.toe')
+      throw Object.assign(new Error('overlay control is only available while combined-v0 is running'), { status: 409 });     // only what the whitelist read goes into status.applying
     // a calibration photographs the ropes and the panels: anything that changes them, restarts TouchDesigner or moves the
     // lighting port spoils the run (the pages refuse these too; this covers the studio chat and a stale page)
     const blocked = calBlocked(action, this.calibration()) ?? testBlocked(action, checked, this.data.probe);
@@ -421,7 +423,7 @@ export function startPending(r, isNew) {
 /** Ropes and panels act through TouchDesigner: when its own answer says it failed, the action failed, whatever the probe's
  *  top-level ok says (a probe.ps1 from before 24 Oct reported ok: true with td.ok false). */
 export function actionResult(action, r) {
-  if ((action === 'ropes' || action === 'hub75' || action === 'test') && r && r.ok !== false && r.td && r.td.ok === false) {
+  if ((action === 'ropes' || action === 'hub75' || action === 'test' || action === 'overlay') && r && r.ok !== false && r.td && r.td.ok === false) {
     return { ...r, ok: false, error: String(r.td.error || 'TouchDesigner did not answer') };
   }
   return r;
@@ -459,6 +461,11 @@ export function planControl(action, body = {}) {
       if (typeof body.on !== 'boolean') throw bad('on is true or false');
       return { kind: 'probe', args: `-Action test${body.on ? ' -On' : ''}` };
     }
+    case 'overlay': {
+      const x = num(body.strength);
+      if (!(x >= 0 && x <= 1)) throw bad('overlay strength is 0 to 1');
+      return { kind: 'probe', args: `-Action overlay -Overlay ${x.toFixed(2)}` };
+    }
     case 'hub75': {
       const x = num(body.brightness);
       if (!(x >= 0 && x <= 1)) throw bad('brightness is 0 to 1');
@@ -493,6 +500,7 @@ export function checkedControl(action, body = {}) {
     case 'rules': return { rules: { ...plan.body } };
     case 'ropes': return { dark: body.dark === true };
     case 'hub75': return { brightness: num(body.brightness) };
+    case 'overlay': return { strength: Number(num(body.strength).toFixed(2)) };
     case 'test': return { on: body.on === true };
     case 'bootfile': case 'switch': case 'rebuild': return { file: body.file };
     case 'lightsroute': return { route: body.route };

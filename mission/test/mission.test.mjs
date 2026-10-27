@@ -163,7 +163,7 @@ test('every control in flight is in status.applying (label in team words, file, 
   const sw = m.control('switch', { file: LIVE });
   const [e] = m.snapshot().applying;
   assert.deepEqual({ ...e, id: typeof e.id }, { id: 'string', action: 'switch', label: 'the switch to the live river', file: LIVE, source: 'mission control', phase: 'applying',
-                                                started_at: AT_2104, expect_s: 60, blocks: ['ropes', 'hub75', 'test', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'] });
+                                                started_at: AT_2104, expect_s: 60, blocks: ['overlay', 'ropes', 'hub75', 'test', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'] });
   t += 30_000;
   for (const [action, body] of [['ropes', { dark: true }], ['hub75', { brightness: 0.5 }], ['mode', { mode: 'manual' }], ['target', { season: 'summer' }], ['rules', { rules: { x: 1 } }],
                                 ['rules-reset', {}], ['lightsroute', { route: 'router' }], ['switch', { file: YEAR }], ['rebuild', { file: YEAR }], ['bootfile', { file: YEAR }]]) {

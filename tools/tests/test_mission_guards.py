@@ -28,7 +28,7 @@ def test_probe_refuses_what_a_calibration_blocks_the_same_list_as_mission_contro
     ps = re.search(r"^\$CAL_BLOCKED = @\(([^)]*)\)", src, re.M)
     js = re.search(r"export const CAL_BLOCKED = \[([^\]]*)\]", MISSION_MJS.read_text(encoding='utf-8'))
     assert ps and js
-    assert quoted(ps.group(1)) == quoted(js.group(1)) == sorted(['ropes', 'hub75', 'test', 'switch', 'rebuild', 'lightsroute'])
+    assert quoted(ps.group(1)) == quoted(js.group(1)) == sorted(['ropes', 'hub75', 'test', 'switch', 'rebuild', 'lightsroute', 'overlay'])
     assert WORDS in src and WORDS in MODEL_JS.read_text(encoding='utf-8'), 'the team words, the same on both sides'
 
 

@@ -51,6 +51,7 @@ const stillTried = { gallery: 0, river: 0 }, stillBusy = { gallery: false, river
 const stillNet = { gallery: false, river: false };   // the last try failed for want of a network (not "no picture"): try again on contact
 const stills = { gallery: { url: null, age_s: null, fetchedAt: null, missing: null }, river: { url: null, age_s: null, fetchedAt: null, missing: null } };
 const lastHTML = new Map();   // section -> the HTML it holds (no churn when nothing changed)
+let overlayDraft = null;
 let hubDraft = null;          // the brightness stepper, before "Set"
 const targetDraft = { season: null, intensity: null };
 const rulesDraft = {};        // what was typed into the rules form, kept across re-renders and a failed Apply
@@ -690,9 +691,25 @@ function showingHTML(m) {
     ${line ? `<p class="showing-desc">${esc(line)}</p>` : ''}
     <div class="row-btns"><button type="button" class="btn primary" id="ctl-showing-change" data-act="show-list" ${s.show_files.length ? '' : 'disabled'}>Change</button>${back}</div>
     <div class="effect">Default: <b>${esc(bootWords(s.boot_file))}</b>, what opens when bitcube restarts. Switching never changes it.</div>
-    ${statusLine('ctl-showing', ['switch', 'bootfile'])}</div>`;
+    ${statusLine('ctl-showing', ['switch', 'bootfile'])}</div>${combinedHTML(m)}`;
 }
 /** Change: every offered show (shows.json), its kind, and which is showing and which is the default; a tap opens its card. */
+function combinedHTML(m) {
+  if (m.show.file?.name !== 'river-combined-v0.toe') { overlayDraft = null; return ''; }
+  const s = m.show.combined, current = typeof s?.overlay === 'number' ? Math.round(s.overlay * 100) : null;
+  const draft = overlayDraft ?? current ?? 25, disabled = off('overlay') || current == null;
+  const state = s?.scene ? `${s.scene.animation ?? '?'} / ${s.scene.palette ?? '?'}` : 'Waiting for a usable Modal scene';
+  return `<div class="ctl" id="ctl-overlay" data-ctl="overlay">
+    <div class="ctl-h">Summer river + Dave's overlay</div>${whyLine('overlay')}
+    <p>River: ${esc(s?.river_source ?? 'not known')}. Summer stays fixed; live video runs at camera speed.</p>
+    <label for="overlay-strength">Dave's overlay strength</label>
+    <div class="row-btns"><input type="range" min="0" max="100" step="1" id="overlay-strength" value="${draft}" aria-describedby="overlay-help overlay-now" ${disabled ? 'disabled' : ''}>
+    <output id="overlay-draft" for="overlay-strength">${draft} %</output>
+    <button type="button" class="btn primary" id="ctl-overlay-set" data-act="overlay-set" ${disabled || draft === current ? 'disabled' : ''}>Set overlay</button></div>
+    <p id="overlay-help">0 %: summer river alone. Higher values add Dave's bright forms. Move the slider, then press Set overlay. The setting survives show switches.</p>
+    <p id="overlay-now">Now ${current == null ? 'not known' : current + ' %'} on bitcube. ${esc(state)}.${s && s.effective_overlay === 0 && s.overlay > 0 ? ' Overlay is unavailable; the summer river continues alone.' : ''}${s?.scene_age_s != null ? ' Scene set ' + esc(dur(s.scene_age_s)) + ' ago.' : ''}</p>
+    ${statusLine('ctl-overlay', ['overlay'])}</div>`;
+}
 function openShowList() {
   const s = model?.show;
   if (!s) return;
@@ -1181,6 +1198,13 @@ document.addEventListener('input', (e) => {
     }, 900);
   }
 });
+document.addEventListener('input', (e) => {
+  if (e.target.id !== 'overlay-strength') return;
+  overlayDraft = Number(e.target.value);
+  const out = $('#overlay-draft'), set = $('#ctl-overlay-set');
+  if (out) out.textContent = `${overlayDraft} %`;
+  if (set) set.disabled = off('overlay') || overlayDraft === Math.round((model?.show.combined?.overlay ?? -1) * 100);
+});
 document.addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.closest?.('[data-act="still"]')) { e.preventDefault(); openStill(); }
   // Enter in a rule's box applies the form when it can, as a form would
@@ -1209,6 +1233,16 @@ document.addEventListener('click', async (e) => {
         ask: dark ? { title: 'Make the ropes dark?', body: 'The ropes in the gallery go black now and stay black until someone presses On. The panels keep showing the river.', ok: 'Go dark', cancel: 'Keep showing the river' } : null,
         what: changeLabel('ropes', { dark }), done: dark ? 'Now dark: the ropes go black within a few seconds' : 'Now on: the ropes show the river again within a few seconds', fail: 'The ropes are unchanged',
         holds: (mm) => mm.show.ropes.state === (dark ? 'dark' : 'river') });
+      break;
+    }
+    case 'overlay-set': {
+      if (overlayDraft == null) break;
+      const sent = overlayDraft;
+      runControl('overlay', '/api/control/overlay', { strength: sent / 100 }, { btn: b,
+        what: changeLabel('overlay', { strength: sent / 100 }), done: `Dave's overlay is now ${sent} %`,
+        fail: 'The overlay could not be set', kept: 'Your slider choice is kept.',
+        holds: (mm) => Math.round((mm.show.combined?.overlay ?? -1) * 100) === sent,
+        onDone: () => { if (overlayDraft === sent) overlayDraft = null; } });
       break;
     }
     case 'hub-step': { const cur = m?.show.panels.brightness == null ? null : Math.round(m.show.panels.brightness * 100); if (cur == null && hubDraft == null) break; hubDraft = clamp((hubDraft ?? cur) + Number(b.dataset.d), 0, 100); render(); announce(`${hubDraft} %`, 'hub-step'); break; }

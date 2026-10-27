@@ -68,6 +68,28 @@
       "updated_by": "gavin",
       "updated": "2026-10-26",
       "last_change": "Built and verified on bitcube; its build reads the calibration pin from shows.json"
+    },
+    {
+      "file": "river-combined-v0.toe",
+      "title": "Combined v0",
+      "kind": "viz",
+      "offered": true,
+      "build": "td/build/build_combined_v0.py",
+      "calibration": {
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",
+        "screens": "tools/pixelmap/screens-2026-10-23.json"
+      },
+      "description": "Live river video with a recorded fallback, Gavin's fixed summer palette, torrent streaks and sun glints, plus an additive overlay of Dave's Modal canvas. Adjust Dave's overlay strength on Status while this show runs. Gallery video is available for future experiments but does not influence v0. No audio. Live footage stays at camera speed.",
+      "inputs": [
+        "river camera (recorded river-normal.mp4 as fallback)",
+        "Dave's Modal canvas and mirrored scene",
+        "gallery camera (available, not used in v0)"
+      ],
+      "created_by": "will",
+      "created": "2026-10-26",
+      "updated_by": "will",
+      "updated": "2026-10-26",
+      "last_change": "Created from the baseline template: live summer with adjustable additive Modal overlay"
     }
   ]
 }

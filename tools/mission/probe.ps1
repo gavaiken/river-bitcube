@@ -12,12 +12,13 @@
 #                                                                tools/td.ps1, saves with tools/td_save.ps1, then the switch path
 #                                                                above (restart on it, ~1 min dark). Reports rebuilt / saved /
 #                                                                switched (booleans) and rebuilt_map with the status.
+#   [-Action overlay -Overlay 0.25]                              combined-v0 only: save additive canvas strength (0..1)
 #   [-Action test -On]                                           the test pattern on the ropes and panels (without -On: back to
 #                                                                what they showed before; td_mission.py keeps which)
 #   ropes, hub75, test, switch, rebuild and lightsroute are refused while a calibration runs ({ ok: false, error: "a calibration is
 #   running. Stop it on the Lights page first", refused: <action> } with the status), whoever runs this script; a dry run (or a
 #   decode of earlier photos) touches no lights and refuses nothing.
-param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On)
+param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25)
 $ErrorActionPreference = 'Continue'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $river = Split-Path $repo -Parent
@@ -81,7 +82,7 @@ $tdPs1 = Join-Path $repo 'tools\td.ps1'
 # studio chat, a hand-run SSH). The same rule as mission control's calBlocked (mission/lib/mission.mjs CAL_BLOCKED). The
 # action is refused and only the status is reported; Stop goes through calibrate.ps1 -Action cancel, never through here. A dry
 # run (or a decode of earlier photos) photographs nothing and touches no lights or TouchDesigner: it refuses nothing.
-$CAL_BLOCKED = @('ropes', 'hub75', 'test', 'switch', 'rebuild', 'lightsroute')
+$CAL_BLOCKED = @('ropes', 'hub75', 'test', 'switch', 'rebuild', 'lightsroute', 'overlay')
 if ($CAL_BLOCKED -contains $Action) {
     $calRun = $null
     $calFile = Join-Path $river 'calibration.json'
@@ -154,10 +155,11 @@ $out.lights_route = $(if (@($lr).Count -gt 1) { 'BOTH' } elseif ($lr.InterfaceAl
 $td = $null
 if ($Action -eq 'switch') { $td = @{ ok = $false; error = "restarting on $BootFile" } }
 elseif (Get-Process TouchDesigner -ErrorAction SilentlyContinue) {
-    $req = @{ action = $(if ($Action -in 'ropes', 'hub75', 'test') { $Action } else { 'status' }) }
+    $req = @{ action = $(if ($Action -in 'ropes', 'hub75', 'test', 'overlay') { $Action } else { 'status' }) }
     if ($Action -eq 'ropes') { $req.dark = [bool]$Dark }
     if ($Action -eq 'hub75') { $req.brightness = $Brightness }
     if ($Action -eq 'test') { $req.on = [bool]$On }
+    if ($Action -eq 'overlay') { $req.strength = $Overlay }
     $req | ConvertTo-Json -Compress | Set-Content -Path (Join-Path $env:TEMP 'mission_args.json') -Encoding utf8
     $raw = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'tools\td.ps1') -File (Join-Path $PSScriptRoot 'td_mission.py') -Timeout 15 2>$null
     $line = ($raw | Where-Object { $_ -match '^\{' } | Select-Object -Last 1)
@@ -165,7 +167,7 @@ elseif (Get-Process TouchDesigner -ErrorAction SilentlyContinue) {
 } else { $td = @{ ok = $false; error = 'TouchDesigner is not running' } }
 $out.td = $td
 # ropes / hub75 / test act through TouchDesigner: if it didn't carry the action out, the action failed (the page must not say done)
-if ($Action -in 'ropes', 'hub75', 'test' -and $td -and $td.ok -eq $false) { $out.ok = $false; $out.error = "$($td.error)" }
+if ($Action -in 'ropes', 'hub75', 'test', 'overlay' -and $td -and $td.ok -eq $false) { $out.ok = $false; $out.error = "$($td.error)" }
 
 # Boot file: the show file Start-River.cmd opens at the next start, worked out as it does (tools/shows.ps1 Resolve-BootFile):
 # boot-file.txt's file when it names a listed show that exists (mission control sets it; the last such line wins),

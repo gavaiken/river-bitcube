@@ -4,18 +4,24 @@ title: "A River Becoming: show files"
 
 # Show files: what the piece is doing
 
-For Colin and Justine (and the rest of the team): what each show file does, in plain words, and what you can ask to change. Words in **bold** are defined in the [glossary](https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md). Updated 24 Oct 2026.
+For Colin and Justine (and the rest of the team): what each show file does, in plain words, and what you can ask to change. Words in **bold** are defined in the [glossary](https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md). Updated 26 Oct 2026.
 
-A **show file** is the TouchDesigner file that runs the whole piece on bitcube: the 20 ropes and the HUB75 panels. There are two:
+A **show file** is the TouchDesigner file that runs the whole piece on bitcube: the 20 ropes and the HUB75 panels. Mission control offers these files:
 
 | File | What it is | Needs |
 |---|---|---|
 | [**river-local-oct-22-seasons**](files/river-local-oct-22-seasons.html) | The river's year. Plays the recorded river through four seasons; people in the room warm it toward summer. **Opens at boot.** | Nothing: runs with no internet at all |
 | [**river-online-oct-23**](files/river-online-oct-23.html) | The live river and Dave's AI, set up for Gray Area (four screens, 23 Oct rope map). Shows the river camera live (over Starlink) and lets Dave's agent on Modal shape the colours and movement. | Internet, the river site online, Modal |
+| [**river-baseline-template**](files/river-baseline-template.html) | Starting point for making a new visualization; live river and gallery inputs | Live cameras, recorded river fallback |
+| [**Combined v0**](files/river-combined-v0.html) | Will's live summer river with Dave's adjustable additive canvas overlay | Live river (recorded fallback) and the local Modal mirror |
 
-Older show files are renamed with `old-` in front ([old-river-online-oct-20](files/old-river-online-oct-20.html), `old-river.toe`): they never open at boot and mission control doesn't offer them. To change which of the two runs, use mission control: Status → TouchDesigner → **Show file** (Switch to the live river / Switch to the river's year), or **Boot file** for what opens at the next restart.
+Older show files are renamed with `old-` in front ([old-river-online-oct-20](files/old-river-online-oct-20.html), `old-river.toe`): they never open at boot and mission control doesn't offer them. To switch, use mission control: Status → What's showing → Change → pick a file → Switch. Back to default returns to the default. Set as default separately changes what opens at restart; switching does not.
 
 **Gallery card** (for the iPad in front of the piece): [the seasons version](card/seasons.html). The online version will need its own card.
+
+## Will's visualization
+
+[Combined v0](files/river-combined-v0.html): live river with recorded fallback, Gavin's fixed summer treatment, and Dave's additive Modal canvas overlay. Its Status slider adjusts overlay strength. See its page for build and control details.
 
 ## The seasons version, in short
 - **The river is always moving.** Its base is a recording of the real river, so it always reads as a river, on the ropes and on the panels.

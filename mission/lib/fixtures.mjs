@@ -165,6 +165,11 @@ export class FixtureMission {
         ...(ro ? { ropes: { ...ro, source: 'test', ...(ro.status && typeof ro.status === 'object' ? { status: { ...ro.status, source: 'test' } } : {}) } } : {}),
         ...(td.hub75 && typeof td.hub75 === 'object' ? { hub75: { ...td.hub75, source: 'test' } } : {}) } } };
     }
+    if (out.probe?.value?.td?.file === 'river-combined-v0.toe') {
+      const td = out.probe.value.td;
+      out.probe.value.td = { ...td, combined: { season: 'summer', intensity: 0.85, overlay: w.overlay ?? 0.25,
+        effective_overlay: w.overlay ?? 0.25, river_source: 'live', scene: { animation: 'flow', palette: 'fixture' }, scene_age_s: 5 } };
+    }
     if (out.probe?.value) w.applying.confirm(out.probe.value, this.now());
     out.applying = w.applying.list(clock);
     const ended = w.applying.ended(clock);
@@ -229,6 +234,11 @@ export class FixtureMission {
         w.restarting = this.applyS > 0 ? { file: checked.file, until: this.now() + this.applyS * 1000 } : null;
       }
       if (action === 'bootfile') w.boot_file = checked.file;
+      if (action === 'overlay') {
+        if (!td || td.ok === false || running !== 'river-combined-v0.toe')
+          return { ok: false, error: 'overlay control is only available while combined-v0 is running', fixture: true };
+        w.overlay = checked.strength;
+      }
       if (action === 'test') {       // as probe.ps1 -Action test: through TouchDesigner, refused when it doesn't answer
         if (!td || td.ok === false) return { ok: false, error: 'TouchDesigner is not running', fixture: true };
         w.test = checked.on;

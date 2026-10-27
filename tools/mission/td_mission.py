@@ -36,7 +36,17 @@ out = {'ok': True, 'action': act}
 
 h = sys.modules.setdefault('mission_probe', types.ModuleType('mission_probe'))
 
-if act == 'ropes':
+if act == 'overlay':
+    try:
+        viz = op('/project1/viz')
+        if project.name != 'river-combined-v0.toe' or viz is None:
+            raise ValueError('overlay control is only available while combined-v0 is running')
+        if (ropes and ropes.par.Source.eval() == 'test') or (panels and panels.par.Source.eval() == 'test'):
+            raise ValueError('stop the test pattern before adjusting the overlay')
+        viz.op('combined_mod').module.set_strength(viz, args.get('strength'), project.name)
+    except Exception as e:
+        out.update(ok=False, error=str(e))
+elif act == 'ropes':
     ropes.par.Source = 'black' if args.get('dark') else 'canvas'
     ropes.par.Active = True                     # dark = keep sending black (CLAUDE.md), never Active off
 elif act == 'hub75':
@@ -84,6 +94,8 @@ out.update({
     'hub75': {'brightness': panels.par.Brightness.eval(), 'output': bool(panels.par.Output), 'source': panels.par.Source.eval()} if panels else None,
     'seasons': safe(lambda: op('/project1/seasons/seasons_mod').module.state()['year'].state()) if op('/project1/seasons') else None,
     'river_cam': safe(lambda: op('/project1/river_local/river_cam_mod').module.status('river', 'sub')) if op('/project1/river_local') else None,
+    'combined': safe(lambda: op('/project1/viz/combined_mod').module.status(op('/project1/viz')))
+                if project.name == 'river-combined-v0.toe' and op('/project1/viz/combined_mod') else None,
     'errors': len(op('/project1').errors(recurse=True) or ''),
 })
 

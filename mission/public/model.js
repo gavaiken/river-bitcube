@@ -119,11 +119,11 @@ export const calNoLights = (c) => calDryRun(c) || (!!c && typeof c === 'object' 
 // Applying a change (docs/mission-ui.md): what a change in flight blocks, when the server's entry names no blocks of its own.
 // A switch or a rebuild restarts TouchDesigner on the year: everything that touches either waits; a boot-file change only
 // the file controls (and a calibration's start); a lighting port change the lights; the rest only a second copy of itself.
-const TD_TOUCHING = ['ropes', 'hub75', 'test', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
+const TD_TOUCHING = ['overlay', 'ropes', 'hub75', 'test', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
 export const APPLY_BLOCKS = {
   switch: TD_TOUCHING, rebuild: TD_TOUCHING, bootfile: ['switch', 'rebuild', 'bootfile', 'calibrate'], lightsroute: ['ropes', 'hub75', 'test', 'lightsroute', 'calibrate'],
-  ropes: ['ropes', 'test'], hub75: ['hub75'], test: ['test', 'ropes', 'calibrate'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
-  calibrate: ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'calibrate'],   // a calibration's start: what a running one blocks, and a second start
+  overlay: ['overlay'], ropes: ['ropes', 'test'], hub75: ['hub75'], test: ['test', 'ropes', 'calibrate'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
+  calibrate: ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'calibrate', 'overlay'],   // a calibration's start: what a running one blocks, and a second start
 };
 /** The changes that wait for the server's verdict before they are done, and what shows each on bitcube: a full check's reading
  *  (TouchDesigner answering on its file, the boot file, the lighting port: R8 #31, #32) or the run's own progress (a calibration,
@@ -140,7 +140,7 @@ export const dryStart = (action, body) => action === 'calibrate' && !!body && ty
   && (body.dry_run === true || (typeof body.decode_only === 'string' && body.decode_only !== ''));
 /** The team's words for a change in flight when the server's entry has no label of its own (an older server). */
 export const APPLY_LABEL = { switch: 'a show-file switch', rebuild: "the rebuild of the river's year", bootfile: 'the change of the default', lightsroute: 'the change of the lighting port',
-  ropes: 'the change of the ropes', hub75: 'the change of the panels', mode: 'the change of the mode', target: 'the change of the target', rules: 'the change of the rules',
+  overlay: 'the change of the overlay', ropes: 'the change of the ropes', hub75: 'the change of the panels', mode: 'the change of the mode', target: 'the change of the target', rules: 'the change of the rules',
   'rules-reset': 'the reset of the rules', calibrate: 'the calibration start', test: 'the test pattern' };
 /** One name per change (R7 #19), made here for the server's entries (lib/applying.mjs), this phone's own applying
  *  line, every other phone's band, Last done and the unconfirmed line: a noun phrase that names what it changes to, and reads in
@@ -159,6 +159,7 @@ export function changeLabel(action, body = {}, { running = null } = {}) {
     case 'lightsroute': return b.route === 'direct' ? "the change of the lighting port to bitcube's LIGHTS port" : b.route === 'router' ? 'the change of the lighting port to the spare router port' : 'the change of the lighting port';
     case 'ropes': return b.dark === true ? 'the change of the ropes to dark' : 'the change of the ropes to the river';   // as planControl: only a real true goes dark
     case 'test': return b.on === true ? 'the test pattern start' : 'the test pattern stop';   // as planControl: only a real true starts it
+    case 'overlay': return `the change of Dave's overlay to ${Math.round(Number(b.strength) * 100)} %`;
     case 'hub75': return x != null ? `the change of the panels to ${Math.round(Math.min(1, Math.max(0, x)) * 100)} %` : 'the change of the panels';
     case 'mode': return typeof b.mode === 'string' && b.mode ? `the change of the mode to ${cap(b.mode)}` : 'the change of the mode';
     case 'target': {
@@ -176,7 +177,7 @@ export function changeLabel(action, body = {}, { running = null } = {}) {
 }
 /** The usual time of each change, in seconds, until bitcube's reading shows it: the server's own table (lib/applying.mjs EXPECT_S,
  *  kept equal by test/model.test.mjs), so a page can say "usually about 1 min" for its own change before status.applying has it. */
-export const EXPECT_S = { switch: 60, rebuild: 150, bootfile: 15, lightsroute: 20, ropes: 15, hub75: 15, test: 15, mode: 3, target: 3, rules: 3, 'rules-reset': 3, calibrate: 10,
+export const EXPECT_S = { overlay: 15, switch: 60, rebuild: 150, bootfile: 15, lightsroute: 20, ropes: 15, hub75: 15, test: 15, mode: 3, target: 3, rules: 3, 'rules-reset': 3, calibrate: 10,
   check: 30 };   // the full check (an SSH round trip): never a lock (lib/applying.mjs records only what APPLY_BLOCKS names), only its usual time
 /** What the boot file's confirming line says in place of a usual time: its reading comes with bitcube's next full check. */
 export const BOOT_USUAL = "bitcube's full check shows it within a minute";
@@ -986,6 +987,7 @@ export function derive(status, nowMs) {
     ? { file: bootNow.name, label: bootNow.label } : null;
   const show = {
     file: tdOk ? { name: td.file, kind, label, words: `TouchDesigner is showing ${label}` } : null,
+    combined: tdOk && td.file === 'river-combined-v0.toe' ? obj(td.combined) : null,
     boot_file: bootNow,
     // the files a switch or "Set as default" offers (shows.json offered, and on bitcube)
     show_files: showFiles,
@@ -1058,6 +1060,8 @@ export function derive(status, nowMs) {
     // the test pattern: through TouchDesigner, never during a calibration (it photographs the ropes and panels); its Stop the same,
     // so a test pattern TouchDesigner can't take back off says why
     test: ctl(first('test') ?? cantTd ?? cantCal ?? (tdOk ? null : "TouchDesigner isn't answering")),
+    overlay: ctl(first('overlay') ?? cantTd ?? cantCal ?? (testOn ? TEST_ON : null)
+      ?? (td?.file === 'river-combined-v0.toe' && typeof td.combined?.overlay === 'number' ? null : 'combined-v0 is not running or has not answered')),
     hub75: ctl(first('hub75') ?? cantTd ?? cantCal),   // the camera is photographing the panels and ropes
     // never while TouchDesigner is restarting (a second switch kills the half-opened file: another minute dark), and never on
     // a full check too old to say what runs now (the buttons' labels come from it)

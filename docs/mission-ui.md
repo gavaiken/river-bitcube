@@ -309,3 +309,10 @@ Harness, from `~/claude/local/ui-shots`: `node shots.mjs --base http://127.0.0.1
 | Card details for Will, Dave, Andi | P14, P15, P34 |
 | System map page | P26, P27 |
 | Studio chat | P23, P24, P25 |
+
+
+## Combined v0 overlay control (26 Oct 2026)
+
+While `river-combined-v0.toe` is running, Status shows **Summer river + Dave's overlay** beneath What's showing. The 0–100% range is a draft: press **Set overlay** to apply it. The card reports the strength read from bitcube, live vs recorded river source, the canvas scene and its age, and when the overlay is unavailable. 0% preserves the summer base alone; 100% adds the full canvas and clamps before the existing output caps. Settings persist in `River/combined-v0.json`.
+
+The fixed `overlay` control uses the existing authenticated mission-control action/probe/TD bridge path. It accepts only a bounded number, is guarded by the actual open project in TD, and is blocked by a switch, rebuild, calibration or test pattern. No new port or service. It never changes the default or another show's parameters.
