@@ -738,9 +738,10 @@ function combinedHTML(m) {
     <div class="row-btns"><input type="range" min="0" max="100" step="1" id="screen-recorded" value="${Math.round(screens.recorded * 100)}" ${screenDisabled ? 'disabled' : ''}><output id="screen-recorded-value">${Math.round(screens.recorded * 100)} %</output></div>
     <label for="screen-hold">Time on each look (automatic cycle)</label>
     <select id="screen-hold" ${screenDisabled ? 'disabled' : ''}>${[15,30,60,120].map(v => `<option value="${v}" ${screens.hold === v ? 'selected' : ''}>${v} seconds</option>`).join('')}</select>
-    <label for="screen-offset">Delay between screens (automatic cycle)</label>
-    <div class="row-btns"><input type="range" min="0" max="30" step="1" id="screen-offset" value="${screens.offset}" ${screenDisabled ? 'disabled' : ''}><output id="screen-offset-value">${screens.offset} s</output></div>
-    <p>0 seconds synchronizes all screens. With 10 seconds, screens 1–4 start each transition 10 seconds apart.</p>
+    <label for="screen-offset">Spacing across the screen cycle</label>
+    <div class="row-btns"><input type="range" min="0" max="120" step="0.25" id="screen-offset" value="${screens.offset}" ${screenDisabled ? 'disabled' : ''}><output id="screen-offset-value">${screens.offset} s</output></div>
+    <button type="button" class="btn" data-act="screen-spread" ${screenDisabled ? 'disabled' : ''}>Spread looks evenly</button>
+    <p>Spread looks evenly places the four screens around the full cycle, so they can hold different looks at once. With 30-second holds this uses 28.5-second spacing. Zero synchronizes them. Press Apply river settings to save.</p>
     <p>The ropes keep their current look. Gavin style uses his seasonal colours and river effects on live footage. Gavin style (recorded) uses his three-speed recording blend, seasonal colours, contrast and animated effects. The cycle runs Current → Gavin live → Recorded, with an 8-second fade between each. Moving either slider selects Manual blend: Recorded sets its share; Live blend divides the remainder.</p>
     <p>First screen now: ${Math.round((s?.screens?.gavin_mix ?? 0) * 100)} % Gavin live, ${Math.round((s?.screens?.recorded_mix ?? 0) * 100)} % Processed recording${s?.screens ? '; mode: ' + esc(s.screens.mode) : '; screen controls need the updated show'}.</p>
     ${s?.screens?.per_screen ? '<p>' + s.screens.per_screen.map((w,k) => `Screen ${k+1}: ${Math.round(w.current_mix*100)} % Current / ${Math.round(w.gavin_mix*100)} % Gavin live / ${Math.round(w.recorded_mix*100)} % Recorded`).join('<br>') + '</p>' : ''}
@@ -1239,7 +1240,11 @@ document.addEventListener('input', (e) => {
   if (['screen-mode', 'screen-hold', 'screen-blend', 'screen-recorded', 'screen-offset'].includes(e.target.id)) {
     screensDraft = screenChoice(screensDraft ?? model?.show.combined?.screens);
     if (e.target.id === 'screen-mode') screensDraft.mode = e.target.value;
-    if (e.target.id === 'screen-hold') screensDraft.hold = Number(e.target.value);
+    if (e.target.id === 'screen-hold') {
+      const wasSpread = Math.abs(screensDraft.offset - 3 * (screensDraft.hold + 8) / 4) < .01;
+      screensDraft.hold = Number(e.target.value);
+      if (wasSpread) screensDraft.offset = 3 * (screensDraft.hold + 8) / 4;
+    }
     if (e.target.id === 'screen-offset') {
       screensDraft.offset = Number(e.target.value);
       $('#screen-offset-value').textContent = e.target.value + ' s';
@@ -1292,6 +1297,13 @@ document.addEventListener('click', async (e) => {
         ask: dark ? { title: 'Make the ropes dark?', body: 'The ropes in the gallery go black now and stay black until someone presses On. The panels keep showing the river.', ok: 'Go dark', cancel: 'Keep showing the river' } : null,
         what: changeLabel('ropes', { dark }), done: dark ? 'Now dark: the ropes go black within a few seconds' : 'Now on: the ropes show the river again within a few seconds', fail: 'The ropes are unchanged',
         holds: (mm) => mm.show.ropes.state === (dark ? 'dark' : 'river') });
+      break;
+    }
+    case 'screen-spread': {
+      screensDraft = screenChoice(screensDraft ?? model?.show.combined?.screens);
+      screensDraft.mode = 'cycle';
+      screensDraft.offset = 3 * (screensDraft.hold + 8) / 4;
+      render();
       break;
     }
     case 'overlay-set': {

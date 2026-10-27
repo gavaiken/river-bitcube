@@ -19,8 +19,8 @@ def checked(value):
     if isinstance(recorded, bool) or not isinstance(recorded, (int, float)) or not math.isfinite(recorded) or not 0 <= recorded <= 1:
         raise ValueError('recorded screen blend must be a number from 0 to 1')
     offset = value.get('offset', 0.0)
-    if isinstance(offset, bool) or not isinstance(offset, (int, float)) or not math.isfinite(offset) or not 0 <= offset <= 30:
-        raise ValueError('screen timing offset must be a number from 0 to 30 seconds')
+    if isinstance(offset, bool) or not isinstance(offset, (int, float)) or not math.isfinite(offset) or not 0 <= offset <= 120:
+        raise ValueError('screen timing offset must be a number from 0 to 120 seconds')
     return {'mode': value['mode'], 'blend': float(blend), 'hold': int(hold), 'recorded': float(recorded), 'offset': float(offset)}
 
 
@@ -57,7 +57,10 @@ def amount(settings, elapsed):
 
 def screen_targets(settings, elapsed):
     offset = settings.get('offset', 0.0) if settings['mode'] == 'cycle' else 0.0
-    return tuple(weights(settings, elapsed - k * offset) for k in range(4))
+    if settings['mode'] == 'cycle':
+        period = 3 * (settings['hold'] + FADE_S)
+        return tuple(weights(settings, (elapsed - k * offset) % period) for k in range(4))
+    return (weights(settings, elapsed),) * 4
 
 
 def step(st, settings, now):

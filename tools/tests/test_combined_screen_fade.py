@@ -88,7 +88,7 @@ def test_four_screens_delay_the_same_cycle_and_zero_restores_sync():
     assert fade.screen_targets(s,34)[1:] == ((1,0,0),)*3
     for elapsed in [0,34,72,110,148,230]:
         for k,w in enumerate(fade.screen_targets(s,elapsed)):
-            assert w == pytest.approx(fade.weights(s,elapsed-10*k))
+            assert w == pytest.approx(fade.weights(s,(elapsed-10*k)%114))
             assert sum(w) == pytest.approx(1)
     sync=fade.screen_targets(dict(s,offset=0),72)
     assert sync == ((0,.5,.5),)*4
@@ -112,7 +112,20 @@ def test_offset_change_and_interrupted_fade_remain_continuous_on_every_screen():
     assert st['screen_weights_all']==((1,0,0),)*4
 
 
-@pytest.mark.parametrize('offset',[True,None,-1,30.1,float('nan'),float('inf'),'10'])
+@pytest.mark.parametrize('offset',[True,None,-1,120.1,float('nan'),float('inf'),'10'])
 def test_bad_offset_is_refused(offset):
     with pytest.raises(ValueError):
         fade.checked({'mode':'cycle','blend':0,'hold':30,'offset':offset})
+
+
+@pytest.mark.parametrize('hold',[15,30,60,120])
+def test_evenly_spaced_screens_show_different_holds_from_the_start(hold):
+    period=3*(hold+fade.FADE_S)
+    s={'mode':'cycle','blend':0,'hold':hold,'offset':period/4}
+    for t in range(int(period)*2):
+        w=fade.screen_targets(s,t)
+        # Four phases distributed over three looks always include at least two distinct held looks.
+        held={tuple(x) for x in w if max(x)==1}
+        assert len(held)>=2
+        assert all(sum(x)==pytest.approx(1) for x in w)
+    assert fade.screen_targets(s,0)==fade.screen_targets(s,period)

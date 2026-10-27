@@ -79,7 +79,7 @@
         "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",
         "screens": "tools/pixelmap/screens-2026-10-23.json"
       },
-      "description": "Live river with recorded fallback, Gavin's fixed summer base and Dave's additive canvas. Auto recognizes two river-camera views and selects masked, shadow-lifted crops; manual framing and Original bypass remain available. The four screens can fade independently among the current look, Gavin's seasonal treatment on live footage, and his processed three-speed river recording, with manual blending or staggered timed cycles. The ropes keep the current Combined look. Mission control saves framing, overlay and screen settings. No audio.",
+      "description": "Live river with recorded fallback, Gavin's fixed summer base and Dave's additive canvas. Auto recognizes two river-camera views and selects masked, shadow-lifted crops; manual framing and Original bypass remain available. The four screens can fade independently among the current look, Gavin's seasonal treatment on live footage, and his processed three-speed river recording, with manual blending or cycles spread across the screens. The ropes keep the current Combined look. Mission control saves framing, overlay and screen settings. No audio.",
       "inputs": [
         "river camera (recorded river-normal.mp4 as fallback)",
         "Dave's Modal canvas and mirrored scene",
@@ -89,7 +89,7 @@
       "created": "2026-10-26",
       "updated_by": "will",
       "updated": "2026-10-26",
-      "last_change": "Stagger four screen cycles with an adjustable delay; restore Gavin seasonal processing and three-speed recorded playback"
+      "last_change": "Spread screen looks around the full cycle from startup; add evenly-spread preset and wider phase spacing"
     }
   ]
 }

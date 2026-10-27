@@ -115,7 +115,9 @@ test('screen delay is bounded and older clients preserve it', async () => {
   const screens={mode:'cycle',blend:0,hold:30,offset:10};
   assert.equal(planControl('overlay',{strength:.18,screens}).args,
     '-Action overlay -Overlay 0.18 -Screenmode cycle -Screenblend 0.00 -Screenhold 30 -Screenoffset 10.00');
-  for (const offset of [true,null,-1,31,NaN,Infinity,'10; shutdown'])
+  assert.equal(planControl('overlay',{strength:.18,screens:{...screens,hold:120,offset:96}}).args,
+    '-Action overlay -Overlay 0.18 -Screenmode cycle -Screenblend 0.00 -Screenhold 120 -Screenoffset 96.00');
+  for (const offset of [true,null,-1,121,NaN,Infinity,'10; shutdown'])
     assert.throws(()=>checkedControl('overlay',{strength:.18,screens:{...screens,offset}}));
   const dir=new URL('./fixtures/',import.meta.url).pathname;
   const f=JSON.parse(readFileSync(join(dir,'all-good.json'),'utf8'));

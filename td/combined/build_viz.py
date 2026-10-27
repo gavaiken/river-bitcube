@@ -38,8 +38,8 @@ if not hasattr(viz.par, 'Screenmode'):
 if not hasattr(viz.par, 'Screenrecorded'):
     pg.appendFloat('Screenrecorded', label='Recorded footage in manual screen mix')
 if not hasattr(viz.par, 'Screenoffset'):
-    pg.appendFloat('Screenoffset', label='Delay between screen cycles (seconds)')
-viz.par.Screenoffset.normMin, viz.par.Screenoffset.normMax, viz.par.Screenoffset.default = 0, 30, 0
+    pg.appendFloat('Screenoffset', label='Phase spacing between screen cycles (seconds)')
+viz.par.Screenoffset.normMin, viz.par.Screenoffset.normMax, viz.par.Screenoffset.default = 0, 120, 0
 viz.par.Screenmode.menuNames = ['current', 'gavin', 'recorded', 'manual', 'cycle']
 viz.par.Screenmode.menuLabels = ['Current look', 'Gavin style (live)', 'Gavin style (recorded)', 'Manual blend', 'Automatic cycle']
 viz.par.Screenblend.normMin, viz.par.Screenblend.normMax, viz.par.Screenblend.default = 0, 1, 0

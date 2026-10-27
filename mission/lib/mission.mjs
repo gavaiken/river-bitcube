@@ -502,7 +502,7 @@ function checkedScreens(value) {
   const recorded = value.recorded === undefined ? undefined : num(value.recorded);
   if (recorded !== undefined && !(recorded >= 0 && recorded <= 1)) throw bad('recorded blend is 0 to 1');
   const offset = value.offset === undefined ? undefined : num(value.offset);
-  if (offset !== undefined && !(offset >= 0 && offset <= 30)) throw bad('screen offset is 0 to 30 seconds');
+  if (offset !== undefined && !(offset >= 0 && offset <= 120)) throw bad('screen offset is 0 to 120 seconds');
   return { mode: value.mode, blend: Number(blend.toFixed(2)), hold, ...(recorded === undefined ? {} : { recorded: Number(recorded.toFixed(2)) }), ...(offset === undefined ? {} : { offset: Number(offset.toFixed(2)) }) };
 }
 

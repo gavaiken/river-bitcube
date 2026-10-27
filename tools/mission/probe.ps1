@@ -18,7 +18,7 @@
 #   ropes, hub75, test, switch, rebuild and lightsroute are refused while a calibration runs ({ ok: false, error: "a calibration is
 #   running. Stop it on the Lights page first", refused: <action> } with the status), whoever runs this script; a dry run (or a
 #   decode of earlier photos) touches no lights and refuses nothing.
-param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25, [ValidateSet('auto','original','channel','channel-multi','pool','pool-multi')][string]$Framing, [ValidateSet('current','gavin','recorded','manual','cycle')][string]$Screenmode, [ValidateRange(0,1)][double]$Screenblend=0, [ValidateSet(15,30,60,120)][int]$Screenhold=30, [ValidateRange(0,1)][Nullable[double]]$Screenrecorded, [ValidateRange(0,30)][Nullable[double]]$Screenoffset)
+param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25, [ValidateSet('auto','original','channel','channel-multi','pool','pool-multi')][string]$Framing, [ValidateSet('current','gavin','recorded','manual','cycle')][string]$Screenmode, [ValidateRange(0,1)][double]$Screenblend=0, [ValidateSet(15,30,60,120)][int]$Screenhold=30, [ValidateRange(0,1)][Nullable[double]]$Screenrecorded, [ValidateRange(0,120)][Nullable[double]]$Screenoffset)
 $ErrorActionPreference = 'Continue'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $river = Split-Path $repo -Parent
