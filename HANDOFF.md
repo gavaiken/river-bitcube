@@ -1,18 +1,27 @@
 # Handoff: where things stand
 
-- **Holder:** Will (Codex)
-- **Where:** bitcube: automatic selection of the two river framing profiles
-- **Updated:** 2026-10-26 21:26 PT
+- **Holder:** nobody: free for Will
+- **Where:** bitcube free; Combined v0 left showing Auto framing at Will's request
+- **Updated:** 2026-10-26 21:35 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
 ## Running now
-- `river-combined-v0.toe`: **Channel: three windows**, live river, fixed summer intensity 0.85, Dave overlay 10%. Will explicitly requested this be left showing.
+- `river-combined-v0.toe`: **Auto**, currently detecting Pool and using **Pool: three windows**, live river, fixed summer intensity 0.85, Dave overlay 10%. Will explicitly requested this be left showing.
 - Verified after reopening: 60 fps, zero project errors, ropes sending, panels on. The boot default remains `river-local-oct-22-seasons.toe`; no other show, build or calibration pin changed. Dave's repo/deployment untouched.
 
-## Reversible river framing: 12ad39e
+## Automatic camera-view selection: c9bcc88
+- Will asked for the framing to follow his camera-position changes. **Auto: recognize camera view** is now enabled and persisted, preserving the overlay at 10%. Manual Channel/Pool choices and Original bypass still work.
+- Recognizes two known views from 32×18 exposure-normalized reference thumbnails, checked twice per second. Similarity ≥0.90 and a ≥0.10 lead over the other view required; one second of stable matching before selecting its three-window profile. Changed image structure resets settling. Uncertain/ambiguous/blank frames, a detector older than 2 s, or recorded fallback use Original.
+- This selects existing masks/crops; it does not segment moving water or invent crops for arbitrary angles. Daylight/lighting changes may cause Auto to abstain. No camera API/preset-control changes and no PTZ commands sent.
+- Current live Pool matched at ~0.9997 similarity and ~0.247 margin. Both prior view references, exposure/water perturbations, ambiguous/blank/noise frames, both transition directions and stale detector data tested offline. Recorded fallback bypass and automatic Pool recovery tested on TD. Auto/10% setting restored across reopening with no project errors; live processing verified at 60 fps; final runtime check repeated after reopening. The physical camera was not moved for a second live transition test.
+- Validation: **301 Python passed, 3 skipped; 417 mission tests passed**. Saved .toe fresh expansion: **387 parts, zero UTF-8/UTF-16/URL-encoded secret hits**. GitHub check/Pages green. Local browser fixture tested Auto apply and detected-Pool readback; fixture tab/server closed.
+- Mission control `/version`: **c9bcc880d636378027ae468cf9144dad5c4c3a99**, started 21:34 PT. Reload for Auto selector.
+- Pre-Auto backup: `C:\Users\user\River\checkpoints\combined-v0-before-auto-20261026\`; source `d0e041a`. Selecting a manual profile disables Auto immediately. New verified staging recovery stash: `combined-v0 auto verified staging 2026-10-26` (already deployed; do not apply over main).
+
+## Reversible river framing: 12ad39e (prior pass)
 - Status in mission control now offers **River framing**: Original (bypass), Channel one/three windows, Pool one/three windows. Choose the matching profile after moving the camera, then **Apply river settings**. This button also applies Dave's overlay slider. Settings persist together in `River/combined-v0.json`; a legacy overlay-only request preserves framing.
 - Original takes the exact previous GPU input route (verified max pixel difference 0). Recorded fallback automatically bypasses all framing; live frames restore it when fresh again.
-- Profiles enlarge water regions, lift shadows and apply feathered masks generated from Will's two night-camera stills. Three nested windows crossfade every 18 s (54 s cycle). This is a first pass with fixed per-view profiles, **not automatic camera-position recognition or semantic/motion water segmentation**. Changed lighting or imprecise presets may require retuning. Pool detail is limited by exposure. Current camera is on the Channel view; no PTZ commands were sent.
+- Profiles enlarge water regions, lift shadows and apply feathered masks generated from Will's two night-camera stills. Three nested windows crossfade every 18 s (54 s cycle). Fixed per-view masks and crops, now selected automatically by the matcher above or manually. Changed lighting or imprecise presets may require retuning. Pool detail is limited by exposure.
 - TD implementation: `td/combined/framing.py`, numpy Script TOP at up to 10 Hz, 640x360, alongside the unchanged summer/Modal treatment and calibrated outputs. No new shader, port or service. Original saved in the .toe; first-frame runtime loads the persisted choice.
 - All five profiles exercised on TD; Channel visually inspected against live footage and Pool against its prior reference preview. Recorded fallback bypass, Original, persistence across restart, and web selector draft/apply/readback verified. Overlay temporarily suppresses itself during missing/placeholder Modal scenes, as before.
 - Validation: **295 Python passed, 3 skipped; 416 mission tests passed**. Fresh saved-show expansion: **384 parts, zero secret hits** in UTF-8/UTF-16/URL-encoded scans. GitHub check and Pages green for 12ad39e.
@@ -30,5 +39,5 @@
 - Tests need modern Node (CI 24, mission control 26.10), not this Mac's default Node 20. Session's temporary Node: `/tmp/river-npm-cache/_npx/fd0ad82db56a14ec/node_modules/node/bin`.
 
 ## Next
-- Tune framing/masks, exposure and crop choices with Will; Original available at any point. Daylight/motion-aware masks and automatic profile recognition are future work.
+- Tune framing/masks, exposure and Auto recognition under daylight with Will; Original available at any point. Motion-aware masks and new arbitrary-angle crops remain future work.
 - Gallery influence, audio and further river recordings remain deferred.
