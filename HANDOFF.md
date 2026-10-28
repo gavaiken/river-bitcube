@@ -1,9 +1,12 @@
 # Handoff: where things stand
 
-- **Holder:** Will (Codex), direct recorded-video update complete; no active visual edit; diagnostic capture retained
+- **Holder:** Will (Codex), applying duplicate-frame repair for cascade after physical feedback; diagnostic capture retained
 - **Where:** bitcube running **`river-all-looks.toe`** ("The river: all looks (playlist)", auto, ~58–60 fps), **the boot default since 11:20** (Gavin); `river-looks.toe` (three looks) retired as `old-river-looks.toe`, its frozen copy `river-two-looks.toe` stays offered
-- **Updated:** 2026-10-28 13:39 PT
+- **Updated:** 2026-10-28 13:44 PT
 - **Next holder:** Will. All-looks stays default / Auto, softer ribbons retained. Approved 30 fps footage is now persistent for all-looks; reload/reboot retains it. Originals and frozen shows preserved. Rollback below removes the preference too.
+
+## Cascade duplicate-frame repair in progress (28 Oct, Will / Codex)
+- Will reports some clips still slow/stuttering after mask bypass. Offline inspection found193 near-identical frame pairs in the660-frame interpolated cascade clip (source itself has166 near-identical pairs in352frames); evening has0/6887. Re-rendered cascade with mpdecimate before MCI, preserving timing/duration;660frames/22s/30fps and only1 near-identical pair. Decoder check/contact sheet passed. Preparing a separately staged media revision and guarded checkpoint rollback; no shader or rope changes.
 
 ## Direct recorded video at 30 fps, slow mask bypassed (28 Oct, Will / Codex)
 - Will requested 30 fps water and explicitly accepted removing the mask. Source `0bde30b`: all-looks recorded input alone can bypass the low-rate motion mask (`River/remembered/control.json`, `screens.motion_mask: false`). The GPU still samples the selected movie directly with its existing grade/tint/crops and softer ribbons. Live camera masking and other shows retain their prior behavior. The CPU motion signal for ropes remains unchanged.
