@@ -20,11 +20,11 @@ Decisions: bitcube owns the loop clock; a new remembered day takes effect only a
 
 ## 1. The data: remembered days
 
-Built once on the Mac mini (`tools/remembered/build_days.py`), committed to both repos (`data/remembered/` here; the same files in river-agent).
+Built once on the Mac mini by a script in river-agent (private: it holds the reach and the point), committed to both repos (`data/remembered/` here; the same files in river-agent).
 
-- **Flow:** Dry Creek near Dobbins, NWM reach **8062207** (Will: pin 39.413113, −121.248323; modelled outlet ~283 m downstream), **NWM v3 retrospective**, hourly, Oct 2002–Jan 2023, from the public zarr on AWS. Modelled reach flow, not a measurement. Missing values stay missing; nothing is interpolated across gaps. Days are fixed PST (UTC−8), as Will's summaries are.
-- **Weather:** Open-Meteo historical, hourly, at the same pin: precipitation (mm), temperature (°C), snowfall (cm), is_day.
-- **Today:** NWM operational `analysis_assimilation` from `https://api.water.noaa.gov/nwps/v1/reaches/8062207/streamflow?series=analysis_assimilation`, fetched by Dave's agent each tick and archived (rolling window). A different model product: always labelled as such. Gap 2023–2026 is not filled.
+- **Flow:** Dry Creek near Dobbins, the National Water Model reach at the river site (its ID and Will's pin are in river-agent's private config, never here), **NWM v3 retrospective**, hourly, Oct 2002–Jan 2023, from the public zarr on AWS. Modelled reach flow, not a measurement. Missing values stay missing; nothing is interpolated across gaps. Days are fixed PST (UTC−8), as Will's summaries are.
+- **Weather:** Open-Meteo historical, hourly, at the same point: precipitation (mm), temperature (°C), snowfall (cm), is_day.
+- **Today:** NWM operational `analysis_assimilation` for the same reach (NOAA's NWPS reach streamflow API), fetched by Dave's agent each tick and archived (rolling window). A different model product: always labelled as such. Gap 2023–2026 is not filled.
 
 Files (`data/remembered/`):
 - `days.csv`: one row per day with data: `date, flow_mean_cfs, flow_max_cfs, flow_pct` (percentile of the day's mean flow in the record), `rain_mm, rain_max_mm_h, heaviest_hour, tmin_c, tmax_c, snow_cm, season, dry, cold, hours_flow` (hours with flow values).
