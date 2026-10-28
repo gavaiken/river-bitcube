@@ -1,9 +1,16 @@
 # Handoff: where things stand
 
-- **Holder:** Gavin (Mac mini session A: building the remembered river on bitcube; Will and Justine on site)
-- **Where:** bitcube (building `river-remembered.toe`; Combined v0 / river's year until it's ready)
-- **Updated:** 2026-10-27 21:35 PT
-- **Next holder:** Will (Codex), for visual tuning.
+- **Holder:** free → **River Calibrate** next (rebuild the 5 existing shows on the 27 Oct map)
+- **Where:** bitcube running **`river-remembered.toe`**, which is now the **boot default** (Gavin); fallback = the river's year
+- **Updated:** 2026-10-27 21:25 PT
+- **Next holder:** River Calibrate (Gavin's Mac mini), then session A again for the artists' round 2 on the remembered river.
+
+
+## The remembered river (27 Oct, Gavin, session A): `river-remembered.toe`, boot default
+- The artists' "Rules for the light" built: every 5-min loop relives one remembered day (Dave's agent picks it: `memory`/`surge_at` in his scene; each of his choices plays once if under 15 min old, bitcube fills the gaps with notable days), calm → building → surge → settling on the ropes, foam on mostly-black screens, the pool from the calibration (`zones-2026-10-27.json`), lingerers from the counter. Opening night ON by default (a surge every loop). Design and contracts: `docs/remembered-river.md`; debug page: mission control `/remembered`.
+- Running 21:20 at 42–48 fps (target 60), Dave's day 3 Oct 2018 played, river cam offline → recorded clip. Pinned: 27 Oct multi-view map + screens + zones. `.toe` secret scan 339 parts / 0 hits.
+- Not yet: driftwood eddies (logs not marked: `tools/remembered/logs-<date>.json`), the counter not restarted with zones (lingerers' ropes empty until it is), fps below 60, the artists' round-2 feedback (pool ripple, more dynamic, screens like /hub75, black dots in the surge, easing, a "filling pool" animation).
+- Dave's repo: `c9de2e6` (prompt: the interpreter, not the river) and `322e92b` (trust the camera over the model; at most one dry day in four) are live on Modal.
 
 ## Calibration through camera views (27 Oct, Gavin): see `docs/sessions/calibrate.md`
 - Calibrate now pans/tilts the gallery cam through `tools/cameras/views.json` (home 3241/0, mid, up to the rig), stitches the views by shared LEDs (1.8–1.9 px), and always returns it home (verified exact). New map `pixelmap-2026-10-27.json` (all 20 ropes, floor to rig) and `screens-2026-10-27.json` (2, 3, 4 located and checked against Gavin's marks; 1 hand-placed) are committed; **no show pins them yet** (next: pin the pair in a show of our own and rebuild; the river then spans the whole sculpture). bitcube has a leftover `stash@{0}: autostash` (an interim screens file plus the old river_masks deletions); harmless, drop it when convenient. The show (river's year) was restored after each step.
