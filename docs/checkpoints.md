@@ -23,6 +23,19 @@ At that moment bitcube's boot file was `river-local-oct-22-seasons.toe`, TouchDe
 3. **bitcube.** `git pull` in `C:\Users\user\River\river-bitcube`. If a `.toe` or `boot-file.txt` still differs, copy it back from the archive's `River\` folder (close TD first). Untracked files (`secrets.local.json`, RopeLights config) come from the archive too. Restore a scheduled task with `Register-ScheduledTask -Xml (Get-Content <file>.xml -Raw) -TaskName <name> -Force`.
 4. Reboot bitcube, or run `Start-River.cmd` through a one-off interactive scheduled task (see `CLAUDE.md`), and check the ropes and panels.
 
+## all-looks-v1: the playlist file with the river's year folded in (28 Oct, 10:41 PT)
+
+`river-all-looks.toe` as first built: the playlist mixer (control.json `playlist`, status `playlist/position/progress/inputs/used`),
+the look switches in outputs, the remembered river and the two fills (numpy) plus the river's year (`/project1/seasons`, an
+operator look). Not the default; `river-looks.toe` (= `river-two-looks.toe`) still is.
+
+| What | Where |
+|---|---|
+| river-bitcube | tag `all-looks-v1` (river-all-looks.toe committed in it) |
+| before any of it | tag `before-all-looks` |
+
+Going back: switch bitcube to `river-looks.toe` (mission control's Back to default); in the repo `git checkout all-looks-v1 -- river-all-looks.toe td/looks td/build/build_all_looks.py td/build/fold_seasons.py td/build/build_remembered.py`.
+
 ## river-looks-gpu-ribbons-v1: the river (all looks) with the GPU silk ribbons (28 Oct, 09:15 PT)
 
 `river-looks.toe` (the boot default) on auto, as Gavin approved it on the piece the morning of 28 Oct: the remembered river with its

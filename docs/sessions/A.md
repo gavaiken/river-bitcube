@@ -125,3 +125,16 @@ Notes kept here while another session is editing the shared docs; folded into th
   `build_remembered.py` now reloads every module. A forced re-tag was refused by the permission classifier; used a new tag.
 - **Left:** see HANDOFF.md "Open / not done" (60 fps needs a <16.7 ms frame; standalone river-remembered.toe not rebuilt; the
   — both since done: 55-60 fps, meter without the rule; the standalone river-remembered.toe rebuilt on the GPU at 09:40 with Gavin's OK: nothing left).
+
+
+## SESSION SUMMARY: the playlist file (28 Oct 2026, 10:00-11:15 PT, Mac mini + bitcube, three Opus subagents)
+- **Asked:** all the TD visuals in one file, a config for order and duration, a settings panel per look with its description,
+  the live inputs and their effect, a rollback point; speed and accuracy, cost no object.
+- **Did:** tag `before-all-looks`; `river-two-looks.toe` (frozen copy of river-looks.toe) and `river-all-looks.toe` (new, offered,
+  not the default); the playlist mixer (`td/looks/mixer.py`: entries of loops / cycles / minutes, looping, keeps its place, flood
+  rule, status playlist/position/progress/looks); `td/looks/inputs.py` (subagent: Dave / river / room + what the look used);
+  the `looks` map with descriptions in shows.json + checks + pages (subagent); the look switches in outputs and
+  `fold_seasons.py`: the river's year folded in and seen driving the ropes and screens from inside the playlist file. The
+  mission Looks tab (subagent) was in flight at hand-back: see HANDOFF.
+- **Left:** Combined with Modal not folded in (needs its own fold script, Web Render created inactive); the Looks tab merge
+  if not merged; see HANDOFF "Not done / not verified". Checkpoint `all-looks-v1`.

@@ -1,9 +1,59 @@
 # Handoff: where things stand
 
-- **Holder:** Gavin (Mac mini session A) **until noon 28 Oct**; then **Will** (Codex), visual tuning
-- **Where:** bitcube running **`river-looks.toe`** (auto, 60 fps), the **boot default**; `river-remembered.toe` also rebuilt on the GPU; checkpoint tag `river-looks-gpu-ribbons-v1` (the ribbons before the frame-rate work)
-- **Updated:** 2026-10-28 09:45 PT
-- **Next holder:** Will, from noon 28 Oct. After noon: **freeze**, fixes only, each with Gavin's OK. Read the next section first.
+- **Holder:** Gavin (Mac mini session A) **until 11:15 28 Oct**; then **Will** (Codex), visual tuning
+- **Where:** bitcube running **`river-looks.toe`** (auto, 60 fps), the **boot default**; `river-all-looks.toe` (the playlist file) built and committed, not the default
+- **Updated:** 2026-10-28 11:10 PT
+- **Next holder:** Will. Freeze on the default file: fixes only, with Gavin's OK. The playlist file is open for iteration (never the default until Gavin presses Set as default).
+
+## Late morning of 28 Oct (session A): `river-all-looks.toe`, every look in one file with a playlist. **Will: read this and the next section**
+Gavin asked (10:00) for all the TD visuals in one file, a config for which looks play in what order and for how long, a
+settings panel per look with its description, and the live inputs (Dave's Modal agent etc.) and how they shape the look;
+nothing broken, a rollback point. Done in 75 minutes with three Opus subagents on the repo side; here is exactly where it is.
+
+**Files.** `river-looks.toe` untouched, still the boot default and running (tag `before-all-looks` = the repo as it was).
+`river-two-looks.toe` = a frozen byte-for-byte copy of it ("The river (two looks)", offered). `river-all-looks.toe` = the new
+file, offered (so bitcube can switch to it) but **not the default**; page `docs/files/river-all-looks.md`.
+
+**What works on the piece (verified 10:35-10:41, all-looks open, then switched back to river-looks):**
+- **The playlist mixer** (`td/looks/mixer.py`, tests `tools/tests/test_looks.py`): `River\looks\control.json`
+  `playlist: [{look, for: {loops|cycles|minutes: n}}]` (loops only for `remembered`, cycles only for the fills, minutes for
+  any; 1..12 entries), `mode: auto` plays it in a loop, `manual` + `look` pins one; a new playlist keeps its place by the look
+  showing; the flood rule stays (a flood loop goes straight to the next entry when that is a fill). Default = the old
+  rotation (remembered x4 loops, fill-simple x1 cycle). `status.json` adds `playlist`, `position`, `progress {done, of,
+  unit}`, `looks` (what this file has), `inputs` (Dave / river / room: `td/looks/inputs.py`) and `used` (what the look showing
+  did with them). A playlist written to control.json took effect live and kept its place.
+- **Operator looks** go through `outputs/look_src_ropes` + `look_src_screen1..4` (Switch: 0 = the numpy images, 1 = seasons,
+  2 = modal) and `look_fade_*` (Level): `mixer._route` sets them and turns an operator look's COMP cooking on only while it
+  shows. **The river's year is folded in** (`/project1/seasons`, by `td/build/fold_seasons.py`, which runs the seasons builder
+  inside this file on this file's pins, then `build_all_looks.py` wires it): pinned to `seasons` the ropes and screens carried
+  its picture; back on auto the remembered river at 60 fps with seasons off. Its control page (port 9981) is in this file.
+- **Descriptions:** `shows.json` `river-all-looks.toe` `looks` map: each look's title, description (word for word from its
+  standalone entry), inputs, file and unit; checked by `tools/shows_check.py`; `docs/shows.md`.
+
+**Not done / not verified:**
+- **Combined with Modal** (`modal`) is **not folded in**. Its builder (`td/build/build_combined_modal_inputs.py`) rewrites
+  the shared `/project1/inputs`, `outputs`, `ropes`, `panels`, so it can't be exec'd as-is like the seasons one. The way:
+  a `fold_modal.py` that builds only its `viz` layer into `/project1/modal` (its `exec` of `td/combined/build_viz.py` with
+  the runtime swap, lines ~313-320 of its builder, plus `td/combined_modal/build_modal_inputs.py`), gives that COMP a
+  `rope_canvas` (its field through the pixel map as `outputs` does it there) and `quad<k>_out` (screens.py with
+  `SCREENS_COMP=<the modal COMP>`), then `build_all_looks.py` again. **Create its Web Render inactive and switch it on a
+  frame later** (19 Oct: a live-created Web Render froze TD). Until then `status.looks` lists four and the mixer refuses
+  `modal` in a playlist.
+- **The Looks tab in mission control** (`/looks`: playlist editor, per-look sections with descriptions and settings, the
+  inputs card; `POST /api/control/looks {mode, look?, playlist?}`; `probe.ps1 -Action looks -Playlist`): see the next
+  line in this file for its state (a subagent built it; merged if it says so below, else on branch
+  `worktree-agent-ac0ad053c49c2429e` in `.claude/worktrees/agent-ac0ad053c49c2429e` on the Mac mini, to review and merge).
+  Until it's merged, `probe.ps1`'s `-Look` ValidateSet still lists three looks: pin `seasons` by writing
+  `River\looks\control.json` by hand (`{"mode":"manual","look":"seasons"}`).
+- The seasons look's `seasons_exec` (its engine, presence, the 9981 page) keeps running while the COMP's cooking is off;
+  Python cost was 0.2 ms with seasons showing and ~5 ms with the remembered river, so it's cheap, but it wasn't profiled
+  with seasons idle for long.
+- Fades for operator looks are the Level TOP's brightness (linear), the numpy looks' fades are theirs; both 2 s. Not compared
+  side by side on the piece.
+
+**Rollback:** `river-looks.toe` is the default and untouched. If all-looks misbehaves while it shows: mission control's
+Back to default (or `probe.ps1 -Action switch -BootFile river-looks.toe`). Repo: tag `before-all-looks`; the all-looks file
+with seasons: tag `all-looks-v1`.
 
 ## Morning of 28 Oct (session A): the screens as GPU silk ribbons; M2 and M7 done. **Will: start here**
 **What's on the piece now.** `river-looks.toe` on auto: four loops of the remembered river, then one Fill my cup (simple),
