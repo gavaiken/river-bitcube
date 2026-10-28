@@ -24,9 +24,12 @@ QW, QH, NQ = 128, 256, 4
 N_ROPES, N_PX = 20, 400
 FRAME = (1440.0, 808.0)
 SCREEN_M = (0.32, 0.64)             # a screen: 128 x 256 LEDs at 2.5 mm
-SCREEN1_ANGLE = 15.0                # deg, counterclockwise as seen (Gavin, 27 Oct: screen 1 can't be seen by the camera)
-MAX_N = 3500
-STREAK = 8                          # samples along each particle's streak
+SCREEN1_ANGLE = 21.0                # deg, counterclockwise as seen (screen 1 can't be seen by the camera)
+# How each screen hangs, measured on site with an iPhone (Gavin, 27 Oct night; + = counterclockwise as seen). The camera
+# sees the screens at a slant, so its corners misjudge the rotation (screen 2 looked upright): these win.
+TILT_MEASURED = {1: 21.0, 2: -19.0, 3: -20.0, 4: 23.0}
+MAX_N = 5000
+STREAK = 14                         # samples along each particle's streak
 DOT_M = 0.018                       # a particle's radius in the room, metres (a few LEDs on a rope, ~10 on a screen)
 ROPE_R = 2.2                        # a particle lights rope LEDs within this many frame px
 ROPE_GAIN = 0.85
@@ -88,6 +91,8 @@ class Geometry:
                 if k == 1 or e.get('estimated'):
                     ang = math.radians(SCREEN1_ANGLE) if k == 1 else ang
                     h = max(h, SCREEN_M[1] * px_per_m * 1.2)
+                if k in TILT_MEASURED:
+                    ang = math.radians(TILT_MEASURED[k])
                 self.screens.append((cxy, ang, h * SCREEN_M[0] / SCREEN_M[1], h))
             else:
                 self.screens.append((np.array([W * (0.42 + 0.05 * k), H * (0.75 - 0.12 * k)]), 0.0,
@@ -119,7 +124,7 @@ class Field:
         g, rng = self.g, self.rng
         self.t += dt
         speed = max(60.0, rope_speed_leds * g.px_per_led)          # frame px/s, never stalled
-        rate = 40 + 1800 * intensity ** 1.5                         # particles per second
+        rate = 50 + 3200 * intensity ** 1.6                         # particles per second: a torrent in the surge
         self.spawn_debt += rate * dt
         n = min(int(self.spawn_debt), MAX_N - len(self.b))
         self.spawn_debt -= int(self.spawn_debt)
@@ -148,7 +153,7 @@ class Field:
         if not len(self.b):
             return np.zeros((0, 2), np.float32), np.zeros(0, np.float32)
         k = np.linspace(0.0, 1.0, STREAK, dtype=np.float32)
-        tail = 0.025                                                    # seconds of motion the streak covers
+        tail = 0.05                                                     # seconds of motion the streak covers (a smear)
         pts = self.p[None, :, :] - self.v[None, :, :] * tail * k[:, None, None]
         br = self.b[None, :] * (1.0 - 0.8 * k[:, None])
         return pts.reshape(-1, 2), br.reshape(-1)

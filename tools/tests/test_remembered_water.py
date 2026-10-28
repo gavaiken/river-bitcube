@@ -54,7 +54,7 @@ def test_particle_field_windows_follow_the_room():
     repo = Path(__file__).resolve().parents[2]
     g = particles.Geometry(repo / 'tools/pixelmap/pixelmap-2026-10-27.json', repo / 'tools/pixelmap/screens-2026-10-27.json')
     angles = [round(np.degrees(a)) for _, a, _, _ in g.screens]
-    assert angles[0] == 15 and abs(angles[2] + 21) <= 2 and abs(angles[3] - 24) <= 2
+    assert angles == [21, -19, -20, 23]
     calm, surge = particles.Field(g), particles.Field(g)
     for _ in range(300):
         calm.step(1 / 60, 0.1, 40)
