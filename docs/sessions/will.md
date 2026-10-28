@@ -118,3 +118,12 @@
 - Fresh-process actual show._holder selected interpolated paths for all-looks; frozen two-looks selected original paths. No physical reboot or interruption. All six baseline hashes (saved .toe, controls×2, boot, originals×2) unchanged. Current boot/defaultshowstillall-looks; preference makes new footage survive startup.
 - Tests exercise startup preference, one-show scope, missing/corrupt/partial fallback, invalid names, repeated keep without overwriting checkpoint, persistent rollback after rotation, preservation of other preference entries and guards. Originals/rollback retained; pre-existing bitcube river_masks moves and untracked26Oct map preserved.
 - Final tools/check:524 Python passed/3 skipped;503 mission tests passed. Source/config/docs synced, no .toe artifact change or new shader cooking.
+
+
+## SESSION SUMMARY — 2026-10-28: start full-playlist stutter profile
+
+- Will requested a full-sequence profile for intermittent physical rope/screen stutter. Read latest30fps-trial handoff, confirmed it was explicitly approved to remain active, and preserved it. Baton b3cdb46; profiling source0f64a9c. Current no active visual edit.
+- Added bounded temporary callback/section and Art-Net timing wrappers, read-only Windows native CPU/memory sampler, report script and docs. No external dependency install, WMI sampling loop, full Python tracing hooks, GPU image readback or project save. Wrappers restore automatically and preserve original return values/exceptions; tests cover expiration and respecting subsequent patches.
+- Started25min capture at13:10:09 PT, expected13:35:09, under River/profiles/cycle-20261028-131009. TD12944 / sampler8040. Verified CSV frame/send events and system data flowing; sampled metadata overhead~0.04ms. No claim of root cause from this initial check. Open-file lengths can appear0 on Windows despite readable flushed records.
+- Follow-up heartbeat analyze-river-performance-capture created in this chat, every5min quiet until meaningful completion/failure, to analyze locally and report, then disable itself. No fixes authorized by the follow-up. Show and approved temporary media trial left running, no build/restart/save/control/mapping/shader edits. Setup checks527 Python passed/3 skipped and503 mission passed. Final analysis remains pending until capture ends.
+- Health at222s: active, writer alive,0 diagnostic rows lost, no project errors, current trial retained and saved show hash unchanged. Final setup/handoff checks527 Python passed/3 skipped;503 mission passed.

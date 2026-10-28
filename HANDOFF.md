@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** Will (Codex), preparing temporary full-playlist profiling; current approved 30 fps trial preserved
+- **Holder:** Will (Codex), 25-minute diagnostic capture running; no active visual edit
 - **Where:** bitcube running **`river-all-looks.toe`** ("The river: all looks (playlist)", auto, ~58–60 fps), **the boot default since 11:20** (Gavin); `river-looks.toe` (three looks) retired as `old-river-looks.toe`, its frozen copy `river-two-looks.toe` stays offered
-- **Updated:** 2026-10-28 13:07 PT
+- **Updated:** 2026-10-28 13:13 PT
 - **Next holder:** Will. All-looks stays default / Auto, softer ribbons retained. Approved 30 fps footage is now persistent for all-looks; reload/reboot retains it. Originals and frozen shows preserved. Rollback below removes the preference too.
 
 ## Approved 30 fps footage kept across startup (28 Oct, Will / Codex)
@@ -13,6 +13,14 @@
 - **Rollback now and across future startups:** same no-restart command: `.\tools\td.ps1 "exec(open('C:/Users/user/River/river-bitcube/tools/remembered/video_trial.py').read(), dict(globals(), TRIAL_ACTION='rollback'))"`. It removes only all-looks’ matching preference, preserves other shows’ preferences, and restores the matching original movie/list. No save/rebuild needed. `TRIAL_ACTION='status'` reports runtime and persistent selection. A normal reload/reboot now retains30fps; this supersedes the temporary-trial notes below.
 - Final validation: `tools/check` passed (524 Python passed/3 skipped;503 mission tests passed).
 - Tests cover preference startup, fallback on missing/corrupt/partial data, path restrictions, scope to one show, idempotent keep/checkpoint preservation, rollback after clip rotation and preservation of unrelated settings. No physical reboot was performed; startup selection was verified in a separate process to avoid interrupting the piece.
+
+## Full-playlist performance capture running (28 Oct, Will / Codex)
+- Will reports occasional stuttering on physical ropes and screens, around10–20s over the sequence. Temporary timing tools source `0f64a9c`, docs `docs/performance-capture.md`. No render/control/clip changes; current approved30fps trial retained. No restart/rebuild/project save.
+- Capture: **`C:\Users\user\River\profiles\cycle-20261028-131009`**, started **13:10:09 PT**, duration1500s, expected finish **13:35:09 PT**. TD PID12944; read-only OS sampler PID8040. Covers25min against the usual21m24s playlist. Raw per-frame callback intervals, nested show/field/mask/rope/fill timings, TD-reported GPU/CPU cook times, actual Art-Net send gaps and clip/look/loop tags; external native Windows CPU/memory samples at1Hz (no psutil install, WMI loop or GPU image readback).
+- Data verified flowing through222s: frame and Art-Net events, CPU/memory/phase rows; sampler log empty, writer alive,0 diagnostic rows lost. Saved show hash remains41732bc6acb5160ae8348092f84f35d1f351fa8a7b9821977e8281aeda1ff9ef. Initial per-frame metadata overhead ~0.04ms in inspected samples, not a bound on all profiling overhead. Raw trace can catch stalls that the smoothed status hides. CPU/GPU timings are nested or prior-cook observations; do not claim physical presentation causality from them alone.
+- Hooks auto-restore after1500s; writer flushes and marks capture.json complete, OS sampler ends5s later with system-complete.json. Runtime state/threads live in sys.modules, never comp.storage. On TD restart, treat the trace as partial. Open Windows CSV file attributes may show0bytes while flushed rows are readable; check the last row rather than file size alone. Do not save the current media trial.
+- Read-only follow-up heartbeat **`analyze-river-performance-capture`** checks quietly every5min, analyzes completed trace in this chat and disables itself after delivering a report. Local analysis destination: `/Users/will/projects/modal-art/work/full-cycle-profile-20261028`. No automatic animation fixes authorized. Early setup validation:527 Python passed/3 skipped;503 mission passed, plus targeted callback/expiry/restore tests.
+- Do not overwrite profiles or start a second capture. Stop/status through td.ps1 with CAPTURE_ACTION='stop'/'status'; see docs. Further visual changes during capture must be noted so the comparison is not misattributed.
 
 ## Temporary 30 fps recorded-video trial (history; now kept persistently) (28 Oct, Will / Codex)
 - Will requested a reversible on-panel comparison of the motion-interpolated video. Guarded tool `tools/remembered/video_trial.py` (source120da8e) redirects only `remembered_live.clips` and the current `remembered/fallback_clip` parameter. **Runtime only: no project save, build/restart, shader/filter/control/default/calibration edits.** Existing softer ribbons retained. Normal camera/fallback selection and two-clip rotation remain; file switches restart the selected movie, not the remembered-day or playlist clock.
