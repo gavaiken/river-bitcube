@@ -202,13 +202,18 @@ function mapError(raw) {
   if (/could not fetch|fetch failed|ssh|can't reach/i.test(s)) return "bitcube didn't send it";
   return s;
 }
-/** The map's 8000 points grouped by rope, as fractions of the frame (y already flipped: v runs bottom → top). */
+/** The map's 8000 points grouped by rope, as fractions of the frame (y already flipped: v runs bottom → top).
+ *  A multi-view map (meta.space: several camera views stitched, tools/pixelmap/sphere.py) keeps u, v in its own stitched
+ *  frame; this page draws over the gallery cam's live picture, so it uses each LED's place in that view (hu, hv) instead.
+ *  LEDs above the picture (the rope tops) land above it; one behind the camera (hu null) is left out. */
 function prepareRopes(map) {
   if (!map || !Array.isArray(map.points)) return null;
+  const home = !!map.meta?.space;
   const ropes = Array.from({ length: N_ROPES }, () => []);
   for (const p of map.points) {
     if (!p || typeof p.rope !== 'number' || p.rope < 0 || p.rope >= N_ROPES) continue;
-    ropes[p.rope].push({ px: p.px, x: p.u, y: 1 - p.v, visible: p.visible === true });
+    if (home && (typeof p.hu !== 'number' || typeof p.hv !== 'number')) continue;
+    ropes[p.rope].push({ px: p.px, x: home ? p.hu : p.u, y: 1 - (home ? p.hv : p.v), visible: p.visible === true });
   }
   for (const r of ropes) r.sort((a, b) => a.px - b.px);
   return ropes;
@@ -219,7 +224,8 @@ function screenQuads() {
   const out = [];
   const sc = S.map.screens?.screens;
   if (sc && typeof sc === 'object') {
-    for (let n = 1; n <= 4; n++) { const q = sc[String(n)]; out.push(q && q.tl ? { n, ...flip(q), estimated: q.estimated === true, from: q.from ?? null, located: true } : { n, located: false }); }
+    // a multi-view screens file also gives each screen's corners in the gallery cam's own view (home): the picture this page draws over
+    for (let n = 1; n <= 4; n++) { const q = sc[String(n)], c = q?.home?.tl ? q.home : q; out.push(c && c.tl ? { n, ...flip(c), estimated: q.estimated === true, from: q.from ?? null, located: true } : { n, located: false }); }
     return out;
   }
   const q1 = S.map.map?.hub75_quad1;

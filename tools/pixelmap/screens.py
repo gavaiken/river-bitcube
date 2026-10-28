@@ -128,6 +128,16 @@ def to_uv(corners, w, h):
             for k, (x, y) in corners.items()}
 
 
+def home_corners(space, uv):
+    """A screen's corners (TD UVs of the map's frame) in the home view's own frame (the gallery cam's picture at its show
+    position), for mission control's Lights page, which draws over that picture. None when a corner is behind it."""
+    px = space.cam.project(space.frame.uv_to_dirs(np.array([uv[c] for c in CORNERS], float)))
+    if not np.isfinite(px).all():
+        return None
+    w, h = space.cam.w, space.cam.h
+    return {c: [round(float(x / w), 5), round(float(1 - y / h), 5)] for c, (x, y) in zip(CORNERS, px)}
+
+
 def corrected_rot(capture, space, name, black):
     """The view's rotation as the camera actually was: the calibration's own frame of that view against this black frame."""
     ref = capture.REPO / 'frames' / space.views[name]['capture'] / 'A' / 'black.png'
@@ -259,6 +269,10 @@ def main():
     meta = {'capture': out.name, 'camera': a.cam, 'frame_size': [w, h],
             'uv': 'TD convention: u left->right, v bottom->top; corners as seen (tl = top left of the upright picture)'}
     if space:
+        for v in screens.values():
+            hc = home_corners(space, v)
+            if hc:
+                v['home'] = hc
         meta |= {'map': mpath.name, 'frame': 'the map\'s virtual frame (its meta.space): pin both together',
                  'views': list(per_view)}
     path.write_text(json.dumps({'meta': meta, 'screens': {str(k): v for k, v in screens.items()}}, indent=1) + '\n')

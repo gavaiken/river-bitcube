@@ -7,7 +7,7 @@
    808
   ],
   "uv": "TD convention: u left->right, v bottom->top; corners as seen (tl = top left of the upright picture)",
-  "map": "pixelmap-2026-10-27-views.json",
+  "map": "pixelmap-2026-10-27.json",
   "frame": "the map's virtual frame (its meta.space): pin both together",
   "views": [
    "home",
@@ -35,7 +35,25 @@
     0.6198
    ],
    "estimated": true,
-   "from": "hand: Gavin, panorama 27 Oct"
+   "from": "hand: Gavin, panorama 27 Oct",
+   "home": {
+    "tl": [
+     0.38434,
+     1.32892
+    ],
+    "tr": [
+     0.39812,
+     1.33051
+    ],
+    "br": [
+     0.39281,
+     1.17449
+    ],
+    "bl": [
+     0.37858,
+     1.17289
+    ]
+   }
   },
   "2": {
    "tl": [
@@ -56,7 +74,25 @@
    ],
    "px": 4319,
    "balance": 0.63,
-   "view": "mid"
+   "view": "mid",
+   "home": {
+    "tl": [
+     0.53156,
+     1.29711
+    ],
+    "tr": [
+     0.55268,
+     1.30659
+    ],
+    "br": [
+     0.5548,
+     1.16822
+    ],
+    "bl": [
+     0.5344,
+     1.16284
+    ]
+   }
   },
   "3": {
    "tl": [
@@ -77,7 +113,25 @@
    ],
    "px": 17358,
    "balance": 0.8,
-   "view": "home"
+   "view": "home",
+   "home": {
+    "tl": [
+     0.34623,
+     0.83923
+    ],
+    "tr": [
+     0.39702,
+     0.81123
+    ],
+    "br": [
+     0.36387,
+     0.63863
+    ],
+    "bl": [
+     0.31009,
+     0.66228
+    ]
+   }
   },
   "4": {
    "tl": [
@@ -98,7 +152,25 @@
    ],
    "px": 9684,
    "balance": 0.73,
-   "view": "mid"
+   "view": "mid",
+   "home": {
+    "tl": [
+     0.41623,
+     1.06527
+    ],
+    "tr": [
+     0.45643,
+     1.10595
+    ],
+    "br": [
+     0.49771,
+     0.95837
+    ],
+    "bl": [
+     0.45543,
+     0.9203
+    ]
+   }
   }
  }
 }

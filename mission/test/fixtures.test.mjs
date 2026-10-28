@@ -219,7 +219,7 @@ test('the scripted calibration: the progress file\'s shape and stages, cancel, t
   const { readLocalPixelmap } = await import('../lib/lights.mjs');
   const dir = new URL('../../tools/pixelmap/', import.meta.url).pathname;
   const map = readLocalPixelmap(dir);
-  assert.equal(map.file, 'pixelmap-2026-10-23.json');
+  assert.equal(map.file, 'pixelmap-2026-10-27.json');
   // a hand-driven clock and timers: no waiting
   let t = 1_792_749_540_000, timers = [];
   const setTimer = (fn, ms) => { const h = { fn, at: t + ms, unref() {} }; timers.push(h); return h; };
@@ -249,7 +249,7 @@ test('the scripted calibration: the progress file\'s shape and stages, cancel, t
   assert.ok(seen.some((x) => x[0] === 'ropes-decode' && /^rope  3: visible/.test(x[5])));
   assert.deepEqual(final.result, mapResult(map));
   assert.deepEqual([final.result.map, final.result.points, final.result.hub75_quads, final.result.camera, final.result.frame_size, final.result.drift_px],
-                   ['pixelmap-2026-10-23.json', 8000, ['hub75_quad1'], 'gallery', [1440, 808], 10.23]);
+                   ['pixelmap-2026-10-27.json', 8000, ['hub75_quad1'], 'gallery', [1440, 808], 0]);
   assert.deepEqual(final.before, { Active: true, Source: 'canvas', Brightness: 0.4, Graybit: 0, Grayinvert: false, Panels: 'canvas', Maxbrightness: 0.4 });
   assert.match(final.capture, /^pixelmap-\d{8}-\d{6}$/); assert.match(final.hub75_capture, /^hub75-\d{8}-\d{6}$/);
   assert.ok(final.log.length > 5 && final.log.length <= 40 && final.log.some((l) => l.startsWith('$ ')));
