@@ -268,7 +268,7 @@
       "title": "The river (all looks, playlist)",
       "label": "all looks",
       "kind": "show",
-      "offered": false,
+      "offered": true,
       "build": "td/build/build_all_looks.py",
       "calibration": {
         "pixelmap": "tools/pixelmap/pixelmap-2026-10-28.json",
@@ -291,7 +291,7 @@
       "created": "2026-10-28",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-28",
-      "last_change": "New: river-looks.toe copied; the playlist mixer, the river's year and Combined with Modal to be folded in"
+      "last_change": "river-all-looks.toe committed as its starting point (a copy of river-looks.toe, same bytes as river-two-looks.toe, scan 0 hits) so bitcube can switch to it; the playlist mixer build follows"
     }
   ]
 }
