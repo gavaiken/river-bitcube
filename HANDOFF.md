@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
 - **Holder:** Gavin (Mac mini session A) **until noon 28 Oct**; then **Will** (Codex), visual tuning
-- **Where:** bitcube running **`river-looks.toe`** (auto), the **boot default**; checkpoint tag `river-looks-gpu-ribbons-v1`
-- **Updated:** 2026-10-28 09:40 PT
+- **Where:** bitcube running **`river-looks.toe`** (auto, 60 fps), the **boot default**; `river-remembered.toe` also rebuilt on the GPU; checkpoint tag `river-looks-gpu-ribbons-v1` (the ribbons before the frame-rate work)
+- **Updated:** 2026-10-28 09:45 PT
 - **Next holder:** Will, from noon 28 Oct. After noon: **freeze**, fixes only, each with Gavin's OK. Read the next section first.
 
 ## Morning of 28 Oct (session A): the screens as GPU silk ribbons; M2 and M7 done. **Will: start here**
@@ -54,10 +54,7 @@ check `River\remembered\status.json` and `td.ps1 -Screenshot /project1/remembere
 **Open / not done** (none is half-done in the code):
 - Watch the screens for tearing now that vsync is off (none seen in TD's output; the Colorlight sender samples HDMI on its
   own clock). Undo: `vsyncmode = 'enabled'` in `build_remembered.py`, rebuild.
-- `river-remembered.toe` (standalone, not running, not the default) has no GPU operators yet: opened as it is, it runs the
-  numpy ribbons automatically. To add them, when two short dark minutes are fine: `probe.ps1 -Action switch -BootFile
-  river-remembered.toe`, then `td.ps1 -File td\build\build_remembered.py`, `td_save.ps1`, `frames\toe_scan.py`, commit the
-  .toe, and switch back to `river-looks.toe`.
+- (done 09:40, with Gavin's OK) `river-remembered.toe` (standalone) rebuilt with the GPU chain too: 61 fps, `ribbons-gpu`; committed.
 - The ribbons flow along the ropes by each screen, but at a fixed speed per ribbon; matching the ropes' own speed in a surge
   more closely is a tuning question.
 - bitcube's checkout shows `river_masks/` moved into a subfolder and an untracked `pixelmap-2026-10-26.json`: not ours, left

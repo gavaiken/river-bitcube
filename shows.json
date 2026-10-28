@@ -160,7 +160,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-28",
-      "last_change": "M7 frame rate: the panels window without vsync and the ropes stepping at 30 Hz on the frames the ribbons don't (no frame waits for a refresh: ~45 fps)"
+      "last_change": "river-remembered.toe rebuilt and saved with the GPU ribbons and GPU river (as river-looks.toe), no vsync, ropes at 30 Hz: 61 fps, ribbons-gpu on the piece; secret scan 0 hits"
     },
     {
       "file": "river-filling.toe",
