@@ -238,7 +238,7 @@
     {
       "file": "river-two-looks.toe",
       "title": "The river (two looks)",
-      "label": "two looks",
+      "label": "the river (two looks)",
       "kind": "show",
       "offered": true,
       "build": "td/build/build_two_looks.py",
@@ -266,7 +266,7 @@
     {
       "file": "river-all-looks.toe",
       "title": "The river (all looks, playlist)",
-      "label": "all looks",
+      "label": "the river (playlist)",
       "kind": "show",
       "offered": true,
       "build": "td/build/build_all_looks.py",
