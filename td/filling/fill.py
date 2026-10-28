@@ -195,41 +195,58 @@ def reset():
     h.fill = None
 
 
+def make(comp):
+    """A Fill (or SimpleFill) from a COMP's Mapfile / Screensfile / Zonesfile parameters."""
+    mf = comp.par.Mapfile.eval() if hasattr(comp.par, 'Mapfile') else ''
+    sf = comp.par.Screensfile.eval() if hasattr(comp.par, 'Screensfile') else ''
+    zf = comp.par.Zonesfile.eval() if hasattr(comp.par, 'Zonesfile') else ''
+    variant = comp.par.Variant.eval() if hasattr(comp.par, 'Variant') else 'configurable'
+    return make_variant(variant, space_mod.Space(mf or None, sf or None, zf or None))
+
+
+def make_variant(variant, space):
+    if variant == 'simple':
+        from filling.simple import SimpleFill
+        return SimpleFill(space)
+    return Fill(space)
+
+
+def read_control(fill):
+    """The dials: River\\filling\\control.json into the fill."""
+    try:
+        fill.set(json.loads((RIVER / 'filling' / 'control.json').read_text(encoding='utf-8-sig')))
+    except (OSError, ValueError):
+        pass
+
+
+def write_status(fill, now, t):
+    phase, full = fill.state
+    st = dict(fill.settings, t=now, level=round(full, 3), phase=phase, cycle_s=round(t, 1))
+    p = RIVER / 'filling' / 'status.json'
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix('.tmp')
+        tmp.write_text(json.dumps(st), encoding='utf-8')
+        tmp.replace(p)
+    except OSError:
+        pass
+
+
 def frame(comp):
     h = _holder()
     try:
         if h.fill is None:
-            mf = comp.par.Mapfile.eval() if hasattr(comp.par, 'Mapfile') else ''
-            sf = comp.par.Screensfile.eval() if hasattr(comp.par, 'Screensfile') else ''
-            zf = comp.par.Zonesfile.eval() if hasattr(comp.par, 'Zonesfile') else ''
-            variant = comp.par.Variant.eval() if hasattr(comp.par, 'Variant') else 'configurable'
-            cls = Fill
-            if variant == 'simple':
-                from filling.simple import SimpleFill
-                cls = SimpleFill
-            h.fill = cls(space_mod.Space(mf or None, sf or None, zf or None))
+            h.fill = make(comp)
         now = time.time()
         if now - h.read_at > 1.0:
             h.read_at = now
-            try:
-                h.fill.set(json.loads((RIVER / 'filling' / 'control.json').read_text(encoding='utf-8-sig')))
-            except (OSError, ValueError):
-                pass
+            read_control(h.fill)
         h.frame = getattr(h, 'frame', 0) + 1
         if h.frame % 2 == 0 or h.ropes is None:                          # the water at 30 Hz
             h.ropes, h.panels, h.t = h.fill.frames(now)
         if now - h.wrote_at > 0.5:
             h.wrote_at = now
-            phase, full = h.fill.state
-            st = dict(h.fill.settings, t=now, level=round(full, 3), phase=phase, cycle_s=round(h.t, 1))
-            p = RIVER / 'filling' / 'status.json'
-            try:
-                p.parent.mkdir(parents=True, exist_ok=True)
-                tmp = p.with_suffix('.tmp')
-                tmp.write_text(json.dumps(st), encoding='utf-8')
-                tmp.replace(p)
-            except OSError:
-                pass
+            write_status(h.fill, now, h.t)
         h.error = None
     except Exception as e:                                                # noqa: BLE001 - never stop the show
         h.error = repr(e)

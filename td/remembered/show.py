@@ -49,7 +49,8 @@ KNOBS = ('speed', 'density', 'brightness', 'turbulence')
 NEUTRAL = {k: 0.5 for k in KNOBS}
 CONTROL_DEFAULT = {'pool_height_m': None, 'light': 'off', 'leds': [], 'opening_night': True,   # opening night ON unless told
                    'screen_intensity': None, 'screen_threshold': None,                          # None: water.SETTINGS
-                   'screen_mode': 'particles'}       # particles (one field, the screens as windows) | water (video)
+                   'screen_mode': 'particles',       # particles (one field, the screens as windows) | water (video)
+                   'screen_video': 0.25}             # M9: how strongly the river video shows under the particles (0..1)
 SCREEN_CALM = 0.4                   # the screens in calm, as a share of their intensity (artists, 27 Oct: follow the loop)
 DARK_LUMA = 0.08                    # the live cam darker than this (night) -> the screens use the clips
 LIGHTS = ('off', 'pool', 'eddies', 'leds')
@@ -78,6 +79,9 @@ def parse_control(c):
         on = c['opening'].get('on', on)
     ctl['opening_night'] = bool(on)
     sc = c.get('screens') if isinstance(c.get('screens'), dict) else {}
+    v = sc.get('video', c.get('screen_video'))
+    if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 1:
+        ctl['screen_video'] = float(v)
     if sc.get('mode', c.get('screen_mode')) in ('particles', 'water'):
         ctl['screen_mode'] = sc.get('mode', c.get('screen_mode'))
     for key, name in (('screen_intensity', 'intensity'), ('screen_threshold', 'threshold')):
@@ -283,12 +287,16 @@ class Show:
         self.ticks = 0
         self.panel_dt = 0.0
 
+    def wants_video(self):
+        """Whether the river video is drawn (the water look, or faintly under the particles: M9)."""
+        return self.control['screen_mode'] == 'water' or self.control['screen_video'] > 0
+
     # ---- inputs ----------------------------------------------------------------------------------------------------
 
     def feed_river(self, img, source, now):
         """A new river frame (row 0 at the top; live cam or the recorded clip)."""
         self.panels.feed(img)
-        if self.control['screen_mode'] == 'water':
+        if self.wants_video():
             self.water.feed(img)
         self.river_source = source
         self.river_t = now
@@ -388,7 +396,12 @@ class Show:
             # the artists' simulator look (water.py): the moving water through four drifting windows, everything else off
             if self.control['screen_mode'] == 'particles':
                 inten = self.control['screen_intensity'] or 0.82
-                self.panel_frame = np.clip(self.field.render_screens(pal['light']) * inten, 0.0, 1.0)
+                frame = self.field.render_screens(pal['light']) * inten
+                if self.control['screen_video'] > 0:              # M9: the river video, faint, under the particles
+                    video = self.water.step(self.crops, self.wins, level=self.screen_level, intensity=None,
+                                            sens=self.control['screen_threshold'])
+                    frame = frame + video * self.control['screen_video']
+                self.panel_frame = np.clip(frame, 0.0, 1.0)
             else:
                 self.panel_frame = self.water.step(self.crops, self.wins, level=self.screen_level,
                                                    intensity=self.control['screen_intensity'],
@@ -439,12 +452,22 @@ def get(comp):
         mf = comp.par.Mapfile.eval() if hasattr(comp.par, 'Mapfile') else ''
         sf = comp.par.Screensfile.eval() if hasattr(comp.par, 'Screensfile') else ''
         h.show = Show(zones_mod.load(zf or None), seed=int(comp.par.Seed.eval()) if hasattr(comp.par, 'Seed') else 0,
-                      pixelmap=mf or None, screens=sf or None)
+                      pixelmap=mf or None, screens=sf or None, show=getattr(project, 'name', SHOW) or SHOW)
     return h.show
 
 
 def frame(comp):
     """Execute DAT onFrameStart: a river frame now and then, one tick, then cook the two Script TOPs."""
+    step(comp)
+    for n in ('rope_render', 'panel_render'):
+        o = comp.op(n)
+        if o is not None:
+            o.cook(force=True)
+
+
+def step(comp):
+    """Everything frame() does but drawing: inputs, one tick, the windows' drift. The looks mixer (td/looks) calls this
+    and draws show.rope_frame / show.panel_frame itself."""
     h = _holder()
     try:
         show = get(comp)
@@ -478,7 +501,7 @@ def frame(comp):
             a = small.numpyArray(delayed=True) if small is not None else None
             if a is not None:
                 show.feed_river(np.ascontiguousarray(a[::-1, :, :3]), 'live' if getattr(h, 'live', False) else 'clip', now)
-        if h.frame % 2 == 0 and show.control['screen_mode'] == 'water':   # each screen's window of the footage
+        if h.frame % 2 == 0 and show.wants_video():                # each screen's window of the footage
             for k in range(4):
                 w = comp.op(f'win{k + 1}_fit')
                 a = w.numpyArray(delayed=True) if w is not None else None
@@ -495,10 +518,7 @@ def frame(comp):
                 c.par.cropbottom, c.par.croptop = 1 - (y + hh), 1 - y
     except Exception as e:                                        # noqa: BLE001
         h.error = repr(e)
-    for n in ('rope_render', 'panel_render'):
-        o = comp.op(n)
-        if o is not None:
-            o.cook(force=True)
+    return h.show
 
 
 def rope_image(show):

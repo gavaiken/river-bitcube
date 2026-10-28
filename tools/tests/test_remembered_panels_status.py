@@ -206,7 +206,8 @@ def test_control_json_shapes():
     c = show.parse_control({'t': 1, 'zones': {'file': 'zones-x.json', 'light': 'leds', 'pool_height_m': 0.6,
                                               'leds': [{'rope': 1, 'from': 2, 'to': 3}]}})
     assert c == {'pool_height_m': 0.6, 'light': 'leds', 'leds': [{'rope': 1, 'from': 2, 'to': 3}], 'opening_night': True,
-                 'screen_intensity': None, 'screen_threshold': None, 'screen_mode': 'particles'}
+                 'screen_intensity': None, 'screen_threshold': None, 'screen_mode': 'particles',
+                 'screen_video': 0.25}
     assert show.CONTROL_DEFAULT['opening_night'] is True                   # opening night is on unless told otherwise
     assert show.parse_control({'light': 'pool', 'opening_night': False})['opening_night'] is False
     assert show.parse_control({'opening': {'on': False}})['opening_night'] is False
@@ -238,7 +239,7 @@ def test_build_script_and_registry_entry():
     src = (ROOT / 'td' / 'build' / 'build_remembered.py').read_text(encoding='utf-8')
     ast.parse(src)
     assert "registry.require_build(project.name, 'td/build/build_remembered.py')" in src
-    assert 'registry.zones_for(TOE)' in src and "TOE = 'river-remembered.toe'" in src
+    assert 'registry.zones_for(TOE)' in src and "'river-remembered.toe'" in src   # (river-looks.toe overrides TOE)
     assert 'videostreaminTOP' not in src and 'glslTOP' not in src and 'project.save' not in src
     entry = next(s for s in json.loads((ROOT / 'shows.json').read_text())['shows'] if s['file'] == 'river-remembered.toe')
     assert entry['build'] == 'td/build/build_remembered.py' and entry['kind'] == 'show'

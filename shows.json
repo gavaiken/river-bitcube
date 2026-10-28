@@ -160,7 +160,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-27",
-      "last_change": "The particle field now loads the LED map and screens (their paths were doubled, so it ran on a default layout)"
+      "last_change": "M9: the river video faintly under the particle windows (screens.video, default 0.25); the build also builds river-looks.toe"
     },
     {
       "file": "river-filling.toe",
@@ -206,6 +206,34 @@
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-27",
       "last_change": "The zones file now loads (its path was doubled): the ropes fill by real height like the screens"
+    },
+    {
+      "file": "river-looks.toe",
+      "title": "The river (all looks)",
+      "label": "the river (all looks)",
+      "kind": "show",
+      "offered": false,
+      "build": "td/build/build_looks.py",
+      "calibration": {
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
+        "screens": "tools/pixelmap/screens-2026-10-27.json",
+        "zones": "tools/pixelmap/zones-2026-10-27.json"
+      },
+      "description": "The remembered river, Fill my cup (simple) and Fill my cup (configurable) in one show file, moved between by fading to black and back in, never by restarting. Auto: four loops of the remembered river, then one full Fill my cup (simple), again. Manual: fade to a chosen look and stay on it. Each look keeps its own settings (the remembered river's page, the fill dials).",
+      "inputs": [
+        "Dave's agent (memory, surge hour, palette and knobs in gallery_state)",
+        "remembered days (data/remembered)",
+        "river camera (recorded clip as fallback)",
+        "people counter (River\\presence.json, lingerers)",
+        "River\\remembered\\control.json (pool line, light checks, opening night)",
+        "River\\looks\\control.json (auto or manual, the look)",
+        "River\\filling\\control.json (the fill dials)"
+      ],
+      "created_by": "Gavin (session A)",
+      "created": "2026-10-27",
+      "updated_by": "Gavin (session A)",
+      "updated": "2026-10-27",
+      "last_change": "New (M8): not yet built on bitcube"
     }
   ]
 }
