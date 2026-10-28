@@ -6,7 +6,7 @@ title: "river-remembered"
 
 **Dry Creek relives one remembered day from its past every five minutes.** The final visualization (design and contracts: [the remembered river](../remembered-river.html); terms in the glossary: remembered day, loop, phase, surge, decision wave, the pool, day's season, lingerer). [All show files](../show-files.html)
 
-**Status (27 Oct): not yet built on bitcube.** The logic and the build script are in the repo and tested offline; the `.toe` is made on bitcube from the baseline template (below), then `offered` goes to `true` in `shows.json`.
+**Status (28 Oct):** built, offered and rebuilt with the GPU ribbons. It also runs as a look inside `river-all-looks.toe`, the current default; the standalone file is kept for testing.
 
 ## For visitors
 The column remembers a real day of the creek: its hours, its rain, how high the river ran, its night and day, its season. Most of the time the light is calm: single slow drips down a few ropes, a pool breathing on the floor. As the remembered storm builds, the drips join into flow; then, for a few seconds, everything holds its breath, and a white front falls down every rope into the pool, which churns white. The water runs bright for half a minute, swells once, then drains of colour, slows and goes dark rope by rope, the pool last. The screens show the real river's moving water through four slowly drifting windows, everything else dark, brighter as the surge comes. Stand still near the column and the light slows and gathers toward you.

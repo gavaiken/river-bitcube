@@ -6,7 +6,7 @@ title: "The river, all looks with a playlist (river-all-looks.toe)"
 
 **`river-all-looks.toe`** (28 Oct 2026, Gavin, session A): every look in one show file, played in an order you set. Between looks it fades to black (2 s) and back in (2 s), never restarting TouchDesigner. It grew out of [The river (all looks)](river-looks.html), which had three looks and a fixed order. [All show files](../show-files.html)
 
-**Status (28 Oct):** registered in `shows.json` but not offered yet (`offered: false`) until the file is built and checked on bitcube. The default show doesn't change with it.
+**Status (28 Oct):** built, checked and offered; the boot default since 11:20. The remembered river, both fills and the river's year are available inside it. Combined with Modal is still pending its fold script and cannot yet be added to the running playlist.
 
 ## Its looks
 
@@ -16,7 +16,7 @@ title: "The river, all looks with a playlist (river-all-looks.toe)"
 | [Fill my cup (simple)](river-fill-simple.html) (`fill-simple`) | The first filling cup, the look the artists liked best | cycles (about 84 s each) |
 | [Fill my cup (configurable)](river-filling.html) (`fill-configurable`) | The filling cup with dials | cycles |
 | [The river's year](river-local-oct-22-seasons.html) (`seasons`) | The recorded river through four seasons | minutes |
-| [Combined with Modal Input Selector](river-combined-modal-inputs.html) (`modal`) | Will's live river with one Modal input steering it | minutes |
+| [Combined with Modal Input Selector](river-combined-modal-inputs.html) (`modal`, pending) | Will's live river with one Modal input steering it; not yet folded into this file | minutes |
 
 Each look keeps its own settings (the remembered river's page, the fill dials, the year's rules, the Modal input and strength), the same as in its own file. Its description in mission control is the one it had as its own file: `shows.json` keeps a copy under this entry's `looks` ([format](../shows.html#looks)). Only the look on the lights runs; the remembered river's clock keeps the wall time while it's hidden, so it comes back partway through a loop.
 

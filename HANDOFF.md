@@ -1,9 +1,17 @@
 # Handoff: where things stand
 
-- **Holder:** Gavin (Mac mini session A) **until 11:15 28 Oct**; then **Will** (Codex), visual tuning
-- **Where:** bitcube running **`river-all-looks.toe`** ("The river: all looks (playlist)", auto, 61 fps), **the boot default since 11:20** (Gavin); `river-looks.toe` (three looks) retired as `old-river-looks.toe`, its frozen copy `river-two-looks.toe` stays offered
-- **Updated:** 2026-10-28 11:12 PT
+- **Holder:** Will (Codex), taking over from Gavin; current task is version reconciliation only
+- **Where:** bitcube running **`river-all-looks.toe`** ("The river: all looks (playlist)", auto, ~58–60 fps), **the boot default since 11:20** (Gavin); `river-looks.toe` (three looks) retired as `old-river-looks.toe`, its frozen copy `river-two-looks.toe` stays offered
+- **Updated:** 2026-10-28 11:55 PT
 - **Next holder:** Will. The playlist file is the default and the one to iterate on (Gavin, 11:20); rollback: switch to `river-two-looks.toe` (the 28 Oct morning file) with mission control's Change, and Set as default if needed.
+
+## Version reconciliation (28 Oct, Will / Codex)
+- Gavin's 28 Oct handoff supersedes the historical 26 Oct "Running now", defaults, calibration and power notes below. Use this header, the latest registry and live status; do not restore an old Combined checkpoint or reapply staging stashes.
+- Pulled Will's clones: river-bitcube `229f8a5`, river-agent `322e92b`. Mission control `/version` also reports `229f8a5` (non-fixture production).
+- Read-only bitcube verification: boot file and live status both `river-all-looks.toe`, Auto; remembered ×4 loops then fill-simple ×1 cycle. Four built looks: remembered, fill-simple, fill-configurable, seasons. Combined/Modal is still not folded in. At inspection: 58 fps, `ribbons-gpu`, Python 5.97 ms / frame 17.95 ms. River input was the recorded fallback; Dave's scene age was 723 s. These are observations, not input repairs.
+- Saved `river-all-looks.toe` SHA256 matches this checkout: `1607e6758a61531c577cd3a55693e247db34cf7efd19169ff8d058e2cff1af6d`. Its registry pins the **28 Oct** map/screens/zones. Keep Gavin's current 1,400 W total software limit; the 26 Oct caps are history.
+- bitcube's repo initially at `26f0db9` (only later docs/mission UI commits absent); Dave's bitcube checkout initially at `d25b52f`, distinct from the cloud deployment. No show rebuild/save/switch, control writes, camera moves, helper restarts or Modal deployment in this reconciliation. Pre-existing river_masks moves and untracked 26 Oct map preserved.
+- Corrected stale "not yet built/offered" text on the two show pages. Palette override, folding Combined, and the artists' UX review remain future work; no dedicated new review-plan file found at `229f8a5`.
 
 ## Will: your first hour (28 Oct, from ~11:45)
 1. `git pull`; read this file top to bottom (the two 28 Oct sections), then `docs/files/river-all-looks.md` and

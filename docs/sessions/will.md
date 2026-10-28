@@ -81,3 +81,11 @@
 - Will power-cycled the send card on bitcube HDMI; screens blank. Took baton ceb0284. Read-only checks found Combined still running, same process, zero project errors, Output enabled, canvas source, brightness 1, 256×512 rendered image. Windows re-enumerated the1920×1080 LED monitor as DISPLAY2 instead of earlier DISPLAY1; TD index 0. Window COMP claimed open, but physical output was blank.
 - Closed existing `/project1/panels/window` and reopened three frames later. **Will confirmed all four screens showed the image again.** Verified non-black panel image, window open/index 0/1920×1080, 60 fps / zero errors, ropes/panels active. No show restart/rebuild/save, no mapping, boot default, show settings, service or system changes. Combined left showing with existing evenly-spread cycle.
 - Shared colour flicker remains unresolved; no claim that sender reset or window recovery fixes it. Documented the hotplug recovery in HANDOFF and Combined page. Baseline 337 Python passed/3 skipped and 420 mission passed; no source or .toe changes. Pre-existing bitcube river_masks/pixelmap changes preserved.
+
+
+## SESSION SUMMARY — 2026-10-28 11:56 PT: reconcile Gavin’s latest handoff
+
+- Pulled river-bitcube to 229f8a5 and Dave’s local river-agent to 322e92b. Read the updated rules, handoff, all-looks and remembered pages, and mission control Help. Will has the baton; only version reconciliation is in scope.
+- Confirmed live all-looks boot default, Auto, remembered ×4 / fill-simple ×1, four built looks, 58 fps and ribbons-gpu. Saved all-looks hash matches the latest repo. Production mission control is 229f8a5. The all-looks registry pins 28 Oct calibration, and the power limit is now 1,400 W total. Older 26 Oct instructions must not override these.
+- Corrected stale build/offered statements in the two show pages; recorded the incomplete Combined fold and absent new UX review plan. River recorded fallback and Dave scene age 723 s observed; no input repair or deployment attempted. Bitcube checkout initially26f0db9 and its separate Dave checkout d25b52f; cloud deployment is separate. No live show or settings changes. Existing bitcube dirty files preserved.
+- Validation: tools/check passed (509 Python passed, 3 skipped; 503 mission control passed). Documentation-only takeover; no visualization changes.
