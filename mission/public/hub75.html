@@ -37,14 +37,13 @@
       <div><dt>Light vs. full white</dt><dd id="mLight">–</dd></div>
       <div><dt>Water found</dt><dd id="mWater">–</dd></div>
     </dl>
-    <div class="lit" id="lit" aria-label="Each screen lit, against the 30 % rule"></div>
   </section>
 
   <section class="card" aria-label="Controls">
     <div class="ctl">
-      <label for="intensity">Brightness cap <output id="intensityOut"></output></label>
+      <label for="intensity">Intensity <output id="intensityOut"></output></label>
       <input type="range" id="intensity" min="0" max="1" step="0.01">
-      <p class="hint">The artists' rule: 0.55 (55 % of full panel brightness). Scales light output (linear), not the signal.</p>
+      <p class="hint">0 = off, 1 = full panel brightness. Scales light output (linear), not the signal.</p>
     </div>
     <div class="ctl">
       <span class="lbl">Look</span>
@@ -70,14 +69,9 @@
       <button type="button" class="btn primary" id="auto">Find the water</button>
       <button type="button" class="btn" id="play">Pause</button>
       <label class="check"><input type="checkbox" id="follow"> Keep following</label>
+      <label class="check"><input type="checkbox" id="drift"> Drift</label>
     </div>
-    <div class="rules">
-      <span class="lbl">The artists' rules</span>
-      <label class="check"><input type="checkbox" id="rule30"> At most 30 % of a screen lit</label>
-      <label class="check"><input type="checkbox" id="cool"> Cool palette (blues, teals, cyans, cool white)</label>
-      <div class="ctl"><label for="fade">Soft edge at every panel <output id="fadeOut"></output></label><input type="range" id="fade" min="8" max="12" step="1"></div>
-      <p class="hint">Always on: foam is the brightest 15 % of the moving water; each screen shows its own crop of the water at its own scale; nothing smaller than 2 LEDs lights.</p>
-    </div>
+    <p class="hint">Starts on the artists' settings and windows (27 Oct), as the remembered river's screens run them on bitcube. Drift moves each of the four windows gently around its home, as bitcube does: up to 3.5 % of the frame each way over 1½–2½ minutes, its size breathing ±6 %.</p>
     <details class="more">
       <summary>Fine-tune</summary>
       <div class="ctl"><label for="sens">Motion threshold <output id="sensOut"></output></label><input type="range" id="sens" min="0" max="1" step="0.01"><p class="hint">Higher keeps only the most active water.</p></div>

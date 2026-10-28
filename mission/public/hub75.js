@@ -10,14 +10,11 @@
 //      sampling its own window of the footage (or one window spanning all four). Outside the water the signal is exactly 0:
 //      the LEDs are off, not dark grey. Intensity scales light output (linear), then the signal is re-encoded.
 //   4. LEDs (the canvas): each LED drawn as an emitter on a black board, at the panel's grey depth, with optional glow.
-// The artists' panel rules ("Rules for the light", 27 Oct; docs/mission-ui.md "HUB75 simulator"), on by default: foam is the
-// brightest ~15 % of the moving water only; at most 30 % of a screen lit (a per-screen floor rises until it holds, with the meter
-// against 30 %); a soft fade of 8-12 LEDs at every panel's edge; each screen a different crop and scale of the same water; the
-// brightness capped at 55 %; no shape smaller than 2 LEDs (a 2 x 2 opening after the panels pass); a cool palette (blues, teals,
-// cyans, cool white) as an option.
+// The defaults are the artists' settings (their "Copy settings", 27 Oct), the same ones td/remembered/water.py runs on bitcube:
+// four windows at fixed homes (screens 1-4 left to right) and, with Drift on, each window wandering gently around its home with
+// water.py's own constants (DRIFT, DRIFT_PERIODS, ZOOM_BREATH), so this page shows what the screens show.
 // Plain ES module, no build, no framework.
 import { mountShell, art } from '/ui.js';
-import { litMeterHTML, PANEL_RULE_PCT } from '/frames-view.js';
 
 const $ = (s) => document.querySelector(s);
 const AW = 320, AH = 180;                  // analysis size
@@ -25,15 +22,20 @@ const SW = 128, SH = 256, GAP = 48;        // one screen in LEDs (portrait), the
 const PW = SW * 4, PH = SH;                // the panel texture: four screens side by side
 const WALL_W = 4 * SW + 3 * GAP;           // 656
 const GPAD = 32, GW = (WALL_W + 2 * GPAD) / 2, GH = (SH + 2 * GPAD) / 2;   // the glow is worked out on the wall, at half resolution
-const KEY = 'mc-hub75-v2';                 // v2: the artists' rules (a new key, so an old browser's settings don't hide them)
-const SCALES = [1, 1.45, 2.1, 3];          // each screen's zoom against the Zoom setting: a different crop and scale of the same water
-const FOAM_TOP = 0.15;                     // foam: the brightest 15 % of the moving water
-const DEFAULTS = { intensity: 0.55, look: 'water', frame: 'four', zoom: 2.4, sens: 0.35, soft: 0.35, floor: 0.12, contrast: 1.4,
-                   sat: 0.85, trail: 0.5, glow: 0.25, bits: 10, follow: false, src: 'mask', view: 'wall', fade: 10, rule30: true, cool: true,
-                   centers: [[0.3, 0.5], [0.42, 0.55], [0.55, 0.5], [0.68, 0.45]], spanCenter: [0.5, 0.5] };
+const KEY = 'mc-hub75-v3';                 // v3 (28 Oct): the artists' settings as defaults; a new key so every browser starts on them
+// the artists' windows (x, y, w, h of the footage, 0-1 from top left; screens 1-4 left to right): each window's home.
+// w and h are what Zoom 2.5 gives on 16:9 footage, so a home is kept as its centre.
+const HOMES = [[0.1818, 0.2875, 0.1125, 0.4], [0.3438, 0.5425, 0.1125, 0.4], [0.4449, 0.0756, 0.1125, 0.4], [0.6168, 0.2639, 0.1125, 0.4]];
+// the drift, exactly as td/remembered/water.py: how far a window wanders from home (fraction of the frame, each axis), its
+// periods in seconds (x, y) per screen, and its size breathing
+const DRIFT = 0.035, ZOOM_BREATH = 0.06;
+const DRIFT_PERIODS = [[97, 131], [113, 89], [83, 149], [127, 103]];
+const DEFAULTS = { intensity: 0.82, look: 'water', frame: 'four', zoom: 2.5, sens: 0.35, soft: 0.35, floor: 0.12, contrast: 1.4,
+                   sat: 0.85, trail: 0.5, glow: 0.25, bits: 10, follow: false, drift: true, src: 'mask', view: 'wall',
+                   centers: HOMES.map(([x, y, w, h]) => [+(x + w / 2).toFixed(5), +(y + h / 2).toFixed(5)]), spanCenter: [0.5, 0.5] };
 const LOOK_HINT = {
   water: 'The moving water as it looks, everything else off.',
-  foam: 'Only the brightest 15 % of the moving water: sparse, most LEDs off.',
+  foam: 'Only the bright white water inside the moving area: sparse, most LEDs off.',
   motion: 'Only what changed in the last moments, with a fading trail: the flow itself.',
 };
 
@@ -81,14 +83,14 @@ void main() {
   o = vec4(s, 0., 1.);
 }`;
 const FS_MASK = HEAD + `
-uniform sampler2D uIn, uAna; uniform vec2 uStep; uniform float uNorm, uThr, uSoft;
+uniform sampler2D uIn; uniform vec2 uStep; uniform float uNorm, uThr, uSoft;
 const float W[5] = float[5](0.227, 0.1945, 0.1216, 0.054, 0.0162);
 void main() {
   vec2 s = texture(uIn, vUv).rg * W[0];
   for (int i = 1; i < 5; i++) { vec2 dd = uStep * float(i); s += (texture(uIn, vUv + dd).rg + texture(uIn, vUv - dd).rg) * W[i]; }
   float n = s.x * uNorm;
   float m = smoothstep(uThr, uThr + uSoft, n);
-  o = vec4(m, clamp(s.y * uNorm * 1.3, 0., 1.), clamp(s.x * 4., 0., 1.), texture(uAna, vUv).r);   // a: luma, for foam's 85th percentile
+  o = vec4(m, clamp(s.y * uNorm * 1.3, 0., 1.), clamp(s.x * 4., 0., 1.), 1.);
 }`;
 // where panel pixel px samples the footage (y of the footage from the top), and the mip level that averages it
 const WINDOW = `
@@ -111,21 +113,16 @@ void main() {
 }`;
 const FS_PANEL = HEAD + WINDOW + `
 uniform sampler2D uVid, uMask, uMot;
-uniform int uLook; uniform float uFloor, uContrast, uSat, uIntensity, uNorm, uFoam, uFade, uCool; uniform vec4 uFloorK;
-vec3 coolRamp(float l) {           // deep blue, teal, cyan, cool white
-  vec3 a = vec3(0.03, 0.10, 0.32), b = vec3(0.0, 0.42, 0.52), c = vec3(0.30, 0.82, 0.95), d = vec3(0.86, 0.95, 1.0);
-  return l < 0.33 ? mix(a, b, l / 0.33) : l < 0.66 ? mix(b, c, (l - 0.33) / 0.33) : mix(c, d, (l - 0.66) / 0.34);
-}
+uniform int uLook; uniform float uFloor, uContrast, uSat, uIntensity, uNorm;
 void main() {
   vec2 px = gl_FragCoord.xy;
   float lod; vec2 src = srcOf(px, lod);
   vec3 c = textureLod(uVid, src, lod).rgb;
   vec4 mk = texture(uMask, src);
   float m = mk.r, L = luma(c);
-  int k = int(px.x / ${SW}.);
   vec3 v;
   if (uLook == 0) v = c * m;
-  else if (uLook == 1) v = c * smoothstep(uFoam - 0.015, uFoam + 0.03, L) * m;
+  else if (uLook == 1) v = c * smoothstep(0.38, 0.85, L) * m;
   else {
     float fast = texelFetch(uMot, ivec2(px), 0).r * uNorm;
     float e = smoothstep(1.2, 5., fast) * mix(1., m, 0.85);
@@ -134,34 +131,12 @@ void main() {
   float l = luma(v);
   v = mix(vec3(l), v, uSat);
   l = luma(v);
-  float fl = min(uFloor + uFloorK[k], 0.95);         // this screen's floor: raised while it is over the 30 % rule
-  float kf = l > 0. ? max(l - fl, 0.) / (1. - fl) / l : 0.;
+  float kf = l > 0. ? max(l - uFloor, 0.) / (1. - uFloor) / l : 0.;
   v *= kf;
   v = pow(clamp(v, 0., 1.), vec3(uContrast));
-  if (uCool > 0.5) { float lc = luma(v); v = lc > 0. ? coolRamp(clamp(lc * 1.15, 0., 1.)) * min(1., lc * 4.) : vec3(0.); }
-  // a soft fade at every panel's edge (each screen is four 128 x 64 panels): uFade LEDs wide
-  if (uFade > 0.) {
-    vec2 lp = vec2(mod(px.x, ${SW}.), mod(px.y, 64.));
-    float d = min(min(lp.x, ${SW}. - lp.x), min(lp.y, 64. - lp.y));
-    v *= smoothstep(0., uFade, d);
-  }
   vec3 lin = pow(v, vec3(2.2)) * uIntensity;
   v = pow(lin, vec3(1. / 2.2));
   o = vec4(floor(v * 255. + 0.5) / 255., 1.);
-}`;
-// no shape smaller than 2 LEDs: an LED stays lit only when it is part of a fully lit 2 x 2 block (a morphological opening)
-const FS_OPEN = HEAD + `
-uniform sampler2D uIn;
-bool lit(ivec2 p) { return any(greaterThan(texelFetch(uIn, clamp(p, ivec2(0), ivec2(${PW - 1}, ${PH - 1})), 0).rgb, vec3(0.))); }
-void main() {
-  ivec2 p = ivec2(gl_FragCoord.xy);
-  vec4 c = texelFetch(uIn, p, 0);
-  bool keep = false;
-  for (int dy = -1; dy <= 0; dy++) for (int dx = -1; dx <= 0; dx++) {
-    ivec2 q = p + ivec2(dx, dy);
-    if (lit(q) && lit(q + ivec2(1, 0)) && lit(q + ivec2(0, 1)) && lit(q + ivec2(1, 1))) keep = true;
-  }
-  o = keep ? c : vec4(0., 0., 0., 1.);
 }`;
 // the light each part of the wall gives off (linear), with nothing between and around the screens, so blurring it (its mips)
 // spills light past a screen's edge without one screen bleeding into the next
@@ -226,7 +201,7 @@ function compile(fs) {
   for (let i = 0; i < n; i++) { const a = gl.getActiveUniform(p, i); u[a.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(p, a.name); }
   return { p, u };
 }
-const P = { mot: compile(FS_MOT), ana: compile(FS_ANA), blurH: compile(FS_BLUR_H), mask: compile(FS_MASK), panel: compile(FS_PANEL), open: compile(FS_OPEN), glowSrc: compile(FS_GLOWSRC), led: compile(FS_LED) };
+const P = { mot: compile(FS_MOT), ana: compile(FS_ANA), blurH: compile(FS_BLUR_H), mask: compile(FS_MASK), panel: compile(FS_PANEL), glowSrc: compile(FS_GLOWSRC), led: compile(FS_LED) };
 
 const quad = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, quad);
@@ -254,7 +229,6 @@ let mi = 0;
 const ana = [target(AW, AH, { float: floatOK }), target(AW, AH, { float: floatOK })];
 const blurT = target(AW, AH, { float: floatOK });
 const maskT = target(AW, AH);
-const panelRawT = target(PW, PH, { filter: gl.NEAREST });
 const panelT = target(PW, PH, { filter: gl.NEAREST });
 const glowT = target(GW, GH, { mip: true });
 gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -283,7 +257,9 @@ function watchFrames() {
   else { let last = -1; setInterval(() => { if (video.currentTime !== last) { last = video.currentTime; newFrame = true; } }, 1000 / 60); }
 }
 watchFrames();
-video.addEventListener('loadedmetadata', () => { vidW = video.videoWidth; vidH = video.videoHeight; first = true; frames = 0; startedAt = performance.now(); placed = false; });
+// the windows start at their homes; only a clip of your own gets them placed on its water once its motion map has settled
+let ownClip = false;
+video.addEventListener('loadedmetadata', () => { vidW = video.videoWidth; vidH = video.videoHeight; first = true; frames = 0; startedAt = performance.now(); placed = !ownClip; });
 video.addEventListener('error', () => banner("Couldn't load the river footage. Reload, or choose a clip of your own below."));
 $('#clipName').textContent = 'river-cascade.mp4 · river cam, 27 Oct 14:51, 22 s loop';
 function play() { video.play().then(() => { $('#play').textContent = 'Pause'; }, () => { $('#play').textContent = 'Play'; banner('Tap Play to start the footage.'); }); }
@@ -291,26 +267,36 @@ play();
 $('#play').onclick = () => { if (video.paused) { banner(''); play(); } else { video.pause(); $('#play').textContent = 'Play'; } };
 $('#file').onchange = (e) => {
   const f = e.target.files?.[0]; if (!f) return;
-  video.src = URL.createObjectURL(f); $('#clipName').textContent = f.name; play();
+  ownClip = true; video.src = URL.createObjectURL(f); $('#clipName').textContent = f.name; play();
 };
 
 // ---- windows into the footage -----------------------------------------------------------------------------------------
 // four: each screen's window, centre in normalised footage coordinates; span: one window across the wall, gaps included
 const cur = { centers: S.centers.map((c) => [...c]), span: [...S.spanCenter] };
-let placed = false;
-function sizes(k = 0) {
+let placed = true, driftT = 0;          // driftT: seconds since the page opened, set once a frame
+function sizes() {
   const z = S.zoom, ar = vidW / vidH;
-  if (S.frame === 'four') { const h = 1 / (z * SCALES[k]), w = h * (SW / SH) / ar; return { w, h }; }
+  if (S.frame === 'four') { const h = 1 / z, w = h * (SW / SH) / ar; return { w, h }; }
   let w = 1 / z, h = w * ar * (SH / WALL_W);
   if (h > 1) { w /= h; h = 1; }
   return { w, h };
 }
 const clampC = (c, w, h) => [Math.min(1 - w / 2, Math.max(w / 2, c[0])), Math.min(1 - h / 2, Math.max(h / 2, c[1]))];
-function rects() {
-  const out = [];
-  if (S.frame === 'four') for (let k = 0; k < 4; k++) { const { w, h } = sizes(k), c = clampC(cur.centers[k], w, h); out.push([c[0] - w / 2, c[1] - h / 2, w, h]); }
+/** The four windows now ([x, y, w, h], 0-1 from top left). With Drift on (four windows only), each wanders around its home
+ *  as td/remembered/water.py Water.windows does; drift = false gives the homes themselves. */
+function rects(drift = S.drift) {
+  const { w, h } = sizes(), out = [];
+  if (S.frame === 'four') for (let k = 0; k < 4; k++) {
+    let c = cur.centers[k], ww = w, hh = h;
+    if (drift) {
+      const [px, py] = DRIFT_PERIODS[k], t = driftT, tau = 2 * Math.PI;
+      c = [c[0] + DRIFT * Math.sin(tau * t / px + k * 1.7), c[1] + DRIFT * Math.sin(tau * t / py + k * 0.9)];
+      const z = 1 + ZOOM_BREATH * Math.sin(tau * t / (px + py) + k);
+      ww = Math.min(1, w * z); hh = Math.min(1, h * z);
+    }
+    c = clampC(c, ww, hh); out.push([c[0] - ww / 2, c[1] - hh / 2, ww, hh]);
+  }
   else {
-    const { w, h } = sizes();
     const c = clampC(cur.span, w, h), x0 = c[0] - w / 2, y0 = c[1] - h / 2;
     for (let k = 0; k < 4; k++) out.push([x0 + (k * (SW + GAP) / WALL_W) * w, y0, (SW / WALL_W) * w, h]);
   }
@@ -319,8 +305,7 @@ function rects() {
 
 // ---- reading the mask back (8 times a second): the source view, auto placement, the meters ----------------------------------
 const maskPx = new Uint8Array(AW * AH * 4);
-let norm = 40, waterFrac = 0, foamThr = 0.6;
-const floorK = [0, 0, 0, 0];             // each screen's extra floor while it is over the 30 % rule
+let norm = 40, waterFrac = 0;
 function readMask() {
   gl.bindFramebuffer(gl.FRAMEBUFFER, maskT.f);
   gl.readPixels(0, 0, AW, AH, gl.RGBA, gl.UNSIGNED_BYTE, maskPx);
@@ -332,11 +317,6 @@ function readMask() {
   const want95 = 4 / Math.max(p95 / 255, 0.01);
   norm += (want95 - norm) * 0.25;
   waterFrac = wet / (AW * AH);
-  // foam: the luma above which the brightest FOAM_TOP of the moving water lies
-  const lh = new Uint32Array(256);
-  for (let i = 0; i < AW * AH; i++) if (maskPx[i * 4] > 127) lh[maskPx[i * 4 + 3]]++;
-  let a2 = 0; const top = wet * FOAM_TOP;
-  for (let v = 255; v >= 0; v--) { a2 += lh[v]; if (a2 >= top) { foamThr += (v / 255 - foamThr) * 0.3; break; } }
 }
 function autoPlace() {
   // integral image of "water, weighted by what is moving now"; the best window, blank it out, again
@@ -353,16 +333,17 @@ function autoPlace() {
     }
     return { x: bx, y: by, W, H, c: [(bx + W / 2) / AW, (by + H / 2) / AH] };
   };
-  if (S.frame === 'span') { const { w, h } = sizes(); S.spanCenter = best(w, h).c; }
+  const { w, h } = sizes();
+  if (S.frame === 'span') { S.spanCenter = best(w, h).c; }
   else {
     const found = [];
     for (let k = 0; k < 4; k++) {
-      const { w, h } = sizes(k), b = best(w, h); found.push(b.c);
+      const b = best(w, h); found.push(b.c);
       // blank the window and a margin around it, so the next screen shows somewhere else
       const mx = Math.round(b.W * 0.35), my = Math.round(b.H * 0.35);
       for (let y = Math.max(0, b.y - my); y < Math.min(AH, b.y + b.H + my); y++) for (let x = Math.max(0, b.x - mx); x < Math.min(AW, b.x + b.W + mx); x++) sc[y * AW + x] = 0;
     }
-    S.centers = found;              // screen k keeps its own scale: never re-sorted across screens
+    S.centers = found.sort((a, b) => a[0] - b[0]);
   }
   save();
 }
@@ -373,21 +354,11 @@ function meters() {
   gl.bindFramebuffer(gl.FRAMEBUFFER, panelT.f);
   gl.readPixels(0, 0, PW, PH, gl.RGBA, gl.UNSIGNED_BYTE, panelPx);
   let lit = 0, light = 0;
-  const per = [0, 0, 0, 0];
   for (let i = 0; i < PW * PH; i++) {
     const r = panelPx[i * 4], g = panelPx[i * 4 + 1], b = panelPx[i * 4 + 2];
-    if (r | g | b) { lit++; per[Math.floor((i % PW) / SW)]++; }
+    if (r | g | b) lit++;
     light += lin8[r] + lin8[g] + lin8[b];
   }
-  const pct = per.map((n) => (100 * n) / (SW * SH));
-  // the 30 % rule: a screen over it raises its own floor a little each look; one well under lets it back down
-  for (let k = 0; k < 4; k++) {
-    if (!S.rule30) floorK[k] = 0;
-    else if (pct[k] > PANEL_RULE_PCT - 2) floorK[k] = Math.min(0.8, floorK[k] + (pct[k] > PANEL_RULE_PCT ? 0.05 : 0.02));   // aims a little under, so a moving river stays under
-    else if (pct[k] < PANEL_RULE_PCT - 7 && floorK[k] > 0) floorK[k] = Math.max(0, floorK[k] - 0.01);
-  }
-  const html = litMeterHTML(pct);
-  if ($('#lit').innerHTML !== html) $('#lit').innerHTML = html;
   $('#mLit').textContent = `${(100 * lit / (PW * PH)).toFixed(0)} %`;
   $('#mLight').textContent = `${(100 * light / (3 * PW * PH)).toFixed(1)} %`;
   $('#mWater').textContent = `${(100 * waterFrac).toFixed(0)} % of the frame`;
@@ -501,7 +472,7 @@ src.addEventListener('pointerdown', (e) => {
 });
 src.addEventListener('pointermove', (e) => {
   if (dragK == null) return;
-  const [x, y] = at(e), { w, h } = sizes(S.frame === 'four' ? dragK : 0), c = clampC([x + dragOff[0], y + dragOff[1]], w, h);
+  const [x, y] = at(e), { w, h } = sizes(), c = clampC([x + dragOff[0], y + dragOff[1]], w, h);
   if (S.frame === 'span') { S.spanCenter = c; cur.span = [...c]; } else { S.centers[dragK] = c; cur.centers[dragK] = [...c]; }
 });
 const drop = () => { if (dragK != null) save(); dragK = null; };
@@ -510,7 +481,7 @@ src.addEventListener('pointerup', drop); src.addEventListener('pointercancel', d
 // ---- controls -------------------------------------------------------------------------------------------------------------
 const fmt = { intensity: (v) => v.toFixed(2), zoom: (v) => `${v.toFixed(1)}×`, sens: (v) => v.toFixed(2), soft: (v) => v.toFixed(2),
               floor: (v) => v.toFixed(2), contrast: (v) => v.toFixed(2), sat: (v) => v.toFixed(2), trail: (v) => v.toFixed(2),
-              glow: (v) => v.toFixed(2), bits: (v) => `${v} bit (${2 ** v} steps)`, fade: (v) => `${v} LEDs` };
+              glow: (v) => v.toFixed(2), bits: (v) => `${v} bit (${2 ** v} steps)` };
 for (const k of Object.keys(fmt)) {
   const inp = $(`#${k}`), out = $(`#${k}Out`);
   const show = () => { out.textContent = fmt[k](S[k]); };
@@ -526,13 +497,14 @@ for (const [sel, key] of [['#lookSeg', 'look'], ['#frameSeg', 'frame'], ['#srcSe
   document.querySelectorAll(`${sel} button`).forEach((b) => { b.onclick = () => { S[key] = Object.values(b.dataset)[0]; segs(); save(); if (key === 'frame') autoPlace(); }; });
 segs();
 $('#follow').checked = S.follow;
-for (const k of ['rule30', 'cool']) { $(`#${k}`).checked = !!S[k]; $(`#${k}`).onchange = (e) => { S[k] = e.target.checked; save(); }; }
 $('#follow').onchange = (e) => { S.follow = e.target.checked; save(); };
+$('#drift').checked = S.drift;
+$('#drift').onchange = (e) => { S.drift = e.target.checked; save(); };
 $('#auto').onclick = () => autoPlace();
 $('#reset').onclick = () => { Object.assign(S, structuredClone(DEFAULTS)); save(); location.reload(); };
 $('#copy').onclick = async () => {
   const { centers, spanCenter, view: _v, src: _s, follow: _f, ...rest } = S;
-  const text = JSON.stringify({ ...rest, windows: rects().map((r) => r.map((n) => +n.toFixed(4))), windows_are: 'x, y, w, h of the footage, 0-1 from top left; screens 1-4 left to right' }, null, 2);
+  const text = JSON.stringify({ ...rest, windows: rects(false).map((r) => r.map((n) => +n.toFixed(4))), windows_are: 'x, y, w, h of the footage, 0-1 from top left; screens 1-4 left to right' }, null, 2);
   try { await navigator.clipboard.writeText(text); $('#copy').textContent = 'Copied'; } catch { prompt('Settings', text); }
   setTimeout(() => { $('#copy').textContent = 'Copy settings'; }, 1500);
 };
@@ -542,6 +514,7 @@ setView(S.view);
 let ping = 0, lastRead = 0, lastMeters = 0, lastFollow = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  driftT = now / 1000;
   if (video.readyState >= 2 && newFrame) {
     newFrame = false;
     vi = 1 - vi;
@@ -558,7 +531,7 @@ function frame(now) {
   if (frames === 0) return;
   const thr = 0.05 + S.sens * 0.9, soft = 0.05 + S.soft * 0.8;
   run(P.blurH, blurT, { uStep: [1.6 / AW, 0] }, [['uIn', ana[ping].t]]);
-  run(P.mask, maskT, { uStep: [0, 1.6 / AH], uNorm: norm, uThr: thr, uSoft: soft }, [['uIn', blurT.t], ['uAna', ana[ping].t]]);
+  run(P.mask, maskT, { uStep: [0, 1.6 / AH], uNorm: norm, uThr: thr, uSoft: soft }, [['uIn', blurT.t]]);
   if (now - lastRead > 125) { lastRead = now; readMask(); drawSource(); }
   // place the windows once the motion map has settled (3 s), then again whenever following
   if (!placed && performance.now() - startedAt > 3000 && frames > 30) { placed = true; autoPlace(); }
@@ -566,11 +539,9 @@ function frame(now) {
   for (let k = 0; k < 4; k++) for (let i = 0; i < 2; i++) cur.centers[k][i] += (S.centers[k][i] - cur.centers[k][i]) * 0.06;
   for (let i = 0; i < 2; i++) cur.span[i] += (S.spanCenter[i] - cur.span[i]) * 0.06;
   const r = rects();
-  run(P.panel, panelRawT, { 'uRect': r.flat(), uVidPx: [vidW, vidH], uLook: { int: ['water', 'foam', 'motion'].indexOf(S.look) },
-                         uFloor: S.floor, uContrast: S.contrast, uSat: S.sat, uIntensity: S.intensity, uNorm: norm,
-                         uFoam: foamThr, uFade: S.fade, uCool: S.cool ? 1 : 0, uFloorK: floorK },
+  run(P.panel, panelT, { 'uRect': r.flat(), uVidPx: [vidW, vidH], uLook: { int: ['water', 'foam', 'motion'].indexOf(S.look) },
+                         uFloor: S.floor, uContrast: S.contrast, uSat: S.sat, uIntensity: S.intensity, uNorm: norm },
       [['uVid', vid[vi]], ['uMask', maskT.t], ['uMot', mot[mi].t]]);
-  run(P.open, panelT, {}, [['uIn', panelRawT.t]]);
   const levels = 2 ** S.bits - 1;
   run(P.glowSrc, glowT, { uLevels: levels }, [['uPanel', panelT.t]]);
   gl.bindTexture(gl.TEXTURE_2D, glowT.t); gl.generateMipmap(gl.TEXTURE_2D);
