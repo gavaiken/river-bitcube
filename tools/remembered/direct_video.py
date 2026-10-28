@@ -1,4 +1,4 @@
-"""All-looks direct recorded-video mode. Through td.ps1: default enable; DIRECT_VIDEO=False restores mask/readbacks.
+"""All-looks direct recorded-video mode. Through td.ps1: default enable; DIRECT_VIDEO=False restores the mask, retaining optimized GPU video delivery.
 No shader, graph, movie, clock or show reset. Source functions are patched in place to preserve profiler wrappers.
 """
 import ast

@@ -655,12 +655,14 @@ def direct_recorded_video(show):
 
 
 def cpu_video_crops(show):
-    """The GPU reads the movie directly; avoid four unused synchronous CPU readbacks in direct mode.
-    CPU fallback still receives fresh crops on the very next tick if the GPU fails.
+    """GPU recorded footage samples the movie directly, with or without the slow mask.
+    CPU water mode and GPU failure still receive fresh crops on the very next tick.
     """
-    return show.wants_video() and not (direct_recorded_video(show)
-                                       and show.control.get('screen_mode', 'particles') == 'particles'
-                                       and show.gpu_active())
+    gpu_recorded = (show is not None and show.show == 'river-all-looks.toe'
+                    and show.river_source == 'clip'
+                    and show.control.get('screen_mode', 'particles') == 'particles'
+                    and show.gpu_active())
+    return show.wants_video() and not gpu_recorded
 
 
 def mask_image(show):

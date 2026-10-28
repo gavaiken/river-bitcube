@@ -1,9 +1,12 @@
 # Handoff: where things stand
 
-- **Holder:** Will (Codex), cascade duplicate-frame repair complete; no active visual edit; diagnostic capture retained
+- **Holder:** Will (Codex), restoring low-rate mask independently of GPU video delivery; diagnostic capture retained
 - **Where:** bitcube running **`river-all-looks.toe`** ("The river: all looks (playlist)", auto, ~58–60 fps), **the boot default since 11:20** (Gavin); `river-looks.toe` (three looks) retired as `old-river-looks.toe`, its frozen copy `river-two-looks.toe` stays offered
-- **Updated:** 2026-10-28 13:46 PT
+- **Updated:** 2026-10-28 13:49 PT
 - **Next holder:** Will. All-looks stays default / Auto, softer ribbons retained. Approved 30 fps footage is now persistent for all-looks; reload/reboot retains it. Originals and frozen shows preserved. The latest cascade revision has its own rollback below; restore it before using the older media rollback.
+
+## Restore mask without unused video readbacks (28 Oct, Will / Codex; applying)
+- Will requests masking again while retaining30fps video. The shader already has independent movie and mask inputs. Decouple CPU crop-readback suppression from the mask-bypass flag: healthy all-looks recorded GPU particle mode skips the four unused CPU crop readbacks regardless of mask setting. Mask continues updating at existing roughly10Hz; GPU multiplies each fresh30fps movie frame by the latest mask. No shader/graph/.toe or media changes. Restore with direct_video.py DIRECT_VIDEO=False after checks.
 
 ## Cascade duplicate-frame repair deployed (28 Oct, Will / Codex)
 - Will reports some clips still slow/stuttering after mask bypass; bypass alone did not resolve it. Offline inspection found193 near-identical frame pairs in the660-frame interpolated cascade clip (source itself has166/351); evening has0/6887. Re-rendered cascade with `mpdecimate` before the existing MCI filter, preserving timestamps/duration. Result660frames/22s/30fps with only1 near-identical pair. Decoder check/contact sheet passed. Near-identical is mean absolute RGB difference<0.1 at160×90; it is an offline diagnostic, not physical-display proof.
