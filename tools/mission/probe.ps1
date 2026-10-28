@@ -166,7 +166,7 @@ if ($Action -eq 'rebuild') {
     elseif (-not $running) { $out.ok = $false; $out.error = 'TouchDesigner is not running: nothing to rebuild' }
     else {
         $open = (& powershell -NoProfile -ExecutionPolicy Bypass -File $tdPs1 'project.name' -Timeout 15 2>$null | Select-Object -Last 1)
-        $open = "$open".Trim()
+        $open = "$open".Trim().Trim("'", '"')      # td.ps1 prints a string value as Python's repr: 'river-....toe'
         if ($LASTEXITCODE -ne 0 -or -not $open) { $out.ok = $false; $out.error = 'TouchDesigner did not answer: rebuild refused' }
         elseif ($open -ne $BootFile) { $out.ok = $false; $out.error = "TouchDesigner is running $open, not $($BootFile): rebuild refused" }
         else {
