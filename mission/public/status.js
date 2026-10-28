@@ -17,6 +17,7 @@ const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit,
 import { apiTimeout } from '/app.js';
 import { modalInputView, FROM_WORDS, FACTOR_INFO } from '/modal-input.js';
 import { modalFeedView } from '/modal-feed.js';
+import { fillingView, toPct, fromPct, askedIs, cycleWords, FILLING_DIAL_WORDS } from '/filling.js';
 const $ = (sel, root = document) => root.querySelector(sel);
 const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
 // One name per thing (the copy rules); descriptors live on the card, never in the name.
@@ -55,6 +56,7 @@ const stills = { gallery: { url: null, age_s: null, fetchedAt: null, missing: nu
 const lastHTML = new Map();   // section -> the HTML it holds (no churn when nothing changed)
 let overlayDraft = null, framingDraft = null, screensDraft = null;
 let miSourceDraft = null, miStrengthDraft = null;   // the Modal input choice before Apply (percent)
+let flDraft = null;           // the filling glass's dials before Apply: { palette?, brightness?, intensity?, speed? } (percent)
 let hubDraft = null;          // the brightness stepper, before "Set"
 const targetDraft = { season: null, intensity: null };
 const rulesDraft = {};        // what was typed into the rules form, kept across re-renders and a failed Apply
@@ -700,7 +702,7 @@ function showingHTML(m) {
     ${line ? `<p class="showing-desc">${esc(line)}</p>` : ''}
     <div class="row-btns"><button type="button" class="btn primary" id="ctl-showing-change" data-act="show-list" ${s.show_files.length ? '' : 'disabled'}>Change</button>${back}</div>
     <div class="effect">Default: <b>${esc(bootWords(s.boot_file))}</b>, what opens when bitcube restarts. Switching never changes it.</div>
-    ${statusLine('ctl-showing', ['switch', 'bootfile'])}</div>${combinedHTML(m)}${modalInputHTML(m)}`;
+    ${statusLine('ctl-showing', ['switch', 'bootfile'])}</div>${combinedHTML(m)}${modalInputHTML(m)}${fillingHTML(m)}`;
 }
 /** Change: every offered show (shows.json), its kind, and which is showing and which is the default; a tap opens its card. */
 function screenChoice(s) { return { mode: s?.mode ?? 'current', blend: s?.blend ?? 0, hold: s?.hold ?? 30, recorded: s?.recorded ?? 0, offset: s?.offset ?? 0 }; }
@@ -817,6 +819,45 @@ function modalInputHTML(m) {
     <div class="row-btns"><button type="button" class="btn primary" id="ctl-mi-set" data-act="mi-set" ${o || !miChanged(v) ? 'disabled' : ''}>Apply</button></div>
     ${statusLine('ctl-modalinput', ['modalinput'])}
     ${v ? sendingHTML(v) : ''}</div>`;
+}
+/** The filling glass (river-filling.toe, docs/mission-ui.md "Filling glass dials"): its four dials, a draft until Apply (as every
+ *  control), then what the show itself reports now, with its age. Nothing of it shows for any other show. */
+const flView = (m) => fillingView(m?.show.filling, m?.show.fresh.probe_age_s ?? 0);
+/** The draft, whole (percent for the three dials): the dials start from what bitcube was asked last (filling.js base). */
+const flNow = (v) => ({ ...toPct(v?.base ?? M.FILLING_DEFAULTS), ...(flDraft ?? {}) });
+function flChanged(v) {
+  if (!v || !flDraft) return false;
+  const a = toPct(v.base), d = flNow(v);
+  return ['palette', 'brightness', 'intensity', 'speed'].some((k) => a[k] !== d[k]);
+}
+/** "How fast it fills and drains. 100 % is about 84 s a full cycle." (and, at another speed, what that one makes it) */
+const flSpeedLine = (pct) => `${FILLING_DIAL_WORDS.speed.line} 100 % is ${cycleWords(1)}${pct === 100 ? '' : `; at ${nb(pct + ' %')}, ${cycleWords(pct / 100)}`}.`;
+const FL_DIALS = [['brightness', 0, 100, 5], ['intensity', 0, 100, 5], ['speed', 25, 300, 5]];
+function fillingHTML(m) {
+  if (m.show.file?.name !== M.FILLING_FILE) { flDraft = null; return ''; }
+  const v = flView(m), o = off('filling'), d = flNow(v), PW = M.FILLING_PALETTE_WORDS;
+  const btn = (id) => `<button type="button" id="ctl-fl-${id}" data-act="fl-palette" data-palette="${id}" class="${d.palette === id ? 'lit' : ''}" aria-pressed="${d.palette === id}" ${o ? 'disabled' : ''}>${esc(PW[id])}</button>`;
+  const dial = ([k, lo, hi, step]) => {
+    const W = FILLING_DIAL_WORDS[k], line = k === 'speed' ? flSpeedLine(d.speed) : W.line;
+    return `<label for="fl-${k}">${W.label}</label>
+    <div class="row-btns"><input type="range" min="${lo}" max="${hi}" step="${step}" id="fl-${k}" value="${d[k]}" aria-describedby="fl-${k}-line" ${o ? 'disabled' : ''}>
+    <output id="fl-${k}-v" for="fl-${k}">${nb(d[k] + ' %')}</output></div>
+    <p class="effect" id="fl-${k}-line">${esc(line)}</p>`;
+  };
+  const n = v?.now, seen = nowOr(item(m, 'touchdesigner'));
+  const now = !n ? `<p class="effect" id="fl-now">Now on bitcube: <b>not known yet</b>: ${esc(v?.problems?.[0] ?? "the show hasn't reported")}.</p>`
+    : n.old ? `<p class="effect" id="fl-now">Last report from the show: <b>${esc(n.words)}</b> · ${ageSpan(n.age_s)}. It reports every second: an old report means it has stopped reporting.</p>`
+    : `<p class="effect" id="fl-now">${seen.pre}: <b>${esc(n.words)}</b> · reported ${ageSpan(n.age_s)}${seen.tail}.</p>`;
+  const extra = n && (n.intensity != null || n.speed != null)
+    ? `<p class="effect">Its intensity ${n.intensity == null ? 'not known' : nb(Math.round(n.intensity * 100) + ' %')}, speed ${n.speed == null ? 'not known' : nb(Math.round(n.speed * 100) + ' %')}.</p>` : '';
+  return `<div class="ctl ${whyOf('filling') && !busy('filling') ? 'off' : ''}" id="ctl-filling" data-ctl="filling"${busy('filling') ? ' aria-busy="true"' : ''}>
+    <div class="ctl-h">The filling glass</div>${whyLine('filling')}
+    <label id="fl-pal-l">Palette</label>
+    <div class="seg fl-seg" role="group" aria-labelledby="fl-pal-l">${M.FILLING_PALETTES.map(btn).join('')}</div>
+    ${FL_DIALS.map(dial).join('')}
+    ${now}${extra}
+    <div class="row-btns"><button type="button" class="btn primary" id="ctl-fl-set" data-act="fl-set" ${o || !v || !flChanged(v) ? 'disabled' : ''}>Apply</button></div>
+    ${statusLine('ctl-filling', ['filling'])}</div>`;
 }
 /** "What Modal is sending" for the chosen source, its stale warning, and the other sources' freshness on one line. */
 function sendingHTML(v) {
@@ -1408,6 +1449,15 @@ document.addEventListener('input', (e) => {
     render();
     return;
   }
+  if (['fl-brightness', 'fl-intensity', 'fl-speed'].includes(e.target.id)) {
+    const k = e.target.id.slice(3), x = Number(e.target.value);
+    flDraft = { ...(flDraft ?? {}), [k]: x };
+    const out = $(`#fl-${k}-v`), set = $('#ctl-fl-set'), v = flView(model);
+    if (out) out.textContent = nb(`${x} %`);
+    if (k === 'speed') { const line = $('#fl-speed-line'); if (line) line.textContent = flSpeedLine(x); }
+    if (set) set.disabled = off('filling') || !v || !flChanged(v);
+    return;
+  }
   if (e.target.id === 'mi-strength') {
     miStrengthDraft = Number(e.target.value);
     const out = $('#mi-strength-v'), set = $('#ctl-mi-set');
@@ -1467,6 +1517,20 @@ document.addEventListener('click', async (e) => {
         fail: 'The overlay could not be set', kept: 'Your slider choice is kept.',
         holds: (mm) => Math.round((mm.show.combined?.overlay ?? -1) * 100) === sent && mm.show.combined?.framing === profile && (!screens || sameScreens(screenChoice(mm.show.combined?.screens), screens)),
         onDone: () => { if (overlayDraft === sent) overlayDraft = null; if (framingDraft === profile) framingDraft = null; if (screens && sameScreens(screenChoice(screensDraft), screens)) screensDraft = null; } });
+      break;
+    }
+    case 'fl-palette': flDraft = { ...(flDraft ?? {}), palette: b.dataset.palette }; render(); break;
+    case 'fl-set': {
+      const v = flView(m);
+      if (!v) break;
+      const pct = flNow(v), body = fromPct(pct), sent = { ...flDraft };
+      const words = `${M.FILLING_PALETTE_WORDS[pct.palette]}, ${nb(pct.brightness + ' %')}, intensity ${nb(pct.intensity + ' %')}, speed ${nb(pct.speed + ' %')}`;
+      runControl('filling', '/api/control/filling', body, { btn: b, what: changeLabel('filling', body),
+        // when you chose it; what the show reports is the Now line under the dials
+        doneAt: (t) => `You chose ${words} at ${t}: the show takes it within a second or two`,
+        fail: 'The filling glass is unchanged', kept: 'Your choice is kept.', noAnswer: 'the Now line shows what the show reports',
+        holds: (mm) => askedIs(flView(mm), body),
+        onDone: () => { if (flDraft && Object.entries(sent).every(([k, x]) => flDraft[k] === x)) flDraft = null; } });
       break;
     }
     case 'mi-source': miSourceDraft = b.dataset.source; render(); break;

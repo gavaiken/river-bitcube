@@ -147,6 +147,11 @@ footer.foot .fine-print { margin-top: 4px; }
 
 /* Modal input (the Modal input show): the choice, then what Dave's agent is sending (docs/mission-ui.md "Modal input") */
 .mi-seg { flex-wrap: wrap; }
+/* The filling glass's palette: four words that don't fit in one row on a phone ("Midnigh/t"): two by two, one row from 520 px */
+.fl-seg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); }
+.fl-seg button { background: var(--panel-solid); }
+.fl-seg button + button { border-left: 0; border-top: 0; }
+@media (min-width: 520px) { .fl-seg { grid-template-columns: repeat(4, 1fr); } }
 .mi-sending { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
 .mi-params { display: flex; flex-direction: column; }
 .mi-row { display: grid; grid-template-columns: minmax(84px, auto) 1fr auto; gap: 2px 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
