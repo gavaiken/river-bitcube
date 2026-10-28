@@ -22,3 +22,15 @@ At that moment bitcube's boot file was `river-local-oct-22-seasons.toe`, TouchDe
 2. **Mission control** updates itself from `main` within ~5 min of that push; check `GET /version` shows the new commit.
 3. **bitcube.** `git pull` in `C:\Users\user\River\river-bitcube`. If a `.toe` or `boot-file.txt` still differs, copy it back from the archive's `River\` folder (close TD first). Untracked files (`secrets.local.json`, RopeLights config) come from the archive too. Restore a scheduled task with `Register-ScheduledTask -Xml (Get-Content <file>.xml -Raw) -TaskName <name> -Force`.
 4. Reboot bitcube, or run `Start-River.cmd` through a one-off interactive scheduled task (see `CLAUDE.md`), and check the ropes and panels.
+
+## remembered-particles-v1: the remembered river with the particle windows (27 Oct, 22:20 PT)
+
+The remembered river as the artists saw it on the night of 27 Oct: the remembered-day loop on the ropes, and the screens as windows into one particle field in the room (round 2b, `td/remembered/particles.py`, measured tilts). The boot default.
+
+| What | Where |
+|---|---|
+| river-bitcube | tag `remembered-particles-v1` → `40203ed` (river-remembered.toe committed in it) |
+| river-agent (Dave's) | tag `remembered-particles-v1` → `322e92b` |
+| bitcube | `C:\Users\user\Archive\remembered-particles-v1\` (river-remembered.toe, boot-file.txt) |
+
+Going back: as above (`git checkout remembered-particles-v1 -- td/remembered td/build/build_remembered.py river-remembered.toe`, commit, pull on bitcube, rebuild or reopen).
