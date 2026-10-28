@@ -128,3 +128,13 @@ def test_decode_puts_a_two_view_session_into_one_map(tmp_path, monkeypatch):
     assert hidden_from_home                                         # lights above the show position: placed anyway
     assert (tmp_path / 'pixelmap-20261020-120000' / 'panorama.png').exists()
     assert sp.views['up']['ptz'] == [3241, 900]
+
+
+def test_camera_shift_sees_movement_not_light():
+    from pixelmap.capture import camera_shift
+    rng = np.random.default_rng(0)
+    img = rng.uniform(0, 255, (200, 300, 3)).astype(np.float32)
+    img[50:120, 80:200] += 80
+    assert camera_shift(img, img * 0.6 + 30) == 0                     # the room brightened: no movement
+    moved = np.roll(np.roll(img, 3, axis=0), -4, axis=1)
+    assert camera_shift(img, moved) == pytest.approx(5.0)

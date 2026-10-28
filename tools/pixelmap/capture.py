@@ -13,7 +13,7 @@ Both modes put the ropes (Active, Source, Brightness, Graybit, Grayinvert) and p
 they were, also when the run fails.
 
 One ffmpeg RTSP reader stays open for the whole run (a fresh connect per frame takes seconds).
-Don't move the camera during a run; meta.json records the drift between the first and last black frame.
+Don't move the camera during a run; meta.json records the drift: how far the picture moved (px) between the first and last black frame.
 A multi-view calibration (tools/mission/calibrate.py, tools/cameras/views.json) runs this once per camera view with
 --session, --view and --ptz: meta.json records them, and decode.py / hub75.py put a session's views together.
 """
@@ -146,6 +146,23 @@ def measure_settle(cam):
     return float(np.clip(t90 + 0.4, 0.8, 4.0))
 
 
+def camera_shift(a, b):
+    """How far the picture moved between two frames (px), by phase correlation of their edges: blind to the room's
+    light changing (auto exposure, house lights) and mostly to people walking, which a plain frame difference is not
+    (27 Oct: a still camera read as drift 37 because the room brightened)."""
+    def edges(f):
+        g = f.max(axis=2) if f.ndim == 3 else f
+        gy, gx = np.gradient(g.astype(np.float32))
+        e = np.hypot(gx, gy)
+        return e - e.mean()
+    fa, fb = np.fft.fft2(edges(a)), np.fft.fft2(edges(b))
+    r = fa * np.conj(fb)
+    r = np.fft.ifft2(r / (np.abs(r) + 1e-9)).real
+    y, x = np.unravel_index(int(r.argmax()), r.shape)
+    h, w = r.shape
+    return float(np.hypot(x if x < w / 2 else x - w, y if y < h / 2 else y - h))
+
+
 def disagreement(a, b, lit):
     d = np.abs(a.max(axis=2) - b.max(axis=2)) > DISAGREE_DIFF
     return float(d[lit].mean()) if lit.any() else 0.0
@@ -182,8 +199,9 @@ def run_ropes(cam, out, settle):
         save(cands[best[2]], out / 'B' / f"{p['name']}.png")
     end_black = snap(cam, settle, lambda: set_ropes({'source': 'black'}))
     save(end_black, out / 'black_end.png')
-    drift = float(np.abs(passes['A']['black'] - end_black).max(axis=2).mean())
-    return {'patterns': report, 'drift': round(drift, 2), 'lit_camera_px': int(lit.sum())}
+    drift = camera_shift(passes['A']['black'], end_black)
+    scene = float(np.abs(passes['A']['black'] - end_black).max(axis=2).mean())
+    return {'patterns': report, 'drift': round(drift, 2), 'scene_change': round(scene, 2), 'lit_camera_px': int(lit.sum())}
 
 
 def run_hub75(cam, out, settle):

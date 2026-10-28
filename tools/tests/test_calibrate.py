@@ -217,7 +217,7 @@ def test_full_run_walks_every_stage_and_reports_the_map(env):
     capture_steps = [s['step'] for s in env.snaps if s['stage'] == 'ropes-capture']
     assert capture_steps[0] == 0 and 1 in capture_steps and capture_steps[-1] == 2       # no per-pattern lines: a pass is a step
     assert [s for s in env.snaps if s['stage'] == 'ropes-capture'][-1]['retakes'] == 1
-    assert p['max_drift'] == 30.0 and 'pass' in p and 'retakes' in p
+    assert p['max_drift'] == 8.0 and 'pass' in p and 'retakes' in p
     decode = [s for s in env.snaps if s['stage'] == 'ropes-decode']
     assert decode[-1]['step'] == 20 and decode[-1]['of'] == 20
     assert any('retaken' in s['message'] for s in env.snaps)
@@ -450,7 +450,7 @@ def test_a_moved_camera_fails_the_run_before_any_map_is_written(env, monkeypatch
     assert p['error'] == 'The camera moved during the run (drift 48): the map was not saved. Fix the camera and run again'
     assert p['message'] == p['error'] == p['reason'] and p['stage'] == 'ropes-capture' and p['result'] is None
     assert p['restored'] is True                                           # capture.py ended by itself: its finally ran
-    assert p['capture_info']['drift'] == 48.3 and p['max_drift'] == 30.0
+    assert p['capture_info']['drift'] == 48.3 and p['max_drift'] == 8.0
     assert not list(env.scripts.glob('pixelmap-*.json'))                   # decode.py never ran
     assert env.bridge.calls == ['1']
     assert not (env.state / 'calibration.lock').exists()

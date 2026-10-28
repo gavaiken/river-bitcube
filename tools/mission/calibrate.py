@@ -1,7 +1,7 @@
 """Mission control's calibration job: the structured-light pipeline as a background job with a progress file.
 
     .venv\\Scripts\\python tools\\mission\\calibrate.py [--dry-run | --decode-only frames\\pixelmap-YYYYMMDD-HHMMSS]
-                                                      [--cam gallery] [--brightness 0.4] [--settle S] [--max-drift 30] [--log FILE]
+                                                      [--cam gallery] [--brightness 0.4] [--settle S] [--max-drift 8] [--log FILE]
 
 Stages (each a subprocess of the existing tools, their stdout parsed as it arrives):
     ropes-capture   capture.py ropes     Gray-code patterns on the ropes, two passes, retakes (docs/sessions/B.md)
@@ -17,8 +17,8 @@ Camera views (tools/cameras/views.json): when the camera has views, the gallery 
 in turn and both capture stages photograph every view; decode.py and hub75.py stitch the views into one map
 (tools/pixelmap/sphere.py). The camera ALWAYS goes back to its show position (views.json "home") once the panels are
 photographed, and also when a run fails or is cancelled; "camera" in the progress file says where it ended up.
---no-views keeps the camera where it is (one view, as before). The camera must not move during one view's capture: when capture.py's meta drift (camera px between the first and last black frame)
-is above --max-drift (default 30), the run fails BEFORE decoding, so no map is saved, with the words the portal shows. A lock file refuses a second run; a full run also refuses to start
+--no-views keeps the camera where it is (one view, as before). The camera must not move during one view's capture: when capture.py's meta drift (how far the picture moved, px, between the first and last black frame)
+is above --max-drift (default 8), the run fails BEFORE decoding, so no map is saved, with the words the portal shows. A lock file refuses a second run; a full run also refuses to start
 when TouchDesigner's bridge does not answer. --dry-run walks the stages with short waits and no lights, camera or
 subprocesses (for exercising the portal); --decode-only decodes an existing capture (no lights).
 
@@ -48,7 +48,7 @@ STEPS = {'ropes-capture': 2, 'ropes-decode': 20, 'hub75-capture': 1, 'hub75-loca
 EXPECTED_S = {'ropes-capture': 170, 'ropes-decode': 40, 'hub75-capture': 35, 'hub75-locate': 10}   # typical, for a bar
 CAPTURE_STAGES = ('ropes-capture', 'hub75-capture')
 N_ROPES = 20
-MAX_DRIFT_PX = 30.0          # --max-drift default: camera movement (px) between the first and last black frame that voids a run
+MAX_DRIFT_PX = 8.0           # --max-drift default: how far the picture moved (px, capture.camera_shift) between the first and last black frame that voids a run
 # capture.py's per-pattern line: "pass A: pattern 12 of 29 (b03)" (the pass letter may also trail: "pattern 12 of 29 pass A")
 PATTERN_RE = re.compile(r'^\s*(?:pass\s+(?P<pass1>[A-Z])\b[:\s]*)?pattern\s+(?P<i>\d+)\s+of\s+(?P<n>\d+)\b(?P<rest>.*)$', re.IGNORECASE)
 PASS_RE = re.compile(r'\bpass\s+(?P<p>[A-Z])\b')
@@ -583,7 +583,7 @@ class Job:
         elif line.startswith('{'):
             try:
                 info = json.loads(line)
-                self.write(capture_info={k: info.get(k) for k in ('mode', 'drift', 'lit_camera_px', 'settle', 'brightness_cap')})
+                self.write(capture_info={k: info.get(k) for k in ('mode', 'drift', 'lit_camera_px', 'settle', 'brightness_cap')} | ({'scene_change': info['scene_change']} if 'scene_change' in info else {}))
             except ValueError:
                 pass
         else:
