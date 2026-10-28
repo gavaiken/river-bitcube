@@ -29,6 +29,7 @@ from . import palette
 from . import panels as panels_mod
 from . import ropes as ropes_mod
 from . import status as status_mod
+from . import water as water_mod
 from . import zones as zones_mod
 
 RIVER = Path(r'C:\Users\user\River')
@@ -45,7 +46,10 @@ RIVER_STALE_S = 10.0
 PANEL_EVERY = 2                     # screens step every 2nd frame
 KNOBS = ('speed', 'density', 'brightness', 'turbulence')
 NEUTRAL = {k: 0.5 for k in KNOBS}
-CONTROL_DEFAULT = {'pool_height_m': None, 'light': 'off', 'leds': [], 'opening_night': True}   # opening night ON unless told
+CONTROL_DEFAULT = {'pool_height_m': None, 'light': 'off', 'leds': [], 'opening_night': True,   # opening night ON unless told
+                   'screen_intensity': None, 'screen_threshold': None}                          # None: water.SETTINGS
+SCREEN_CALM = 0.4                   # the screens in calm, as a share of their intensity (artists, 27 Oct: follow the loop)
+DARK_LUMA = 0.08                    # the live cam darker than this (night) -> the screens use the clips
 LIGHTS = ('off', 'pool', 'eddies', 'leds')
 
 
@@ -71,7 +75,30 @@ def parse_control(c):
     if isinstance(c.get('opening'), dict):
         on = c['opening'].get('on', on)
     ctl['opening_night'] = bool(on)
+    sc = c.get('screens') if isinstance(c.get('screens'), dict) else {}
+    for key, name in (('screen_intensity', 'intensity'), ('screen_threshold', 'threshold')):
+        v = sc.get(name, c.get(key))
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 1:
+            ctl[key] = float(v)
     return ctl
+
+
+def screen_level(t, times, opening=True):
+    """The screens' share of their intensity through the loop: SCREEN_CALM in calm, eased up to 1 from building to the
+    surge, held through the surge, eased back down while settling."""
+    def ease(x):
+        x = max(0.0, min(1.0, x))
+        return x * x * (3 - 2 * x)
+    b, s, st, c = ((times or {}).get(k) for k in ('build', 'surge', 'settle', 'calm'))
+    if None in (b, s, st, c):
+        return SCREEN_CALM
+    if t < b:
+        return SCREEN_CALM
+    if t < s:
+        return SCREEN_CALM + (1 - SCREEN_CALM) * ease((t - b) / max(1.0, s - b))
+    if t < st:
+        return 1.0
+    return 1.0 - (1 - SCREEN_CALM) * ease((t - st) / max(1.0, c - st))
 
 
 def read_json(path):
@@ -224,6 +251,10 @@ class Show:
         self.loop = clock.Loop(seed)
         self.ropes = ropes_mod.Ropes(self.z, seed)
         self.panels = panels_mod.Panels(self.z, seed)
+        self.water = water_mod.Water()
+        self.crops = [None] * 4
+        self.wins = self.water.windows(0.0)
+        self.screen_level = SCREEN_CALM
         self.room = Room()
         self.knobs = Knobs()
         self.pal = PaletteGlide(palette.palette('autumn'))
@@ -250,6 +281,7 @@ class Show:
     def feed_river(self, img, source, now):
         """A new river frame (row 0 at the top; live cam or the recorded clip)."""
         self.panels.feed(img)
+        self.water.feed(img)
         self.river_source = source
         self.river_t = now
 
@@ -330,8 +362,14 @@ class Show:
         ctx['rope_speed'] = self.ropes.v_now
         self.ticks += 1
         self.panel_dt += dt
+        self.wins = self.water.windows(now)
+        target = 1.0 if snap['phase'] == 'surge' else screen_level(snap['t_s'], snap['times'], opening)
+        self.screen_level += (target - self.screen_level) * (1 - math.exp(-dt / 0.6))   # never a jump
         if self.ticks % PANEL_EVERY == 0:                 # the screens at 30 fps: half the work, still smooth
-            self.panel_frame = self.panels.step(self.panel_dt, ctx)
+            # the artists' simulator look (water.py): the moving water through four drifting windows, everything else off
+            self.panel_frame = self.water.step(self.crops, self.wins, level=self.screen_level,
+                                               intensity=self.control['screen_intensity'],
+                                               sens=self.control['screen_threshold'])
             self.panel_dt = 0.0
         if now >= self.next['status']:
             self.next['status'] = now + status_mod.WRITE_EVERY
@@ -339,7 +377,7 @@ class Show:
                 now=now, show=self.show, fps=self.fps, loop=snap, day=day, plan=snap['plan'], knobs=knobs,
                 reflex=self.knobs.reflex, palette=palette.as_hex(pal), heard=heard,
                 river_motion=motion, river_source=self.river_source if river_live else 'none', room=room,
-                lit_pct=self.panels.lit_pct, cap=panels_mod.CAP, watts=self.ropes.watts, opening_night=opening,
+                lit_pct=self.water.lit_pct, cap=round(self.screen_level, 2), watts=self.ropes.watts, opening_night=opening,
                 zones_file=self.z.file,
                 pool_height_m=self.control['pool_height_m'] if self.control['pool_height_m'] is not None
                 else self.z.pool_height_m, light=self.control['light'])
@@ -355,9 +393,11 @@ class Show:
 
 def _holder():
     h = sys.modules.setdefault('remembered_live', types.ModuleType('remembered_live'))
-    for k, v in (('show', None), ('last', None), ('frame', 0), ('error', None)):
+    for k, v in (('show', None), ('last', None), ('frame', 0), ('error', None), ('live', False)):
         if not hasattr(h, k):
             setattr(h, k, v)
+    if not hasattr(h, 'clips'):                               # the artists' approved footage, in turn (round 2, Q6)
+        h.clips = sorted(str(p).replace('\\', '/') for p in (RIVER / 'recordings' / 'river' / 'remembered').glob('*.mp4'))
     return h
 
 
@@ -365,6 +405,8 @@ def reset():
     """Drop the live show (a rebuild starts fresh)."""
     h = _holder()
     h.show, h.last = None, None
+    if hasattr(h, 'clips'):
+        del h.clips                                               # look for the clips again
 
 
 def get(comp):
@@ -384,20 +426,48 @@ def frame(comp):
         dt = 0.0 if h.last is None or now < h.last else now - h.last
         h.last = now
         h.frame += 1
+        if h.frame % 30 == 1:                                    # twice a second: live cam, or the clips?
+            live = False
+            try:
+                cam = comp.op('/project1/inputs/river_cam_mod')
+                live = bool(cam.module.fresh('river', 'sub')) and not comp.op('/project1/inputs').par.Forceclip.eval()
+                if live:                                          # at night the cam is dark: the clips look better
+                    probe = comp.op('cam_probe')
+                    pa = probe.numpyArray(delayed=True) if probe is not None else None
+                    live = pa is None or float(pa[..., :3].mean()) > DARK_LUMA
+            except Exception:                                     # noqa: BLE001
+                pass
+            h.live = live
+            sw = comp.op('river_src')
+            if sw is not None and int(sw.par.index.eval()) != (0 if live else 1):
+                sw.par.index = 0 if live else 1
+            clip = comp.op('fallback_clip')
+            files = getattr(h, 'clips', None)
+            if clip is not None and files:                        # the approved clips take turns, a loop each
+                want = files[(show.loop.index if hasattr(show, 'loop') else 0) % len(files)]
+                if clip.par.file.eval() != want:
+                    clip.par.file = want
         if h.frame % 6 == 0:                                     # ~10 fps: the river cam's own rate
             small = comp.op('river_small')
             a = small.numpyArray(delayed=True) if small is not None else None
             if a is not None:
-                live = False
-                try:
-                    cam = comp.op('/project1/inputs/river_cam_mod')
-                    live = bool(cam.module.fresh('river', 'sub')) and not comp.op('/project1/inputs').par.Forceclip.eval()
-                except Exception:                                 # noqa: BLE001
-                    pass
-                show.feed_river(np.ascontiguousarray(a[::-1, :, :3]), 'live' if live else 'clip', now)
+                show.feed_river(np.ascontiguousarray(a[::-1, :, :3]), 'live' if getattr(h, 'live', False) else 'clip', now)
+        if h.frame % 2 == 0:                                     # each screen's window of the footage (crop + fit TOPs)
+            for k in range(4):
+                w = comp.op(f'win{k + 1}_fit')
+                a = w.numpyArray(delayed=True) if w is not None else None
+                show.crops[k] = None if a is None else np.ascontiguousarray(a[::-1, :, :3])
         show.tick(now, dt)
         h.error = show.error
     except Exception as e:                                        # noqa: BLE001 - never stop the show
+        h.error = repr(e)
+    try:                                                          # move the windows (the drift) for the next frame
+        for k, (x, y, w, hh) in enumerate(get(comp).wins):
+            c = comp.op(f'win{k + 1}')
+            if c is not None:
+                c.par.cropleft, c.par.cropright = x, x + w
+                c.par.cropbottom, c.par.croptop = 1 - (y + hh), 1 - y
+    except Exception as e:                                        # noqa: BLE001
         h.error = repr(e)
     for n in ('rope_render', 'panel_render'):
         o = comp.op(n)

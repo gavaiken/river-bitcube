@@ -159,7 +159,7 @@ def test_status_json_matches_the_contract(tmp_path):
     assert out['ropes_follow'] == 'sound' and out['heard'] == 0.62 and out['river_source'] == 'live'
     assert out['room']['lingerers'][0]['ropes'] == [7, 8] and out['loop']['length_s'] == 300
     assert len(out['palette']) == 3 and all(re.fullmatch(r'#[0-9a-f]{6}', c) for c in out['palette'])
-    assert len(out['panels']['lit_pct']) == 4 and out['panels']['cap'] == 0.55
+    assert len(out['panels']['lit_pct']) == 4 and 0.39 <= out['panels']['cap'] <= 1.0
     assert out['zones'] == {'file': 'default', 'pool_height_m': 0.25, 'light': 'off'}
     assert out['knobs']['reflex']['speed'] > 0
     assert not (river / 'remembered' / 'status.json.tmp').exists()
@@ -205,7 +205,8 @@ def test_control_json_shapes():
     assert show.parse_control(None) == show.CONTROL_DEFAULT
     c = show.parse_control({'t': 1, 'zones': {'file': 'zones-x.json', 'light': 'leds', 'pool_height_m': 0.6,
                                               'leds': [{'rope': 1, 'from': 2, 'to': 3}]}})
-    assert c == {'pool_height_m': 0.6, 'light': 'leds', 'leds': [{'rope': 1, 'from': 2, 'to': 3}], 'opening_night': True}
+    assert c == {'pool_height_m': 0.6, 'light': 'leds', 'leds': [{'rope': 1, 'from': 2, 'to': 3}], 'opening_night': True,
+                 'screen_intensity': None, 'screen_threshold': None}
     assert show.CONTROL_DEFAULT['opening_night'] is True                   # opening night is on unless told otherwise
     assert show.parse_control({'light': 'pool', 'opening_night': False})['opening_night'] is False
     assert show.parse_control({'opening': {'on': False}})['opening_night'] is False
