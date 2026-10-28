@@ -50,10 +50,10 @@ Apply only the screen changes without resetting the look or playlist: `td.ps1 -F
 Rollback: set `SOFT_RIBBONS=False` in the update script’s execution globals; it reconnects the original Blur TOP and restores the original DRAW shader without resetting the clock. Saved pre-deployment show and controls: `River\checkpoints\before-soft-ribbons-20261028-will\` (`disk-before.toe`, `live-before.toe`). The frozen two-looks show remains available in mission control.
 
 
-## Temporary interpolated-footage trial (28 Oct, Will)
+## Approved 30 fps recorded footage (28 Oct, Will)
 
-The running all-looks show can temporarily play separate 30 fps motion-interpolated copies of both recorded backgrounds. The original files, softer ribbon shader, video grade, controls and saved show remain intact. This is a runtime-only trial, not a change to startup: reloading returns the original footage. Interpolation is calculated offline; bitcube only decodes the finished videos.
+Will approved the physical-panel trial and asked to keep it. The remembered-river look in this show now selects motion-interpolated **30 fps** versions of both recorded backgrounds at startup. Resolution and durations stay640×360,22s and229.6s. Interpolation was calculated offline; bitcube decodes the finished files. The softer ribbons, grade, playlist, original videos and saved .toe remain intact.
 
-Apply/status/rollback: [`tools/remembered/video_trial.py`](../../tools/remembered/video_trial.py), executed through `tools/td.ps1` with `TRIAL_ACTION` apply/status/rollback. The guard refuses other projects, unexpected clip lists and incomplete candidate files. Full checkpoint and exact rollback command are in the current HANDOFF. Do not save the trial into the show file; keeping it persistently is a separate decision after review.
+`River\remembered\video-library.json` holds an all-looks-only preference; `td/remembered/video_library.py` reads it when the runtime initializes its clip list. Other shows keep the originals. Invalid/incomplete preferences fall back to the original library. Reloads/reboots now retain this choice. Startup selection was verified in a fresh process without interrupting the running animation.
 
-Will confirmed the physical motion looked smoother and asked to leave the trial running. Both candidate clips rotated normally. Follow-up building-phase sample: median59fps (48–63), no project errors. The saved show, controls, boot file and original footage were hash-verified unchanged.
+Apply/keep/status/rollback: [`tools/remembered/video_trial.py`](../../tools/remembered/video_trial.py), executed through `tools/td.ps1` with `TRIAL_ACTION`. **Rollback** removes this show’s matching preference and restores the original movie/list immediately, preserving unrelated preferences. No project save or rebuild is needed. Full checkpoint and exact command are in HANDOFF.
