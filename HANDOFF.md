@@ -1,10 +1,16 @@
 # Handoff: where things stand
 
-- **Holder:** free → session A (River Artist Vision) for the artists' round 2. River Calibrate finished on bitcube 22:35 PT.
-- **Where:** bitcube running **`river-remembered.toe`** (the boot default), 60 fps, 0 errors; gallery cam home (3241, 0)
-- **Updated:** 2026-10-27 22:35 PT
+- **Holder:** Gavin (Mac mini session A, with Will and Justine on site)
+- **Where:** bitcube running **`river-looks.toe`, The river (all looks)**, auto (four remembered loops, then one Fill my cup (simple)); the boot default is still `river-remembered.toe`
+- **Updated:** 2026-10-27 23:35 PT
 - **Next holder:** session A (artists' round 2 on the remembered river), then Will (Codex) for visual tuning.
 
+
+
+## Night of 27 Oct (session A): fill my cup, the looks show (M8), river video under the particles (M9)
+- **Shows:** `river-fill-simple.toe` Fill my cup (simple), `river-filling.toe` Fill my cup (configurable, dials on Status), `river-looks.toe` The river (all looks: auto / manual with 2 s fades, no restarts; Looks card on Status). All offered, built, secret-scanned, committed. Plan and milestones: `docs/remembered-river.md`.
+- **Fixed:** the builds doubled the calibration paths, so the particle field and both fills ran on a default layout; now they load the 27 Oct map, screens and zones (fills by real height; screen heights from Gavin's tape measurements). Test pattern confirmed every screen's number and orientation (1 top left, 2 top right, 4 middle, 3 bottom).
+- **Open:** frame rate 28 fps in the looks show (M9's video readbacks); boot default not changed (ask Gavin); the auto switch to the fill (after 4 remembered loops, ~20 min) not yet seen on the piece; M2 finer particles, M3 pool, M4 dynamics, M5 easing and black dots, M6, M7 remain.
 
 ## The remembered river (27 Oct, Gavin, session A): `river-remembered.toe`, boot default
 - The artists' "Rules for the light" built: every 5-min loop relives one remembered day (Dave's agent picks it: `memory`/`surge_at` in his scene; each of his choices plays once if under 15 min old, bitcube fills the gaps with notable days), calm → building → surge → settling on the ropes, foam on mostly-black screens, the pool from the calibration (`zones-2026-10-27.json`), lingerers from the counter. Opening night ON by default (a surge every loop). Design and contracts: `docs/remembered-river.md`; debug page: mission control `/remembered`.
