@@ -188,7 +188,9 @@ try:
               "In:  river_in   (the river: live cam, or the recorded clip when the cam is down)\n"
               "     gallery_in (the gallery cam)\n"
               "Out: viz_out, any size; it is stretched to the 1280x720 field (16:9), which is laid\n"
-              "     over the GALLERY cam's view: a pixel lands on the rope/screen that hangs there.\n"
+              "     over the whole sculpture as the calibration's stitched map sees it (floor at the bottom,\n"
+              "     rig at the top): a pixel lands on the rope/screen that hangs there. Not the gallery cam's\n"
+              "     own picture: the map gives each LED's place in that too (hu, hv).\n"
               "The template wires river_in straight to viz_out. Replace what is between them.\n"
               "Brightness is limited downstream (ropes: 1,400 W for both boxes together), so you can't overload the power.")
     rin = get(selectTOP, 'river_in', 0, 0)
@@ -212,7 +214,7 @@ try:
         p = getattr(out_c.par, name)
         p.normMin, p.normMax, p.default = lo, hi, default
     note(out_c, "OUTPUTS: DON'T TOUCH (rebuilt by td/build/build_combined_v0.py).\n"
-                "viz_out -> field_out (1280x720, gallery-cam space)\n"
+                "viz_out -> field_out (1280x720, the map's frame: the whole sculpture)\n"
                 "  -> ropes: one sample per LED through the pinned pixel map -> rope_canvas (20x400) -> /project1/ropes\n"
                 "  -> screens: the four HUB75 screens (td/build/screens.py) -> /project1/panels\n"
                 "screens_preview = what TD sends (ropes + 4 screens), for td.ps1 -Screenshot.\n"

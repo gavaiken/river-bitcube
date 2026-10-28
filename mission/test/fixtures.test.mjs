@@ -371,7 +371,7 @@ test('fixture mode records every change in flight, holds a switch, rebuild or bo
   release(); await rb;
   assert.equal(m.rebuilt('all-good'), null, 'TouchDesigner is restarting on it: not the map in use yet (R7 #26)');
   t += 6_001;
-  assert.deepEqual(m.rebuilt('all-good'), { at: t, map: 'pixelmap-2026-10-23.json', file: 'river-local-oct-22-seasons.toe' }, 'confirmed: in use');
+  assert.deepEqual(m.rebuilt('all-good'), { at: t, map: 'pixelmap-2026-10-27.json', file: 'river-local-oct-22-seasons.toe' }, 'confirmed: in use');
   assert.equal(m.rebuilt('td-low-fps'), null);
   const rebuiltAt = t;
   // a rebuild is refused, as probe.ps1 refuses it, unless TouchDesigner answers on that very file

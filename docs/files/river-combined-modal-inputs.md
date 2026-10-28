@@ -16,7 +16,7 @@ Will's [Combined v0](river-combined-v0.html), cloned, with one new control: **wh
 - **Stale data:** if the chosen source has nothing current (scene missing or older than 15 minutes; Modal Frames quiet for 120 s past the frame's `ttl_s`, or polls failing, or no frame yet), it fades back to Combined alone and mission control says why. It comes back by itself.
 - **Settings:** `C:\Users\user\River\combined-modal-inputs.json` `{source, strength}`; default **canvas, 0.18**. Restored when the show opens.
 - **Inputs:** river camera (recorded clip fallback), the local Modal mirror (`gallery_state`, served on 8770, from `tools/modal/modal_link.py`), Modal Frames mirrored by `tools/modal/frames_sync.py` (started by `modal_link.py`).
-- **Outputs:** Combined v0's 20 ropes and four screens, pinned 23 Oct calibration, ropes capped at 0.4 brightness and 600 W per box.
+- **Outputs:** Combined v0's 20 ropes and four screens, pinned 27 Oct multi-view calibration (floor to rig), ropes capped at 0.4 brightness and 600 W per box.
 
 ## Controls
 Mission control Status, while this show runs. Script form: `probe.ps1 -Action modalinput -Source <off|canvas|scene|frames> -Strength <0..1>`; status `td.modal_input`. Full contract: [Modal input selector interface](../modal-inputs.html).

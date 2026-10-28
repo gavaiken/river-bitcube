@@ -19,7 +19,7 @@ Will's first visualization: the live river in Gavin's summer colours, with Dave'
 ## Structure and iteration
 `inputs -> viz -> outputs`, with `ropes` and `panels` at `/project1`. Keep `viz/river_in`, `viz/gallery_in` and `viz/viz_out`. Change this show's code, rebuild through `tools/td.ps1`, inspect a preview and gallery still, and save only with `tools/td_save.ps1`. Update this page and its registry metadata with every change.
 
-Calibration is read through `registry.calibration_for(project.name)`; no newest-map selection. To compare in the gallery: Change -> Combined v0 -> Switch. Back to default returns to the existing default; switching does not change it.
+Calibration is read through `registry.calibration_for(project.name)`; no newest-map selection. Pinned since 27 Oct: the multi-view map (`pixelmap-2026-10-27.json`, three gallery-cam views stitched, floor to rig) and `screens-2026-10-27.json`; the field now spans the whole sculpture, not the gallery cam's own framing. To compare in the gallery: Change -> Combined v0 -> Switch. Back to default returns to the existing default; switching does not change it.
 
 ## Reverting the experiment
 Choose **Original (bypass)** under River framing and press **Apply river settings**. This restores the pre-framing river path while retaining the overlay strength. It does not require a show restart. The .toe is saved with Original selected; the persisted choice is restored on load.

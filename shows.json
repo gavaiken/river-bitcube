@@ -10,8 +10,8 @@
       "offered": true,
       "build": "td/build/build_seasons_local.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",
-        "screens": "tools/pixelmap/screens-2026-10-23.json"
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
+        "screens": "tools/pixelmap/screens-2026-10-27.json"
       },
       "description": "Plays the recorded river through a year that only turns forward: still white winter, green spring rain, a golden summer torrent, a rust-and-mud autumn. Automatic mode turns one season a minute; dynamic mode lets the people counter warm it toward summer as the room fills; manual picks a target season and intensity. Runs on bitcube alone, with no internet. Control page on port 9981.",
       "inputs": [
@@ -21,8 +21,8 @@
       "created_by": "gavin",
       "created": "2026-10-22",
       "updated_by": "gavin",
-      "updated": "2026-10-26",
-      "last_change": "Build script reads its calibration pin from shows.json (no newest-map-wins)"
+      "updated": "2026-10-27",
+      "last_change": "Pins the 27 Oct multi-view map (three gallery-cam views stitched, floor to rig); rebuild on bitcube to bake it"
     },
     {
       "file": "river-online-oct-23.toe",
@@ -33,8 +33,8 @@
       "offered": true,
       "build": "td/build/build_river_local.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",
-        "screens": "tools/pixelmap/screens-2026-10-23.json"
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
+        "screens": "tools/pixelmap/screens-2026-10-27.json"
       },
       "description": "The river as it is right now: the river camera streams over Starlink and fills the ropes and screens, with a time-slice memory and sparkle on moving water. Dave's AI agent on Modal watches the room and the river, and every few minutes sets the palette, flow, rain and gain; his canvas plays as a faint layer. If the river feed drops it falls back to rain. Needs the internet, the river site and Modal.",
       "inputs": [
@@ -45,8 +45,8 @@
       "created_by": "gavin",
       "created": "2026-10-23",
       "updated_by": "gavin",
-      "updated": "2026-10-26",
-      "last_change": "Build script reads its calibration pin from shows.json (no newest-map-wins)"
+      "updated": "2026-10-27",
+      "last_change": "Pins the 27 Oct multi-view map (three gallery-cam views stitched, floor to rig); rebuild on bitcube to bake it"
     },
     {
       "file": "river-baseline-template.toe",
@@ -55,8 +55,8 @@
       "offered": true,
       "build": "td/build/build_baseline.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",
-        "screens": "tools/pixelmap/screens-2026-10-23.json"
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
+        "screens": "tools/pixelmap/screens-2026-10-27.json"
       },
       "description": "The starting point for a new visualization: the river camera (with the recorded clip as fallback) and the gallery camera in, the river out on the four HUB75 screens and down the 20 ropes through the pinned calibration. Copy it to make your own show file; it is not meant to be shown to visitors.",
       "inputs": [
@@ -67,7 +67,7 @@
       "created": "2026-10-26",
       "updated_by": "gavin",
       "updated": "2026-10-27",
-      "last_change": "Ropes brighter (Gavin): brightness 1.0 (was 0.4), one 1,400 W limit for both boxes instead of 600 W each"
+      "last_change": "Pins the 27 Oct multi-view map (three gallery-cam views stitched, floor to rig); rebuild on bitcube to bake it"
     },
     {
       "file": "river-combined-v0.toe",
@@ -76,8 +76,8 @@
       "offered": true,
       "build": "td/build/build_combined_v0.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",
-        "screens": "tools/pixelmap/screens-2026-10-23.json"
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
+        "screens": "tools/pixelmap/screens-2026-10-27.json"
       },
       "description": "Live river with recorded fallback, Gavin's fixed summer base and Dave's additive canvas. Auto recognizes two river-camera views and selects masked, shadow-lifted crops; manual framing and Original bypass remain available. The four screens can fade independently among the current look, Gavin's seasonal treatment on live footage, and his processed three-speed river recording, with manual blending or cycles spread across the screens. The ropes keep the current Combined look. Mission control saves framing, overlay and screen settings. No audio.",
       "inputs": [
@@ -89,7 +89,7 @@
       "created": "2026-10-26",
       "updated_by": "gavin",
       "updated": "2026-10-27",
-      "last_change": "Ropes brighter (Gavin): brightness 1.0 (was 0.4), one 1,400 W limit for both boxes instead of 600 W each"
+      "last_change": "Pins the 27 Oct multi-view map (three gallery-cam views stitched, floor to rig); rebuild on bitcube to bake it"
     },
     {
       "file": "river-combined-modal-inputs.toe",
@@ -99,8 +99,8 @@
       "offered": true,
       "build": "td/build/build_combined_modal_inputs.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",
-        "screens": "tools/pixelmap/screens-2026-10-23.json"
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
+        "screens": "tools/pixelmap/screens-2026-10-27.json"
       },
       "description": "Will's Combined v0 (live river, summer look, framing, screen-look cycle) with one Modal input chosen in mission control: off; Dave's canvas added on top (today's look); Dave's scene recolouring the river with its palette and steering speed, density, brightness and turbulence; or Modal Frames, Dave's own pictures for each screen and the ropes, journeyed to in OKLCH and rippled by the live river. One strength slider; switching fades over 4 s without a restart. Stale Modal data fades back to plain Combined.",
       "inputs": [
@@ -112,7 +112,7 @@
       "created": "2026-10-27",
       "updated_by": "gavin",
       "updated": "2026-10-27",
-      "last_change": "Ropes brighter (Gavin): brightness 1.0 (was 0.4), one 1,400 W limit for both boxes instead of 600 W each"
+      "last_change": "Pins the 27 Oct multi-view map (three gallery-cam views stitched, floor to rig); rebuild on bitcube to bake it"
     },
     {
       "file": "river-seasons-palettes.toe",
@@ -122,8 +122,8 @@
       "offered": false,
       "build": "td/build/build_seasons_palettes.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",
-        "screens": "tools/pixelmap/screens-2026-10-23.json"
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
+        "screens": "tools/pixelmap/screens-2026-10-27.json"
       },
       "description": "The river's year, unchanged in how it behaves, with new colours: an icy winter of whites and greys, a deeper teal spring, a sparse blue-green summer with few glints, and a deep cerulean autumn whose leaf flecks are pale orange. Same modes and control page (port 9981) as the river's year, which stays the default. Runs on bitcube alone.",
       "inputs": [
@@ -132,9 +132,9 @@
       ],
       "created_by": "studio agent",
       "created": "2026-10-27",
-      "updated_by": "studio agent",
+      "updated_by": "gavin",
       "updated": "2026-10-27",
-      "last_change": "New: copy of the river's year with the winter, spring, summer and autumn palettes changed"
+      "last_change": "Pins the 27 Oct multi-view map (three gallery-cam views stitched, floor to rig); rebuild on bitcube to bake it"
     },
     {
       "file": "river-remembered.toe",

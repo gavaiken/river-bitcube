@@ -239,7 +239,7 @@ test('the v2 routes on the real fixtures: lights, pixelmap, calibration (scripte
   // the scripted calibration: none -> start -> progress -> done; the probe mirrors it; cancel; the drift flag
   // (the rebuild above went all the way: /api/calibration says which map the river's year now uses, on every phone)
   const none = await (await get('/api/calibration', on('all-good'))).json();
-  assert.deepEqual(none, { running: false, none: true, rebuilt: { at: none.rebuilt.at, map: 'pixelmap-2026-10-23.json', file: 'river-local-oct-22-seasons.toe' } });
+  assert.deepEqual(none, { running: false, none: true, rebuilt: { at: none.rebuilt.at, map: 'pixelmap-2026-10-27.json', file: 'river-local-oct-22-seasons.toe' } });
   assert.ok(Math.abs(Date.now() - none.rebuilt.at) < 60_000);
   assert.equal((await (await get('/api/calibration', on('td-low-fps'))).json()).rebuilt, null, 'the rebuild was in all-good only');
   assert.equal((await post('/api/control/calibrate', { action: 'explode' }, on('all-good'))).status, 400);
