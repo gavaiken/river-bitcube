@@ -240,7 +240,7 @@
       "title": "The river (two looks)",
       "label": "two looks",
       "kind": "show",
-      "offered": false,
+      "offered": true,
       "build": "td/build/build_two_looks.py",
       "calibration": {
         "pixelmap": "tools/pixelmap/pixelmap-2026-10-28.json",
@@ -261,7 +261,7 @@
       "created": "2026-10-28",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-28",
-      "last_change": "A frozen copy of river-looks.toe as it ran on the morning of 28 Oct, the rollback point before the all-looks file"
+      "last_change": "river-two-looks.toe committed: a byte-for-byte copy of river-looks.toe as saved at 09:32 on 28 Oct; secret scan 0 hits"
     },
     {
       "file": "river-all-looks.toe",
