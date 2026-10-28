@@ -111,7 +111,8 @@
       "created": "2026-10-28",
       "updated_by": "gavin",
       "updated": "2026-10-28",
-      "last_change": "Fixture entry until the show is in shows.json"
+      "last_change": "Fixture entry until the show is in shows.json",
+      "composite": true
     },
     {
       "file": "river-all-looks.toe",
@@ -173,7 +174,8 @@
       "created": "2026-10-28",
       "updated_by": "gavin",
       "updated": "2026-10-28",
-      "last_change": "Fixture entry with the looks' words until shows.json has them"
+      "last_change": "Fixture entry with the looks' words until shows.json has them",
+      "composite": true
     }
   ]
 }

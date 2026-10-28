@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { derive, dur, daytimeMinutes, intensityWord, seasonOfPhase, contactFor, seasonPace, EXPECT_S, PAGE_STALE_S, POLL_S, STALE_FACTOR } from '../public/model.js';
+import { showCard, derive, dur, daytimeMinutes, intensityWord, seasonOfPhase, contactFor, seasonPace, EXPECT_S, PAGE_STALE_S, POLL_S, STALE_FACTOR } from '../public/model.js';
 
 const DIR = new URL('./fixtures/', import.meta.url);
 const fixtures = readdirSync(DIR).filter((f) => f.endsWith('.json') && !f.startsWith('_')).sort()
@@ -726,4 +726,11 @@ test('R6 #33: one time left for a calibration, aged by its own copy\'s read time
   calib(fx, { stage: 'ropes-capture', expected_s: 170, elapsed_s: 20, read_age_s: 0 });
   assert.equal(at(0).left_words, 'about 4 min more');
   assert.equal(at(500_000).left_s, 0, 'never below nothing');
+});
+
+
+test('a composite show file (several looks inside) says so on its card; a single visualization does not', () => {
+  run(clone(byName['all-good']));                                   // the fixture's show cards are loaded by derive()
+  assert.equal(showCard('river-all-looks.toe')?.composite, true);
+  assert.equal(showCard('river-local-oct-22-seasons.toe')?.composite, false);
 });
