@@ -5,6 +5,8 @@
 - schema: every field there, of the right type; kind show|template|viz; dates YYYY-MM-DD; file names unique
 - files: every offered entry's .toe exists; every entry's build script and pinned calibration files exist
 - description: at most 100 words
+- looks (optional, a file with several looks): each a lowercase slug with title, description (at most 100 words), inputs,
+  file (a listed show file: the look's standalone file) and for (loops|cycles|minutes)
 - boot_default: an offered entry
 - freshness: when the changes since --base (default origin/main; plus the working tree) touch an entry's .toe or its build
   script, that entry's last_change must differ from the base's, and its updated date must not go backwards. A new entry passes.
@@ -23,11 +25,39 @@ KINDS = ('show', 'template', 'viz')
 ROLES = ('year', 'live')
 DATE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 MAX_WORDS = 100
+LOOK_SLUG = re.compile(r'[a-z0-9]+(?:-[a-z0-9]+)*')
+LOOK_FOR = ('loops', 'cycles', 'minutes')
 REQUIRED_STR = ('file', 'title', 'kind', 'build', 'description', 'created_by', 'created', 'updated_by', 'updated', 'last_change')
 
 
 def words(s):
     return len(str(s).split())
+
+
+def check_looks(looks, where, listed):
+    """Problems with an entry's looks: {slug: {title, description, inputs, file, for}} (docs/shows.md)."""
+    if not isinstance(looks, dict) or not looks:
+        return [f'{where}: looks, if given, is an object of looks by name']
+    out = []
+    for name, lk in looks.items():
+        at = f'{where}: looks.{name}'
+        if not LOOK_SLUG.fullmatch(name):
+            out.append(f'{at}: a look name is a lowercase slug (a-z, 0-9, -)')
+        if not isinstance(lk, dict):
+            out.append(f'{at}: not an object')
+            continue
+        for k in ('title', 'description', 'file'):
+            if not isinstance(lk.get(k), str) or not lk[k].strip():
+                out.append(f'{at}: {k} must be a non-empty string')
+        if isinstance(lk.get('description'), str) and words(lk['description']) > MAX_WORDS:
+            out.append(f"{at}: description is {words(lk['description'])} words; at most {MAX_WORDS}")
+        if not isinstance(lk.get('inputs'), list) or not all(isinstance(x, str) and x.strip() for x in lk['inputs']):
+            out.append(f'{at}: inputs must be a list of short phrases')
+        if isinstance(lk.get('file'), str) and lk['file'].strip() and lk['file'] not in listed:
+            out.append(f"{at}: file {lk['file']} is not a listed show file")
+        if lk.get('for') not in LOOK_FOR:
+            out.append(f"{at}: for must be one of {', '.join(LOOK_FOR)}")
+    return out
 
 
 def check_registry(reg, repo=REPO):
@@ -92,6 +122,10 @@ def check_registry(reg, repo=REPO):
                                + ('' if required else ' (or null)'))
                 elif not (repo / v).is_file():
                     out.append(f'{where}: calibration.{k} {v} is missing')
+    listed = {s.get('file') for s in reg['shows'] if isinstance(s, dict)}
+    for i, s in enumerate(reg['shows']):
+        if isinstance(s, dict) and 'looks' in s:
+            out += check_looks(s['looks'], f"shows[{i}]" + (f" ({s.get('file')})" if s.get('file') else ''), listed)
     bd = reg.get('boot_default')
     entry = next((s for s in reg['shows'] if isinstance(s, dict) and s.get('file') == bd), None)
     if not entry:
