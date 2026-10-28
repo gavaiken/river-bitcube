@@ -184,7 +184,16 @@ def write_atomic(path, data):
         f.write(data)
         f.flush()
         os.fsync(f.fileno())
-    os.replace(tmp, path)
+    # Windows refuses to replace a file another process has open this instant (TouchDesigner reading sync.json or
+    # latest.json): retry briefly rather than fail the poll.
+    for attempt in range(20):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 19:
+                raise
+            time.sleep(0.05)
 
 
 def write_json(path, obj):

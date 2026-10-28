@@ -334,3 +334,17 @@ def test_image_missing_past_the_budget_fails_and_keeps_what_arrived(fake, tmp_pa
     fake.files['/frames/f1/ropes.png'] = real
     assert m.poll() == 'new'
     assert fake.requests.count('/frames/f1/screen-1.png') == 1      # not fetched again
+
+
+def test_replace_retried_while_windows_holds_the_file(tmp_path, monkeypatch):
+    real, calls = os.replace, []
+
+    def busy(src, dst):
+        calls.append(dst)
+        if len(calls) < 3:
+            raise PermissionError(5, 'Access is denied')
+        return real(src, dst)
+    monkeypatch.setattr(fs.os, 'replace', busy)
+    monkeypatch.setattr(fs.time, 'sleep', lambda s: None)
+    fs.write_atomic(tmp_path / 'x.json', b'{}')
+    assert (tmp_path / 'x.json').read_bytes() == b'{}' and len(calls) == 3

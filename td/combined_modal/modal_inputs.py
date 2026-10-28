@@ -296,7 +296,7 @@ def _journal():
         return st['journal'][1]
     text = None
     try:
-        data = json.loads(path.read_text(encoding='utf-8'))
+        data = json.loads(path.read_text(encoding='utf-8', errors='replace'))
         entries = data.get('entries') if isinstance(data, dict) else data
         entries = [e for e in entries or [] if isinstance(e, dict)]
         if entries:
