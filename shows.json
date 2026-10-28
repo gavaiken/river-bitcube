@@ -234,6 +234,64 @@
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-28",
       "last_change": "river-looks.toe saved without vsync and with the ropes at 30 Hz: 55-60 fps on the piece; secret scan 0 hits"
+    },
+    {
+      "file": "river-two-looks.toe",
+      "title": "The river (two looks)",
+      "label": "two looks",
+      "kind": "show",
+      "offered": false,
+      "build": "td/build/build_two_looks.py",
+      "calibration": {
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-28.json",
+        "screens": "tools/pixelmap/screens-2026-10-28.json",
+        "zones": "tools/pixelmap/zones-2026-10-28.json"
+      },
+      "description": "A frozen copy of The river (all looks) as it ran on 28 Oct: the remembered river and Fill my cup alternating (four remembered loops, then one fill; a flood day brings the fill at once), with the GPU silk ribbons on the screens. Kept as the rollback point while the all-looks file grows.",
+      "inputs": [
+        "Dave's agent (memory, surge hour, palette and knobs in gallery_state)",
+        "remembered days (data/remembered)",
+        "river camera (recorded clip as fallback)",
+        "people counter (River\\presence.json, lingerers)",
+        "River\\remembered\\control.json (pool line, light checks, opening night)",
+        "River\\looks\\control.json (auto or manual, the look)",
+        "River\\filling\\control.json (the fill dials)"
+      ],
+      "created_by": "Gavin (session A)",
+      "created": "2026-10-28",
+      "updated_by": "Gavin (session A)",
+      "updated": "2026-10-28",
+      "last_change": "A frozen copy of river-looks.toe as it ran on the morning of 28 Oct, the rollback point before the all-looks file"
+    },
+    {
+      "file": "river-all-looks.toe",
+      "title": "The river (all looks, playlist)",
+      "label": "all looks",
+      "kind": "show",
+      "offered": false,
+      "build": "td/build/build_all_looks.py",
+      "calibration": {
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-28.json",
+        "screens": "tools/pixelmap/screens-2026-10-28.json",
+        "zones": "tools/pixelmap/zones-2026-10-28.json"
+      },
+      "description": "Every look in one show file, played in a configurable order: a playlist of looks, each for so many loops, cycles or minutes, looping; or one look pinned. The remembered river, Fill my cup (simple and configurable), the river's year and Combined with Modal Input Selector, faded through black between them. Each look keeps its own settings; mission control's Looks tab edits the playlist, each look's settings and shows the live inputs.",
+      "inputs": [
+        "Dave's agent (memory, surge hour, palette and knobs in gallery_state)",
+        "remembered days (data/remembered)",
+        "river camera (recorded clip as fallback)",
+        "people counter (River\\presence.json, lingerers)",
+        "River\\remembered\\control.json (pool line, light checks, opening night)",
+        "River\\looks\\control.json (auto or manual, the look)",
+        "River\\filling\\control.json (the fill dials)",
+        "the river library (the river's year)",
+        "Dave's Modal canvas, mirrored scene, reflexes and frames (Combined with Modal)"
+      ],
+      "created_by": "Gavin (session A)",
+      "created": "2026-10-28",
+      "updated_by": "Gavin (session A)",
+      "updated": "2026-10-28",
+      "last_change": "New: river-looks.toe copied; the playlist mixer, the river's year and Combined with Modal to be folded in"
     }
   ]
 }
