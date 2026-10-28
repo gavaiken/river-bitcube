@@ -52,7 +52,8 @@ NEUTRAL = {k: 0.5 for k in KNOBS}
 CONTROL_DEFAULT = {'pool_height_m': None, 'light': 'off', 'leds': [], 'opening_night': True,   # opening night ON unless told
                    'screen_intensity': None, 'screen_threshold': None,                          # None: water.SETTINGS
                    'screen_mode': 'particles',       # particles (one field, the screens as windows) | water (video)
-                   'screen_video': 0.25,             # M9: how strongly the river video shows under the particles (0..1)
+                   'screen_video': 0.15,             # M9: how strongly the river video shows under the particles (0..1)
+                                                     # (0.25 until 28 Oct: a grey haze under the ribbons on the piece)
                    'screen_field': 'ribbons'}        # what the particle windows look onto (FIELDS)
 # the particle fields: ribbons (silk of glitter, Gavin's reference, 28 Oct, the default) | fine (M2's smoky streaks with
 # ledges, flow.py) | streaks (round 2b, particles.py, checkpoint remembered-particles-v1)

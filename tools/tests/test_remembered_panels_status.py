@@ -207,7 +207,7 @@ def test_control_json_shapes():
                                               'leds': [{'rope': 1, 'from': 2, 'to': 3}]}})
     assert c == {'pool_height_m': 0.6, 'light': 'leds', 'leds': [{'rope': 1, 'from': 2, 'to': 3}], 'opening_night': True,
                  'screen_intensity': None, 'screen_threshold': None, 'screen_mode': 'particles',
-                 'screen_video': 0.25, 'screen_field': 'ribbons'}
+                 'screen_video': 0.15, 'screen_field': 'ribbons'}
     assert show.parse_control({'screens': {'field': 'fine'}})['screen_field'] == 'fine'
     assert show.parse_control({'screens': {'field': 'lasers'}})['screen_field'] == 'ribbons'
     assert show.CONTROL_DEFAULT['opening_night'] is True                   # opening night is on unless told otherwise

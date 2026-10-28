@@ -223,7 +223,7 @@ function setVideo(pct, touched = true) {
 }
 videoInput.addEventListener('input', () => setVideo(Number(videoInput.value)));
 ctls.video = control($('#z-video'), { action: 'remembered-screens', expectS: EXPECT_S['remembered-screens'], label: 'Apply', kind: 'primary',
-  before: 'Moves only the screens: the ropes keep the show.', what: changeLabel('remembered-screens', { video: 0.25 }),
+  before: 'Moves only the screens: the ropes keep the show.', what: changeLabel('remembered-screens', { video: 0.15 }),
   noAnswer: 'the line above the button says what bitcube has',
   done: (r) => `Asked TouchDesigner for the river video at ${fmt.nb(`${Math.round(Number(r?.written?.screens?.video ?? S.video / 100) * 100)} %`)} under the particles`,
   run: () => api('/api/control/remembered-screens', { video: S.video / 100 }),
@@ -260,7 +260,7 @@ function renderControls(v) {
   const vnow = v?.video?.now ?? null, vasked = v?.video?.asked ?? null;
   $('#video-now').textContent = vnow != null ? fmt.nb(`${Math.round(vnow * 100)} %`) : vasked != null ? `${fmt.nb(`${Math.round(vasked * 100)} %`)} asked (TouchDesigner hasn't said)` : 'not known';
   if (!S.videoTouched && (vnow ?? vasked) != null) setVideo((vnow ?? vasked) * 100, false);
-  else if (S.video == null) setVideo((v?.video?.default ?? 0.25) * 100, false);
+  else if (S.video == null) setVideo((v?.video?.default ?? 0.15) * 100, false);
   ctls.video.update({ why: whyFor('remembered-screens', v), whyBy: S.m?.controls?.['remembered-screens']?.by ?? null });
 }
 /** Each status answer: the controls see the model (their own change's entry, the server's verdict). */

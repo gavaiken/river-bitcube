@@ -129,9 +129,10 @@ class Ribbons:
         return x, yy, np.abs(s)
 
     def _shown(self):
-        """How much of each ribbon shows (0..1): calm one faint ribbon, a surge all of them."""
+        """How much of each ribbon shows (0..1): every window always has its ribbon (Gavin, 28 Oct: "too sparse and
+        dark"), faint in calm and full in a surge, the ribbons fading up one after another as the level rises."""
         lv = self.level
-        return [min(1.0, max(0.0, lv * N_RIB * 1.2 - i + 0.6)) if i else max(0.35, min(1.0, 0.35 + lv)) for i in range(N_RIB)]
+        return [min(1.0, 0.5 + 0.5 * max(0.0, min(1.0, lv * N_RIB - i * 0.5))) for i in range(N_RIB)]
 
     def step(self, dt, intensity, rope_speed_leds, turbulence=0.5):
         if dt <= 0:
@@ -157,7 +158,7 @@ class Ribbons:
         out = np.zeros((QH, QW * NQ, 3), np.float32)
         col = np.asarray(colour, np.float32)
         shown = self._shown()
-        bright = 0.65 + 0.65 * self.level
+        bright = 0.9 + 0.5 * self.level
         for k, (cx, cy, ang, w, h) in enumerate(self.screens):
             img = np.zeros(QH * QW, np.float32)
             ca, sa = math.cos(ang), math.sin(ang)

@@ -160,7 +160,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-28",
-      "last_change": "Screens: silk ribbons of glitter (td/remembered/ribbons.py, Gavin's reference) as the default particle field; M2's fine smoky field with ledges (flow.py) and round 2b's streaks selectable (control.json screens.field)"
+      "last_change": "Screens: every window always has its silk ribbon (faint in calm, full in a surge), brighter; the river video under them 0.15 (was 0.25, a grey haze); ribbons the default field since 28 Oct"
     },
     {
       "file": "river-filling.toe",
@@ -233,7 +233,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-28",
-      "last_change": "Screens: silk ribbons of glitter (td/remembered/ribbons.py, Gavin's reference) as the default particle field; M2's fine smoky field with ledges (flow.py) and round 2b's streaks selectable (control.json screens.field)"
+      "last_change": "Screens: every window always has its silk ribbon (faint in calm, full in a surge), brighter; the river video under them 0.15 (was 0.25, a grey haze); ribbons the default field since 28 Oct"
     }
   ]
 }
