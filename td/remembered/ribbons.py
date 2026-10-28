@@ -28,15 +28,17 @@ PTS = 3800                       # points per ribbon per screen (streaming throu
 ROPE_PTS = 4000                  # per ribbon, over the whole height, for the ropes
 DUST = 900                       # loose glitter per screen
 BOKEH = 7                        # faint soft discs per screen
+ROPE_GRID = 512                  # rows the spine is computed on over the whole height, for the ropes
 GRID = 192                       # rows the spine is computed on per screen band
 TWINKLE = (0.55 + 0.45 * np.sin(np.arange(64) * 2 * math.pi / 64)).astype(np.float32)
 TRAIL = 0.55                     # a little persistence: the glitter shimmers rather than flickers
 
 
 def _soft(a):
-    p = np.pad(a, 1)
-    h = p[:, :-2] + p[:, 1:-1] + p[:, 2:]
-    return (h[:-2] + h[1:-1] + h[2:]) / 9.0
+    """A 3 x 3 box blur over the last two axes, edges zero."""
+    p = np.pad(a, [(0, 0)] * (a.ndim - 2) + [(1, 1), (1, 1)])
+    h = p[..., :-2] + p[..., 1:-1] + p[..., 2:]
+    return (h[..., :-2, :] + h[..., 1:-1, :] + h[..., 2:, :]) / 9.0
 
 
 def _disc(r):
@@ -155,47 +157,44 @@ class Ribbons:
     # ---- drawing -------------------------------------------------------------------------------------------------------
 
     def render_screens(self, colour):
-        out = np.zeros((QH, QW * NQ, 3), np.float32)
+        # (speed, M7) every screen's points into one bincount, then the glow, trace and colour on all four at once: bitcube
+        # was spending 14.5 ms here with one pass per screen and ribbon
         col = np.asarray(colour, np.float32)
         shown = self._shown()
         bright = 0.9 + 0.5 * self.level
+        idx, vals = [], []
         for k, (cx, cy, ang, w, h) in enumerate(self.screens):
-            img = np.zeros(QH * QW, np.float32)
             ca, sa = math.cos(ang), math.sin(ang)
             ylo, yhi = self.band[k]
             span = yhi - ylo
+            base = k * QH * QW
             for i in range(N_RIB):
                 if shown[i] <= 0.01:
                     continue
                 u = (self.pu[k, i] - self.flow * self.rib[i]['spd'] / span) % 1.0
                 y = yhi - u * span
-                # (speed) the spine on GRID rows of the band, then looked up per point: trig on 192 rows, not 3,800 points
+                # the spine on GRID rows of the band, then looked up per point: trig on 192 rows, not 3,800 points
                 xs, c, sn, W = self._spine(i, yhi - (np.arange(GRID) + 0.5) / GRID * span)
                 g = np.minimum((u * GRID).astype(np.int32), GRID - 1)
                 vW = self.pv[k, i] * W[g]
-                x, yy, face = xs[g] + vW * c[g], y + vW * sn[g] * 0.45, np.abs(sn[g])
-                dx, dy = x - cx, yy - cy
-                lx = dx * ca + dy * sa
-                ly = -dx * sa + dy * ca
-                fx = (lx / w + 0.5) * QW
-                fy = (0.5 - ly / h) * QH
-                ix, iy = fx.astype(np.int32), fy.astype(np.int32)
-                ok = (fx >= 0) & (ix < QW) & (fy >= 0) & (iy < QH)
+                dx, dy = xs[g] + vW * c[g] - cx, y + vW * sn[g] * 0.45 - cy
+                fx = ((dx * ca + dy * sa) / w + 0.5) * QW
+                fy = (0.5 - (-dx * sa + dy * ca) / h) * QH
+                ok = (fx >= 0) & (fx < QW) & (fy >= 0) & (fy < QH)
                 if not ok.any():
                     continue
-                tw = TWINKLE[(self.pw[k, i] * self.t + self.pph[k, i]).astype(np.int32) & 63]
-                val = self.pbe[k, i] * tw * (0.55 + 0.45 * face) * (shown[i] * bright)
-                img += np.bincount((iy[ok] * QW + ix[ok]), val[ok], QH * QW).astype(np.float32)
-            img = img.reshape(QH, QW)
-            # loose glitter and bokeh
-            dd = self.dust[k]
-            di = dd.astype(np.int32)
-            twd = 0.5 + 0.5 * np.sin(self.t * 5.0 + self.dust_b[k] * 40)
-            img += np.bincount(di[:, 1] * QW + di[:, 0], self.dust_b[k] * twd * (0.2 + 0.35 * self.level),
-                               QH * QW).astype(np.float32).reshape(QH, QW)
+                tw = TWINKLE[(self.pw[k, i][ok] * self.t + self.pph[k, i][ok]).astype(np.int32) & 63]
+                idx.append(base + fy[ok].astype(np.int32) * QW + fx[ok].astype(np.int32))
+                vals.append(self.pbe[k, i][ok] * tw * (0.55 + 0.45 * np.abs(sn[g][ok])) * (shown[i] * bright))
+            # loose glitter
+            di = self.dust[k].astype(np.int32)
+            idx.append(base + di[:, 1] * QW + di[:, 0])
+            vals.append(self.dust_b[k] * (0.5 + 0.5 * np.sin(self.t * 5.0 + self.dust_b[k] * 40)) * (0.2 + 0.35 * self.level))
+        img = np.bincount(np.concatenate(idx), np.concatenate(vals), NQ * QH * QW).astype(np.float32).reshape(NQ, QH, QW)
+        # bokeh: a few faint soft discs
+        for k in range(NQ):
             for b in range(BOKEH):
-                r = float(self.bok_r[k, b])
-                key = round(r * 2) / 2
+                key = round(float(self.bok_r[k, b]) * 2) / 2
                 disc = self.discs.get(key)
                 if disc is None:
                     disc = self.discs[key] = _disc(key)
@@ -204,35 +203,41 @@ class Ribbons:
                 a = 0.10 * (0.5 + 0.5 * math.sin(self.t * 0.6 + float(self.bok_ph[k, b]))) * (0.4 + 0.6 * self.level)
                 x0, x1, y0, y1 = max(0, bx - n), min(QW, bx + n + 1), max(0, by - n), min(QH, by + n + 1)
                 if x0 < x1 and y0 < y1:
-                    img[y0:y1, x0:x1] += disc[y0 - by + n:y1 - by + n, x0 - bx + n:x1 - bx + n] * a
-            glow = _soft(_soft(img))
-            frame = img * 0.5 + glow * 1.5
-            tr = np.maximum(self.trails[k] * TRAIL, frame)
-            tr[tr < 0.015] = 0.0
-            self.trails[k] = tr
-            v = np.clip(tr, 0, 1.6)
-            rgb = v[..., None] * col + np.clip(v - 0.55, 0, 1)[..., None] * (1 - col)      # the brightest go to white
-            out[:, k * QW:(k + 1) * QW] = np.clip(rgb, 0, 1)
-            self.lit_pct[k] = int(round(100 * float((tr > 0.03).mean())))
-        return out
+                    img[k, y0:y1, x0:x1] += disc[y0 - by + n:y1 - by + n, x0 - bx + n:x1 - bx + n] * a
+        frame = img * 0.5 + _soft(_soft(img)) * 1.5
+        tr = np.maximum(self.trails * TRAIL, frame)
+        tr[tr < 0.015] = 0.0
+        self.trails = tr
+        v = np.minimum(tr, 1.6)
+        rgb = v[..., None] * col + np.clip(v - 0.55, 0, 1)[..., None] * (1 - col)          # the brightest go to white
+        self.lit_pct = [int(round(100 * float(m))) for m in (tr > 0.03).mean(axis=(1, 2))]
+        # (NQ, QH, QW, 3) -> QH x (QW*4) x 3, screens side by side
+        return np.ascontiguousarray(np.clip(rgb, 0, 1).transpose(1, 0, 2, 3).reshape(QH, NQ * QW, 3))
 
     def render_ropes(self, colour):
-        can = np.zeros(self.ch * self.cw, np.float32)
+        # (speed, M7) one bincount, then each LED reads its own cell and four neighbours: no blur of the whole canvas
         shown = self._shown()
         span = self.y1 - self.y0 + 60
+        idx, vals = [], []
         for i in range(N_RIB):
             if shown[i] <= 0.01:
                 continue
             u = (self.ru[i] - self.flow * self.rib[i]['spd'] / span) % 1.0
             y = self.y1 + 30 - u * span
-            x, yy, face = self._sheet(i, y, self.rv[i])
-            ix = np.round(x - self.cx0).astype(np.int32)
-            iy = np.round(yy - self.cy0).astype(np.int32)
+            xs, c, sn, W = self._spine(i, self.y1 + 30 - (np.arange(ROPE_GRID) + 0.5) / ROPE_GRID * span)
+            g = np.minimum((u * ROPE_GRID).astype(np.int32), ROPE_GRID - 1)
+            vW = self.rv[i] * W[g]
+            ix = np.round(xs[g] + vW * c[g] - self.cx0).astype(np.int32)
+            iy = np.round(y + vW * sn[g] * 0.45 - self.cy0).astype(np.int32)
             ok = (ix >= 0) & (ix < self.cw) & (iy >= 0) & (iy < self.ch)
-            can += np.bincount(iy[ok] * self.cw + ix[ok], np.full(ok.sum(), 0.5 * shown[i], np.float32),
-                               self.ch * self.cw).astype(np.float32)
-        can = can.reshape(self.ch, self.cw)
-        can = (can + np.roll(can, 1, 0) + np.roll(can, -1, 0) + np.roll(can, 1, 1) + np.roll(can, -1, 1)) / 2.5
-        acc = can[self.rope_iy, self.rope_ix] * self.rope_ok * (0.4 + 0.6 * self.level)
+            idx.append(iy[ok] * self.cw + ix[ok])
+            vals.append(np.full(int(ok.sum()), 0.5 * shown[i], np.float32))
+        acc = np.zeros(len(self.rope_ix), np.float32)
+        if idx:
+            can = np.bincount(np.concatenate(idx), np.concatenate(vals), self.ch * self.cw).astype(np.float32)
+            can = np.pad(can.reshape(self.ch, self.cw), 1)
+            ry, rx = self.rope_iy + 1, self.rope_ix + 1
+            acc = (can[ry, rx] + can[ry - 1, rx] + can[ry + 1, rx] + can[ry, rx - 1] + can[ry, rx + 1]) / 2.5
+        acc = acc * self.rope_ok * (0.4 + 0.6 * self.level)
         out = np.clip(acc, 0, 1)[:, None] * np.asarray(colour, np.float32)
         return out.reshape(N_ROPES, N_PX, 3)
