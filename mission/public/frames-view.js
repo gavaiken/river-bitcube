@@ -104,14 +104,16 @@ export function paintScreens(fq, sc) {
 // ---- the artists' panel rule: at most 30 % of a screen lit --------------------------------------------------------------
 export const PANEL_RULE_PCT = 30;
 /** One bar per screen against the 30 % rule, as HTML (the page's stylesheet: .litmeter in v2.css). pcts: four numbers (0-100) or
- *  nulls. Over the rule: the bar and its number say so in words too ("over"), never by colour alone. */
+ *  nulls. Over the rule: the bar and its number say so in words too ("over"), never by colour alone. rule: null draws the lit
+ *  share alone (the remembered river since 28 Oct: the artists dropped the rule, Gavin wants the screens dense). */
 export function litMeterHTML(pcts, { rule = PANEL_RULE_PCT, label = 'Screen' } = {}) {
   const row = (p, k) => {
-    const v = typeof p === 'number' && Number.isFinite(p) ? Math.max(0, p) : null, over = v != null && v > rule;
+    const v = typeof p === 'number' && Number.isFinite(p) ? Math.max(0, p) : null, over = rule != null && v != null && v > rule;
     const w = v == null ? 0 : Math.min(100, v);
     return `<div class="litrow${over ? ' over' : ''}"><span class="litname">${label} ${k + 1}</span>
-      <span class="litbar" role="img" aria-label="${label} ${k + 1}: ${v == null ? 'unknown' : `${Math.round(v)} % lit`}${over ? `, over the ${rule} % rule` : ''}"><span class="fill" style="width:${w}%"></span><span class="rule" style="left:${rule}%"></span></span>
+      <span class="litbar" role="img" aria-label="${label} ${k + 1}: ${v == null ? 'unknown' : `${Math.round(v)} % lit`}${over ? `, over the ${rule} % rule` : ''}"><span class="fill" style="width:${w}%"></span>${rule != null ? `<span class="rule" style="left:${rule}%"></span>` : ''}</span>
       <span class="litnum">${v == null ? '–' : `${Math.round(v)} %`}${over ? ' <b>over</b>' : ''}</span></div>`;
   };
-  return `<div class="litmeter">${[0, 1, 2, 3].map((k) => row(pcts?.[k], k)).join('')}<div class="litkey">the line: at most ${rule} % of a screen lit</div></div>`;
+  const key = rule != null ? `<div class="litkey">the line: at most ${rule} % of a screen lit</div>` : '';
+  return `<div class="litmeter">${[0, 1, 2, 3].map((k) => row(pcts?.[k], k)).join('')}${key}</div>`;
 }

@@ -1,6 +1,6 @@
 // Mission control: the Remembered river page (/remembered; docs/mission-ui.md "Remembered river page"). The team's realtime debug
 // view of river-remembered.toe (docs/remembered-river.md): what goes in (Dave's agent, the river camera, the room), what the loop
-// decides and why, what comes out (the lights, the 30 % rule, the ropes' watts), and its two controls. Every word comes from
+// decides and why, what comes out (the lights, each screen's lit share, the ropes' watts), and its two controls. Every word comes from
 // remembered-words.js (pure, tested); the frames are drawn by the Lights page's own frames-view.js; the controls follow "Applying a
 // change" through ui.js control(), with the model's reasons (model.js controls['remembered-zones'|'remembered-opening']).
 // GET /api/remembered every 2 s, /api/status every 5 s, /api/lights every 4 s, the stills every 30 s. Plain ES module, no build step.
@@ -8,7 +8,7 @@ import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, DOC_
 import { fetchTimed } from '/app.js';
 import { derive, changeLabel, dur, EXPECT_S, REMEMBERED_POOL_M, REMEMBERED_ONLY } from '/model.js';
 import { decodeLights, fitCanvas, paintStrips, paintScreens, paintEmpty, litMeterHTML } from '/frames-view.js';
-import { rememberedView, dayStripSVG, mss, hourWords, dateWords, PANEL_RULE_PCT } from '/remembered-words.js';
+import { rememberedView, dayStripSVG, mss, hourWords, dateWords } from '/remembered-words.js';
 
 const REM_MS = 2000, LIGHTS_MS = 4000, STILL_MS = 30_000;
 const $ = (s) => document.querySelector(s);
@@ -163,7 +163,7 @@ function renderDecision(v) {
 
 function renderOutputs(v) {
   const run = !!v?.running;
-  put('lit', run && v.panels.lit ? litMeterHTML(v.panels.lit, { rule: PANEL_RULE_PCT }) : '<p class="muted secondary">TouchDesigner reports how much of each screen is lit while the remembered river runs.</p>');
+  put('lit', run && v.panels.lit ? litMeterHTML(v.panels.lit, { rule: null }) : '<p class="muted secondary">TouchDesigner reports how much of each screen is lit while the remembered river runs.</p>');
   const facts = run ? [
     ['Ropes', v.wattsWords ?? 'watts not known'],
     ['Frames a second', v.fps != null ? `${Math.round(v.fps)}` : 'not known'],
