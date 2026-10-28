@@ -47,6 +47,14 @@ def test_files_build_scripts_and_pins_must_exist_but_an_unoffered_file_may_be_mi
     assert problems(lambda r: r['shows'][0]['calibration'].update(screens=None)) == [], 'screens may be null'
 
 
+def test_zones_pin_is_optional_dated_and_must_exist():
+    assert problems(lambda r: r['shows'][0]['calibration'].update(zones=None)) == [], 'zones may be null'
+    assert any('calibration.zones must be a dated file' in p
+               for p in problems(lambda r: r['shows'][0]['calibration'].update(zones='zones.json')))
+    assert any('calibration.zones tools/pixelmap/zones-1999-01-01.json is missing' in p
+               for p in problems(lambda r: r['shows'][0]['calibration'].update(zones='tools/pixelmap/zones-1999-01-01.json')))
+
+
 def test_boot_default_must_be_an_offered_show():
     assert problems(lambda r: r.update(boot_default='river-baseline-template.toe')) == [], 'any offered show may be the default'
     assert any('boot_default' in p for p in problems(lambda r: r['shows'][0].update(offered=False)))

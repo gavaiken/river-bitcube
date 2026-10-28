@@ -84,6 +84,19 @@ def test_show_builds_pin_through_the_registry_never_newest_wins(path):
     assert any(s.get('build') == built for s in registry.load()['shows']), f'{built} is some show\'s build in shows.json'
 
 
+def test_zones_for_the_pin_or_none(tmp_path):
+    files = ['tools/pixelmap/pixelmap-2026-01-01.json', 'tools/pixelmap/screens-2026-01-01.json']
+    repo = make_repo(tmp_path, [show()], files + ['tools/pixelmap/zones-2027-01-01.json'])
+    assert registry.zones_for('river-x.toe', repo) is None              # no pin: never the newest zones file
+    s = show()
+    s['calibration']['zones'] = 'tools/pixelmap/zones-2026-01-01.json'
+    repo = make_repo(tmp_path, [s], files)
+    with pytest.raises(registry.RegistryError, match='missing'):
+        registry.zones_for('river-x.toe', repo)
+    (tmp_path / 'tools/pixelmap/zones-2026-01-01.json').write_text('{}')
+    assert registry.zones_for('river-x.toe', repo).endswith('/tools/pixelmap/zones-2026-01-01.json')
+
+
 def test_screens_module_takes_the_pin_never_the_newest_screens_file():
     src = (REPO / 'td' / 'build' / 'screens.py').read_text(encoding='utf-8')
     assert 'import glob' not in src and 'glob.glob' not in src

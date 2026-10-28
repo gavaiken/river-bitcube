@@ -82,7 +82,8 @@ def check_registry(reg, repo=REPO):
             out.append(f'{where}: calibration must be {{"pixelmap": ..., "screens": ...}}')
         else:
             for k, pat, required in (('pixelmap', r'tools/pixelmap/pixelmap-\d{4}-\d{2}-\d{2}\.json', True),
-                                     ('screens', r'tools/pixelmap/screens-\d{4}-\d{2}-\d{2}\.json', False)):
+                                     ('screens', r'tools/pixelmap/screens-\d{4}-\d{2}-\d{2}\.json', False),
+                                     ('zones', r'tools/pixelmap/zones-\d{4}-\d{2}-\d{2}\.json', False)):
                 v = cal.get(k)
                 if v is None and not required:
                     continue

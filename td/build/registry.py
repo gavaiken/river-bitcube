@@ -67,6 +67,21 @@ def calibration_for(toe_name, repo=None):
     return out
 
 
+def zones_for(toe_name, repo=None):
+    """The remembered river's calibration zones a show pins (calibration.zones: tools/pixelmap/zones-<date>.json), as an
+    absolute path with forward slashes, or None when it pins none (the show then uses its built-in defaults).
+    RegistryError when it pins a file that is missing."""
+    repo = Path(repo or REPO)
+    s = entry(toe_name, repo)
+    rel = (s.get('calibration') or {}).get('zones')
+    if not rel:
+        return None
+    p = repo / rel
+    if not p.is_file():
+        raise RegistryError(f"{s['file']} pins {rel} (calibration.zones in shows.json), but that file is missing")
+    return str(p).replace('\\', '/')
+
+
 def require_build(toe_name, script, repo=None):
     """Refuse (RegistryError) unless shows.json says `script` (repo-relative, e.g. 'td/build/build_river_local.py') builds
     this show file. Returns the entry."""

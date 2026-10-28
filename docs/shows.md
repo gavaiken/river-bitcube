@@ -57,6 +57,7 @@ Mission control restarts itself when `shows.json` changes on `main` (as it does 
 | `build` | yes | The repo-relative build script (`td/build/build_<name>.py`). The script refuses to run in any other file. |
 | `calibration.pixelmap` | yes | The rope LED map this show pins (`tools/pixelmap/pixelmap-<date>.json`). |
 | `calibration.screens` | no | Where the HUB75 screens hang in the camera's view (`tools/pixelmap/screens-<date>.json`); `null` = the fallback windows. |
+| `calibration.zones` | no | The remembered river's zones (`tools/pixelmap/zones-<date>.json`: LED heights, pool, eddies, rope feet, screen heights and tilts; `tools/remembered/zones.py`); `null` or absent = the show's built-in defaults. Read with `registry.zones_for()`; the people counter also reads it. |
 | `description` | yes | At most 100 words: what it does, what someone sees after switching. |
 | `inputs` | yes | What it reads: cameras, files, services (a list of short phrases). |
 | `created_by`, `created` | yes | Who made it, `YYYY-MM-DD`. |
