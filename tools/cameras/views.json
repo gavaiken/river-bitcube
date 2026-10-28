@@ -1,9 +1,10 @@
 {
   "_doc": "Calibration views per camera (tools/cameras/ptz.py, tools/mission/calibrate.py). home = the show position the camera always returns to (preset id on the camera, and its pan/tilt in the camera's own units, from `ptz.py <cam> pos`). views = where a calibration photographs the lights, in order; the first must be home. pan/tilt: units, \"max\"/\"min\" (drive to the stop) or left out (home's). Neighbouring views must overlap (the lights both see are how they're stitched). tol = units a position may be off.",
   "gallery": {
-    "home": {"name": "show", "preset": 3, "pan": 3241, "tilt": 0, "set": "2026-10-27 19:50 PT: aimed low at people and the sculpture's base (Will's new position)"},
+    "home": {"name": "show", "preset": 3, "pan": 3241, "tilt": 0, "set": "2026-10-27 20:05 PT (preset 3 saved; tilt runs 0 to 1240 at the top stop, which sees the rope tops at the rig): aimed low at people and the sculpture's base (Will's new position)"},
     "views": [
       {"name": "home"},
+      {"name": "mid", "tilt": 620},
       {"name": "up", "tilt": "max"}
     ],
     "tol": 3
