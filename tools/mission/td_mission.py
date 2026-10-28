@@ -6,6 +6,9 @@
 #   {"action": "ropes", "dark": true|false}    keep sending black (dark) or the canvas; never stops the sender
 #   {"action": "hub75", "brightness": 0..1}    HUB75 output brightness
 #   {"action": "test", "on": true|false}       the test pattern on the ropes and the panels, or back to what they showed
+#   {"action": "modalinput", "source": "off|canvas|scene|frames", "strength": 0..1}
+#                                              Combined with Modal Input Selector only (docs/modal-inputs.md); status then
+#                                              carries "modal_input" whenever that show is open
 #   {"action": "frames"}                       status plus "frames": what the ropes and the HUB75 are being sent now:
 #       {"at": unix s, "source": ropes Source, "brightness": panels Brightness,
 #        "ropes":  {"w": 20, "h": 400, "rgb": base64 of w*h*3 uint8, row 0 = plug end, columns = ropes 1..20,
@@ -44,6 +47,17 @@ if act == 'overlay':
         if (ropes and ropes.par.Source.eval() == 'test') or (panels and panels.par.Source.eval() == 'test'):
             raise ValueError('stop the test pattern before adjusting the overlay')
         viz.op('combined_mod').module.set_strength(viz, args.get('strength'), project.name, args.get('framing'), args.get('screens'))
+    except Exception as e:
+        out.update(ok=False, error=str(e))
+elif act == 'modalinput':
+    # Combined with Modal Input Selector only (docs/modal-inputs.md): one source + strength, 4 s fade, saved.
+    try:
+        viz = op('/project1/viz')
+        if project.name != 'river-combined-modal-inputs.toe' or viz is None or viz.op('modal_inputs_mod') is None:
+            raise ValueError('the Modal input selector is only available while Combined with Modal Input Selector is running')
+        if (ropes and ropes.par.Source.eval() == 'test') or (panels and panels.par.Source.eval() == 'test'):
+            raise ValueError('stop the test pattern before changing the Modal input')
+        viz.op('modal_inputs_mod').module.set_input(viz, args.get('source'), args.get('strength'), project.name)
     except Exception as e:
         out.update(ok=False, error=str(e))
 elif act == 'ropes':
@@ -96,6 +110,8 @@ out.update({
     'river_cam': safe(lambda: op('/project1/river_local/river_cam_mod').module.status('river', 'sub')) if op('/project1/river_local') else None,
     'combined': safe(lambda: op('/project1/viz/combined_mod').module.status(op('/project1/viz')))
                 if project.name == 'river-combined-v0.toe' and op('/project1/viz/combined_mod') else None,
+    'modal_input': safe(lambda: op('/project1/viz/modal_inputs_mod').module.status(op('/project1/viz')))
+                   if project.name == 'river-combined-modal-inputs.toe' and op('/project1/viz/modal_inputs_mod') else None,
     'errors': len(op('/project1').errors(recurse=True) or ''),
 })
 

@@ -50,7 +50,7 @@ Present only while this show is open (otherwise absent/`null`). Numbers are what
 | `sources.frames` | `ok` (a valid frame is on disk and not past its grace), `age_s` (since arrival), `frame_id`, `note`, `quiet` (bool), `rejected` (last rejected frame and reason, or `null`), `sync` (`{"ok":bool,"age_s":n,"error":...}` from `frames_sync.py`). |
 | `params` | What the effective source drives, one entry per thing (below). `[]` for `off`. |
 
-`params` entries are `{"name", "value", "drives"}` plus, where they differ from `value`: `raw` (the value the source asked for, before gliding), `effective` (after the camera reflex offsets), `factor` (the multiplier applied now, after strength and fades).
+`params` entries are `{"name", "value", "drives"}` plus, only where they differ from `value`: `raw` (the value the source asked for, before gliding) and `effective` (after the camera reflex offsets). Scene knobs always carry `factor` (the multiplier applied now, after strength and fades; 1 = Combined as tuned); frames elements carry `mix` (that element's applied mix with Combined now).
 
 - **scene:** `palette` (value = the colours now, gliding; `raw` = the scene's colours), `speed`, `density`, `brightness`, `turbulence` (value 0–1 = the gliding scene value, `effective` = with reflex offsets, `factor` = applied multiplier).
 - **frames:** one per element, `screen-1` … `screen-4` then `ropes`:
