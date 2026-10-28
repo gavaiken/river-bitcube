@@ -144,8 +144,8 @@
       "offered": false,
       "build": "td/build/build_remembered.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",
-        "screens": "tools/pixelmap/screens-2026-10-23.json",
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
+        "screens": "tools/pixelmap/screens-2026-10-27.json",
         "zones": "tools/pixelmap/zones-2026-10-27.json"
       },
       "description": "Dry Creek relives one remembered day from its past every five minutes: calm drips, a building flow, then the surge, a white front falling down every rope into a churning pool, then settling. Dave's agent picks the day (bitcube picks a notable one when he is late); a new day arrives with one slow wave down the ropes. The screens show only the river's moving highlights, mostly black. People standing still slow the light and draw it to their ropes.",
@@ -160,7 +160,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-27",
-      "last_change": "Built on bitcube 27 Oct 21:03; screens and the preview's ropes brought into outputs by Select TOPs (a wire can't cross COMPs)"
+      "last_change": "Pinned the 27 Oct multi-view map and screens (the final camera and lights); built on bitcube 27 Oct; screens and preview ropes through Select TOPs"
     }
   ]
 }
