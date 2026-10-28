@@ -64,3 +64,4 @@
 
 **Lingerer**: Someone standing still close to the column. The room's one visible reflex: the light slows and gathers toward the ropes nearest them.
 
+**Show view**: Where the gallery camera points while the piece runs: low, seeing the people and the base of the piece. It turns away only during a calibration, and always comes back.
