@@ -1,0 +1,152 @@
+[
+ {
+  "date": "2005-12-31",
+  "kind": "flood",
+  "line": "31 Dec 2005: highest modelled flow in the record, 5733 cfs; 85.3 mm of rain"
+ },
+ {
+  "date": "2012-12-02",
+  "kind": "flood",
+  "line": "2 Dec 2012: 2nd highest modelled flow in the record, 4534 cfs; 88.4 mm of rain"
+ },
+ {
+  "date": "2019-02-27",
+  "kind": "flood",
+  "line": "27 Feb 2019: 3rd highest modelled flow in the record, 3778 cfs; 44.5 mm of rain"
+ },
+ {
+  "date": "2012-03-16",
+  "kind": "flood",
+  "line": "16 Mar 2012: 4th highest modelled flow in the record, 3609 cfs; 78.2 mm of rain"
+ },
+ {
+  "date": "2019-01-16",
+  "kind": "flood",
+  "line": "16 Jan 2019: 5th highest modelled flow in the record, 3568 cfs; 68.8 mm of rain"
+ },
+ {
+  "date": "2017-01-10",
+  "kind": "flood",
+  "line": "10 Jan 2017: 6th highest modelled flow in the record, 3550 cfs; 108.9 mm of rain"
+ },
+ {
+  "date": "2019-02-14",
+  "kind": "flood",
+  "line": "14 Feb 2019: 9th highest modelled flow in the record, 3047 cfs; 76 mm of rain"
+ },
+ {
+  "date": "2021-10-24",
+  "kind": "storm",
+  "line": "24 Oct 2021: 170.1 mm of rain, the wettest day in the record; 12.1 mm in the heaviest hour; flow peaked at 193 cfs"
+ },
+ {
+  "date": "2017-01-08",
+  "kind": "storm",
+  "line": "8 Jan 2017: 117.6 mm of rain, the 2nd wettest day in the record; 7.7 mm in the heaviest hour; flow peaked at 2491 cfs"
+ },
+ {
+  "date": "2010-10-24",
+  "kind": "storm",
+  "line": "24 Oct 2010: 114.9 mm of rain, the 3rd wettest day in the record; 12.7 mm in the heaviest hour; flow peaked at 358 cfs"
+ },
+ {
+  "date": "2014-02-08",
+  "kind": "storm",
+  "line": "8 Feb 2014: 103.4 mm of rain, the 5th wettest day in the record; 8 mm in the heaviest hour; flow peaked at 63 cfs"
+ },
+ {
+  "date": "2012-11-30",
+  "kind": "storm",
+  "line": "30 Nov 2012: 103.2 mm of rain, the 6th wettest day in the record; 8.7 mm in the heaviest hour; flow peaked at 1363 cfs"
+ },
+ {
+  "date": "2022-12-30",
+  "kind": "storm",
+  "line": "30 Dec 2022: 102.4 mm of rain, the 7th wettest day in the record; 9.8 mm in the heaviest hour; flow peaked at 2077 cfs"
+ },
+ {
+  "date": "2003-11-03",
+  "kind": "first_rain",
+  "line": "3 Nov 2003: first big rain of the 2003-04 water year, 14 mm after 179 days without 10 mm in a day; flow 4.4 cfs"
+ },
+ {
+  "date": "2021-10-17",
+  "kind": "first_rain",
+  "line": "17 Oct 2021: first big rain of the 2021-22 water year, 10.2 mm after 175 days without 10 mm in a day; flow 3.2 cfs"
+ },
+ {
+  "date": "2018-10-03",
+  "kind": "first_rain",
+  "line": "3 Oct 2018: first big rain of the 2018-19 water year, 15.5 mm after 171 days without 10 mm in a day; flow 4.9 cfs"
+ },
+ {
+  "date": "2020-11-13",
+  "kind": "first_rain",
+  "line": "13 Nov 2020: first big rain of the 2020-21 water year, 32.4 mm after 167 days without 10 mm in a day; flow 3.5 cfs"
+ },
+ {
+  "date": "2006-11-02",
+  "kind": "first_rain",
+  "line": "2 Nov 2006: first big rain of the 2006-07 water year, 26.7 mm after 165 days without 10 mm in a day; flow 4.6 cfs"
+ },
+ {
+  "date": "2009-10-13",
+  "kind": "first_rain",
+  "line": "13 Oct 2009: first big rain of the 2009-10 water year, 84.1 mm after 161 days without 10 mm in a day; flow 5 cfs"
+ },
+ {
+  "date": "2008-10-02",
+  "kind": "drought",
+  "line": "2 Oct 2008: day 131 in a row under 1 mm of rain, the longest dry run in the record; flow 3.9 cfs, percentile 13"
+ },
+ {
+  "date": "2012-10-21",
+  "kind": "drought",
+  "line": "21 Oct 2012: day 120 in a row under 1 mm of rain, the longest of 2012; flow 4.6 cfs, percentile 18"
+ },
+ {
+  "date": "2020-10-09",
+  "kind": "drought",
+  "line": "9 Oct 2020: day 119 in a row under 1 mm of rain, the longest of 2020; flow 4.9 cfs, percentile 21"
+ },
+ {
+  "date": "2004-09-18",
+  "kind": "drought",
+  "line": "18 Sep 2004: day 113 in a row under 1 mm of rain, the longest of 2004; flow 4.5 cfs, percentile 17"
+ },
+ {
+  "date": "2006-10-04",
+  "kind": "drought",
+  "line": "4 Oct 2006: day 113 in a row under 1 mm of rain, the longest of 2006; flow 5.7 cfs, percentile 25"
+ },
+ {
+  "date": "2013-12-07",
+  "kind": "cold",
+  "line": "7 Dec 2013: 5.1 cm of snow, the most snow in a day in the record; low -9.2 °C"
+ },
+ {
+  "date": "2006-03-12",
+  "kind": "cold",
+  "line": "12 Mar 2006: 2.2 cm of snow, the 3rd most snow in a day in the record; low -1.7 °C"
+ },
+ {
+  "date": "2019-02-05",
+  "kind": "cold",
+  "line": "5 Feb 2019: 2.2 cm of snow, the 4th most snow in a day in the record; low -2.2 °C"
+ },
+ {
+  "date": "2009-12-09",
+  "kind": "cold",
+  "line": "9 Dec 2009: low of -9.6 °C, the 2nd coldest low in the record; high 6.2 °C"
+ },
+ {
+  "date": "2004-01-04",
+  "kind": "cold",
+  "line": "4 Jan 2004: low of -9 °C, the 4th coldest low in the record; high 4.2 °C"
+ },
+ {
+  "date": "2011-02-20",
+  "kind": "cold",
+  "line": "20 Feb 2011: low of -6.8 °C, the 6th coldest low in the record; high 6.2 °C"
+ }
+]
