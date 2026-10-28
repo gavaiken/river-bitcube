@@ -2,6 +2,8 @@
 // live status, each activity line in the team's words, and the steps toggle's name. Pure ES module, no DOM: chat.js uses it
 // in the browser and test/chat.test.mjs under node --test.
 import { FILES } from './model.js';
+/** Modal's two public answers (lib/modal-feed.mjs): what the Modal input panel calls "what Modal is sending". */
+const MODAL_FEED_URL = /modal\.run\/(?:public\/scene\.json|frames\/)/i;
 
 export const excerpt = (s, n) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? `${s.slice(0, n - 1)}…` : s; };
 
@@ -188,7 +190,7 @@ export function plainStep(raw) {
   if (/^couldn't sync the repo/i.test(s)) return { text: "couldn't bring its copy of the repo up to date; working from an older copy", act: false };
   if (/^searched for /i.test(s)) return { text: 'searched the repo', act: false };
   if ((m = s.match(/^searched the web:?\s*(.*)$/i))) return { text: m[1] && !bad(m[1]) ? `searched the web for ${m[1]}` : 'searched the web', act: false };
-  if ((m = s.match(/^fetched (.+)$/i))) return { text: /modal\.run/i.test(m[1]) ? "looked at what Dave's agent posted" : 'looked something up online', act: false };
+  if ((m = s.match(/^fetched (.+)$/i))) return { text: MODAL_FEED_URL.test(m[1]) ? 'looked at what Modal is sending' : /modal\.run/i.test(m[1]) ? "looked at what Dave's agent posted" : 'looked something up online', act: false };
   if ((m = s.match(/^asked a helper:?\s*(.*)$/i))) {
     const w = m[1] ? plainWords(m[1].replace(/^[A-Z]/, (c) => c.toLowerCase()), '', { asDone: false }) : '';
     return { text: w ? `asked a helper to ${w.replace(/^[A-Z]/, (c) => c.toLowerCase())}` : 'asked a helper', act: false };

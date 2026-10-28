@@ -21,6 +21,9 @@
   --warn: #f2b233;  --warn-ink: #1c2228; --warn-soft: #fff0cc; --warn-text: #6b4500;
   --down: #b9372a;  --down-ink: #ffffff; --down-soft: #fbe1dc; --down-text: #8a2419;
   --unk: #5c6670;   --unk-ink: #ffffff;  --unk-soft: #e8ebee;  --unk-text: #3c454e;
+  /* Modal's brand green (its site: #7FEE64 bright, #09AF58 deep), for the word and chip "Modal" only, never a state. The chip is
+     bright green with dark ink in both themes (10.6:1); #09AF58 is only a border here: as text it is 2.9:1 on white. */
+  --modal-green: #7FEE64; --modal-green-ink: #0B2A0F; --modal-green-deep: #09AF58; --modal-green-text: #0B2A0F;
   /* the art: wash tints (a, b), flow-line colours (l1, l2); the unknown season's slate until ui.js sets them */
   --art-a: #dde3ea; --art-b: #e6e8ec; --art-l1: #6f87a3; --art-l2: #8ea3bb;
   --art-wash-alpha: 0.2; --art-line-alpha: 0.3; --art-ripple-alpha: 0.24;
@@ -46,6 +49,7 @@
     --warn: #f0b429;  --warn-ink: #1d1500; --warn-soft: #3a2a06; --warn-text: #ffd87a;
     --down: #ef6a57;  --down-ink: #1e0905; --down-soft: #3f1711; --down-text: #ffb3a7;
     --unk: #8a949e;   --unk-ink: #10151a;  --unk-soft: #262d34;  --unk-text: #c3cbd3;
+    --modal-green-text: #7FEE64;         /* 11.6:1 on the dark card */
     --art-a: #172029; --art-b: #1a222c; --art-l1: #6f87a3; --art-l2: #8ea3bb;
     --art-wash-alpha: 0.22; --art-line-alpha: 0.22; --art-ripple-alpha: 0.18;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
@@ -64,6 +68,7 @@
   --warn: #f0b429;  --warn-ink: #1d1500; --warn-soft: #3a2a06; --warn-text: #ffd87a;
   --down: #ef6a57;  --down-ink: #1e0905; --down-soft: #3f1711; --down-text: #ffb3a7;
   --unk: #8a949e;   --unk-ink: #10151a;  --unk-soft: #262d34;  --unk-text: #c3cbd3;
+  --modal-green-text: #7FEE64;
   --art-a: #172029; --art-b: #1a222c; --art-l1: #6f87a3; --art-l2: #8ea3bb;
   --art-wash-alpha: 0.22; --art-line-alpha: 0.22; --art-ripple-alpha: 0.18;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);

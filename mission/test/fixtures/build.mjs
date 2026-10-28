@@ -6,7 +6,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fixtureModalInput } from '../../lib/fixtures.mjs';
+import { fixtureModalInput, fixtureModalFeed } from '../../lib/fixtures.mjs';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
 const RECORDED = join(DIR, '_recorded-2026-10-23.json');
@@ -368,23 +368,23 @@ const SCENARIOS = {
 
   // ---- the Modal input show: one of Dave's inputs drives the river (docs/modal-inputs.md) ---------------------------------
   ...Object.fromEntries([
-    ['scene', "Scene: Dave's colours and pace recolour the river", { ages: { canvas: 3, scene: 42, frames: 95 } }],
-    ['frames', "Frames: Dave's own pictures for each screen and the ropes", { ages: { canvas: 3, scene: 42, frames: 95 } }],
-    ['canvas', "Canvas: Dave's moving picture over the river", { ages: { canvas: 2, scene: 300, frames: 95 } }],
+    ['scene', "Scene: Modal's colours and pace recolour the river", { ages: { canvas: 3, scene: 42, frames: 95 } }],
+    ['frames', "Frames: Modal's own pictures for each screen and the ropes", { ages: { canvas: 3, scene: 42, frames: 95 } }],
+    ['canvas', "Canvas: Modal's moving picture over the river", { ages: { canvas: 2, scene: 300, frames: 95 } }],
     ['off', 'Off: the river on its own', { strength: 0.6, ages: { canvas: 3, scene: 42, frames: 95 } }],
   ].map(([source, title, o]) => [`modal-input-${source}`, {
     title: `Modal input show: ${title}`,
     description: `TouchDesigner runs ${MODAL_FILE} (Combined with Modal Input Selector, kind viz), chosen on purpose; the Modal input is ${source}${source === 'off' ? '' : ' at 60 %'}. Every source is fresh (canvas seconds old, the scene minutes at most, the latest frame under two minutes). No year page (the show has none); the default is still the river's year.`,
     expect: { headline: 'Everything is up: the Modal input show is showing; lights and cameras fine', severity: 'ok',
       items: items({ touchdesigner: 'ok: the Modal input show at 60 fps', seasons: 'ok: not used (this show has no year)', ropes: 'ok: showing the show, sender open, 140 + 150 W' }),
-      action: "Nothing to do. The Modal input under What's showing changes which of Dave's inputs drives the river." },
+      action: "Nothing to do. The Modal input under What's showing changes which of Modal's outputs drives the river." },
     build: () => modalShow(fixtureModalInput(source, o)),
   }])),
 
   'modal-input-frames-stale': {
-    title: "Modal input show: Dave's frames are old",
+    title: "Modal input show: Modal's frames are old",
     description: `TouchDesigner runs ${MODAL_FILE} with the Modal input on frames at 60 %, but Dave's newest frame is 21 minutes old and Modal Frames has gone quiet (SPEC §6.5): the show has faded back to plain Combined (effective_source off). The canvas and the scene are fresh. The rest of the show is fine.`,
-    expect: { headline: "Dave's frames are 21 min old: showing the river without them", severity: 'warning',
+    expect: { headline: "Modal's frames are 21 min old: showing the river without them", severity: 'warning',
       items: items({ 'modal agent': 'warning: answers, but its frames for the show are 21 min old', touchdesigner: 'ok: the Modal input show at 60 fps', seasons: 'ok: not used (this show has no year)', ropes: 'ok: showing the show, sender open, 140 + 150 W' }),
       action: "Nothing is broken: tell Dave if it lasts, or pick another Modal input under What's showing." },
     build: () => modalShow(fixtureModalInput('frames', { ages: { canvas: 3, scene: 42, frames: 1260 }, stale: true })),
@@ -417,6 +417,8 @@ function modalShow(mi) {
   st.probe.value.td = td({ file: MODAL_FILE, fps: 60.0, ropes: { active: true, source: 'canvas', box_watts_cap: 600, status: sender({ watts: [140, 150], seq: 92 }) },
                            seasons: null, river_cam: relay(), modal_input: mi });
   st.probe.value.devices.seasons_page = false;
+  // what Modal's public endpoints answer (lib/modal-feed.mjs), for the frame the show reports: every value the page lists
+  st.modal_feed = fixtureModalFeed({ frameId: mi.sources.frames.frame_id });
   return { status: st, ...CAMS_GOOD };
 }
 

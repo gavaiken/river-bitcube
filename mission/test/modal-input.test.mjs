@@ -133,7 +133,7 @@ test('every Modal input fixture is OK; old frames are a warning on Dave\'s agent
   const d = run(fx('modal-input-frames-stale'));
   assert.equal(d.overall.level, 'warning');
   assert.equal(d.overall.cause, 'modal-input-stale');
-  assert.equal(d.overall.headline, "Dave's frames are 21 min old: showing the river without them");
+  assert.equal(d.overall.headline, "Modal's frames are 21 min old: showing the river without them");
   assert.match(d.overall.action, /Tell Dave|rests overnight/);
   assert.equal(d.items.find((x) => x.id === 'modal agent').level, 'warning');
   assert.ok(!d.problems.some((p) => p.level === 'down'));
@@ -201,18 +201,18 @@ test('one intro line per source says what arrives; the journey time when bitcube
   assert.equal(viewAt(fx('modal-input-canvas')).latest.live, true);
 });
 
-test('every frame value is explained and marked: ripple, strength, speed from Dave; arrived bitcube\'s; mixed in your setting', () => {
-  assert.deepEqual(FRAME_FIELD_FROM, { amount: 'dave', contrast: 'dave', speed: 'dave', journey: 'bitcube', mix: 'you' });
+test('every frame value is explained and marked: ripple, strength, speed from Modal; arrived bitcube\'s; mixed in your setting', () => {
+  assert.deepEqual(FRAME_FIELD_FROM, { amount: 'modal', contrast: 'modal', speed: 'modal', journey: 'bitcube', mix: 'you' });
   for (const k of Object.keys(FRAME_FIELD_FROM)) assert.ok(FRAME_FIELD_INFO[k]?.length > 20, k);
   assert.match(FRAME_FIELD_INFO.speed, /can't go faster than 1×/);
   assert.match(FRAME_FIELD_INFO.mix, /Strength/);
   for (const k of ['palette', 'speed', 'density', 'brightness', 'turbulence', 'canvas']) assert.ok(PARAM_INFO[k], k);
   const v = viewAt(fx('modal-input-frames'));
   const ropes = v.rows.find((r) => r.name === 'ropes');
-  assert.deepEqual(ropes.fields.map((x) => x.from), ['dave', 'dave', 'dave', 'bitcube', 'you']);
+  assert.deepEqual(ropes.fields.map((x) => x.from), ['modal', 'modal', 'modal', 'bitcube', 'you']);
   assert.ok(ropes.fields.every((x) => x.info));
   const s = viewAt(fx('modal-input-scene'));
-  assert.equal(s.params.find((p) => p.name === 'palette').label, "Dave's colours");
+  assert.equal(s.params.find((p) => p.name === 'palette').label, "Modal's colours");
   assert.ok(s.params.every((p) => p.info), 'each knob has its explanation');
   assert.ok(!s.params.some((p) => p.own_age), 'no knob has its own age: the Latest line says when');
 });
@@ -273,8 +273,8 @@ test('the page: ⓘ buttons toggle on tap with aria-expanded and a title, pictur
   assert.match(js, /case 'mi-info': \{ const k = b\.dataset\.info; if \(miInfoOpen\.has\(k\)\) miInfoOpen\.delete\(k\); else miInfoOpen\.add\(k\); render\(\);/);
   assert.match(js, /case 'mi-pic': if \(MI_PIC\.test/);
   assert.match(js, /Each column is one rope, top = top\./);
-  assert.match(js, /Dave's latest pictures \(before the river ripples them\)/);
-  assert.match(js, /<b>Latest from Dave:<\/b>/);
+  assert.match(js, /Modal's latest pictures \(before the river ripples them\)/);
+  assert.match(js, /<b>Latest from \$\{MODAL_CHIP\}:<\/b>/);
   assert.match(js, /You chose \$\{W\.label\} at \$\{nb\(pct \+ ' %'\)\} at \$\{t\}/);
   assert.doesNotMatch(js, /`Now \$\{W\.label\} at/, 'never "Now Frames at 50 % … 18:09", read as the data\'s age');
   assert.match(css, /\.mi-i \{[^}]*min-width: 32px; min-height: 32px/);

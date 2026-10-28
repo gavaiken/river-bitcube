@@ -291,6 +291,8 @@ const PATH = /(?:\bthe )?(?:[A-Za-z]:)?(?:[\w.~-]*[\\/])+[\w.-]+|(?:\bthe )?\b[\
 // Addresses first, before the path rule could cut one in two ("https:" + "//host/x" was read as a drive and a path).
 // An address runs to the next space or quote, without a closing bracket or a sentence's last mark ("(https://h/x?cmd=Snap).").
 const URLS = [
+  // Modal's two public answers (lib/modal-feed.mjs): "what Modal is sending", as the Modal input panel says
+  [/https?:\/\/[^\s"'<>]*modal\.run\/(?:public\/scene\.json|frames\/)(?:[^\s"'<>]*[^\s"'<>).,;:!?])?/gi, 'what Modal is sending'],
   [/https?:\/\/[^\s"'<>]*modal\.run(?:[^\s"'<>]*[^\s"'<>).,;:!?])?/gi, "Dave's agent's page"],
   [/rtsps?:\/\/[^\s"'<>]*[^\s"'<>).,;:!?]/gi, "a camera's stream"],
   [/https?:\/\/[^\s"'<>]*[^\s"'<>).,;:!?]/gi, 'a web page'],
@@ -424,7 +426,7 @@ export function describeTool(block, ctx = {}) {
       case 'Read': return line(`looked at ${plainFile(i.file_path)}`, i.file_path);
       case 'Edit': case 'Write': case 'NotebookEdit': return line(`changed ${plainFile(i.file_path ?? i.notebook_path)}`, i.file_path ?? i.notebook_path);
       case 'Glob': case 'Grep': return line('searched the repo', i.pattern);
-      case 'WebFetch': return line(/modal\.run/i.test(String(i.url)) ? "looked at what Dave's agent is doing" : 'looked something up online', i.url);
+      case 'WebFetch': return line(/modal\.run\/(?:public\/scene\.json|frames\/)/i.test(String(i.url)) ? 'looked at what Modal is sending' : /modal\.run/i.test(String(i.url)) ? "looked at what Dave's agent is doing" : 'looked something up online', i.url);
       case 'WebSearch': { const q = plainWords(clip(i.query, 60)); return line(q && !unplain(q) ? `searched the web for ${q}` : 'searched the web', i.query); }
       case 'TodoWrite': return line('updated its to-do list', '');
       case 'Agent': case 'Task': {

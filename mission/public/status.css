@@ -165,9 +165,9 @@ footer.foot .fine-print { margin-top: 4px; }
 .mi-fields { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
 .mi-field { display: grid; grid-template-columns: 40px minmax(6.5em, 1fr) 3.6em auto 32px; align-items: center; gap: 2px 6px; }
 .mi-field .mi-from { justify-self: start; }
-/* who a value comes from: Dave (accent), bitcube (plain), your setting (outlined); never a status colour */
+/* who a value comes from: Modal (its brand green chip), bitcube (plain), your setting (outlined); never a status colour */
 .mi-from { display: inline-block; vertical-align: middle; font-size: 11px; font-weight: 700; line-height: 1; padding: 3px 6px; border-radius: 999px; white-space: nowrap; color: var(--muted); border: 1px solid var(--line); }
-.mi-from.dave { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+.mi-from.modal { color: var(--modal-green-ink); background: var(--modal-green); border-color: var(--modal-green-deep); }
 .mi-from.you { color: var(--text); border-color: var(--text); }
 /* ⓘ: 32 px target, a tap opens the explanation under the value */
 .mi-i { appearance: none; border: 0; background: none; color: var(--accent); font: inherit; font-size: 17px; line-height: 1; min-width: 32px; min-height: 32px; margin: -6px -4px; padding: 0; cursor: pointer; border-radius: 8px; }
@@ -191,3 +191,37 @@ footer.foot .fine-print { margin-top: 4px; }
 .mi-thumb:focus-visible { outline: 2px solid var(--accent); }
 .mi-thumb img { width: 48px; height: 96px; object-fit: fill; border-radius: 4px; background: var(--line); color: transparent; overflow: hidden; }
 .mi-thumb.ropes img { width: 30px; image-rendering: pixelated; }
+/* "Modal": its brand green chip, the same in both themes (dark ink on #7FEE64) */
+.modal-chip { display: inline-block; vertical-align: baseline; font-weight: 800; line-height: 1.15; padding: 0 7px; border-radius: 999px;
+  color: var(--modal-green-ink); background: var(--modal-green); border: 1px solid var(--modal-green-deep); }
+.mi-latest .modal-chip { font-size: 15px; }
+/* Everything Modal is sending (modal-feed.js): one row per field, name and path, value, what it is, used or not */
+.mf-inline, .mf-all { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.mf-toggle { appearance: none; border: 0; background: none; font: inherit; font-weight: 750; font-size: 16px; color: var(--text); padding: 6px 0; min-height: 44px;
+  display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; cursor: pointer; }
+.mf-toggle .chev { margin-left: auto; }
+.mf-toggle[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.mf-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+.mf-body { display: flex; flex-direction: column; gap: 10px; }
+.mf-body[hidden] { display: none; }
+.mf-part { display: flex; flex-direction: column; gap: 4px; }
+.mf-ph { font-weight: 750; font-size: 15px; }
+.mf-file { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.mf-when { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.35; }
+.mf-err { margin: 0; font-size: 14px; color: var(--unk-text); background: var(--unk-soft); border-radius: 8px; padding: 6px 8px; }
+.mf-group { display: flex; flex-direction: column; }
+.mf-gh { font-size: 12px; font-weight: 750; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 8px 0 2px; }
+.mf-rows { display: flex; flex-direction: column; }
+.mf-row { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.mf-row:last-child { border-bottom: 0; }
+.mf-k { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
+.mf-name { font-weight: 700; }
+.mf-path { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.mf-new { font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--text); }
+.mf-v { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; font-size: 15px; }
+.mf-text { overflow-wrap: anywhere; }
+.mf-text.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); }
+.mf-what { font-size: 14px; line-height: 1.35; }
+.mf-use { font-size: 13px; color: var(--muted); line-height: 1.35; }
+.mf-use.on b { color: var(--modal-green-text); }
+.mf-v .mi-thumb span { white-space: nowrap; }

@@ -1,5 +1,5 @@
 // The Modal input show's panel (docs/modal-inputs.md, docs/mission-ui.md "Modal input"): td.modal_input as the pages show it,
-// "What Dave's agent is sending". Split from model.js (which keeps the choice's words, the stale verdict and the control) to keep
+// "What Modal is sending". Split from model.js (which keeps the choice's words, the stale verdict and the control) to keep
 // model.js small for phones. Relative import: in the browser this is /model.js, under node the same file.
 import { dur, clock, MODAL_SOURCES, MODAL_SOURCE_WORDS, modalStaleWords } from './model.js';
 
@@ -15,26 +15,26 @@ const HEX = /^#[0-9a-f]{6}$/i;
 /** A frame element's river settings, in plain words (modal-frames/SPEC.md §4): amount, contrast, speed, journey. */
 export const FRAME_FIELD_WORDS = { amount: 'ripple', contrast: 'ripple strength', speed: 'river speed', journey: 'arrived', mix: 'mixed in' };
 const FRAME_FIELD_MAX = { amount: 1, contrast: 1, speed: 2, journey: 1, mix: 1 };
-/** Who each value comes from (Gavin, 28 Oct: "none of it is explained"): Dave's agent, bitcube itself, or the Strength chosen
+/** Who each value comes from (Gavin, 28 Oct: "none of it is explained"): Modal (Dave's agent), bitcube itself, or the Strength chosen
  *  on this page. The page marks it beside the value. */
-export const FROM_WORDS = { dave: 'from Dave', bitcube: 'on bitcube', you: 'your setting' };
-export const FRAME_FIELD_FROM = { amount: 'dave', contrast: 'dave', speed: 'dave', journey: 'bitcube', mix: 'you' };
+export const FROM_WORDS = { modal: 'from Modal', bitcube: 'on bitcube', you: 'your setting' };
+export const FRAME_FIELD_FROM = { amount: 'modal', contrast: 'modal', speed: 'modal', journey: 'bitcube', mix: 'you' };
 /** What each frame value means, for the page's ⓘ (short sentences, the copy rules' plain words). */
 export const FRAME_FIELD_INFO = {
-  amount: "How much the river's light and dark moves through Dave's picture: 0 keeps the picture still, 1 lets the river move it fully.",
+  amount: "How much the river's light and dark moves through Modal's picture: 0 keeps the picture still, 1 lets the river move it fully.",
   contrast: 'How deep those ripples are: low is a gentle shimmer, high makes strong bright and dark bands.',
   speed: "How fast the river's movement plays: 1× is real time. The live river video can't go faster than 1×; only the recorded river can.",
-  journey: "How far the lights have travelled from Dave's previous picture to this one: 100 % means they show the newest picture now.",
-  mix: "Your Strength setting, as applied now: how much of Dave's frames replaces the river look. 0 % is the river alone.",
+  journey: "How far the lights have travelled from Modal's previous picture to this one: 100 % means they show the newest picture now.",
+  mix: "Your Strength setting, as applied now: how much of Modal's frames replaces the river look. 0 % is the river alone.",
 };
 /** What each scene knob (and the canvas) changes in the lights, for the page's ⓘ. */
 export const PARAM_INFO = {
-  palette: "Dave's colours. bitcube recolours the river with them: its dark water takes the darker colours, its bright water the lighter ones.",
+  palette: "Modal's colours. bitcube recolours the river with them: its dark water takes the darker colours, its bright water the lighter ones.",
   speed: 'How fast the moving effects drawn over the river play on the ropes and screens. The live river video itself stays at camera speed.',
   density: 'How many of those moving effects there are at once: more makes the lights busier.',
   brightness: 'How bright the river looks on the ropes and screens.',
   turbulence: 'How rough the water looks: higher breaks the light into choppier, faster-changing patches.',
-  canvas: "Dave's moving picture: a web page his agent draws all the time. bitcube adds it over the river as it plays, at your Strength.",
+  canvas: "Modal's moving picture: a web page it draws all the time. bitcube adds it over the river as it plays, at your Strength.",
 };
 /** "×0.85 of the usual", explained. */
 export const FACTOR_INFO = 'What bitcube applies now, after your Strength: ×1 is the river as Will tuned it, below 1 calmer, above 1 stronger.';
@@ -43,10 +43,10 @@ export const FACTOR_INFO = 'What bitcube applies now, after your Strength: ×1 i
 export const DRIVES_WORDS = {
   palette: "the river's colours: its dark and bright parts take the palette's colours",
   speed: 'how fast the summer effects move', density: 'how many summer effects there are', brightness: 'how bright the river is',
-  turbulence: 'how rough the water looks', canvas: "Dave's moving picture, added over the river",
-  'screen-1': "screen 1: Dave's picture, rippled by the river", 'screen-2': "screen 2: Dave's picture, rippled by the river",
-  'screen-3': "screen 3: Dave's picture, rippled by the river", 'screen-4': "screen 4: Dave's picture, rippled by the river",
-  ropes: "the 20 ropes: Dave's picture, rippled by the river",
+  turbulence: 'how rough the water looks', canvas: "Modal's moving picture, added over the river",
+  'screen-1': "screen 1: Modal's picture, rippled by the river", 'screen-2': "screen 2: Modal's picture, rippled by the river",
+  'screen-3': "screen 3: Modal's picture, rippled by the river", 'screen-4': "screen 4: Modal's picture, rippled by the river",
+  ropes: "the 20 ropes: Modal's picture, rippled by the river",
 };
 const paramLabel = (n) => { const s = String(n).replace(/[-_]+/g, ' ').trim(); return s ? s[0].toUpperCase() + s.slice(1) : '?'; };
 
@@ -70,9 +70,9 @@ export function cadenceS(moments) {
 /** One line saying what arrives from Dave for a source, in plain words. transition_s: how long bitcube takes to reach a new one. */
 export function sourceIntro(source, transition_s = null) {
   const over = num(transition_s) != null && transition_s > 0 ? `over ${dur(transition_s)}` : 'over a few seconds';
-  if (source === 'frames') return `Dave's agent sends a new set of pictures every few minutes: one for each screen and one for all 20 ropes (the colours to aim for), plus how strongly the live river should ripple them. bitcube travels to each new set ${over}.`;
-  if (source === 'scene') return `Dave's agent picks a new scene every few minutes: a set of colours, and four settings for how the river moves. bitcube recolours and steers the river with them, gliding to each new scene ${over}.`;
-  if (source === 'canvas') return "Dave's agent draws a moving picture on a web page, all the time. bitcube adds it over the river as it plays, at your Strength.";
+  if (source === 'frames') return `Modal sends a new set of pictures every few minutes: one for each screen and one for all 20 ropes (the colours to aim for), plus how strongly the live river should ripple them. bitcube travels to each new set ${over}.`;
+  if (source === 'scene') return `Modal picks a new scene every few minutes: a set of colours, and four settings for how the river moves. bitcube recolours and steers the river with them, gliding to each new scene ${over}.`;
+  if (source === 'canvas') return "Modal draws a moving picture on a web page, all the time. bitcube adds it over the river as it plays, at your Strength.";
   return null;
 }
 /** A frame value as the page writes it, so "the same" means what a person would read as the same. */
@@ -100,7 +100,7 @@ export function modalInputView(mi, later_s = 0, nowMs = null) {
   const frameId = typeof fr?.frame_id === 'string' && FRAME_ID.test(fr.frame_id) ? fr.frame_id : null;
   const params = (Array.isArray(o.params) ? o.params : []).map(obj).filter((p) => p && typeof p.name === 'string' && p.name).slice(0, 24).map((p) => {
     const raw = typeof p.drives === 'string' ? p.drives.slice(0, 200) : null;
-    const v = p.value, base = { name: p.name, label: p.name === 'palette' ? "Dave's colours" : paramLabel(p.name), drives: DRIVES_WORDS[p.name] ?? raw, drives_raw: raw,
+    const v = p.value, base = { name: p.name, label: p.name === 'palette' ? "Modal's colours" : paramLabel(p.name), drives: DRIVES_WORDS[p.name] ?? raw, drives_raw: raw,
                                 age_s: add(p.age_s) ?? activeAge, own_age: num(p.age_s) != null, factor: num(p.factor), info: PARAM_INFO[p.name] ?? null };
     if (Array.isArray(v) && v.length && v.every((c) => typeof c === 'string' && HEX.test(c))) return { ...base, kind: 'palette', colors: v.slice(0, 12) };
     if (num(v) != null) {
@@ -127,7 +127,7 @@ export function modalInputView(mi, later_s = 0, nowMs = null) {
     const at = params.indexOf(scr[0]);
     rows = params.filter((p) => !scr.includes(p));
     rows.splice(at, 0, { ...scr[0], name: 'screens', label: 'Screens 1–4', names: [...SCREEN_ELEMENTS], image: null,
-      drives: "screens 1 to 4: each its own picture from Dave, rippled by the river (all four have the same settings now)" });
+      drives: "screens 1 to 4: each its own picture from Modal, rippled by the river (all four have the same settings now)" });
   }
   const images = frameId ? FRAME_ELEMENTS.map((el) => params.find((p) => p.name === el && p.image)?.image ?? `${MODAL_BASE}/frames/${frameId}/${el}.png`)
     .map((url, k) => ({ element: FRAME_ELEMENTS[k], url })) : [];

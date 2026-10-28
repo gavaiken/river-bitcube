@@ -99,20 +99,20 @@ export const MODAL_INPUT_FILE = 'river-combined-modal-inputs.toe';
 export const MODAL_SOURCES = ['off', 'canvas', 'scene', 'frames'];
 /** Each choice's button and its one line, in the pages' words (docs/mission-ui.md "Modal input"). */
 export const MODAL_SOURCE_WORDS = {
-  off: { label: 'Off', line: 'The river on its own, without Dave\'s agent' },
-  canvas: { label: 'Canvas', line: "Dave's moving picture added over the river" },
-  scene: { label: 'Scene', line: "Dave's colours and pace recolour the river" },
-  frames: { label: 'Frames', line: "Dave's own pictures for each screen and the ropes, moved by the river" },
+  off: { label: 'Off', line: 'The river on its own, without Modal' },
+  canvas: { label: 'Canvas', line: "Modal's moving picture added over the river" },
+  scene: { label: 'Scene', line: "Modal's colours and pace recolour the river" },
+  frames: { label: 'Frames', line: "Modal's own pictures for each screen and the ropes, moved by the river" },
 };
 /** The minutes after which a source counts as old (TouchDesigner's stale_after_s when it says, else 15). */
 const staleMin = (mi) => { const s = num(mi?.stale_after_s); return s != null && s > 0 ? Math.max(1, Math.round(s / 60)) : 15; };
-/** Why the stale source is missing, in the band's words: "Dave's frames are more than 15 minutes old: showing the river without them". */
+/** Why the stale source is missing, in the band's words: "Modal's frames are more than 15 minutes old: showing the river without them". */
 export function modalStaleWords(source, mi) {
   const n = staleMin(mi);
   // frames go quiet by Modal Frames' own rule (SPEC §6.5: 120 s past the frame's ttl, or polls failing), not by 15 minutes
-  if (source === 'frames') { const a = num(mi?.data_age_s); return a != null && a >= 60 ? `Dave's frames are ${dur(a)} old: showing the river without them` : "Dave's frames have stopped arriving: showing the river without them"; }
-  if (source === 'scene') return `Dave's scene is more than ${n} minutes old: showing the river without it`;
-  if (source === 'canvas') return "Dave's moving picture isn't arriving: showing the river without it";
+  if (source === 'frames') { const a = num(mi?.data_age_s); return a != null && a >= 60 ? `Modal's frames are ${dur(a)} old: showing the river without them` : "Modal's frames have stopped arriving: showing the river without them"; }
+  if (source === 'scene') return `Modal's scene is more than ${n} minutes old: showing the river without it`;
+  if (source === 'canvas') return "Modal's moving picture isn't arriving: showing the river without it";
   return null;
 }
 export const CAL_STAGE_S = { 'ropes-capture': 170, 'ropes-decode': 40, 'hub75-capture': 35, 'hub75-locate': 10 };   // calibrate.py EXPECTED_S
@@ -884,7 +884,7 @@ export function derive(status, nowMs) {
         `Wait a minute; if it stays down, press ${YEAR_PRESS} (about a minute dark).`, ['seasons']);
       // the Modal input show runs on: only Dave's part is missing (TouchDesigner shows the river without it), so a warning, never a fault
       if (modalInput?.stale) add('modal-input-stale', 'warning', 36, modalInput.stale_words,
-        `${MODAL_SOURCE_WORDS[modalInput.source].label} is chosen under Modal input${modalInput.age_s != null ? `; what Dave's agent sent last is ${dur(modalInput.age_s)} old` : ''}. The rest of the show is running as usual.`,
+        `${MODAL_SOURCE_WORDS[modalInput.source].label} is chosen under Modal input${modalInput.age_s != null ? `; what Modal sent last is ${dur(modalInput.age_s)} old` : ''}. The rest of the show is running as usual.`,
         inRest(now) ? "Dave's agent rests overnight (23:55 to 07:00), so this is normal at this hour; it picks up again in the morning."
           : "Nothing is broken here. Tell Dave if it lasts, or pick another Modal input under What's showing.", ['modal agent']);
       if (riverStale) add('river-stale', 'warning', 55, `The river camera has sent no frames for ${dur(relayAgeNow)}: the show is running on the rain fallback`,

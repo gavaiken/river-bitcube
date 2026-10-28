@@ -38,6 +38,8 @@
 
 **Dave's agent**: Dave's AI, which runs online (on Modal), watches the room and the river through their cameras, and chooses the live river's colours and mood every few minutes. **Clips to Dave** are the short camera clips bitcube sends it.
 
+**Modal**: what Dave's agent sends (its scene, its frames, its moving picture), as mission control's Modal input panel names it (Gavin, 28 Oct): "What Modal is sending", "Latest from Modal", "from Modal", always in Modal's green chip. Use it for those outputs on that panel; the agent itself is still **Dave's agent** elsewhere.
+
 **Mission control**: The team's live web page for the installation: what every part is doing right now (bitcube, the show file, seasons, presence, cameras, the river site, Dave's agent), the controls for steering the piece, and the system map. Behind one shared team password. Not for visitors.
 
 **Studio chat**: One long-running conversation with the team's Claude agent, reachable from mission control. Everyone on the team writes into the same conversation, one request at a time, and the agent can act on the installation, not just talk about it.

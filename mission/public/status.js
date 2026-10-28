@@ -16,6 +16,7 @@ const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit,
   newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS, endedOnce, ownMemory, byMinute, confirmChanged, UNKNOWN_ANSWERS, NOT_RECEIVED, neverGotWords } = M;
 import { apiTimeout } from '/app.js';
 import { modalInputView, FROM_WORDS, FACTOR_INFO } from '/modal-input.js';
+import { modalFeedView } from '/modal-feed.js';
 const $ = (sel, root = document) => root.querySelector(sel);
 const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
 // One name per thing (the copy rules); descriptors live on the card, never in the name.
@@ -750,8 +751,8 @@ function combinedHTML(m) {
     <button type="button" class="btn primary" id="ctl-overlay-set" data-act="overlay-set" ${disabled || !combinedChanged(s) ? 'disabled' : ''}>Apply river settings</button>
     ${statusLine('ctl-overlay', ['overlay'])}</div>`;
 }
-/** The Modal input show (river-combined-modal-inputs.toe, docs/modal-inputs.md): which of Dave's inputs drives the river and how
- *  strongly (Apply, as every control), then what his agent is sending for it: each parameter, its latest value, what it drives
+/** The Modal input show (river-combined-modal-inputs.toe, docs/modal-inputs.md): which of Modal's outputs drives the river and how
+ *  strongly (Apply, as every control), then what Modal is sending for it: each parameter, its latest value, what it drives
  *  and when it was set, the scene's palette and journal or the frame's note and pictures, and the other sources' freshness. */
 function miChanged(v) {
   const src = miSourceDraft ?? v?.source, str = miStrengthDraft ?? (v?.strength == null ? null : Math.round(v.strength * 100));
@@ -769,32 +770,32 @@ function miInfoBtn(key, what, text) {
 const miInfoText = (key, text) => { const k = miKey(key); return `<span class="mi-x" id="mi-x-${k}"${miInfoOpen.has(k) ? '' : ' hidden'}>${esc(text)}</span>`; };
 const miFrom = (who) => `<span class="mi-from ${who}">${esc(FROM_WORDS[who])}</span>`;
 function miValueHTML(p) {
-  if (p.kind === 'palette') return `<span class="mi-swatches" role="img" aria-label="${p.colors.length} colours: ${esc(p.colors.join(', '))}">${p.colors.map((c) => `<i style="background:${esc(c)}"></i>`).join('')}</span> ${miFrom('dave')}`;
-  if (p.kind === 'number') return `<span class="mi-bar" aria-hidden="true"><i style="width:${Math.round(p.frac * 100)}%"></i></span> <b>${esc(fix(p.value))}</b> ${miFrom('dave')}${p.effective != null ? ` <span class="muted">(using ${esc(fix(p.effective))} now)</span>` : ''}${p.factor != null ? ` <span class="muted">· ×${esc(fix(p.factor))} of the usual</span>` : ''}`;
+  if (p.kind === 'palette') return `<span class="mi-swatches" role="img" aria-label="${p.colors.length} colours: ${esc(p.colors.join(', '))}">${p.colors.map((c) => `<i style="background:${esc(c)}"></i>`).join('')}</span> ${miFrom('modal')}`;
+  if (p.kind === 'number') return `<span class="mi-bar" aria-hidden="true"><i style="width:${Math.round(p.frac * 100)}%"></i></span> <b>${esc(fix(p.value))}</b> ${miFrom('modal')}${p.effective != null ? ` <span class="muted">(using ${esc(fix(p.effective))} now)</span>` : ''}${p.factor != null ? ` <span class="muted">· ×${esc(fix(p.factor))} of the usual</span>` : ''}`;
   if (p.kind === 'frame') return p.fields.length ? `<span class="mi-fields">${p.fields.map((f) => `<span class="mi-field"><span class="mi-bar sm" aria-hidden="true"><i style="width:${Math.round(f.frac * 100)}%"></i></span> <span class="mi-fw">${esc(f.words)}</span> <b>${esc(f.key === 'journey' || f.key === 'mix' ? Math.round(f.value * 100) + ' %' : f.key === 'speed' ? fix(f.value) + '×' : fix(f.value))}</b> ${miFrom(f.from)} ${miInfoBtn(`${p.name}-${f.key}`, f.words, f.info)}${miInfoText(`${p.name}-${f.key}`, f.info)}</span>`).join('')}</span>` : '<span class="muted">not known</span>';
-  return `<b>${esc(p.text)}</b> ${miFrom('dave')}`;
+  return `<b>${esc(p.text)}</b> ${miFrom('modal')}`;
 }
 /** A parameter's own ⓘ (a scene knob, the palette, the canvas), with the ×factor explained when it has one. */
 const miParamInfo = (p) => (p.kind === 'frame' || !p.info ? null : p.factor != null ? `${p.info} ×${fix(p.factor)} of the usual: ${FACTOR_INFO}` : p.info);
-/** "Latest from Dave: new pictures at 02:57 (2 min ago) · about every 2 min lately" (his own time; else when it arrived). */
+/** "Latest from Modal: new pictures at 02:57 (2 min ago) · about every 2 min lately" (his own time; else when it arrived). */
 function miLatestHTML(v) {
   const l = v.latest;
   if (!l) return '';
-  if (v.source === 'canvas') return `<p class="mi-latest"><b>Latest from Dave:</b> ${l.live ? 'playing live now' : l.arrived_age_s != null ? `last update reached bitcube ${ageSpan(l.arrived_age_s)}` : 'not known yet'}.</p>`;
+  if (v.source === 'canvas') return `<p class="mi-latest"><b>Latest from ${MODAL_CHIP}:</b> ${l.live ? 'playing live now' : l.arrived_age_s != null ? `last update reached bitcube ${ageSpan(l.arrived_age_s)}` : 'not known yet'}.</p>`;
   const when = l.clock ? `${esc(l.what)} at <b>${esc(l.clock)}</b>${l.age_s != null ? ` (${ageSpan(l.age_s)})` : ''}`
     : l.arrived_age_s != null ? `${esc(l.what)}, reached bitcube ${ageSpan(l.arrived_age_s)}` : `${esc(l.what)}: not known yet`;
   const every = l.every_s != null ? ` · about every ${esc(nb(M.dur(l.every_s)))} lately` : '';
-  return `<p class="mi-latest"><b>Latest from Dave:</b> ${when}${every}.</p>`;
+  return `<p class="mi-latest"><b>Latest from ${MODAL_CHIP}:</b> ${when}${every}.</p>`;
 }
-/** Only Dave's own frame pictures open in the sheet (modal-input.js builds these addresses). */
+/** Only Modal's own frame pictures open in the sheet (modal-input.js builds these addresses). */
 const MI_PIC = /^https:\/\/to-be-a-river--river\.modal\.run\/frames\/[A-Za-z0-9._-]{1,80}\/(?:screen-[1-4]|ropes)\.png$/;
 /** A frame picture, larger, in a sheet: the ropes' 20 columns pixelated, with which way is which. */
 function openPicture(el, url) {
   const v = model ? modalInputView(model.show.modal_input, model.show.fresh.probe_age_s ?? 0, p.last?.now ?? null) : null;
   const what = el === 'ropes' ? 'the 20 ropes' : `screen ${el.slice(-1)}`;
   const when = v?.frames?.issued_clock ? ` Sent at ${v.frames.issued_clock}.` : '';
-  sheet({ title: `Dave's latest picture for ${what}`, body: `<p>The colours bitcube aims for on ${what}, before the river ripples them.${esc(when)}${el === 'ropes' ? ' Each column is one rope, top = top.' : ''}</p>
-    <div class="mi-big-wrap"><img class="mi-big ${el === 'ropes' ? 'ropes' : ''}" src="${esc(url)}" alt="Dave's picture for ${esc(what)}"></div>` });
+  sheet({ title: `Modal's latest picture for ${what}`, body: `<p>The colours bitcube aims for on ${what}, before the river ripples them.${esc(when)}${el === 'ropes' ? ' Each column is one rope, top = top.' : ''}</p>
+    <div class="mi-big-wrap"><img class="mi-big ${el === 'ropes' ? 'ropes' : ''}" src="${esc(url)}" alt="Modal's picture for ${esc(what)}"></div>` });
 }
 function modalInputHTML(m) {
   if (m.show.file?.name !== M.MODAL_INPUT_FILE) { miSourceDraft = null; miStrengthDraft = null; return ''; }
@@ -812,35 +813,84 @@ function modalInputHTML(m) {
     <label for="mi-strength">Strength</label>
     <div class="row-btns"><input type="range" min="0" max="100" step="5" id="mi-strength" value="${str}" aria-describedby="mi-now" ${o || src === 'off' ? 'disabled' : ''}>
     <output id="mi-strength-v" for="mi-strength">${nb(str + ' %')}</output></div>
-    <p class="effect" id="mi-now">${seen.pre} on bitcube: <b>${now}</b>${seen.tail}. 0 % is the river alone; 100 % is Dave's input at full strength.</p>
+    <p class="effect" id="mi-now">${seen.pre} on bitcube: <b>${now}</b>${seen.tail}. 0 % is the river alone; 100 % is Modal's input at full strength.</p>
     <div class="row-btns"><button type="button" class="btn primary" id="ctl-mi-set" data-act="mi-set" ${o || !miChanged(v) ? 'disabled' : ''}>Apply</button></div>
     ${statusLine('ctl-modalinput', ['modalinput'])}
     ${v ? sendingHTML(v) : ''}</div>`;
 }
-/** "What Dave's agent is sending" for the chosen source, its stale warning, and the other sources' freshness on one line. */
+/** "What Modal is sending" for the chosen source, its stale warning, and the other sources' freshness on one line. */
 function sendingHTML(v) {
   const W = M.MODAL_SOURCE_WORDS;
   const fresh = v.sources.filter((x) => x.known).map((x) => x.ok === false ? `${x.label} not arriving`
     : x.id === 'canvas' && x.age_s != null && x.age_s <= 120 ? `${x.label} live` : `${x.label} ${ageSpan(x.age_s)}`).join(' · ');
   const warn = v.stale ? `<div class="mi-stale lv-warning" role="status">${mark('warning')}<span>${esc(v.stale_words)}.</span></div>` : '';
-  if (v.source === 'off' || !v.source) return `<div class="mi-sending"><div class="ctl-h">What Dave's agent is sending</div>
-    <p class="effect">Off: the river runs on its own; nothing from Dave's agent is used.</p>${fresh ? `<p class="mi-fresh">Every input of Dave's, as it last reached bitcube: ${fresh}</p>` : ''}</div>`;
+  const fv = modalFeedView(p.last?.modal_feed, p.last?.now ?? null, v), inline = v.source === 'scene' || v.source === 'frames' ? v.source : null;
+  if (v.source === 'off' || !v.source) return `<div class="mi-sending"><div class="ctl-h">What ${MODAL_CHIP} is sending</div>
+    <p class="effect">Off: the river runs on its own; nothing from Modal is used.</p>${fresh ? `<p class="mi-fresh">Every input from Modal, as it last reached bitcube: ${fresh}</p>` : ''}
+    ${feedAllHTML(fv, null)}</div>`;
   // one row per thing (screens 1–4 as one row while they read the same: v.rows); its own "set … ago" only when it has its own age
   // (the Latest line says when the rest came)
   const rows = v.rows.map((p) => { const info = miParamInfo(p);
     return `<div class="mi-row wide" role="listitem"><div class="mi-name">${esc(p.label)}${info ? ` ${miInfoBtn(p.name, p.label, info)}` : ''}</div><div class="mi-val">${miValueHTML(p)}</div>
       <div class="mi-age">${p.own_age && p.age_s != null ? `set ${ageSpan(p.age_s)}` : ''}</div>${info ? miInfoText(p.name, info) : ''}<div class="mi-drives">${p.drives ? esc(p.drives) : ''}</div></div>`; }).join('');
-  const sc = v.source === 'scene' && v.scene ? `${v.scene.palette_name ? `<p class="mi-note"><span class="lbl">Dave's name for these colours:</span> ${esc(v.scene.palette_name)}</p>` : ''}${v.scene.animation ? `<p class="mi-note"><span class="lbl">Dave's movement:</span> ${esc(v.scene.animation)}</p>` : ''}${v.scene.journal ? `<p class="mi-note"><span class="lbl">Dave's journal:</span> ${esc(v.scene.journal)}</p>` : ''}` : '';
-  const f = v.frames, fr = v.source === 'frames' && f ? `${f.note ? `<p class="mi-note"><span class="lbl">Dave's note:</span> ${esc(f.note)}</p>` : ''}
-    ${f.images.length ? `<p class="mi-cap">Dave's latest pictures (before the river ripples them)${f.issued_clock ? `, sent at ${esc(f.issued_clock)}` : ''}. Tap one to see it larger.</p>
+  const sc = v.source === 'scene' && v.scene ? `${v.scene.palette_name ? `<p class="mi-note"><span class="lbl">Modal's name for these colours:</span> ${esc(v.scene.palette_name)}</p>` : ''}${v.scene.animation ? `<p class="mi-note"><span class="lbl">Modal's movement:</span> ${esc(v.scene.animation)}</p>` : ''}${v.scene.journal ? `<p class="mi-note"><span class="lbl">Modal's journal:</span> ${esc(v.scene.journal)}</p>` : ''}` : '';
+  const f = v.frames, fr = v.source === 'frames' && f ? `${f.note ? `<p class="mi-note"><span class="lbl">Modal's note:</span> ${esc(f.note)}</p>` : ''}
+    ${f.images.length ? `<p class="mi-cap">Modal's latest pictures (before the river ripples them)${f.issued_clock ? `, sent at ${esc(f.issued_clock)}` : ''}. Tap one to see it larger.</p>
     <div class="mi-thumbs">${f.images.map((x) => { const what = x.element === 'ropes' ? 'the ropes' : x.element.replace('-', ' ');
-      return `<button type="button" id="mi-pic-${esc(x.element)}" data-act="mi-pic" data-pic="${esc(x.element)}" data-url="${esc(x.url)}" class="mi-thumb ${x.element === 'ropes' ? 'ropes' : ''}" aria-label="See Dave's picture for ${esc(what)} larger"><img src="${esc(x.url)}" alt="" loading="lazy"><span>${esc(x.element === 'ropes' ? 'Ropes' : 'Screen ' + x.element.slice(-1))}</span></button>`; }).join('')}</div>` : ''}` : '';
-  return `<div class="mi-sending"><div class="ctl-h">What Dave's agent is sending: ${esc(W[v.source].label)}</div>
+      return `<button type="button" id="mi-pic-${esc(x.element)}" data-act="mi-pic" data-pic="${esc(x.element)}" data-url="${esc(x.url)}" class="mi-thumb ${x.element === 'ropes' ? 'ropes' : ''}" aria-label="See Modal's picture for ${esc(what)} larger"><img src="${esc(x.url)}" alt="" loading="lazy"><span>${esc(x.element === 'ropes' ? 'Ropes' : 'Screen ' + x.element.slice(-1))}</span></button>`; }).join('')}</div>` : ''}` : '';
+  return `<div class="mi-sending"><div class="ctl-h">What ${MODAL_CHIP} is sending: ${esc(W[v.source].label)}</div>
     ${v.intro ? `<p class="mi-intro">${esc(v.intro)}</p>` : ''}${warn}${miLatestHTML(v)}
     ${rows ? `<div class="mi-params" role="list">${rows}</div>` : '<p class="effect">Nothing has arrived for it yet.</p>'}
     ${sc}${fr}
-    ${fresh ? `<p class="mi-fresh">Every input of Dave's, as it last reached bitcube: ${fresh}</p>` : ''}
-    ${v.stale_raw ? `<p class="mi-raw">For Will: <code>${esc(v.stale_raw)}</code></p>` : ''}</div>`;
+    ${fresh ? `<p class="mi-fresh">Every input from Modal, as it last reached bitcube: ${fresh}</p>` : ''}
+    ${v.stale_raw ? `<p class="mi-raw">For Will: <code>${esc(v.stale_raw)}</code></p>` : ''}
+    ${inline && fv?.[inline] ? `<div class="mf-inline">${feedPartHTML(fv[inline], inline, true)}</div>` : ''}
+    ${feedAllHTML(fv, inline)}</div>`;
+}
+// ---- Everything Modal is sending (modal-feed.js): every field of Modal's two public answers, with what it is and whether bitcube
+// uses it. The chosen source's answer is listed in the panel; "Everything Modal is sending" (a button, kept open across polls)
+// holds the rest, or both for Off and Canvas.
+const MODAL_CHIP = '<span class="modal-chip">Modal</span>';
+let mfOpen = false;
+const MF_TITLE = { scene: ['Every value in Modal\'s scene', 'public/scene.json'], frames: ['Every value in Modal\'s frames', 'frames/latest.json'] };
+const cap1 = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+function feedThumb(el, url, pfx, caption) {
+  const what = el === 'ropes' ? 'the ropes' : el.replace('-', ' ');
+  if (!url || !MI_PIC.test(url)) return '';
+  return `<button type="button" id="${pfx}-pic-${esc(el)}" data-act="mi-pic" data-pic="${esc(el)}" data-url="${esc(url)}" class="mi-thumb ${el === 'ropes' ? 'ropes' : ''}" aria-label="See Modal's picture for ${esc(what)} larger"><img src="${esc(url)}" alt="" loading="lazy"><span>${esc(caption)}</span></button>`;
+}
+function feedValueHTML(r, pfx) {
+  const now = p.last?.now ?? null;
+  if (r.kind === 'colors') return `<span class="mi-swatches" role="img" aria-label="${r.colors.length} colour${r.colors.length > 1 ? 's' : ''}: ${esc(r.colors.join(', '))}">${r.colors.map((c) => `<i style="background:${esc(c)}"></i>`).join('')}</span> <span class="mf-text mono">${esc(r.colors.join(' '))}</span>`;
+  if (r.kind === 'time') return `<b>${esc(M.clock(r.ms))}</b>${now != null ? ` (${ageSpan(Math.max(0, Math.round((now - r.ms) / 1000)))})` : ''} <span class="mf-text mono">${esc(r.text)}</span>`;
+  if (r.kind === 'image') return r.element ? `${feedThumb(r.element, r.url, pfx, r.element === 'ropes' ? 'Ropes' : 'Screen ' + r.element.slice(-1))} <span class="mf-text mono">${esc(r.text)}</span>` : `<span class="mf-text mono">${esc(r.text)}</span>`;
+  if (r.kind === 'images') return `<span class="mi-thumbs">${r.items.map((x) => (x.url ? feedThumb(x.element, x.url, pfx, `Screen ${x.element.slice(-1)}${x.sha ? ' · ' + x.sha : ''}`) : `<span class="mf-text">Screen ${esc(x.element.slice(-1))}: ${esc(x.text ?? 'no picture')}</span>`)).join('')}</span>`;
+  if (r.kind === 'number') return `<b>${esc(r.text)}</b>${r.hint ? ` <span class="muted">(${esc(r.hint)})</span>` : ''}`;
+  return `<span class="mf-text${r.mono ? ' mono' : ''}">${esc(r.text)}</span>`;
+}
+function feedRowHTML(r, which) {
+  const k = `mf-${which}-${r.key}`, W = M.MODAL_SOURCE_WORDS;
+  return `<div class="mf-row" role="listitem"><div class="mf-k"><span class="mf-name">${esc(r.label)}</span>${r.extra ? ' <span class="mf-new">new</span>' : ''}${r.more ? ` ${miInfoBtn(k, r.label, r.more)}` : ''} <code class="mf-path">${esc(r.path)}</code></div>
+    <div class="mf-v">${feedValueHTML(r, `mf-${which}`)}</div>${r.more ? miInfoText(k, r.more) : ''}
+    <div class="mf-what">${esc(r.info)}</div>
+    <div class="mf-use${r.used.by ? ' on' : ''}">${r.used.by ? `<b>Used by ${esc(W[r.used.by].label)}:</b> ${esc(r.used.words)}` : esc(cap1(r.used.words))}</div></div>`;
+}
+/** One of Modal's answers: when it was checked and changed, a failure (the last good copy is still listed), then every field. */
+function feedPartHTML(part, which, inline) {
+  const [title, file] = MF_TITLE[which];
+  const when = part.fetched_age_s != null ? `Checked ${ageSpan(part.fetched_age_s)}${part.changed_age_s != null ? `; last changed ${ageSpan(part.changed_age_s)}` : ''}. ` : '';
+  const count = part.count ? `${part.count} values${part.extra ? `, ${part.extra} of them new: this page has no words for ${part.extra > 1 ? 'them' : 'it'} yet` : ''}.` : '';
+  const err = part.ok === false ? `<p class="mf-err">Modal didn't answer the last time${part.error ? ` (${esc(part.error)})` : ''}${part.count ? '; below is what it sent last' : ''}.</p>` : '';
+  const groups = part.groups.map((g) => `<div class="mf-group"><div class="mf-gh">${esc(g.title)}</div><div class="mf-rows" role="list">${g.rows.map((r) => feedRowHTML(r, which)).join('')}</div></div>`).join('');
+  return `<div class="mf-part" id="mf-part-${which}"><div class="${inline ? 'ctl-h' : 'mf-ph'}">${esc(title)} <span class="mf-file">${esc(file)}</span></div>
+    ${err}<p class="mf-when">${when}${count}</p>${groups || '<p class="effect">Nothing has arrived from Modal yet.</p>'}</div>`;
+}
+function feedAllHTML(fv, inline) {
+  if (!fv) return '';
+  const rest = ['scene', 'frames'].filter((x) => x !== inline && fv[x]);
+  if (!rest.length) return '';
+  return `<div class="mf-all"><button type="button" class="mf-toggle" id="mf-toggle" data-act="mf-toggle" aria-expanded="${mfOpen}" aria-controls="mf-all-body">Everything ${MODAL_CHIP} is sending<span class="chev" aria-hidden="true">›</span></button>
+    <div class="mf-body" id="mf-all-body"${mfOpen ? '' : ' hidden'}>${inline ? `<p class="effect">Its ${inline === 'scene' ? 'scene' : 'frames'}: listed above.</p>` : ''}${rest.map((x) => feedPartHTML(fv[x], x, false)).join('')}</div></div>`;
 }
 function openShowList() {
   const s = model?.show;
@@ -1419,6 +1469,7 @@ document.addEventListener('click', async (e) => {
       break;
     }
     case 'mi-source': miSourceDraft = b.dataset.source; render(); break;
+    case 'mf-toggle': mfOpen = !mfOpen; render(); break;
     case 'mi-info': { const k = b.dataset.info; if (miInfoOpen.has(k)) miInfoOpen.delete(k); else miInfoOpen.add(k); render(); break; }
     case 'mi-pic': if (MI_PIC.test(b.dataset.url ?? '')) openPicture(b.dataset.pic, b.dataset.url); break;
     case 'mi-set': {
