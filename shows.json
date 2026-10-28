@@ -164,25 +164,48 @@
     },
     {
       "file": "river-filling.toe",
-      "title": "The filling glass",
-      "label": "the filling glass",
+      "title": "Fill my cup (configurable)",
+      "label": "fill my cup (configurable)",
       "kind": "viz",
       "offered": true,
       "build": "td/build/build_filling.py",
       "calibration": {
         "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
         "screens": "tools/pixelmap/screens-2026-10-27.json",
-        "zones": null
+        "zones": "tools/pixelmap/zones-2026-10-27.json"
       },
-      "description": "Every rope and every screen is one canvas, painted by where each LED really is in the room. Water rises from the floor to the top like a glass filling, turbulent and sloshing, a crashing white crest and spray, deep blues broken by churning black; it holds at the top, then drains all the way out, leaving drips, and fills again (about 84 seconds a cycle). A first sample of the artists' filling-pool idea.",
+      "description": "Every rope and every screen is one canvas, by each LED's real height above the floor. Water rises from the floor to the top like a cup filling, turbulent and sloshing, a crashing white crest, soft spray, bubbles and drips, deep colour broken by churning black; it holds at the top, then drains all the way out, and fills again (about 84 s a cycle). Dials in mission control: palette, brightness, intensity, speed.",
       "inputs": [
-        "the LED map and screens (calibration, measured tilts)"
+        "the LED map, screens and zones (calibration, measured screen heights and tilts)",
+        "River\\filling\\control.json (the dials)"
       ],
       "created_by": "Gavin (session A)",
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-27",
-      "last_change": "Finer turbulence at the screens' scale, spray droplets, the dials (palette, brightness, intensity, speed via River\\filling\\control.json)"
+      "last_change": "Renamed Fill my cup (configurable); fills by real height (zones + the measured screen heights) so screens and ropes beside them light together; soft round particles of varying sizes"
+    },
+    {
+      "file": "river-fill-simple.toe",
+      "title": "Fill my cup (simple)",
+      "label": "fill my cup (simple)",
+      "kind": "viz",
+      "offered": false,
+      "build": "td/build/build_fill_simple.py",
+      "calibration": {
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
+        "screens": "tools/pixelmap/screens-2026-10-27.json",
+        "zones": "tools/pixelmap/zones-2026-10-27.json"
+      },
+      "description": "The first filling-cup look the artists liked best: every rope and screen one canvas, by real height; smooth churning blue and black water rises from the floor to the top with a slosh and a crest, soft spray and drips, holds, then drains all the way out, and again (about 84 s a cycle).",
+      "inputs": [
+        "the LED map, screens and zones (calibration, measured screen heights and tilts)"
+      ],
+      "created_by": "Gavin (session A)",
+      "created": "2026-10-27",
+      "updated_by": "Gavin (session A)",
+      "updated": "2026-10-27",
+      "last_change": "New: the first filling-glass look (b2a7064) on the real-height space, soft particles; not yet built on bitcube"
     }
   ]
 }
