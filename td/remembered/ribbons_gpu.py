@@ -37,6 +37,7 @@ GAIN = 1.15                         # and brighter
 FOOTAGE_FLOW_DEG = 25.0             # which way the river runs in the river cam's picture: down and 25 deg toward the right
                                     # (measured 28 Oct on river-cascade.mp4, Lucas-Kanade over the moving water); the screens'
                                     # windows turn so that this runs along the ropes' "down" by each screen
+RIVER_TINT = 0.65                   # how far the river video is tinted toward the palette's blues
 VIDEO_SCREEN_M = 0.64               # a window's height in the footage covers the screen's height
 DUST = 0.035                        # share of screen LEDs holding loose glitter
 
@@ -235,6 +236,11 @@ void main() {
             v = vec3(lv) + (v - vec3(lv)) * g5.z;
             float kf = max(lv - g5.x, 0.0) / ((1.0 - g5.x) * max(lv, 1e-6));
             v = pow(clamp(v * kf, 0.0, 1.0), vec3(g5.y));
+            // tinted toward the palette (Gavin: blues and greens like the rest of the piece): its mid for the darker water,
+            // its light for the bright, RIVER_TINT of the way
+            float l2 = dot(v, vec3(0.2126, 0.7152, 0.0722));
+            vec3 tint = l2 * mix(P(4, 0).rgb * 2.2, P(1, 0).rgb * 1.25, clamp(l2 * 1.4, 0.0, 1.0));
+            v = mix(v, tint, """ + f"{RIVER_TINT:.2f}" + """);
             col = v * g3.a;
         }
     }

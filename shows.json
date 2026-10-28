@@ -160,7 +160,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-28",
-      "last_change": "GPU ribbons in the palette's blues and greens, denser and brighter; river clips on the GPU (river_gpu) at 35 %, each window turned so the river runs along the ropes by its screen; ribbons fall along those ropes too"
+      "last_change": "River clips under the GPU ribbons tinted 65 % toward the palette's blues (mid for darker water, light for bright); before: palette blues/greens, denser, brighter, river and ribbons along the ropes by each screen"
     },
     {
       "file": "river-filling.toe",
@@ -233,7 +233,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-28",
-      "last_change": "GPU ribbons in the palette's blues and greens, denser and brighter; river clips on the GPU (river_gpu) at 35 %, each window turned so the river runs along the ropes by its screen; ribbons fall along those ropes too"
+      "last_change": "River clips under the GPU ribbons tinted 65 % toward the palette's blues (mid for darker water, light for bright); before: palette blues/greens, denser, brighter, river and ribbons along the ropes by each screen"
     }
   ]
 }
