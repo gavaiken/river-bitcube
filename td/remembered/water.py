@@ -111,10 +111,16 @@ class Water:
         return out
 
     def _mask_in(self, win):
+        """The mask under a window at 128 x 256, interpolated (bilinear, as the simulator's texture): soft edges, no steps."""
         x, y, w, h = win
-        xs = np.clip(((x + (np.arange(QW) + 0.5) / QW * w) * MW).astype(int), 0, MW - 1)
-        ys = np.clip(((y + (np.arange(QH) + 0.5) / QH * h) * MH).astype(int), 0, MH - 1)
-        return self.mask[ys][:, xs]
+        fx = np.clip((x + (np.arange(QW) + 0.5) / QW * w) * MW - 0.5, 0, MW - 1.001)
+        fy = np.clip((y + (np.arange(QH) + 0.5) / QH * h) * MH - 0.5, 0, MH - 1.001)
+        x0, y0 = fx.astype(int), fy.astype(int)
+        ax, ay = (fx - x0)[None, :], (fy - y0)[:, None]
+        m = self.mask
+        a, b = m[y0][:, x0], m[y0][:, x0 + 1]
+        c, d = m[y0 + 1][:, x0], m[y0 + 1][:, x0 + 1]
+        return (a * (1 - ax) + b * ax) * (1 - ay) + (c * (1 - ax) + d * ax) * ay
 
     # ---- the screens ---------------------------------------------------------------------------------------------------
     def step(self, crops, wins, level=1.0, intensity=None, sens=None):
