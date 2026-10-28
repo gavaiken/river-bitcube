@@ -2,7 +2,7 @@
 
 - **Holder:** Gavin (Mac mini session A) **until 11:15 28 Oct**; then **Will** (Codex), visual tuning
 - **Where:** bitcube running **`river-looks.toe`** (auto, 60 fps), the **boot default**; `river-all-looks.toe` (the playlist file) built and committed, not the default
-- **Updated:** 2026-10-28 11:10 PT
+- **Updated:** 2026-10-28 11:12 PT
 - **Next holder:** Will. Freeze on the default file: fixes only, with Gavin's OK. The playlist file is open for iteration (never the default until Gavin presses Set as default).
 
 ## Late morning of 28 Oct (session A): `river-all-looks.toe`, every look in one file with a playlist. **Will: read this and the next section**
@@ -39,12 +39,16 @@ file, offered (so bitcube can switch to it) but **not the default**; page `docs/
   `SCREENS_COMP=<the modal COMP>`), then `build_all_looks.py` again. **Create its Web Render inactive and switch it on a
   frame later** (19 Oct: a live-created Web Render froze TD). Until then `status.looks` lists four and the mixer refuses
   `modal` in a playlist.
-- **The Looks tab in mission control** (`/looks`: playlist editor, per-look sections with descriptions and settings, the
-  inputs card; `POST /api/control/looks {mode, look?, playlist?}`; `probe.ps1 -Action looks -Playlist`): see the next
-  line in this file for its state (a subagent built it; merged if it says so below, else on branch
-  `worktree-agent-ac0ad053c49c2429e` in `.claude/worktrees/agent-ac0ad053c49c2429e` on the Mac mini, to review and merge).
-  Until it's merged, `probe.ps1`'s `-Look` ValidateSet still lists three looks: pin `seasons` by writing
-  `River\looks\control.json` by hand (`{"mode":"manual","look":"seasons"}`).
+- **The Looks tab in mission control is merged and pushed** (`/looks`, between Lights and Studio chat: the playlist editor
+  with − / + per look's unit, reorder, remove, Pin, Add a look with its description; one card per listed look with its
+  description, inputs and a link to its settings; the Inputs now card with "what the look did with them"; fixtures
+  `all-looks-auto`, `all-looks-manual`; docs/mission-ui.md "Looks page"). `POST /api/control/looks {mode, look?, playlist?}`
+  -> `probe.ps1 -Action looks -Mode auto -Playlist '<json>'`. **Checked on bitcube:** the probe validates the playlist on real
+  PowerShell 5.1 (a bad unit is refused with the reason) and writes control.json when the JSON reaches it intact (run from a
+  PowerShell session). **Not checked:** the JSON surviving mission control's ssh -> cmd.exe -> powershell path (mission
+  escapes each `"` as `\"`); the first Apply from the Looks tab against the real bitcube will tell. If it fails with
+  "playlist is a list of { look, for }", the quoting is the cause: pass the playlist base64-encoded instead (probe decodes).
+  Settings that bitcube refuses unless the look shows (the fill dials, the Modal source) can't be set ahead; the page says so.
 - The seasons look's `seasons_exec` (its engine, presence, the 9981 page) keeps running while the COMP's cooking is off;
   Python cost was 0.2 ms with seasons showing and ~5 ms with the remembered river, so it's cheap, but it wasn't profiled
   with seasons idle for long.

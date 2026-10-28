@@ -135,6 +135,6 @@ Notes kept here while another session is editing the shared docs; folded into th
   rule, status playlist/position/progress/looks); `td/looks/inputs.py` (subagent: Dave / river / room + what the look used);
   the `looks` map with descriptions in shows.json + checks + pages (subagent); the look switches in outputs and
   `fold_seasons.py`: the river's year folded in and seen driving the ropes and screens from inside the playlist file. The
-  mission Looks tab (subagent) was in flight at hand-back: see HANDOFF.
+  mission Looks tab (subagent) merged and pushed; its ssh quoting of the playlist is the one unverified link (HANDOFF).
 - **Left:** Combined with Modal not folded in (needs its own fold script, Web Render created inactive); the Looks tab merge
   if not merged; see HANDOFF "Not done / not verified". Checkpoint `all-looks-v1`.
