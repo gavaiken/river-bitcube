@@ -27,4 +27,4 @@ Live (Gavin's OK, 20:05–20:45)
 
 Still to do
 - Pin the pair in a show of our own and rebuild it (the multi-view frame lays the river over the whole sculpture, floor to rig, so the look moves).
-- Re-run `screens.py --map tools\pixelmap\pixelmap-2026-10-27.json` with the room dark to see screen 3 rather than estimate it.
+- Re-run `screens.py --map tools\pixelmap\pixelmap-2026-10-27-views.json` with the room dark (it writes screens-<date>.json: rename it to the -views pair) to see screen 3 rather than estimate it.
