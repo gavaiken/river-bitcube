@@ -48,3 +48,12 @@ Will approved the local shader study for the remembered-river look inside this f
 Apply only the screen changes without resetting the look or playlist: `td.ps1 -File td\build\update_all_looks_ribbons.py` (save first with `td_save.ps1`, then verify and save again). A full `build_all_looks.py` also selects these shaders. Neither path changes playlist configuration, mapping, river grade or rope logic.
 
 Rollback: set `SOFT_RIBBONS=False` in the update script’s execution globals; it reconnects the original Blur TOP and restores the original DRAW shader without resetting the clock. Saved pre-deployment show and controls: `River\checkpoints\before-soft-ribbons-20261028-will\` (`disk-before.toe`, `live-before.toe`). The frozen two-looks show remains available in mission control.
+
+
+## Temporary interpolated-footage trial (28 Oct, Will)
+
+The running all-looks show can temporarily play separate 30 fps motion-interpolated copies of both recorded backgrounds. The original files, softer ribbon shader, video grade, controls and saved show remain intact. This is a runtime-only trial, not a change to startup: reloading returns the original footage. Interpolation is calculated offline; bitcube only decodes the finished videos.
+
+Apply/status/rollback: [`tools/remembered/video_trial.py`](../../tools/remembered/video_trial.py), executed through `tools/td.ps1` with `TRIAL_ACTION` apply/status/rollback. The guard refuses other projects, unexpected clip lists and incomplete candidate files. Full checkpoint and exact rollback command are in the current HANDOFF. Do not save the trial into the show file; keeping it persistently is a separate decision after review.
+
+Will confirmed the physical motion looked smoother and asked to leave the trial running. Both candidate clips rotated normally. Follow-up building-phase sample: median59fps (48–63), no project errors. The saved show, controls, boot file and original footage were hash-verified unchanged.
