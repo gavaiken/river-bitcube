@@ -5,21 +5,33 @@
     .venv\\Scripts\\python tools\\presence\\counter.py status     # processes, the last count, the log's tail
     .venv\\Scripts\\python tools\\presence\\counter.py run --debug   # also writes River\\presence-debug.jpg (tuning)
 
-Writes C:\\Users\\user\\River\\presence.json every 0.5 s: {"t": unix time, "count": people near the piece} -- the whole
-contract with the seasons file (td/seasons/seasons_td.py turns dynamic mode on while it's fresh). Also
+    .venv\\Scripts\\python tools\\presence\\counter.py run --zones=tools\\pixelmap\\zones-<date>.json   # rope feet to use
+
+Writes C:\\Users\\user\\River\\presence.json every 0.5 s: {"t": unix time, "count": people near the piece, "people": [...],
+"lingerers": [...]}. "t" and "count" are the whole contract with the seasons file (td/seasons/seasons_td.py turns
+dynamic mode on while it's fresh); the rest is for the remembered river (docs/remembered-river.md §4):
+  people:    [{x, y, h, still_s}]  everyone seen: foot point (box bottom centre) in the show view, 0..1 from the top
+             left; h = box height / frame height; still_s = seconds their foot hasn't moved more than STILL_MOVE
+  lingerers: [{x, y, still_s, ropes}]  people still >= LINGER_STILL_S and close (h >= LINGER_MIN_H), with the (up to)
+             NEAREST_ROPES ropes whose feet (zones file) are within ROPE_RADIUS of them, nearest first (0-based)
+People are followed between frames by a simple tracker (box overlap, else nearest foot point; see Tracker) only to time
+stillness: nothing about anyone is kept once they've been out of sight TRACK_KEEP_S. Rope feet come from the zones file
+(tools/pixelmap/zones-<date>.json): --zones=PATH, else the one a show pins in shows.json (calibration.zones), else the
+newest; without one, lingerers' ropes are []. With the motion fallback, people and lingerers are []. Also
 River\\presence-status.json (detector, frame rate, raw and near counts) for whoever is tuning.
 
 Input: the gallery cam's sub stream (640x360) at 2 frames a second, through ffmpeg; the camera login comes from
 secrets.local.json and is never logged. Detector: YOLOv8 nano (ONNX, CPU, 2 threads; River\\models\\yolov8n.onnx,
-see MODEL_URL) -- people only, one frame at a time, no tracking. "Near the piece" = a box at least MIN_HEIGHT of the
+see MODEL_URL) -- people only. "Near the piece" = a box at least MIN_HEIGHT of the
 frame tall (tune on site: the cam looks up at the piece, so nearby people show as tall boxes at the bottom).
 If the detector can't load, a motion measure (the share of the frame that changed) stands in as a rough count.
-Nobody is identified or recorded: frames stay in memory; only the count leaves the process (the --debug frame is
+Nobody is identified or recorded: frames stay in memory; only the count and anonymous positions leave the process (the --debug frame is
 for tuning, local, overwritten, and off unless asked for). Logs to River\\logs\\presence.log.
 Started at login by Start-Presence.cmd (from SSH a child dies with the session: use a one-off interactive
 scheduled task, as for Start-Modal.cmd).
 """
 import json
+import math
 import os
 import socket
 import subprocess
@@ -46,7 +58,16 @@ WRITE_EVERY = 0.5          # s between presence.json writes
 CONF = 0.35                # person score
 IOU = 0.5                  # non-maximum suppression
 MIN_HEIGHT = 0.25          # "near the piece": box at least this share of the frame tall
-LOCK_PORT = 8772           # held by the running supervisor, so a second one exits at once
+LINGER_STILL_S = 8.0       # a lingerer has stood still at least this long ...
+LINGER_MIN_H = 0.40        # ... and is close: box at least this share of the frame tall
+STILL_MOVE = 0.04          # moving the foot point more than this (in frame heights) restarts the stillness clock
+TRACK_IOU = 0.3            # a box overlapping a person's last box this much is that person ...
+TRACK_DIST = 0.12          # ... else the one whose foot point is within this (frame heights)
+TRACK_KEEP_S = 2.0         # a person unseen this long is forgotten (bridges a missed detection or two)
+PEOPLE_KEEP_S = 1.0        # people unseen for longer than this are left out of "people"
+ROPE_RADIUS = 0.35         # a lingerer's ropes: rope feet within this (frame heights) ...
+NEAREST_ROPES = 2          # ... at most this many, nearest first
+LOCK_PORT = 8772          # held by the running supervisor, so a second one exits at once
 RESTART_SECONDS = 10
 
 
@@ -103,6 +124,129 @@ def near(boxes, frame_h, min_height=MIN_HEIGHT):
     return sum(1 for b in boxes if (b[3] - b[1]) >= min_height * frame_h)
 
 
+# ---- people over time (pure) ---------------------------------------------------------------------------------------
+def iou(a, b):
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = ix * iy
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / union if union > 0 else 0.0
+
+
+class Tracker:
+    """Follows people between frames (2 a second) to time how long each has stood still.
+    update(boxes, now): boxes [(x1, y1, x2, y2, score)] in frame pixels. A box joins the person whose last box it
+    overlaps (IoU >= TRACK_IOU), else the one whose foot point is nearest (within TRACK_DIST frame heights); best
+    matches first, each person and box at most once; other boxes are new people. A person unseen for TRACK_KEEP_S is
+    forgotten. Their stillness clock restarts whenever their foot point is more than STILL_MOVE from where it was when
+    the clock last started (so a few pixels of box jitter never reset it)."""
+
+    def __init__(self, frame_w=W, frame_h=H):
+        self.w, self.h = float(frame_w), float(frame_h)
+        self.tracks, self.next_id = [], 1
+
+    def _foot(self, b):
+        return ((b[0] + b[2]) / 2 / self.w, b[3] / self.h)
+
+    def _dist(self, a, b):
+        return math.hypot((a[0] - b[0]) * self.w / self.h, a[1] - b[1])
+
+    def update(self, boxes, now):
+        pairs = []
+        for ti, t in enumerate(self.tracks):
+            for bi, b in enumerate(boxes):
+                o = iou(t['box'], b)
+                if o >= TRACK_IOU:
+                    pairs.append((1 + o, ti, bi))
+                else:
+                    d = self._dist(t['foot'], self._foot(b))
+                    if d <= TRACK_DIST:
+                        pairs.append((1 - d / TRACK_DIST, ti, bi))
+        used_t, used_b = set(), set()
+        for _, ti, bi in sorted(pairs, reverse=True):
+            if ti in used_t or bi in used_b:
+                continue
+            used_t.add(ti)
+            used_b.add(bi)
+            t, b = self.tracks[ti], boxes[bi]
+            t['box'], t['foot'], t['seen'] = tuple(b[:4]), self._foot(b), now
+            if self._dist(t['foot'], t['anchor']) > STILL_MOVE:
+                t['anchor'], t['still_since'] = t['foot'], now
+        for bi, b in enumerate(boxes):
+            if bi not in used_b:
+                f = self._foot(b)
+                self.tracks.append({'id': self.next_id, 'box': tuple(b[:4]), 'foot': f, 'anchor': f,
+                                    'still_since': now, 'seen': now})
+                self.next_id += 1
+        self.tracks = [t for t in self.tracks if now - t['seen'] <= TRACK_KEEP_S]
+        return self.people(now)
+
+    def people(self, now):
+        """[{x, y, h, still_s}] of everyone seen in the last PEOPLE_KEEP_S (show view, 0..1 from the top left)."""
+        out = []
+        for t in sorted(self.tracks, key=lambda t: t['id']):
+            if now - t['seen'] > PEOPLE_KEEP_S:
+                continue
+            x1, y1, x2, y2 = t['box']
+            out.append({'x': round(t['foot'][0], 3), 'y': round(t['foot'][1], 3), 'h': round((y2 - y1) / self.h, 3),
+                        'still_s': round(now - t['still_since'], 1)})
+        return out
+
+
+def nearest_ropes(x, y, feet, aspect=W / H, radius=ROPE_RADIUS, n=NEAREST_ROPES):
+    """Ropes (0-based) whose feet [{rope, x, y}] are within radius (frame heights) of (x, y), nearest first."""
+    d = sorted((math.hypot((f['x'] - x) * aspect, f['y'] - y), f['rope']) for f in feet)
+    return [int(r) for dist, r in d if dist <= radius][:n]
+
+
+def lingerers(people, feet, aspect=W / H, still_s=LINGER_STILL_S, min_h=LINGER_MIN_H):
+    """People still at least still_s and close (h >= min_h), with their nearest ropes."""
+    return [{'x': p['x'], 'y': p['y'], 'still_s': p['still_s'], 'ropes': nearest_ropes(p['x'], p['y'], feet, aspect)}
+            for p in people if p['still_s'] >= still_s and p['h'] >= min_h]
+
+
+def record(now, count, tracker, feet):
+    """One presence.json: t and count as ever, plus people and lingerers ([] without a tracker: motion fallback)."""
+    ppl = tracker.people(now) if tracker else []
+    return {'t': round(now, 2), 'count': int(count), 'people': ppl,
+            'lingerers': lingerers(ppl, feet, tracker.w / tracker.h if tracker else W / H)}
+
+
+def zones_path(arg=None, repo=REPO):
+    """The zones file whose rope feet lingerers are matched to: arg, else a show's pin (shows.json calibration.zones),
+    else the newest tools/pixelmap/zones-<date>.json; None when there is none."""
+    if arg:
+        return Path(arg)
+    try:
+        for e in json.loads((repo / 'shows.json').read_text(encoding='utf-8')).get('shows', []):
+            z = (e.get('calibration') or {}).get('zones')
+            if z and (repo / z).is_file():
+                return repo / z
+    except (OSError, ValueError, AttributeError):
+        pass
+    found = sorted((repo / 'tools' / 'pixelmap').glob('zones-????-??-??.json'))
+    return found[-1] if found else None
+
+
+class Feet:
+    """Rope feet from a zones file, re-read when the file changes (looked at every 10 s)."""
+
+    def __init__(self, path):
+        self.path, self.mtime, self.feet, self.next = path, None, [], 0.0
+
+    def get(self, now):
+        if self.path and now >= self.next:
+            self.next = now + 10
+            try:
+                m = self.path.stat().st_mtime
+                if m != self.mtime:
+                    self.feet = json.loads(self.path.read_text(encoding='utf-8')).get('feet') or []
+                    self.mtime = m
+            except (OSError, ValueError, AttributeError):
+                pass
+        return self.feet
+
+
 def motion_count(prev, cur, thresh=25, per_person=0.04):
     """Fallback: share of the frame that changed, as a rough head count (one person ~ 4% of the frame)."""
     if prev is None:
@@ -154,7 +298,7 @@ class Frames:
             time.sleep(5)
 
 
-def run(debug=False, min_height=MIN_HEIGHT):
+def run(debug=False, min_height=MIN_HEIGHT, zones=None):
     detector = None
     try:
         import onnxruntime as ort
@@ -165,6 +309,8 @@ def run(debug=False, min_height=MIN_HEIGHT):
     except Exception as e:                                             # missing model or onnxruntime
         log(f'detector unavailable ({type(e).__name__}: {e}); counting motion instead')
     frames = Frames(camera_url())
+    tracker, feet = Tracker(W, H), Feet(zones_path(zones))
+    log(f'rope feet for lingerers: {feet.path.name if feet.path else "none (no zones file): lingerers get no ropes"}')
     count, raw, prev, last_n, last_write, last_debug, t_det = 0, 0, None, 0, 0.0, 0.0, []
     while True:
         now = time.time()
@@ -175,6 +321,7 @@ def run(debug=False, min_height=MIN_HEIGHT):
                 x, geom = letterbox(img)
                 boxes = people(detector.run(None, {detector.get_inputs()[0].name: x})[0], geom, W, H)
                 raw, count = len(boxes), near(boxes, H, min_height)
+                tracker.update(boxes, now)
             else:
                 boxes, count = [], motion_count(prev, img)
                 raw, prev = count, img
@@ -184,7 +331,7 @@ def run(debug=False, min_height=MIN_HEIGHT):
                 last_debug = now
         if now - last_write >= WRITE_EVERY:
             fresh = now - frames.last < 30
-            write_json(OUT, {'t': round(now, 2), 'count': int(count)})
+            write_json(OUT, record(now, count, tracker if detector else None, feet.get(now)))
             write_json(STATUS, {'t': round(now, 2), 'count': int(count), 'raw': int(raw), 'frames': frames.n,
                                 'detector': 'yolov8n' if detector else 'motion', 'min_height': min_height,
                                 'ms': round(1000 * sum(t_det) / len(t_det)) if t_det else None, 'stream': fresh})
@@ -237,8 +384,9 @@ def status():
 if __name__ == '__main__':
     args = sys.argv[1:]
     mh = next((float(a.split('=', 1)[1]) for a in args if a.startswith('--min-height=')), MIN_HEIGHT)
+    zf = next((a.split('=', 1)[1] for a in args if a.startswith('--zones=')), None)
     if args[:1] == ['run']:
-        run(debug='--debug' in args, min_height=mh)
+        run(debug='--debug' in args, min_height=mh, zones=zf)
     elif args[:1] == ['status']:
         status()
     else:

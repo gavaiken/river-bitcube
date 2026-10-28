@@ -58,3 +58,92 @@ def test_write_json_is_whole(tmp_path):
     f = tmp_path / 'presence.json'
     counter.write_json(f, {'t': 1.0, 'count': 3})
     assert json.loads(f.read_text()) == {'t': 1.0, 'count': 3} and not (tmp_path / 'presence.tmp').exists()
+
+
+# ---- people, stillness and lingerers (docs/remembered-river.md §4) ----------------------------------------------------
+def box(cx, bottom, h, w=None, frame_h=360):
+    """A person box in frame pixels: centre x, bottom y, height as a share of the frame."""
+    hp = h * frame_h
+    w = w or hp * 0.4
+    return (cx - w / 2, bottom - hp, cx + w / 2, bottom, 0.9)
+
+
+def test_tracker_follows_one_person_and_times_stillness():
+    t = counter.Tracker(640, 360)
+    for k in range(20):                                           # 10 s at 2 fps, a little jitter
+        ppl = t.update([box(320 + (k % 3), 340, 0.5)], k * 0.5)
+    assert len(ppl) == 1 and len(t.tracks) == 1
+    p = ppl[0]
+    assert abs(p['x'] - 0.5) < 0.01 and abs(p['y'] - 340 / 360) < 0.01 and abs(p['h'] - 0.5) < 0.01
+    assert p['still_s'] == 9.5
+
+
+def test_walking_restarts_the_stillness_clock():
+    t = counter.Tracker(640, 360)
+    for k in range(10):
+        t.update([box(100 + 15 * k, 340, 0.5)], k * 0.5)          # walking: ~0.04 frame heights a frame
+    for k in range(10, 14):
+        ppl = t.update([box(250, 340, 0.5)], k * 0.5)             # stops
+    assert len(t.tracks) == 1
+    assert ppl[0]['still_s'] <= 2.0
+
+
+def test_two_people_keep_their_own_clocks_when_crossing_paths():
+    t = counter.Tracker(640, 360)
+    for k in range(20):
+        ppl = t.update([box(150, 340, 0.5), box(500 - 10 * k, 330, 0.45)], k * 0.5)
+    assert len(t.tracks) == 2
+    still = sorted(p['still_s'] for p in ppl)
+    assert still[0] < 1 and still[1] == 9.5
+
+
+def test_a_missed_detection_doesnt_forget_a_person():
+    t = counter.Tracker(640, 360)
+    for k in range(10):
+        t.update([box(320, 340, 0.5)], k * 0.5)
+    assert t.update([], 5.0) and len(t.update([], 5.6)) == 0      # kept in people for 1 s, then left out ...
+    ppl = t.update([box(321, 340, 0.5)], 6.0)                     # ... but remembered for 2 s: the clock goes on
+    assert len(t.tracks) == 1 and ppl[0]['still_s'] == 6.0
+    t.update([], 7.0)
+    t.update([], 8.5)
+    assert t.tracks == []                                         # gone after TRACK_KEEP_S
+
+
+def test_lingerers_are_still_and_close_with_their_nearest_ropes():
+    feet = [{'rope': r, 'x': 0.3 + 0.05 * r, 'y': 0.95} for r in range(8)]
+    ppl = [{'x': 0.41, 'y': 0.94, 'h': 0.6, 'still_s': 12.0},     # still and close: a lingerer
+           {'x': 0.41, 'y': 0.94, 'h': 0.6, 'still_s': 3.0},      # close, not still long enough
+           {'x': 0.41, 'y': 0.60, 'h': 0.2, 'still_s': 30.0},     # still, far
+           {'x': 0.95, 'y': 0.94, 'h': 0.5, 'still_s': 9.0}]      # still and close, no rope near
+    ls = counter.lingerers(ppl, feet, 640 / 360)
+    assert ls == [{'x': 0.41, 'y': 0.94, 'still_s': 12.0, 'ropes': [2, 3]},
+                  {'x': 0.95, 'y': 0.94, 'still_s': 9.0, 'ropes': []}]
+    assert counter.LINGER_STILL_S == 8.0 and counter.LINGER_MIN_H == 0.40
+
+
+def test_presence_record_keeps_t_and_count(tmp_path):
+    t = counter.Tracker(640, 360)
+    for k in range(20):
+        t.update([box(320, 350, 0.6)], 100 + k * 0.5)
+    rec = counter.record(109.5, 1, t, [{'rope': 4, 'x': 0.52, 'y': 0.97}])
+    assert rec['t'] == 109.5 and rec['count'] == 1
+    assert rec['lingerers'] == [{'x': 0.5, 'y': 0.972, 'still_s': 9.5, 'ropes': [4]}]
+    assert counter.record(1.0, 2, None, []) == {'t': 1.0, 'count': 2, 'people': [], 'lingerers': []}
+    f = tmp_path / 'presence.json'
+    counter.write_json(f, rec)
+    assert json.loads(f.read_text())['count'] == 1
+
+
+def test_zones_path_prefers_the_argument_then_a_pin_then_the_newest(tmp_path):
+    (tmp_path / 'tools' / 'pixelmap').mkdir(parents=True)
+    assert counter.zones_path(None, tmp_path) is None
+    for d in ('2026-10-27', '2026-10-29'):
+        (tmp_path / 'tools' / 'pixelmap' / f'zones-{d}.json').write_text('{"feet": []}')
+    assert counter.zones_path(None, tmp_path).name == 'zones-2026-10-29.json'
+    (tmp_path / 'shows.json').write_text(json.dumps({'shows': [
+        {'file': 'a.toe', 'calibration': {'pixelmap': 'x.json'}},
+        {'file': 'b.toe', 'calibration': {'zones': 'tools/pixelmap/zones-2026-10-27.json'}}]}))
+    assert counter.zones_path(None, tmp_path).name == 'zones-2026-10-27.json'
+    assert counter.zones_path('elsewhere.json', tmp_path) == Path('elsewhere.json')
+    feet = counter.Feet(tmp_path / 'tools' / 'pixelmap' / 'zones-2026-10-27.json')
+    assert feet.get(0) == []
