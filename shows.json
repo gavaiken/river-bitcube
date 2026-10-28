@@ -212,7 +212,7 @@
       "title": "The river (all looks)",
       "label": "the river (all looks)",
       "kind": "show",
-      "offered": false,
+      "offered": true,
       "build": "td/build/build_looks.py",
       "calibration": {
         "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
@@ -233,7 +233,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-27",
-      "last_change": "New (M8): not yet built on bitcube"
+      "last_change": "Built and running on bitcube 27 Oct 23:25 (M8); fades verified on the piece"
     }
   ]
 }
