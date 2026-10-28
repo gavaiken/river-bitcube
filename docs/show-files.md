@@ -11,6 +11,7 @@ A **show file** is the TouchDesigner file that runs the whole piece on bitcube: 
 | File | What it is | Needs |
 |---|---|---|
 | [**river-local-oct-22-seasons**](files/river-local-oct-22-seasons.html) | The river's year. Plays the recorded river through four seasons; people in the room warm it toward summer. **Opens at boot.** | Nothing: runs with no internet at all |
+| [**river-seasons-palettes**](files/river-seasons-palettes.html) | The river's year in new colours: icy winter, deeper teal spring, sparse blue-green summer, deep cerulean autumn. Not the default. | Nothing: runs with no internet at all |
 | [**river-online-oct-23**](files/river-online-oct-23.html) | The live river and Dave's AI, set up for Gray Area (four screens, 23 Oct rope map). Shows the river camera live (over Starlink) and lets Dave's agent on Modal shape the colours and movement. | Internet, the river site online, Modal |
 | [**river-baseline-template**](files/river-baseline-template.html) | Starting point for making a new visualization; live river and gallery inputs | Live cameras, recorded river fallback |
 | [**Combined v0**](files/river-combined-v0.html) | Will's live summer river with Dave's adjustable additive canvas overlay | Live river (recorded fallback) and the local Modal mirror |

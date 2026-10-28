@@ -158,8 +158,21 @@ def ph(name):
     return state()['phases'][name]
 
 
+def _looks():
+    """A show may carry its own tints in a Text DAT `season_looks` (JSON {"tint": [[r,g,b] x4], "glint": [...]});
+    without it (the river's year) the tables above apply."""
+    d = op('/project1/seasons/season_looks')                                  # noqa: F821 (TD global)
+    if d is None:
+        return TINT, GLINT
+    try:
+        j = json.loads(d.text)
+        return ({k: tuple(v) for k, v in enumerate(j['tint'])}, {k: tuple(v) for k, v in enumerate(j['glint'])})
+    except (ValueError, KeyError, TypeError):
+        return TINT, GLINT
+
+
 def tint(ch, table='tint'):
-    t = TINT if table == 'tint' else GLINT
+    t = _looks()[0 if table == 'tint' else 1]
     ws = engine().weights(state()['year'].phase)
     return sum(ws[k] * t[k][ch] for k in range(4))
 

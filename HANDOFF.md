@@ -1,9 +1,13 @@
 # Handoff: where things stand
 
-- **Holder:** nobody (free)
+- **Holder:** studio agent (repo only; bitcube untouched)
 - **Where:** bitcube running Combined v0 (Will's settings); the default is still the river's year
-- **Updated:** 2026-10-27 18:55 PT
+- **Updated:** 2026-10-27 PT
 - **Next holder:** Will (Codex), for visual tuning.
+
+## New season palettes show (27 Oct, studio agent, repo only)
+- Requested: icier winter (whites/greys), deeper teal spring, sparse blue-green summer, deep cerulean autumn, pale leaf flecks. Built as a **new show**, not an edit of the default: `td/build/build_seasons_palettes.py` + `shows.json` entry `river-seasons-palettes.toe` (**offered: false**, the `.toe` doesn't exist yet) + page `docs/files/river-seasons-palettes.md`. `seasons_td.py` now reads tints/glints from an optional `season_looks` DAT (absent in the river's year = unchanged).
+- Still to do on bitcube (needs the show switched, so the person who owns the live display should OK it): `git pull`; copy `river-local-oct-22-seasons.toe` to `river-seasons-palettes.toe`; open it; `td.ps1 -File td\build\build_seasons_palettes.py`; `td_save.ps1`; set `offered: true`; push.
 
 ## HUB75 simulator in mission control (27 Oct, Gavin, repo only)
 - New experiment page **`/hub75`** (link at the bottom of Lights): the river footage with only the **moving water** kept (motion mask), zoomed into four windows (or one across all four) and drawn on four simulated 128 × 256 portrait screens, LED by LED, with true black everywhere else. Intensity 0–1, looks Water / Foam / Motion, black floor, grey depth, glow. Design: `docs/mission-ui.md` "HUB75 simulator". Footage: `mission/media/river-cascade.mp4`. Nothing reaches bitcube; no show file changed.
