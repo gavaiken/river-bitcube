@@ -144,3 +144,32 @@ footer.foot .fine-print { margin-top: 4px; }
 .generic-row { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin-bottom: 8px; }
 .generic-row .lbl { color: var(--muted); font-weight: 600; }
 @media (max-width: 380px) { .show-card .kv { grid-template-columns: 1fr; gap: 0; } }
+
+/* Modal input (the Modal input show): the choice, then what Dave's agent is sending (docs/mission-ui.md "Modal input") */
+.mi-seg { flex-wrap: wrap; }
+.mi-sending { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.mi-params { display: flex; flex-direction: column; }
+.mi-row { display: grid; grid-template-columns: minmax(84px, auto) 1fr auto; gap: 2px 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.mi-row:last-child { border-bottom: 0; }
+.mi-name { font-weight: 700; }
+.mi-val { min-width: 0; }
+.mi-age { color: var(--muted); font-size: 13px; white-space: nowrap; text-align: right; }
+.mi-row.wide .mi-val { grid-column: 1 / -1; grid-row: 2; }
+.mi-row.wide .mi-name { grid-column: 1 / 3; }
+.mi-drives { grid-column: 1 / -1; color: var(--muted); font-size: 14px; line-height: 1.35; }
+.mi-swatches { display: inline-flex; gap: 3px; vertical-align: middle; flex-wrap: wrap; }
+.mi-swatches i { width: 22px; height: 22px; border-radius: 5px; border: 1px solid var(--line); }
+.mi-bar { display: inline-block; width: 72px; height: 8px; border-radius: 4px; background: var(--line); vertical-align: middle; overflow: hidden; }
+.mi-bar.sm { width: 40px; height: 6px; }
+.mi-bar i { display: block; height: 100%; background: var(--accent); }
+.mi-fields { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 14px; }
+.mi-field { white-space: nowrap; }
+.mi-note { margin: 0; font-size: 15px; line-height: 1.35; }
+.mi-note .lbl { color: var(--muted); font-weight: 600; }
+.mi-fresh { margin: 0; color: var(--muted); font-size: 14px; font-weight: 600; }
+.mi-raw { margin: 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.mi-stale { display: flex; gap: 8px; align-items: flex-start; font-weight: 700; color: var(--lv-text); background: var(--lv-soft); border-radius: 10px; padding: 8px 10px; }
+.mi-thumbs { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.mi-thumb { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; color: var(--muted); text-decoration: none; }
+.mi-thumb img { width: 48px; height: 96px; object-fit: fill; border-radius: 4px; background: var(--line); color: transparent; overflow: hidden; }
+.mi-thumb.ropes img { width: 30px; image-rendering: pixelated; }

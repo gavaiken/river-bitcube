@@ -52,6 +52,7 @@ const stillNet = { gallery: false, river: false };   // the last try failed for 
 const stills = { gallery: { url: null, age_s: null, fetchedAt: null, missing: null }, river: { url: null, age_s: null, fetchedAt: null, missing: null } };
 const lastHTML = new Map();   // section -> the HTML it holds (no churn when nothing changed)
 let overlayDraft = null, framingDraft = null, screensDraft = null;
+let miSourceDraft = null, miStrengthDraft = null;   // the Modal input choice before Apply (percent)
 let hubDraft = null;          // the brightness stepper, before "Set"
 const targetDraft = { season: null, intensity: null };
 const rulesDraft = {};        // what was typed into the rules form, kept across re-renders and a failed Apply
@@ -697,7 +698,7 @@ function showingHTML(m) {
     ${line ? `<p class="showing-desc">${esc(line)}</p>` : ''}
     <div class="row-btns"><button type="button" class="btn primary" id="ctl-showing-change" data-act="show-list" ${s.show_files.length ? '' : 'disabled'}>Change</button>${back}</div>
     <div class="effect">Default: <b>${esc(bootWords(s.boot_file))}</b>, what opens when bitcube restarts. Switching never changes it.</div>
-    ${statusLine('ctl-showing', ['switch', 'bootfile'])}</div>${combinedHTML(m)}`;
+    ${statusLine('ctl-showing', ['switch', 'bootfile'])}</div>${combinedHTML(m)}${modalInputHTML(m)}`;
 }
 /** Change: every offered show (shows.json), its kind, and which is showing and which is the default; a tap opens its card. */
 function screenChoice(s) { return { mode: s?.mode ?? 'current', blend: s?.blend ?? 0, hold: s?.hold ?? 30, recorded: s?.recorded ?? 0, offset: s?.offset ?? 0 }; }
@@ -747,6 +748,60 @@ function combinedHTML(m) {
     ${s?.screens?.per_screen ? '<p>' + s.screens.per_screen.map((w,k) => `Screen ${k+1}: ${Math.round(w.current_mix*100)} % Current / ${Math.round(w.gavin_mix*100)} % Gavin live / ${Math.round(w.recorded_mix*100)} % Recorded`).join('<br>') + '</p>' : ''}
     <button type="button" class="btn primary" id="ctl-overlay-set" data-act="overlay-set" ${disabled || !combinedChanged(s) ? 'disabled' : ''}>Apply river settings</button>
     ${statusLine('ctl-overlay', ['overlay'])}</div>`;
+}
+/** The Modal input show (river-combined-modal-inputs.toe, docs/modal-inputs.md): which of Dave's inputs drives the river and how
+ *  strongly (Apply, as every control), then what his agent is sending for it: each parameter, its latest value, what it drives
+ *  and when it was set, the scene's palette and journal or the frame's note and pictures, and the other sources' freshness. */
+function miChanged(v) {
+  const src = miSourceDraft ?? v?.source, str = miStrengthDraft ?? (v?.strength == null ? null : Math.round(v.strength * 100));
+  return !!v && (src !== v.source || (src !== 'off' && str !== Math.round((v.strength ?? -1) * 100)));
+}
+const fix = (x, d = 2) => (Math.abs(x) >= 10 ? String(Math.round(x)) : x.toFixed(d).replace(/0+$/, '').replace(/\.$/, ''));
+function miValueHTML(p) {
+  if (p.kind === 'palette') return `<span class="mi-swatches" role="img" aria-label="${p.colors.length} colours: ${esc(p.colors.join(', '))}">${p.colors.map((c) => `<i style="background:${esc(c)}"></i>`).join('')}</span>`;
+  if (p.kind === 'number') return `<span class="mi-bar" aria-hidden="true"><i style="width:${Math.round(p.frac * 100)}%"></i></span> <b>${esc(fix(p.value))}</b>${p.effective != null ? ` <span class="muted">(using ${esc(fix(p.effective))} now)</span>` : ''}`;
+  if (p.kind === 'frame') return p.fields.length ? `<span class="mi-fields">${p.fields.map((f) => `<span class="mi-field"><span class="mi-bar sm" aria-hidden="true"><i style="width:${Math.round(f.frac * 100)}%"></i></span> ${esc(f.words)} <b>${esc(f.key === 'journey' ? Math.round(f.value * 100) + ' %' : f.key === 'speed' ? fix(f.value) + '×' : fix(f.value))}</b></span>`).join('')}</span>` : '<span class="muted">not known</span>';
+  return `<b>${esc(p.text)}</b>`;
+}
+function modalInputHTML(m) {
+  if (m.show.file?.name !== M.MODAL_INPUT_FILE) { miSourceDraft = null; miStrengthDraft = null; return ''; }
+  const v = m.show.modal_input, W = M.MODAL_SOURCE_WORDS, o = off('modalinput') || !v;
+  const src = miSourceDraft ?? v?.source ?? 'off';
+  const cur = v?.strength == null ? null : Math.round(v.strength * 100), str = miStrengthDraft ?? cur ?? 60;
+  const btn = (id) => `<button type="button" id="ctl-mi-${id}" data-act="mi-source" data-source="${id}" class="${src === id ? 'lit' : ''}" aria-pressed="${src === id}" ${o ? 'disabled' : ''}>${W[id].label}</button>`;
+  const now = !v ? 'not known yet: the show hasn\'t answered'
+    : `${v.source ? W[v.source].label : 'Not known'}${v.source && v.source !== 'off' && cur != null ? ` at ${nb(cur + ' %')}` : ''}${v.fading ? `, fading to ${esc(W[v.effective_source]?.label ?? '?')}` : !v.stale && v.effective_source && v.effective_source !== v.source ? `, showing ${esc(W[v.effective_source].label)} for now` : ''}`;
+  const seen = nowOr(item(m, 'touchdesigner'));
+  return `<div class="ctl ${whyOf('modalinput') && !busy('modalinput') ? 'off' : ''}" id="ctl-modalinput" data-ctl="modalinput"${busy('modalinput') ? ' aria-busy="true"' : ''}>
+    <div class="ctl-h">Modal input</div>${whyLine('modalinput')}
+    <div class="seg mi-seg" role="group" aria-label="Modal input" aria-describedby="mi-line">${M.MODAL_SOURCES.map(btn).join('')}</div>
+    <p class="effect" id="mi-line">${esc(W[src].line)}.</p>
+    <label for="mi-strength">Strength</label>
+    <div class="row-btns"><input type="range" min="0" max="100" step="5" id="mi-strength" value="${str}" aria-describedby="mi-now" ${o || src === 'off' ? 'disabled' : ''}>
+    <output id="mi-strength-v" for="mi-strength">${nb(str + ' %')}</output></div>
+    <p class="effect" id="mi-now">${seen.pre} on bitcube: <b>${now}</b>${seen.tail}. 0 % is the river alone; 100 % is Dave's input at full strength.</p>
+    <div class="row-btns"><button type="button" class="btn primary" id="ctl-mi-set" data-act="mi-set" ${o || !miChanged(v) ? 'disabled' : ''}>Apply</button></div>
+    ${statusLine('ctl-modalinput', ['modalinput'])}
+    ${v ? sendingHTML(v) : ''}</div>`;
+}
+/** "What Dave's agent is sending" for the chosen source, its stale warning, and the other sources' freshness on one line. */
+function sendingHTML(v) {
+  const W = M.MODAL_SOURCE_WORDS;
+  const fresh = v.sources.filter((x) => x.known).map((x) => x.ok === false ? `${x.label} not arriving`
+    : x.id === 'canvas' && x.age_s != null && x.age_s <= 120 ? `${x.label} live` : `${x.label} ${ageSpan(x.age_s)}`).join(' · ');
+  const warn = v.stale ? `<div class="mi-stale lv-warning" role="status">${mark('warning')}<span>${esc(v.stale_words)}.</span></div>` : '';
+  if (v.source === 'off' || !v.source) return `<div class="mi-sending"><div class="ctl-h">What Dave's agent is sending</div>
+    <p class="effect">Off: the river runs on its own; nothing from Dave's agent is used.</p>${fresh ? `<p class="mi-fresh">${fresh}</p>` : ''}</div>`;
+  const rows = v.params.map((p) => `<div class="mi-row${p.kind === 'frame' ? ' wide' : ''}" role="listitem"><div class="mi-name">${esc(p.label)}</div><div class="mi-val">${miValueHTML(p)}</div>
+      <div class="mi-age">${p.age_s != null ? `set ${ageSpan(p.age_s)}` : ''}</div><div class="mi-drives">${p.drives ? esc(p.drives) : ''}</div></div>`).join('');
+  const sc = v.source === 'scene' && v.scene ? `${v.scene.palette_name ? `<p class="mi-note"><span class="lbl">Palette name:</span> ${esc(v.scene.palette_name)}</p>` : ''}${v.scene.journal ? `<p class="mi-note"><span class="lbl">Journal:</span> ${esc(v.scene.journal)}</p>` : ''}` : '';
+  const fr = v.source === 'frames' && v.frames ? `${v.frames.note ? `<p class="mi-note"><span class="lbl">Note:</span> ${esc(v.frames.note)}</p>` : ''}
+    ${v.frames.images.length ? `<div class="mi-thumbs">${v.frames.images.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener" class="mi-thumb ${x.element === 'ropes' ? 'ropes' : ''}"><img src="${esc(x.url)}" alt="Dave's picture for ${esc(x.element === 'ropes' ? 'the ropes' : x.element.replace('-', ' '))}" loading="lazy"><span>${esc(x.element === 'ropes' ? 'Ropes' : 'Screen ' + x.element.slice(-1))}</span></a>`).join('')}</div>` : ''}` : '';
+  return `<div class="mi-sending"><div class="ctl-h">What Dave's agent is sending: ${esc(W[v.source].label)}</div>${warn}
+    ${rows ? `<div class="mi-params" role="list">${rows}</div>` : '<p class="effect">Nothing has arrived for it yet.</p>'}
+    ${sc}${fr}
+    ${fresh ? `<p class="mi-fresh">${fresh}</p>` : ''}
+    ${v.stale_raw ? `<p class="mi-raw">For Will: <code>${esc(v.stale_raw)}</code></p>` : ''}</div>`;
 }
 function openShowList() {
   const s = model?.show;
@@ -1263,6 +1318,13 @@ document.addEventListener('input', (e) => {
     render();
     return;
   }
+  if (e.target.id === 'mi-strength') {
+    miStrengthDraft = Number(e.target.value);
+    const out = $('#mi-strength-v'), set = $('#ctl-mi-set');
+    if (out) out.textContent = nb(`${miStrengthDraft} %`);
+    if (set) set.disabled = off('modalinput') || !miChanged(model?.show.modal_input);
+    return;
+  }
   if (e.target.id !== 'overlay-strength') return;
   overlayDraft = Number(e.target.value);
   const out = $('#overlay-draft'), set = $('#ctl-overlay-set');
@@ -1315,6 +1377,18 @@ document.addEventListener('click', async (e) => {
         fail: 'The overlay could not be set', kept: 'Your slider choice is kept.',
         holds: (mm) => Math.round((mm.show.combined?.overlay ?? -1) * 100) === sent && mm.show.combined?.framing === profile && (!screens || sameScreens(screenChoice(mm.show.combined?.screens), screens)),
         onDone: () => { if (overlayDraft === sent) overlayDraft = null; if (framingDraft === profile) framingDraft = null; if (screens && sameScreens(screenChoice(screensDraft), screens)) screensDraft = null; } });
+      break;
+    }
+    case 'mi-source': miSourceDraft = b.dataset.source; render(); break;
+    case 'mi-set': {
+      const v = m?.show.modal_input, source = miSourceDraft ?? v?.source ?? 'off';
+      const pct = miStrengthDraft ?? (v?.strength == null ? 60 : Math.round(v.strength * 100)), body = { source, strength: pct / 100 };
+      const W = M.MODAL_SOURCE_WORDS[source];
+      runControl('modalinput', '/api/control/modalinput', body, { btn: b, what: changeLabel('modalinput', body),
+        done: source === 'off' ? 'Now Off: the river runs on its own' : `Now ${W.label} at ${nb(pct + ' %')}: ${W.line}`,
+        fail: 'The Modal input is unchanged', kept: 'Your choice is kept.',
+        holds: (mm) => mm.show.modal_input?.source === source && (source === 'off' || Math.round((mm.show.modal_input?.strength ?? -1) * 100) === pct),
+        onDone: () => { if (miSourceDraft === source) miSourceDraft = null; if (miStrengthDraft === pct) miStrengthDraft = null; } });
       break;
     }
     case 'hub-step': { const cur = m?.show.panels.brightness == null ? null : Math.round(m.show.panels.brightness * 100); if (cur == null && hubDraft == null) break; hubDraft = clamp((hubDraft ?? cur) + Number(b.dataset.d), 0, 100); render(); announce(`${hubDraft} %`, 'hub-step'); break; }
