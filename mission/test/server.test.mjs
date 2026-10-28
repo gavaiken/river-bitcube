@@ -114,11 +114,18 @@ test('server in fixture mode: /version, login, /fixtures, status, stills, contro
   assert.equal((await (await get('/api/history', { cookie: both })).json()).last_action, null);     // the other scenario is its own world
 
   // the pages (a page not built yet is a 404 that says so, never a 500), the redirects, and the fake agent's two moods
-  for (const page of ['/status', '/lights', '/chat', '/map', '/login']) {
+  for (const page of ['/status', '/lights', '/chat', '/map', '/hub75', '/login']) {
     const r = await get(page, { cookie: mc });
     if (r.status === 404) assert.deepEqual(await r.json(), { error: 'not built yet' }, page);
     else assert.deepEqual([r.status, /text\/html/.test(r.headers.get('content-type'))], [200, true], page);
   }
+  // the HUB75 simulator's footage: behind the login, in byte ranges (Safari plays video only from a server that answers them)
+  assert.equal((await get('/media/river-cascade.mp4')).status, 302);
+  const part = await get('/media/river-cascade.mp4', { cookie: mc, range: 'bytes=0-99' });
+  assert.deepEqual([part.status, part.headers.get('content-type'), (await part.arrayBuffer()).byteLength], [206, 'video/mp4', 100]);
+  assert.match(part.headers.get('content-range'), /^bytes 0-99\/\d+$/);
+  assert.equal((await get('/media/nope.mp4', { cookie: mc })).status, 404);
+  assert.equal((await get('/media/../server.mjs', { cookie: mc })).status, 404);
   for (const old of ['/', '/mission']) { const r = await get(old, { cookie: mc }); assert.deepEqual([r.status, r.headers.get('location')], [302, '/status'], old); }
   assert.equal((await post('/api/chat/send', { text: 'please fail' }, { cookie: mc })).status, 200);
   assert.equal((await post('/api/chat/send', { text: 'hello' }, { cookie: mc })).status, 200);

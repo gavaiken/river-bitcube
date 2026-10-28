@@ -20,7 +20,7 @@
 //                           removed on exit. The agent gets its path in its environment (lib/agent.mjs).
 //
 // Routes (all JSON unless said; everything but /login, /healthz, /version, /shows.json and the assets sits behind the login cookie):
-//   GET  /status /lights /chat /map /login      the v2 pages (public/*.html, docs/mission-ui.md); /, /mission and /status.html
+//   GET  /status /lights /chat /map /hub75 /login   the v2 pages (public/*.html, docs/mission-ui.md); /, /mission and /status.html
 //                                              (the v1 addresses) redirect to /status; /map/ is the engineers' diagram with live dots
 //   GET  /api/status                           lib/mission.mjs snapshot + studio + now (the server's clock) + since + last_action;
 //                                              applying: every control in flight (lib/applying.mjs; docs/mission-ui.md "Applying
@@ -60,7 +60,7 @@
 //                                              recorded with source 'studio chat' (Applying line, Last done and Recent say so);
 import { createServer } from 'node:http';
 import { connect as netConnect } from 'node:net';
-import { readFileSync, existsSync, mkdirSync, copyFileSync, chmodSync, lstatSync, unlinkSync, statSync } from 'node:fs';
+import { createReadStream, readFileSync, existsSync, mkdirSync, copyFileSync, chmodSync, lstatSync, unlinkSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { userInfo } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -264,7 +264,7 @@ function withWords(ev) { return ev ? { ...ev, words: describeEvent(ev), ago_s: M
 
 // ---- helpers ---------------------------------------------------------------------------------------------
 // The v2 pages (docs/mission-ui.md). A page file that is not built yet answers 404 { error: 'not built yet' } rather than 500.
-const PAGES = { '/status': 'status.html', '/lights': 'lights.html', '/chat': 'chat.html', '/map': 'map.html', '/login': 'login.html' };
+const PAGES = { '/status': 'status.html', '/lights': 'lights.html', '/chat': 'chat.html', '/map': 'map.html', '/hub75': 'hub75.html', '/login': 'login.html' };
 const REDIRECTS = { '/': '/status', '/mission': '/status', '/status.html': '/status' };     // the v1 addresses
 // Assets under public/ (styles, scripts, icons, the manifest) are served to anyone, like the login page itself: they hold no data.
 // HTML is only served through PAGES (behind the login); the design prototypes (public/proto/) are in git history.
@@ -276,6 +276,26 @@ function staticFile(path) {
   if (!m || !TYPES[m[2]]) return null;
   const file = join(PUBLIC, m[1]);
   return existsSync(file) ? [file, TYPES[m[2]]] : null;
+}
+// Footage for the HUB75 simulator (/hub75): mission/media/<name>.mp4, behind the login, with byte ranges (Safari plays video only
+// from a server that answers them).
+const MEDIA = join(HERE, 'media');
+function sendMedia(req, res, path) {
+  const m = path.match(/^\/media\/([a-z0-9-]+\.mp4)$/);
+  const file = m && join(MEDIA, m[1]);
+  if (!file || !existsSync(file)) return send(res, 404, { error: 'not found' });
+  const size = statSync(file).size;
+  const h = { 'content-type': 'video/mp4', 'accept-ranges': 'bytes', 'cache-control': 'private, max-age=3600', ...SECURITY };
+  const r = String(req.headers.range ?? '').match(/^bytes=(\d*)-(\d*)$/);
+  let start = 0, end = size - 1;
+  if (r && (r[1] || r[2])) {
+    if (r[1]) { start = Number(r[1]); if (r[2]) end = Math.min(Number(r[2]), size - 1); }
+    else start = Math.max(0, size - Number(r[2]));
+    if (start > end || start >= size) { res.writeHead(416, { ...h, 'content-range': `bytes */${size}` }); return res.end(); }
+    res.writeHead(206, { ...h, 'content-range': `bytes ${start}-${end}/${size}`, 'content-length': end - start + 1 });
+  } else res.writeHead(200, { ...h, 'content-length': size });
+  if (req.method === 'HEAD') return res.end();
+  createReadStream(file, { start, end }).pipe(res);
 }
 const MAP_DIR = join(REPO, 'docs', 'system');      // the interactive system map, served with live status
 function sendPage(req, res, name) {
@@ -464,6 +484,7 @@ const server = createServer(async (req, res) => {
       return send(res, 302, '', 'text/plain', { location: '/status', 'set-cookie': [`scenario=${fx[1]}; Path=/; SameSite=Lax`, setCalib] });
     }
     if (PAGES[path]) return sendPage(req, res, PAGES[path]);
+    if (path.startsWith('/media/') && (req.method === 'GET' || req.method === 'HEAD')) return sendMedia(req, res, path);
     if (path === '/map/' || path === '/map/index.html') {
       const html = readFileSync(join(MAP_DIR, 'index.html'), 'utf8')
         .replace('</body>', '<script>' + readFileSync(join(PUBLIC, 'map-live.js'), 'utf8') + '</script></body>');

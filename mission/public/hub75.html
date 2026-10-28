@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e141a" media="(prefers-color-scheme: dark)">
+<title>HUB75 simulator · Mission control</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" href="/v2.css">
+<link rel="stylesheet" href="/hub75.css">
+<script>try { const t = localStorage.getItem('mc-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
+</head>
+<body>
+<main class="hub">
+  <p class="hub-lede"><b>An experiment, not the show.</b> Only the moving water from the river footage, cut out, zoomed and drawn on four simulated HUB75 screens. Everything that doesn't move is sent as true black (LEDs off). Nothing here reaches bitcube.</p>
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="card stage-card" aria-label="The simulated screens">
+    <div class="card-h"><h2>The four screens</h2>
+      <div class="seg" role="group" aria-label="View">
+        <button type="button" data-view="wall" aria-pressed="true">All four</button>
+        <button type="button" data-view="one" aria-pressed="false">One screen</button>
+        <button type="button" data-view="leds" aria-pressed="false">LED close-up</button>
+      </div>
+    </div>
+    <div class="stage" id="stage">
+      <canvas id="leds" aria-label="Simulated HUB75 screens"></canvas>
+      <button type="button" class="stage-btn" id="full" title="Full screen" aria-label="Full screen">⤢</button>
+    </div>
+    <p class="stage-note" id="stageNote">Each screen is 128 × 256 LEDs (four 128 × 64 panels, hung portrait). Drag to pan when zoomed.</p>
+    <dl class="meters" id="meters">
+      <div><dt>LEDs lit</dt><dd id="mLit">–</dd></div>
+      <div><dt>Light vs. full white</dt><dd id="mLight">–</dd></div>
+      <div><dt>Water found</dt><dd id="mWater">–</dd></div>
+    </dl>
+  </section>
+
+  <section class="card" aria-label="Controls">
+    <div class="ctl">
+      <label for="intensity">Intensity <output id="intensityOut"></output></label>
+      <input type="range" id="intensity" min="0" max="1" step="0.01">
+      <p class="hint">0 = off, 1 = full panel brightness. Scales light output (linear), not the signal.</p>
+    </div>
+    <div class="ctl">
+      <span class="lbl">Look</span>
+      <div class="seg" role="group" aria-label="Look" id="lookSeg">
+        <button type="button" data-look="water">Water</button>
+        <button type="button" data-look="foam">Foam</button>
+        <button type="button" data-look="motion">Motion</button>
+      </div>
+      <p class="hint" id="lookHint"></p>
+    </div>
+    <div class="ctl">
+      <span class="lbl">Framing</span>
+      <div class="seg" role="group" aria-label="Framing" id="frameSeg">
+        <button type="button" data-frame="four">Four windows</button>
+        <button type="button" data-frame="span">One across all four</button>
+      </div>
+    </div>
+    <div class="ctl">
+      <label for="zoom">Zoom <output id="zoomOut"></output></label>
+      <input type="range" id="zoom" min="1" max="8" step="0.05">
+    </div>
+    <div class="row-btns">
+      <button type="button" class="btn primary" id="auto">Find the water</button>
+      <button type="button" class="btn" id="play">Pause</button>
+      <label class="check"><input type="checkbox" id="follow"> Keep following</label>
+    </div>
+    <details class="more">
+      <summary>Fine-tune</summary>
+      <div class="ctl"><label for="sens">Motion threshold <output id="sensOut"></output></label><input type="range" id="sens" min="0" max="1" step="0.01"><p class="hint">Higher keeps only the most active water.</p></div>
+      <div class="ctl"><label for="soft">Edge softness <output id="softOut"></output></label><input type="range" id="soft" min="0" max="1" step="0.01"></div>
+      <div class="ctl"><label for="floor">Black floor <output id="floorOut"></output></label><input type="range" id="floor" min="0" max="0.6" step="0.01"><p class="hint">Anything darker than this goes fully off.</p></div>
+      <div class="ctl"><label for="contrast">Contrast <output id="contrastOut"></output></label><input type="range" id="contrast" min="0.5" max="3" step="0.05"></div>
+      <div class="ctl"><label for="sat">Colour <output id="satOut"></output></label><input type="range" id="sat" min="0" max="1.5" step="0.05"><p class="hint">0 = white light only.</p></div>
+      <div class="ctl"><label for="trail">Motion trail <output id="trailOut"></output></label><input type="range" id="trail" min="0" max="1" step="0.01"></div>
+      <div class="ctl"><label for="glow">Diffuser glow <output id="glowOut"></output></label><input type="range" id="glow" min="0" max="1" step="0.01"></div>
+      <div class="ctl"><label for="bits">Panel grey depth <output id="bitsOut"></output></label><input type="range" id="bits" min="6" max="14" step="1"><p class="hint">How finely the panels can dim. Low depths show steps and crush the darkest water to off.</p></div>
+      <div class="row-btns">
+        <button type="button" class="btn" id="reset">Reset to defaults</button>
+        <button type="button" class="btn" id="copy">Copy settings</button>
+      </div>
+    </details>
+  </section>
+
+  <section class="card src-card" aria-label="The river footage">
+    <div class="card-h"><h2>River footage</h2>
+      <div class="seg" role="group" aria-label="Show" id="srcSeg">
+        <button type="button" data-src="video">Video</button>
+        <button type="button" data-src="mask">Water found</button>
+        <button type="button" data-src="cut">Cut out</button>
+      </div>
+    </div>
+    <div class="src" id="srcWrap"><canvas id="src" aria-label="River footage with the screen windows"></canvas></div>
+    <p class="hint">Drag a window to move it. The motion map builds up over a few seconds; rocks and the timestamp never move, so they drop out.</p>
+    <div class="row-btns">
+      <label class="btn file">Use another clip…<input type="file" id="file" accept="video/*" hidden></label>
+      <span class="clipname" id="clipName"></span>
+    </div>
+  </section>
+  <video id="video" src="/media/river-cascade.mp4" muted playsinline loop preload="auto" hidden></video>
+</main>
+<script type="module" src="/hub75.js"></script>
+</body>
+</html>

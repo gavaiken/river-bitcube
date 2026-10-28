@@ -1048,7 +1048,7 @@ $('#cal-body').addEventListener('click', (e) => {
 
 // ---- footer -------------------------------------------------------------------------------------------------------
 function renderFooter() {
-  put('foot', `<div class="links">${DOC_LINKS.map(([l, h]) => `<a href="${h}" ${h.startsWith('/') ? '' : 'target="_blank" rel="noopener"'}>${esc(l)}</a>`).join('')}</div>`);
+  put('foot', `<div class="links">${[['HUB75 simulator (experiment)', '/hub75'], ...DOC_LINKS].map(([l, h]) => `<a href="${h}" ${h.startsWith('/') ? '' : 'target="_blank" rel="noopener"'}>${esc(l)}</a>`).join('')}</div>`);
 }
 
 // ---- go ----------------------------------------------------------------------------------------------------------
