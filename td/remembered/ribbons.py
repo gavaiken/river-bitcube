@@ -157,7 +157,7 @@ class Ribbons:
 
     # ---- drawing -------------------------------------------------------------------------------------------------------
 
-    def render_screens(self, colour):
+    def render_screens(self, colour, gain=1.0):
         # (speed, M7) every screen's points into one bincount, then the glow, trace and colour on all four at once: bitcube
         # was spending 14.5 ms here with one pass per screen and ribbon
         col = np.asarray(colour, np.float32)
@@ -213,7 +213,7 @@ class Ribbons:
         # colour through a 256-step lookup (the brightest go to white), screens side by side: one gather instead of
         # broadcasting every step to three channels (5.7 ms on bitcube)
         lv = np.linspace(0, LUT_TOP, 256, dtype=np.float32)[:, None]
-        lut = np.clip(lv * col + np.clip(lv - 0.55, 0, 1) * (1 - col), 0, 1).astype(np.float32)
+        lut = (np.clip(lv * col + np.clip(lv - 0.55, 0, 1) * (1 - col), 0, 1) * np.float32(gain)).astype(np.float32)
         q = (np.minimum(tr, LUT_TOP) * (255 / LUT_TOP) + 0.5).astype(np.uint8)        # (NQ, QH, QW)
         return lut[q.transpose(1, 0, 2).reshape(QH, NQ * QW)]
 

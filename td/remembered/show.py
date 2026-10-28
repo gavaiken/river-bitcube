@@ -286,6 +286,7 @@ class Show:
         self.mini_ease = (2.0, 6.0)
         self.drift_p = np.random.default_rng(seed + 3).uniform(0, 2 * math.pi, 2)
         self.field_dt = 0.0
+        self.video_layer = None
         self.crops = [None] * 4
         self.wins = self.water.windows(0.0)
         self.screen_level = SCREEN_CALM
@@ -468,6 +469,11 @@ class Show:
                                 max(self.ropes.v_now, 30.0), knobs.get('turbulence', 0.5))
                 self.field_dt = 0.0
                 self.ropes.overlay = self.field.render_ropes(pal['light']) * 0.8
+                # (M7 speed) the river video under the particles on this tick, the screens on the next: the two halves of
+                # the screens' work on alternate frames, so no frame waits two vsyncs
+                self.video_layer = (self.water.step(self.crops, self.wins, level=self.screen_level, intensity=None,
+                                                    sens=self.control['screen_threshold'], half=True)
+                                    if self.control['screen_video'] > 0 else None)
         else:
             self.ropes.overlay = None
         self.rope_frame = self.ropes.step(dt, ctx)
@@ -481,12 +487,13 @@ class Show:
             # the artists' simulator look (water.py): the moving water through four drifting windows, everything else off
             if self.control['screen_mode'] == 'particles':
                 inten = self.control['screen_intensity'] or 0.82
-                frame = self.field.render_screens(pal['light']) * inten
-                if self.control['screen_video'] > 0:              # M9: the river video, faint, under the particles
-                    video = self.water.step(self.crops, self.wins, level=self.screen_level, intensity=None,
-                                            sens=self.control['screen_threshold'], half=True)
-                    frame = frame + video * self.control['screen_video']
-                self.panel_frame = np.clip(frame, 0.0, 1.0)
+                if self.field_kind == 'ribbons':                 # intensity folded into the ribbons' colour lookup
+                    frame = self.field.render_screens(pal['light'], gain=inten)
+                else:
+                    frame = self.field.render_screens(pal['light']) * inten
+                if self.control['screen_video'] > 0 and self.video_layer is not None:   # M9: the river video, faint, under
+                    frame += self.video_layer * np.float32(self.control['screen_video'])
+                self.panel_frame = np.minimum(frame, 1.0, out=frame)
             else:
                 self.panel_frame = self.water.step(self.crops, self.wins, level=self.screen_level,
                                                    intensity=self.control['screen_intensity'],
