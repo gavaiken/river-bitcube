@@ -12,6 +12,7 @@ Live objects stay in sys.modules ('combined_modal_inputs_live'), never in COMP s
 import json
 import math
 import pathlib
+import re
 import sys
 import threading
 import time
@@ -297,14 +298,16 @@ def _journal():
     try:
         data = json.loads(path.read_text(encoding='utf-8'))
         entries = data.get('entries') if isinstance(data, dict) else data
-        if isinstance(entries, list) and entries:
-            e = entries[-1]
-            for k in ('text', 'entry', 'note', 'message', 'summary', 'line'):
-                if isinstance(e, dict) and isinstance(e.get(k), str):
-                    text = e[k]
+        entries = [e for e in entries or [] if isinstance(e, dict)]
+        if entries:
+            e = max(entries, key=lambda x: x.get('tick') if isinstance(x.get('tick'), (int, float)) else -1)
+            for k in ('reflection', 'text', 'entry', 'note', 'summary'):
+                if isinstance(e.get(k), str) and e[k].strip():
+                    text = e[k].strip()
                     break
-            if text is None and isinstance(e, str):
-                text = e
+        if text:
+            m = re.match(r'(.+?[.!?])(\s|$)', ' '.join(text.split()))
+            text = m.group(1) if m else text
     except (OSError, ValueError, AttributeError):
         text = None
     text = ' '.join(text.split())[:200] if text else None
