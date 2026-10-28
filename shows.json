@@ -22,7 +22,7 @@
       "created": "2026-10-22",
       "updated_by": "gavin",
       "updated": "2026-10-27",
-      "last_change": "Pins the 27 Oct multi-view map (three gallery-cam views stitched, floor to rig); rebuild on bitcube to bake it"
+      "last_change": "Rebuilt on the 27 Oct multi-view map (three gallery-cam views, floor to rig): 20 ropes, screens 2-4 located, 1 hand-placed"
     },
     {
       "file": "river-online-oct-23.toe",
@@ -46,7 +46,7 @@
       "created": "2026-10-23",
       "updated_by": "gavin",
       "updated": "2026-10-27",
-      "last_change": "Pins the 27 Oct multi-view map (three gallery-cam views stitched, floor to rig); rebuild on bitcube to bake it"
+      "last_change": "Rebuilt on the 27 Oct multi-view map (three gallery-cam views, floor to rig): 20 ropes, screens 2-4 located, 1 hand-placed"
     },
     {
       "file": "river-baseline-template.toe",
@@ -67,7 +67,7 @@
       "created": "2026-10-26",
       "updated_by": "gavin",
       "updated": "2026-10-27",
-      "last_change": "Pins the 27 Oct multi-view map (three gallery-cam views stitched, floor to rig); rebuild on bitcube to bake it"
+      "last_change": "Rebuilt on the 27 Oct multi-view map (three gallery-cam views, floor to rig): 20 ropes, screens 2-4 located, 1 hand-placed"
     },
     {
       "file": "river-combined-v0.toe",
@@ -89,7 +89,7 @@
       "created": "2026-10-26",
       "updated_by": "gavin",
       "updated": "2026-10-27",
-      "last_change": "Pins the 27 Oct multi-view map (three gallery-cam views stitched, floor to rig); rebuild on bitcube to bake it"
+      "last_change": "Rebuilt on the 27 Oct multi-view map (three gallery-cam views, floor to rig): 20 ropes, screens 2-4 located, 1 hand-placed"
     },
     {
       "file": "river-combined-modal-inputs.toe",
@@ -112,7 +112,7 @@
       "created": "2026-10-27",
       "updated_by": "gavin",
       "updated": "2026-10-27",
-      "last_change": "Pins the 27 Oct multi-view map (three gallery-cam views stitched, floor to rig); rebuild on bitcube to bake it"
+      "last_change": "Rebuilt on the 27 Oct multi-view map (three gallery-cam views, floor to rig): 20 ropes, screens 2-4 located, 1 hand-placed"
     },
     {
       "file": "river-seasons-palettes.toe",
