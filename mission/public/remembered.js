@@ -227,7 +227,7 @@ function setScreen(k, pct, touched = true) {
 }
 for (const k of SCREEN_KEYS) screenInput[k].addEventListener('input', () => setScreen(k, Number(screenInput[k].value)));
 ctls.video = control($('#z-video'), { action: 'remembered-screens', expectS: EXPECT_S['remembered-screens'], label: 'Apply', kind: 'primary',
-  before: 'Moves only the screens: the ropes keep the show.', what: changeLabel('remembered-screens', { intensity: 0.82, threshold: 0.35, video: 0.15 }),
+  before: 'Moves only the screens: the ropes keep the show.', what: changeLabel('remembered-screens', { intensity: 0.82, threshold: 0.35, video: 0.35 }),
   noAnswer: 'the lines above the button say what bitcube has',
   done: () => `Asked TouchDesigner for ${changeLabel('remembered-screens', screensBody()).replace(/^the change of /, '')}`,
   run: () => api('/api/control/remembered-screens', screensBody()),
@@ -265,7 +265,7 @@ function renderControls(v) {
     const now = v?.[k]?.now ?? null, asked = v?.[k]?.asked ?? null;
     $(`#${k}-now`).textContent = now != null ? fmt.nb(`${Math.round(now * 100)} %`) : asked != null ? `${fmt.nb(`${Math.round(asked * 100)} %`)} asked (TouchDesigner hasn't said)` : 'not known';
     if (!S.scrTouched[k] && (now ?? asked) != null) setScreen(k, (now ?? asked) * 100, false);
-    else if (S.scr[k] == null) setScreen(k, (v?.[k]?.default ?? { intensity: 0.82, threshold: 0.35, video: 0.15 }[k]) * 100, false);
+    else if (S.scr[k] == null) setScreen(k, (v?.[k]?.default ?? { intensity: 0.82, threshold: 0.35, video: 0.35 }[k]) * 100, false);
   }
   ctls.video.update({ why: whyFor('remembered-screens', v), whyBy: S.m?.controls?.['remembered-screens']?.by ?? null });
 }

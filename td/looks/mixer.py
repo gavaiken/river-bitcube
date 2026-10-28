@@ -195,7 +195,7 @@ def frame(comp):
     except Exception as e:                                        # noqa: BLE001 - never stop the show
         h.error = repr(e)
     t_cook = time.perf_counter()
-    for n in ('rope_render', 'panel_render', 'ribbon_params'):
+    for n in ('rope_render', 'panel_render', 'ribbon_params', 'river_mask'):
         o = comp.op(n)
         if o is not None:
             o.cook(force=True)
@@ -217,6 +217,10 @@ def cook(scriptOp):
         from remembered import show as rshow
         on = h.looks is not None and h.looks.look == 'remembered'
         scriptOp.copyNumpyArray(rshow.params_image(rshow._holder().show, fade=k, on=on))
+        return
+    if scriptOp.name == 'river_mask':
+        from remembered import show as rshow
+        scriptOp.copyNumpyArray(rshow.mask_image(rshow._holder().show))
         return
     if scriptOp.name == 'rope_render':
         f = h.ropes

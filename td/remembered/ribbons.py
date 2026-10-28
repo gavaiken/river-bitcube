@@ -49,6 +49,27 @@ def _disc(r):
     return np.clip(r + 0.5 - d, 0, 1).astype(np.float32) * (0.6 + 0.4 * (d / max(r, 1)) ** 2)   # bright rim, as bokeh
 
 
+def rope_down(space, centre, S, radius_m=0.7):
+    """The direction the ropes run downward near a point (unit (x, y), y up): the water on the screens flows the same way
+    as on the ropes around them (Gavin, 28 Oct). Weighted by distance (gaussian, 0.35 m); straight down if no rope is near."""
+    r = space.rope.reshape(N_ROPES, N_PX, 2).astype(np.float64)
+    a, b = r[:, :-8:4], r[:, 8::4]
+    ok = (a[..., 0] > -1e3) & (b[..., 0] > -1e3)
+    d = b - a
+    n = np.hypot(d[..., 0], d[..., 1])
+    mid = (a + b) / 2
+    dist = np.hypot(mid[..., 0] - centre[0], mid[..., 1] - centre[1])
+    ok &= (n > 1e-6) & (n < 0.5 * S) & (dist < radius_m * S)
+    if not ok.any():
+        return (0.0, -1.0)
+    d = d[ok] / n[ok][:, None]
+    d[d[:, 1] > 0] *= -1                                       # each segment pointing down
+    w = np.exp(-(dist[ok] / (0.35 * S)) ** 2)
+    m = (d * w[:, None]).sum(0)
+    m /= max(float(np.hypot(*m)), 1e-9)
+    return (float(m[0]), float(m[1]))
+
+
 class Ribbons:
     @classmethod
     def from_files(cls, pixelmap=None, screens=None, zones=None, seed=0):
@@ -78,6 +99,7 @@ class Ribbons:
                          w=rng.uniform(0.13, 0.22) * S, spd=rng.uniform(0.8, 1.2),
                          home=self.screens[i % len(self.screens)][0]) for i in range(N_RIB)]
         self.sw = SCREEN_M[0] * S
+        self.down = [rope_down(space, (c[0], c[1]), S) for c in self.screens]    # the ropes' "down" by each screen
         # the points: per screen, per ribbon, a fixed (u, v, sparkle) set
         self.band = []
         for (cx, cy, ang, w, h) in self.screens:

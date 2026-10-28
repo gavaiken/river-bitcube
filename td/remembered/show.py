@@ -53,8 +53,9 @@ NEUTRAL = {k: 0.5 for k in KNOBS}
 CONTROL_DEFAULT = {'pool_height_m': None, 'light': 'off', 'leds': [], 'opening_night': True,   # opening night ON unless told
                    'screen_intensity': None, 'screen_threshold': None,                          # None: water.SETTINGS
                    'screen_mode': 'particles',       # particles (one field, the screens as windows) | water (video)
-                   'screen_video': 0.15,             # M9: how strongly the river video shows under the particles (0..1)
-                                                     # (0.25 until 28 Oct: a grey haze under the ribbons on the piece)
+                   'screen_video': 0.35,             # M9: how strongly the river video shows under the particles (0..1)
+                                                     # (28 Oct: 0.25, 0.15 for the numpy haze, then 0.35 on the GPU: Gavin
+                                                     # wants the river clips playing behind the ribbons)
                    'screen_field': 'ribbons',        # what the particle windows look onto (FIELDS)
                    'screen_gpu': True}               # ribbons drawn on the GPU when its shaders are healthy (ribbons_gpu.py)
 # the particle fields: ribbons (silk of glitter, Gavin's reference, 28 Oct, the default) | fine (M2's smoky streaks with
@@ -293,7 +294,7 @@ class Show:
         self.video_layer = None
         self.gpu_ok = False                   # the GPU ribbons' shaders built and without errors (checked in step())
         self.gpu_gain = 0.0                   # how bright the GPU draws the ribbons now (0: not the ribbons' turn)
-        self.light_rgb = (0.6, 0.8, 1.0)
+        self.pal_now = {'deep': (0.03, 0.05, 0.19), 'mid': (0.21, 0.40, 0.49), 'light': (0.46, 0.77, 0.83)}
         self.crops = [None] * 4
         self.wins = self.water.windows(0.0)
         self.screen_level = SCREEN_CALM
@@ -483,7 +484,7 @@ class Show:
                 # the screens' work on alternate frames, so no frame waits two vsyncs
                 self.video_layer = (self.water.step(self.crops, self.wins, level=self.screen_level, intensity=None,
                                                     sens=self.control['screen_threshold'], half=True)
-                                    if self.control['screen_video'] > 0 else None)
+                                    if self.control['screen_video'] > 0 and not self.gpu_active() else None)
         else:
             self.ropes.overlay = None
         self.rope_frame = self.ropes.step(dt, ctx)
@@ -496,16 +497,14 @@ class Show:
         if self.ticks % PANEL_EVERY == 0:                 # the screens at 30 fps: half the work, still smooth
             # the artists' simulator look (water.py): the moving water through four drifting windows, everything else off
             self.gpu_gain = 0.0
-            self.light_rgb = tuple(float(c) for c in pal['light'])
+            self.pal_now = {k: tuple(float(c) for c in pal[k]) for k in ('deep', 'mid', 'light')}
             if self.control['screen_mode'] == 'particles' and self.gpu_active():
-                # the GPU draws the ribbons (ribbon_params -> ribbons_draw ... ribbons_out); here only the river video under
-                # them, and now and then a numpy render for the lit share in status.json
+                # the GPU draws the ribbons and the river under them (ribbon_params -> ribbons_draw ... ribbons_out, and
+                # river_gpu); panel_render carries nothing; now and then a numpy render for the lit share in status.json
                 self.gpu_gain = self.control['screen_intensity'] or 0.82
                 if self.ticks % 300 == 0:
                     self.field.render_screens(pal['light'])
-                if self.control['screen_video'] > 0 and self.video_layer is not None:
-                    self.panel_frame = np.minimum(self.video_layer * np.float32(self.control['screen_video']), 1.0)
-                else:
+                if self.panel_frame is None or self.panel_frame.any():
                     self.panel_frame = np.zeros((ribbons_gpu.QH, ribbons_gpu.QW * 4, 3), np.float32)
             elif self.control['screen_mode'] == 'particles':
                 inten = self.control['screen_intensity'] or 0.82
@@ -591,13 +590,13 @@ def get(comp):
 def frame(comp):
     """Execute DAT onFrameStart: a river frame now and then, one tick, then cook the two Script TOPs."""
     step(comp)
-    for n in ('rope_render', 'panel_render', 'ribbon_params'):
+    for n in ('rope_render', 'panel_render', 'ribbon_params', 'river_mask'):
         o = comp.op(n)
         if o is not None:
             o.cook(force=True)
 
 
-GPU_OPS = ('ribbons_draw', 'ribbons_trail', 'ribbons_out')
+GPU_OPS = ('ribbons_draw', 'ribbons_trail', 'ribbons_out', 'river_gpu')
 
 
 def check_gpu(comp, show):
@@ -621,12 +620,30 @@ def params_image(show, fade=1.0, on=True):
     """ribbon_params: the GPU ribbons' numbers (ribbons_gpu.params), gain 0 when they aren't on the screens."""
     if show is None or show.field_kind != 'ribbons':
         return np.zeros((ribbons_gpu.PH, ribbons_gpu.PW, 4), np.float32)
-    gain = show.gpu_gain * fade if (on and show.gpu_active()) else 0.0
-    return np.ascontiguousarray(ribbons_gpu.params(show.field, show.light_rgb, gain))
+    live = on and show.gpu_active()
+    gain = show.gpu_gain * fade if live else 0.0
+    s = show.water.s
+    vgain = (show.control['screen_video'] * (s['intensity'] * max(0.0, min(1.0, show.screen_level))) ** (1 / 2.2) * fade
+             if live and show.control['screen_mode'] == 'particles' else 0.0)
+    video = {'windows': show.wins or [], 'gain': vgain, 'floor': s['floor'], 'contrast': s['contrast'], 'sat': s['sat']}
+    return np.ascontiguousarray(ribbons_gpu.params(show.field, show.pal_now, gain, video))
+
+
+def mask_image(show):
+    """river_mask: water.py's motion mask (320 x 180, 1 = moving water) for river_gpu, upright in TD."""
+    m = show.water.mask if show is not None else np.zeros((water_mod.MH, water_mod.MW), np.float32)
+    img = np.empty((m.shape[0], m.shape[1], 4), np.float32)
+    img[..., 0] = img[..., 1] = img[..., 2] = m[::-1]
+    img[..., 3] = 1.0
+    return img
 
 
 def cook_params(scriptOp):
     scriptOp.copyNumpyArray(params_image(_holder().show))
+
+
+def cook_mask(scriptOp):
+    scriptOp.copyNumpyArray(mask_image(_holder().show))
 
 
 def step(comp):

@@ -126,7 +126,8 @@ def test_gpu_params_and_the_numpy_mirror_of_the_shaders():
     f = ribbons.Ribbons.from_files(*[str(p) for p in FILES], seed=5)
     for _ in range(30):
         f.step(1 / 30, 0.8, 100, 0.6)
-    p = G.params(f, (0.6, 0.8, 1.0), gain=0.82)
+    PAL = {"deep": (0.03, 0.05, 0.19), "mid": (0.21, 0.40, 0.49), "light": (0.46, 0.77, 0.83)}
+    p = G.params(f, PAL, gain=0.82, video={"windows": [(0.1, 0.1, 0.11, 0.4)] * 4, "gain": 0.3})
     assert p.shape == (G.PH, G.PW, 4) and p.dtype == np.float32 and np.isfinite(p).all()
     assert abs(p[0, 1, 3] - 0.82) < 1e-6 and (p[1:1 + G.N_RIB, 1] <= 2 * math.pi).all()      # time folded into phases
     ref = G.Reference()
@@ -134,4 +135,15 @@ def test_gpu_params_and_the_numpy_mirror_of_the_shaders():
         out = ref.render(p)
     lit = [(out[:, k * 128:(k + 1) * 128].max(-1) > 0.03).mean() for k in range(4)]
     assert out.shape == (G.QH, G.QW * G.NQ, 3) and out.max() <= 1.0 and min(lit) > 0.05, lit
-    assert G.Reference().render(G.params(f, (1, 1, 1), gain=0.0)).max() == 0.0             # gain 0: nothing on the screens
+    assert G.Reference().render(G.params(f, PAL, gain=0.0)).max() == 0.0             # gain 0: nothing on the screens
+
+
+def test_the_ribbons_and_river_follow_the_ropes_by_each_screen():
+    from remembered import ribbons, ribbons_gpu as G
+    f = ribbons.Ribbons.from_files(*[str(p) for p in FILES], seed=5)
+    assert all(d[1] < -0.9 for d in f.down)                                  # the ropes run down by every screen
+    assert f.down[1][0] < -0.25                                              # and slant left by screen 2 (about 19 deg)
+    p = G.params(f, {'deep': (0, 0, 0), 'mid': (0.2, 0.4, 0.5), 'light': (0.5, 0.8, 0.8)})
+    for k, (cx, cy, ang, w, h) in enumerate(f.screens):
+        phi = math.atan2(f.down[k][0], -f.down[k][1])
+        assert abs(math.atan2(p[1 + G.N_RIB + k, 0, 3], p[1 + G.N_RIB + k, 0, 2]) - (ang - phi)) < 1e-4
