@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { planControl, checkedControl, calBlocked, testBlocked, actionResult, Mission, CAL_BLOCKED } from '../lib/mission.mjs';
+import { planControl, checkedControl, calBlocked, testBlocked, actionResult, Mission } from '../lib/mission.mjs';
 import { APPLY_BLOCKS, EXPECT_S, changeLabel, derive, modalInputView, MODAL_INPUT_FILE, MODAL_BASE } from '../public/model.js';
 import { FixtureMission, fixtureModalInput } from '../lib/fixtures.mjs';
 import { ACTIONS } from '../bin/mc.mjs';
@@ -23,7 +23,6 @@ test('modalinput: a listed source and a strength 0..1, nothing else reaches the 
 });
 
 test('modalinput is locked like the overlay: calibration, test pattern, a switch; its own copy; a TouchDesigner refusal fails it', () => {
-  assert.ok(CAL_BLOCKED.includes('modalinput'));
   assert.equal(calBlocked('modalinput', { running: true }).status, 409);
   assert.equal(testBlocked('modalinput', {}, { value: { td: { ok: true, ropes: { source: 'test' } } } }).status, 409);
   for (const a of ['switch', 'rebuild', 'calibrate']) assert.ok(APPLY_BLOCKS[a].includes('modalinput'), a);

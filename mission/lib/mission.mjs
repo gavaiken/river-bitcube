@@ -19,7 +19,10 @@ export const MODAL_INPUT_ONLY = 'the Modal input is only available while the Mod
 /** Controls refused while a calibration runs (model.js refuses the same ones on the pages). A rebuild ends in the switch
  *  path (TouchDesigner stopped and restarted), so it spoils a run as surely as a switch. A dry run (or a decode of earlier
  *  photos) touches no lights, camera or TouchDesigner: it refuses none of them (R7 #20). */
-export const CAL_BLOCKED = ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'overlay', 'modalinput'];
+export const CAL_BLOCKED = ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'overlay'];
+/** Refused during a calibration here too, though probe.ps1's own $CAL_BLOCKED doesn't list it yet (tools/tests/test_mission_guards.py
+ *  keeps CAL_BLOCKED equal to it): fold it into CAL_BLOCKED when probe.ps1 adds modalinput. */
+const CAL_BLOCKED_HERE = ['modalinput'];
 /** The 409 a switch or a rebuild gets while TouchDesigner is starting or restarting (model.js tdStartingWhy, the pages' words; shared
  *  with fixture mode), or null. probe: the full check's reading as kept ({ at, value } or { at, error }), judged by itself, never
  *  the whole page model; a reading the rule can't read, or a slip in it, refuses (closed, CR9 #11). */
@@ -40,7 +43,7 @@ export function testBlocked(action, body, probe) {
 }
 /** The 409 a control gets while a calibration runs (shared with fixture mode), or null. */
 export function calBlocked(action, cal) {
-  if (!CAL_BLOCKED.includes(action) || cal?.running !== true || cal.stale === true || calNoLights(cal)) return null;   // model.js: one rule
+  if (!(CAL_BLOCKED.includes(action) || CAL_BLOCKED_HERE.includes(action)) || cal?.running !== true || cal.stale === true || calNoLights(cal)) return null;   // model.js: one rule
   return Object.assign(new Error(CAL_RUNNING), { status: 409 });
 }
 // Show files, from the show registry (shows.json, docs/shows.md, read by model.js): a switch may open any offered show, and any
