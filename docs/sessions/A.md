@@ -138,3 +138,15 @@ Notes kept here while another session is editing the shared docs; folded into th
   mission Looks tab (subagent) merged and pushed; its ssh quoting of the playlist is the one unverified link (HANDOFF).
 - **Left:** Combined with Modal not folded in (needs its own fold script, Web Render created inactive); the Looks tab merge
   if not merged; see HANDOFF "Not done / not verified". Checkpoint `all-looks-v1`.
+
+
+## SESSION SUMMARY: the default moved to the playlist file; mission control made clearer for the artists (28 Oct 2026, 11:05-11:30 PT)
+- **Asked:** make switching files vs changing looks obvious; make configuration and state easy to find; the playlist file as the
+  default and first in the list; clearer names; composite vs single-viz flagged; a palette for Justine if there's time.
+- **Did:** boot file -> `river-all-looks.toe`, TD opened on it (61 fps, four looks); `river-looks.toe` retired (`old-`), its copy
+  `river-two-looks.toe` kept; titles ("The river: all looks (playlist)", "..., on its own"), `composite: true`, the kind line in the
+  accent colour; the What's showing card's restart-vs-composite sentence; the Looks card's "Playing: ... 2 of 2 · loop 3 of 4" and
+  Looks-tab link; "See and configure:" per look; the Remembered river page's where-it-fits line. All pushed; mission control
+  updates itself within five minutes.
+- **Not done:** the palette override (planned in HANDOFF, about an hour); a full adversarial UX review (one pass against the
+  house rules only).
