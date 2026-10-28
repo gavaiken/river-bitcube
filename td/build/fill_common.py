@@ -43,7 +43,7 @@ for _n, _f, _l in (('Mapfile', PIXELMAP, 'LED map (every rope LED in the room)')
                    ('Zonesfile', ZONES, 'Zones (every rope LED\'s height above the floor)')):
     if not hasattr(fc.par, _n):
         pg.appendStr(_n, label=_l)
-    getattr(fc.par, _n).val = (REPO + '/' + _f) if _f else ''
+    getattr(fc.par, _n).val = '' if not _f else (_f if (':' in _f or _f.startswith('/')) else REPO + '/' + _f)   # registry paths may be absolute
 if not hasattr(fc.par, 'Variant'):
     pg.appendStr('Variant', label='simple | configurable')
 fc.par.Variant = VARIANT

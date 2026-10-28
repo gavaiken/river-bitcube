@@ -183,7 +183,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-27",
-      "last_change": "Renamed Fill my cup (configurable); fills by real height (zones + the measured screen heights) so screens and ropes beside them light together; soft round particles of varying sizes"
+      "last_change": "The zones file now loads (its path was doubled): the ropes fill by real height like the screens"
     },
     {
       "file": "river-fill-simple.toe",
@@ -205,7 +205,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-27",
-      "last_change": "Built and running on bitcube 27 Oct: the first filling-glass look (b2a7064) on the real-height space, soft particles"
+      "last_change": "The zones file now loads (its path was doubled): the ropes fill by real height like the screens"
     }
   ]
 }

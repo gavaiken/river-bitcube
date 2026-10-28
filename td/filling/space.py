@@ -46,8 +46,8 @@ class Space:
         if zones:
             try:
                 z = json.loads(Path(zones).read_text(encoding='utf-8'))
-            except (OSError, ValueError):
-                z = None
+            except (OSError, ValueError) as e:
+                raise RuntimeError(f'zones file {zones} unreadable ({e}): the ropes would fall back to the camera picture') from e
         self.px_per_m = g.px_per_led / 0.025
         S = self.px_per_m
         rope = g.led_xy.reshape(-1, 2).astype(np.float64).copy()
