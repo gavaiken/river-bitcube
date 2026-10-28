@@ -7,6 +7,8 @@ views is a correspondence. `fit_views` solves the lens (focal length f and one r
 point at the centre) and each view's rotation relative to the home view (the one the camera returns to), by least
 squares over every LED seen in two views. No PTZ units or lens specs are needed; the views just have to overlap.
 
+Lens: division model, n = m / (1 + k1 |m|^2) (sphere.Cam).
+
 Coordinates. Camera (and "home") coordinates: x right, y down, z forward (the home view's optical axis). A direction
 `d` (unit 3-vector, home coordinates) is where an LED is as seen from the camera. A view's rotation R maps home to that
 view: d_view = R @ d_home. The virtual frame (`Frame`) is a pinhole camera with the same f, aimed at the middle of all
@@ -73,29 +75,35 @@ def angles(r):
 # ---- the lens -----------------------------------------------------------------------------------
 
 class Cam:
-    """Pinhole with one radial term: pixel = f * n * (1 + k1 |n|^2) + centre, n = (x/z, y/z)."""
+    """Pinhole with one radial term in the division model (good for wide lenses, and invertible over the whole
+    picture): n = m / (1 + k1 |m|^2), where m = (pixel - centre) / f is where it lands and n = (x/z, y/z) the ray."""
 
     def __init__(self, f, k1, w, h):
         self.f, self.k1, self.w, self.h = float(f), float(k1), int(w), int(h)
         self.c = np.array([w / 2, h / 2])
 
     def project(self, d):
-        """(N, 3) directions in this camera's coordinates -> (N, 2) pixels (NaN behind the camera)."""
+        """(N, 3) directions in this camera's coordinates -> (N, 2) pixels (NaN behind it or beyond what the lens takes in)."""
         d = np.atleast_2d(np.asarray(d, float))
         z = d[:, 2:3]
-        n = np.where(z > 1e-6, d[:, :2] / np.where(z > 1e-6, z, 1), np.nan)
-        r2 = (n ** 2).sum(axis=1, keepdims=True)
-        if self.k1 < 0:                              # past r^2 = 1/(-3 k1) the model folds back: not in this lens's view
-            n = np.where(r2 < 1 / (-3 * self.k1), n, np.nan)
-        return self.f * n * (1 + self.k1 * r2) + self.c
+        front = z > 0.05 * np.linalg.norm(d, axis=1, keepdims=True)
+        n = np.where(front, d[:, :2] / np.where(front, z, 1), np.nan)
+        rn = np.linalg.norm(n, axis=1, keepdims=True)
+        k = self.k1
+        if abs(k) < 1e-12:
+            rm = rn
+        else:                                            # k rn rm^2 - rm + rn = 0, the root through 0
+            disc = 1 - 4 * k * rn ** 2
+            rm = np.where(disc >= 0, 2 * rn / (1 + np.sqrt(np.maximum(disc, 0))), np.nan)
+            if k < 0:                                    # past 1/sqrt(-k) the model folds back: not in this lens's view
+                rm = np.where(rm < 0.98 / np.sqrt(-k), rm, np.nan)
+        scale = np.where(rn > 1e-12, rm / np.where(rn > 1e-12, rn, 1), 1.0)
+        return self.f * n * scale + self.c
 
     def rays(self, px):
         """(N, 2) pixels -> (N, 3) unit directions in this camera's coordinates."""
-        px = np.atleast_2d(np.asarray(px, float))
-        nd = (px - self.c) / self.f
-        n = nd.copy()
-        for _ in range(20):                          # undistort: n (1 + k1 |n|^2) = nd
-            n = nd / (1 + self.k1 * (n ** 2).sum(axis=1, keepdims=True))
+        m = (np.atleast_2d(np.asarray(px, float)) - self.c) / self.f
+        n = m / (1 + self.k1 * (m ** 2).sum(axis=1, keepdims=True))
         d = np.c_[n, np.ones(len(n))]
         return d / np.linalg.norm(d, axis=1, keepdims=True)
 

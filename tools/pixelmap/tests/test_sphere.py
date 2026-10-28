@@ -38,19 +38,19 @@ def test_rotation_round_trip():
 
 
 def test_lens_round_trip():
-    cam = sphere.Cam(700, -0.08, W, H)
+    cam = sphere.Cam(700, -0.15, W, H)
     px = np.array([[10.0, 20.0], [720, 404], [1400, 790]])
     assert np.allclose(cam.project(cam.rays(px)), px, atol=1e-6)
 
 
 def test_two_views_tilted_up_are_put_together():
-    truth = sphere.Cam(760, -0.06, W, H)
+    truth = sphere.Cam(760, -0.3, W, H)
     up = sphere.rot([math.radians(-35), 0, 0])            # tilt up 35 degrees
     dirs = ropes()
     obs = {'home': observe(dirs, truth, np.eye(3)), 'up': observe(dirs, truth, up)}
     assert 300 < len(set(obs['home']) & set(obs['up'])) < len(dirs)           # overlap, and each sees lights the other doesn't
     cam, rots, rep = sphere.fit_views(obs, W, H, 'home')
-    assert abs(cam.f - 760) < 8 and abs(cam.k1 + 0.06) < 0.02
+    assert abs(cam.f - 760) < 8 and abs(cam.k1 + 0.3) < 0.03
     assert np.degrees(np.linalg.norm(sphere.rotvec(rots['up'] @ up.T))) < 0.2
     assert rep['up']['rms_px'] < 1.5
     assert abs(rep['up']['pan_tilt_roll'][1] - 35) < 0.3        # reported as tilt up +35
@@ -142,7 +142,7 @@ def test_camera_shift_sees_movement_not_light():
 
 def test_a_strong_barrel_lens_does_not_fold_far_rays_back_into_the_picture():
     cam = sphere.Cam(1114, -0.45, W, H)
-    far = np.array([[1.4, 0.0, 1.0], [0.0, -1.3, 1.0]])         # far outside the view
+    far = np.array([[30.0, 0.0, 1.0], [0.0, -1.0, 0.01]])        # far outside the view, and behind the side
     assert np.isnan(cam.project(far)).all()
     corner = cam.rays([[0.0, 0.0], [W, H]])                       # the picture's own corners still round-trip
     assert np.allclose(cam.project(corner), [[0, 0], [W, H]], atol=1e-4)
