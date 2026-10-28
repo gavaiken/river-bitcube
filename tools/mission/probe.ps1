@@ -86,7 +86,7 @@ $tdPs1 = Join-Path $repo 'tools\td.ps1'
 # studio chat, a hand-run SSH). The same rule as mission control's calBlocked (mission/lib/mission.mjs CAL_BLOCKED). The
 # action is refused and only the status is reported; Stop goes through calibrate.ps1 -Action cancel, never through here. A dry
 # run (or a decode of earlier photos) photographs nothing and touches no lights or TouchDesigner: it refuses nothing.
-$CAL_BLOCKED = @('ropes', 'hub75', 'test', 'switch', 'rebuild', 'lightsroute', 'overlay', 'modalinput')
+$CAL_BLOCKED = @('ropes', 'hub75', 'test', 'switch', 'rebuild', 'lightsroute', 'overlay')
 if ($CAL_BLOCKED -contains $Action) {
     $calRun = $null
     $calFile = Join-Path $river 'calibration.json'

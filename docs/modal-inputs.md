@@ -60,7 +60,7 @@ Present only while this show is open (otherwise absent/`null`). Numbers are what
 
 ## Action: `probe.ps1 -Action modalinput -Source <off|canvas|scene|frames> -Strength <0..1>`
 - Validates (`-Source` one of the four, `-Strength` a number 0–1; PowerShell rejects anything else before TouchDesigner is touched), applies with the 4 s fade, saves the settings file, and answers the usual probe JSON (`ok: true`) with the new `td.modal_input`.
-- Refused (`ok: false`, `error`) unless TouchDesigner has `river-combined-modal-inputs.toe` open, while the test pattern is on, or while a calibration runs (like the other light actions).
+- Refused (`ok: false`, `error`) unless TouchDesigner has `river-combined-modal-inputs.toe` open, or while the test pattern is on. Not yet in the calibration lock: to add it, put `modalinput` in `CAL_BLOCKED` in both `mission/lib/mission.mjs` and `probe.ps1` (`tools/tests/test_mission_guards.py` keeps the two lists equal).
 - Inside TouchDesigner it is `td_mission.py` action `{"action":"modalinput","source":"scene","strength":0.6}`.
 
 ## Pieces
