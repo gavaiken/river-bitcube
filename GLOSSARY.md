@@ -14,7 +14,7 @@
 
 **River library**: The recorded clips of the real river, kept on bitcube and played back when the live river feed is absent. Not the same as the **river memory** (the last few seconds of whatever river image is showing, smeared down the ropes).
 
-**Season**: One of four looks the river passes through: winter (near-still, white and pale blue, ice glints), spring (thaw and rain, greens and teal), summer (torrent, gold and sunlight glints), autumn (slowing, ochre, rust, leaf-red and mud). A season sets both the river's colours and its intensity.
+**Season**: (The river's year only.) One of four looks the river passes through: winter (near-still, white and pale blue, ice glints), spring (thaw and rain, greens and teal), summer (torrent, gold and sunlight glints), autumn (slowing, ochre, rust, leaf-red and mud). A season sets both the river's colours and its intensity.
 
 **Season cycle**: The river's year compressed into four minutes, one minute per season, blending continuously. It is what the piece does when nothing else is steering it.
 
@@ -45,3 +45,22 @@
 **Studio chat**: One long-running conversation with the team's Claude agent, reachable from mission control. Everyone on the team writes into the same conversation, one request at a time, and the agent can act on the installation, not just talk about it.
 
 **Test pattern**: A mode on mission control's Lights page for checking every LED and screen: the ropes fill red, green, blue, then white, each wiping down from the plug end, and each screen shows four coloured panels (red, green, blue, yellow) with its number in white squares, which also shows which way up it hangs. The river stops until someone presses Stop; then the ropes and panels go back to what they showed.
+
+## The remembered river (the artists' "Rules for the light", 27 Oct)
+
+**Remembered day**: One real date from Dry Creek's past, chosen by Dave's agent, that the column relives: its hours, its rain, how high the river ran, its night and day, its season. Usually chosen because it resembles the river today; otherwise for its significance (a flood, a drought, the first rains). _Avoid_: memory (and never confuse with **river memory**, the last few seconds smeared down the ropes).
+
+**Loop**: About five minutes in which the column relives one remembered day's 24 hours, about 12 seconds per hour. One remembered day per loop; never the same one twice within an hour.
+
+**Phase**: Where a loop is: **calm**, **building**, **surge** or **settling**.
+
+**Surge**: The one moment of full brightness and colour in a loop, landing on the remembered day's heaviest hour of rain, moved earlier or later by the room. A dry day has no surge.
+
+**Decision wave**: One slow wave of light down every rope, and a line wiping down each screen, when a new remembered day is chosen.
+
+**The pool**: Where the ropes coil on the floor. Deeper, bluer and slower than the ropes above it: it breathes in calm, goes dark just before the surge, churns white during it, and is the last thing to fade.
+
+**Day's season**: The season of the remembered date, which sets the loop's palette. Not the **season cycle** of the river's year.
+
+**Lingerer**: Someone standing still close to the column. The room's one visible reflex: the light slows and gathers toward the ropes nearest them.
+
