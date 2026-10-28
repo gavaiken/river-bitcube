@@ -346,7 +346,7 @@
       "created": "2026-10-28",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-28",
-      "last_change": "river-all-looks.toe committed as its starting point (a copy of river-looks.toe, same bytes as river-two-looks.toe, scan 0 hits) so bitcube can switch to it; the playlist mixer build follows"
+      "last_change": "Built on the piece with the playlist mixer: status playlist/position/progress/inputs/used, the look_src_*/look_fade_* switches; playlist round trip checked through control.json; 59 fps; secret scan 0 hits"
     }
   ]
 }
