@@ -233,7 +233,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-28",
-      "last_change": "GPU ribbons keep their cyan and green in a surge (light pushed more saturated, white capped); river clips tinted 65 % toward the palette"
+      "last_change": "river-looks.toe saved with the palette GPU ribbons and the GPU river (river_mask, river_gpu, screens_mix); secret scan 0 hits; 31 fps on the piece"
     }
   ]
 }
