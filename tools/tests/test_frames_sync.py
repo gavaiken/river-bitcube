@@ -305,3 +305,32 @@ def test_site_token_read_only_if_present(tmp_path):
     assert fs.site_token(tmp_path) is None
     (tmp_path / 'secrets.local.json').write_text(json.dumps({'modal': {'site_token': 'abc'}}))
     assert fs.site_token(tmp_path) == 'abc'
+
+
+def test_brief_image_404_is_retried_and_partial_kept(fake, tmp_path):
+    fake.publish('f1', elements=('screen-1', 'ropes'))
+    real = fake.files.pop('/frames/f1/ropes.png')
+    slept = []
+
+    def sleep(s):
+        slept.append(s)
+        if len(slept) == 3:
+            fake.files['/frames/f1/ropes.png'] = real          # it turns up a few seconds late
+    m = fs.Mirror(site=fake.url, root=tmp_path / 'frames', log=lambda *_: None, sleep=sleep)
+    assert m.poll() == 'new'
+    assert slept == [1, 1, 1]
+    assert fake.requests.count('/frames/f1/screen-1.png') == 1
+
+
+def test_image_missing_past_the_budget_fails_and_keeps_what_arrived(fake, tmp_path):
+    fake.publish('f1', elements=('screen-1', 'ropes'))
+    real = fake.files.pop('/frames/f1/ropes.png')
+    t = [0.0]
+    m = fs.Mirror(site=fake.url, root=tmp_path / 'frames', log=lambda *_: None, clock=lambda: t[0],
+                  sleep=lambda s: t.__setitem__(0, t[0] + 10))
+    with pytest.raises(OSError):
+        m.poll()
+    assert not (tmp_path / 'frames' / 'latest.json').exists()
+    fake.files['/frames/f1/ropes.png'] = real
+    assert m.poll() == 'new'
+    assert fake.requests.count('/frames/f1/screen-1.png') == 1      # not fetched again

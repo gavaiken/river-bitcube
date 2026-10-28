@@ -210,8 +210,11 @@ def prune(root, keep=KEEP, protect=()):
 
 
 class Mirror:
-    def __init__(self, site=SITE, root=FRAMES_DIR, layout=LAYOUT, token=None, clock=time.time, log=print, opener=None):
+    def __init__(self, site=SITE, root=FRAMES_DIR, layout=LAYOUT, token=None, clock=time.time, log=print, opener=None,
+                 sleep=time.sleep):
         self.site, self.root = site.rstrip('/'), pathlib.Path(root)
+        self.sleep = sleep
+        self.partial = {}                # (frame_id, element) -> PNG bytes already fetched for a frame not yet complete
         self.layout_version, self.sizes = load_layout(layout)
         self.token, self.clock, self.log = token, clock, log
         self.opener = opener or urllib.request.build_opener()
@@ -274,20 +277,32 @@ class Mirror:
         if fid == self.frame_id:
             self.etag = self.status['etag'] = etag
             return 'same'
+        self.partial = {k: v for k, v in self.partial.items() if k[0] == fid}
         deadline = self.clock() + FETCH_BUDGET_S
         images = {}
         for name, e in m['elements'].items():
             if 'image' not in e:
                 continue
-            if self.clock() > deadline:
-                raise OSError(f'{fid}: images not fetched within {FETCH_BUDGET_S:.0f} s')
-            code, _h, data = self._get(e['image'], timeout=max(1, deadline - self.clock()))
-            if code != 200:
-                raise OSError(f'{fid}/{name}.png: HTTP {code}')
+            # Modal can briefly answer 404 for an image its manifest already names (seen 27 Oct): retry that image
+            # within the 30 s budget, and keep what arrived so a later poll only fetches what is still missing.
+            data = self.partial.get((fid, name))
+            while data is None:
+                if self.clock() > deadline:
+                    raise OSError(f'{fid}: images not fetched within {FETCH_BUDGET_S:.0f} s')
+                code, _h, body = self._get(e['image'], timeout=max(1, deadline - self.clock()))
+                if code == 200:
+                    data = self.partial[(fid, name)] = body
+                elif code in (404, 408, 425, 429) or code >= 500:
+                    if self.clock() + 1 > deadline:
+                        raise OSError(f'{fid}/{name}.png: HTTP {code}')
+                    self.sleep(1)
+                else:
+                    raise OSError(f'{fid}/{name}.png: HTTP {code}')
             try:
                 check_image(name, data, e['sha256'], self.sizes)
                 rgb = png_rgb(data)
             except Rejected as err:
+                self.partial.pop((fid, name), None)
                 # Not stored as seen (no etag): the next poll tries the newest manifest again (§6.1).
                 self.status['rejected'] = {'frame_id': fid, 'reason': str(err), 'at_epoch': self.clock()}
                 self.log(f'frames: rejected {fid} ({err})')
@@ -295,6 +310,7 @@ class Mirror:
             images[name] = (data, rgb)
         if self.clock() > deadline:
             raise OSError(f'{fid}: images not fetched within {FETCH_BUDGET_S:.0f} s')
+        self.partial = {}
         folder = self.root / fid
         folder.mkdir(exist_ok=True)
         for name, (data, rgb) in images.items():
