@@ -128,6 +128,17 @@ def to_uv(corners, w, h):
             for k, (x, y) in corners.items()}
 
 
+def corrected_rot(capture, space, name, black):
+    """The view's rotation as the camera actually was: the calibration's own frame of that view against this black frame."""
+    ref = capture.REPO / 'frames' / space.views[name]['capture'] / 'A' / 'black.png'
+    if not ref.exists():
+        print(f'view {name}: no calibration frame to compare with ({ref}): assuming the camera landed exactly')
+        return space.rots[name]
+    s_ = capture.image_shift(np.asarray(Image.open(ref).convert('RGB'), np.float32), black)
+    print(f'view {name}: picture {s_} px from the calibration\'s')
+    return space.corrected(name, s_)
+
+
 def shoot(capture, comp, cam, out, settle, prefix=''):
     """Black, then each quarter of each screen: {(screen, quarter): frame}, saved under out."""
     from PIL import Image
@@ -149,6 +160,9 @@ def main():
     ap.add_argument('--settle', type=float, default=2.0)
     ap.add_argument('--brightness', type=float, default=0.3, help='panels brightness while locating')
     ap.add_argument('--map', help='the pixel map whose frame the screens go in (default: the newest)')
+    ap.add_argument('--frames', help='work out the screens again from an earlier run\'s frames (frames/screens-<stamp>): '
+                                     'no lights, no camera')
+    ap.add_argument('--out', help='write the screens here (default tools/pixelmap/screens-<today>.json)')
     a = ap.parse_args()
     mpath = Path(a.map) if a.map else decode.latest_pixelmap()
     space_meta = (json.loads(mpath.read_text()).get('meta') or {}).get('space') if mpath else None
@@ -159,50 +173,55 @@ def main():
         import ptz
         views_cfg = ptz.views(a.cam)
         print('multi-view map', mpath.name, '- views', list(space.rots))
-    comp = capture.td("print([p for p in ('/project1/seasons', '/project1/river_local') "
-                      "if op(p) is not None and hasattr(op(p).par, 'Screencorners')][0])")['stdout'].strip()
-    keep = json.loads(capture.td(
-        f"import json; c = op('{comp}'); r = op('/project1/ropes'); p = op('/project1/panels')\n"
-        "print(json.dumps({'corners': bool(c.par.Screencorners), 'solo': int(c.par.Screensolo), "
-        "'test': bool(c.par.Screentest), 'source': r.par.Source.eval(), 'bright': float(p.par.Brightness)}))")['stdout'])
-    print('before:', comp, keep)
-    secrets = json.loads((capture.REPO / 'secrets.local.json').read_text())
-    cam = capture.Reader(secrets['cameras'][a.cam])
-    stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-    out = capture.REPO / 'frames' / f'screens-{stamp}'
-    out.mkdir(parents=True, exist_ok=True)
     per_view, rots = {}, {}
-    try:
-        capture.td(f"c = op('{comp}'); c.par.Screentest = False; c.par.Screencorners = True\n"
-                   f"op('/project1/ropes').par.Source = 'black'; op('/project1/panels').par.Brightness = {a.brightness}")
-        if not space:
-            per_view[None] = shoot(capture, comp, cam, out, a.settle)
-        else:
-            for name, v in space.views.items():
-                with ptz.Ptz(a.cam) as c:
-                    pan, tilt = v.get('ptz') or (None, None)
-                    print(f'view {name}: camera to', c.move_to(pan, tilt, (views_cfg or {}).get('tol', 3)))
-                time.sleep(4.0)                    # the camera sways for a moment after a tilt
-                per_view[name] = shoot(capture, comp, cam, out, a.settle, f'{name}-')
-                # The camera never lands exactly where the calibration had it: measure the difference in the picture.
-                ref = capture.REPO / 'frames' / v['capture'] / 'A' / 'black.png'
-                if ref.exists():
-                    s_ = capture.image_shift(np.asarray(Image.open(ref).convert('RGB'), np.float32), per_view[name][9, 0])
-                    rots[name] = space.corrected(name, s_)
-                    print(f'view {name}: picture {s_} px from the calibration\'s')
-    finally:
-        if space and views_cfg:
-            try:
-                with ptz.Ptz(a.cam) as c:
-                    ok, pos = c.go_home(views_cfg)
-                print('camera home:', pos, '' if ok else 'NOT where it should be: python tools/cameras/ptz.py gallery home')
-            except Exception as e:
-                print(f'CAMERA NOT BACK HOME ({e}): python tools/cameras/ptz.py gallery home')
-        capture.td(f"c = op('{comp}'); c.par.Screencorners = {keep['corners']}; c.par.Screensolo = {keep['solo']}; "
-                   f"c.par.Screenquarter = 0; "
-                   f"c.par.Screentest = {keep['test']}\nop('/project1/ropes').par.Source = '{keep['source']}'\n"
-                   f"op('/project1/panels').par.Brightness = {keep['bright']}")
-        cam.close()
+    if a.frames:
+        out = Path(a.frames)
+        load = lambda n: np.asarray(Image.open(out / f'{n}.png').convert('RGB'), np.float32)
+        for name in (space.views if space else [None]):
+            pre = f'{name}-' if name else ''
+            per_view[name] = {(k, q): load(f'{pre}screen{k}-q{q}') for k, q in [(9, 0)] + [(k, q) for k in (1, 2, 3, 4) for q in (1, 2, 3, 4)]}
+            if name:
+                rots[name] = corrected_rot(capture, space, name, per_view[name][9, 0])
+    else:
+        comp = capture.td("print([p for p in ('/project1/seasons', '/project1/river_local') "
+                          "if op(p) is not None and hasattr(op(p).par, 'Screencorners')][0])")['stdout'].strip()
+        keep = json.loads(capture.td(
+            f"import json; c = op('{comp}'); r = op('/project1/ropes'); p = op('/project1/panels')\n"
+            "print(json.dumps({'corners': bool(c.par.Screencorners), 'solo': int(c.par.Screensolo), "
+            "'test': bool(c.par.Screentest), 'source': r.par.Source.eval(), 'bright': float(p.par.Brightness)}))")['stdout'])
+        print('before:', comp, keep)
+        secrets = json.loads((capture.REPO / 'secrets.local.json').read_text())
+        cam = capture.Reader(secrets['cameras'][a.cam])
+        stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+        out = capture.REPO / 'frames' / f'screens-{stamp}'
+        out.mkdir(parents=True, exist_ok=True)
+        try:
+            capture.td(f"c = op('{comp}'); c.par.Screentest = False; c.par.Screencorners = True\n"
+                       f"op('/project1/ropes').par.Source = 'black'; op('/project1/panels').par.Brightness = {a.brightness}")
+            if not space:
+                per_view[None] = shoot(capture, comp, cam, out, a.settle)
+            else:
+                for name, v in space.views.items():
+                    with ptz.Ptz(a.cam) as c:
+                        pan, tilt = v.get('ptz') or (None, None)
+                        print(f'view {name}: camera to', c.move_to(pan, tilt, (views_cfg or {}).get('tol', 3)))
+                    time.sleep(4.0)                    # the camera sways for a moment after a tilt
+                    per_view[name] = shoot(capture, comp, cam, out, a.settle, f'{name}-')
+                    # The camera never lands exactly where the calibration had it: measure the difference in the picture.
+                    rots[name] = corrected_rot(capture, space, name, per_view[name][9, 0])
+        finally:
+            if space and views_cfg:
+                try:
+                    with ptz.Ptz(a.cam) as c:
+                        ok, pos = c.go_home(views_cfg)
+                    print('camera home:', pos, '' if ok else 'NOT where it should be: python tools/cameras/ptz.py gallery home')
+                except Exception as e:
+                    print(f'CAMERA NOT BACK HOME ({e}): python tools/cameras/ptz.py gallery home')
+            capture.td(f"c = op('{comp}'); c.par.Screencorners = {keep['corners']}; c.par.Screensolo = {keep['solo']}; "
+                       f"c.par.Screenquarter = 0; "
+                       f"c.par.Screentest = {keep['test']}\nop('/project1/ropes').par.Source = '{keep['source']}'\n"
+                       f"op('/project1/panels').par.Brightness = {keep['bright']}")
+            cam.close()
     h, w = next(iter(per_view.values()))[9, 0].shape[:2]
     seen, info = {}, {}                                    # corners in TD UVs of the map's frame (or the camera's)
     for view, frames in per_view.items():
@@ -236,7 +255,7 @@ def main():
         dr.polygon(pts, outline=(255, 255, 0) if not s.get('estimated') else (255, 128, 0))
         dr.text((pts[0][0] + 3, pts[0][1] + 3), f"{k} tl" + (' est' if s.get('estimated') else ''), fill=(255, 255, 0))
     im.save(out / 'corners.png')
-    path = capture.REPO / 'tools' / 'pixelmap' / f"screens-{datetime.now():%Y-%m-%d}.json"
+    path = Path(a.out) if a.out else capture.REPO / 'tools' / 'pixelmap' / f"screens-{datetime.now():%Y-%m-%d}.json"
     meta = {'capture': out.name, 'camera': a.cam, 'frame_size': [w, h],
             'uv': 'TD convention: u left->right, v bottom->top; corners as seen (tl = top left of the upright picture)'}
     if space:

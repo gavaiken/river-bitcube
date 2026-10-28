@@ -161,3 +161,15 @@ def test_image_shift_sign_and_a_view_corrected_by_it():
     p_ref, p_now = cam.project(d @ true_up.T)[0], cam.project(d @ back.T)[0]
     r = sp.corrected('up', p_now - p_ref)
     assert np.degrees(np.linalg.norm(sphere.rotvec(r @ back.T))) < 0.05
+
+
+def test_image_shift_ignores_the_cameras_overlay_text():
+    from pixelmap.capture import image_shift
+    rng = np.random.default_rng(1)
+    scene = rng.uniform(0, 120, (400, 600)).astype(np.float32)
+    def shot(dy):
+        f = np.roll(scene, dy, axis=0).copy()
+        f[5:20, 200:400] = 255 * (np.arange(200) % 7 < 3)          # the clock: same place in every frame
+        f[380:395, 500:590] = 255 * (np.arange(90) % 5 < 2)        # "gallery"
+        return f
+    assert image_shift(shot(0), shot(40)) == (0.0, 40.0)

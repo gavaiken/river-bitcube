@@ -146,6 +146,9 @@ def measure_settle(cam):
     return float(np.clip(t90 + 0.4, 0.8, 4.0))
 
 
+OSD_BAND = 0.07          # fraction of the height at the top and bottom where the Reolink overlay text sits
+
+
 def camera_shift(a, b):
     """How far the picture moved between two frames (px), by phase correlation of their edges: blind to the room's
     light changing (auto exposure, house lights) and mostly to people walking, which a plain frame difference is not
@@ -159,7 +162,13 @@ def image_shift(a, b):
         g = f.max(axis=2) if f.ndim == 3 else f
         gy, gx = np.gradient(g.astype(np.float32))
         e = np.hypot(gx, gy)
-        return e - e.mean()
+        e = e - e.mean()
+        # The camera's own overlay (the clock along the top, its name bottom right) never moves with the picture and
+        # pulled every answer to 0 (27 Oct: a view 130 px off read as 0): leave those bands out.
+        band = max(1, int(round(OSD_BAND * e.shape[0])))
+        e[:band] = 0
+        e[-band:] = 0
+        return e
     fa, fb = np.fft.fft2(edges(a)), np.fft.fft2(edges(b))
     r = fa * np.conj(fb)
     r = np.fft.ifft2(r / (np.abs(r) + 1e-9)).real
