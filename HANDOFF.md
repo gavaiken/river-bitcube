@@ -1,9 +1,9 @@
 # Handoff: where things stand
 
-- **Holder:** Will (Codex), taking over from Gavin; version reconciliation complete; no active live edit
+- **Holder:** Will (Codex), deploying Will-approved softer ribbon shader to all-looks only
 - **Where:** bitcube running **`river-all-looks.toe`** ("The river: all looks (playlist)", auto, ~58–60 fps), **the boot default since 11:20** (Gavin); `river-looks.toe` (three looks) retired as `old-river-looks.toe`, its frozen copy `river-two-looks.toe` stays offered
-- **Updated:** 2026-10-28 11:58 PT
-- **Next holder:** Will. The playlist file is the default and the one to iterate on (Gavin, 11:20); rollback: switch to `river-two-looks.toe` (the 28 Oct morning file) with mission control's Change, and Set as default if needed.
+- **Updated:** 2026-10-28 12:30 PT
+- **Next holder:** Will. Active scope: checkpoint, apply and verify the locally approved softer-fold screen shader; preserve playlist/clock/default/calibration/rope engine.  The playlist file is the default and the one to iterate on (Gavin, 11:20); rollback: switch to `river-two-looks.toe` (the 28 Oct morning file) with mission control's Change, and Set as default if needed.
 
 ## Version reconciliation (28 Oct, Will / Codex)
 - Gavin's 28 Oct handoff supersedes the historical 26 Oct "Running now", defaults, calibration and power notes below. Use this header, the latest registry and live status; do not restore an old Combined checkpoint or reapply staging stashes.
