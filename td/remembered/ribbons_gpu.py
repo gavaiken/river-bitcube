@@ -184,15 +184,16 @@ void main() {
     light = g1.rgb; gain = g1.a;
     mid = texelFetch(sTD2DInputs[2], ivec2(4, 0), 0).rgb;
 #endif
-    float v = min(tr.x, 1.6);
+    float v = min(tr.x, 1.25);
     float green = tr.x > 1e-4 ? clamp(tr.y / tr.x, 0.0, 1.0) : 0.0;
     // the palette's mid (blue-teal) for the faint glitter rising to its light (cyan) for the bright, white only at the top;
     // the green-leaning ribbons tip both toward green
-    vec3 lo = max(mid * 1.7, vec3(0.0)), hi = light;
+    // the palette's light pushed more saturated: a surge reads cyan and green, not white
+    vec3 lo = max(mid * 1.7, vec3(0.0)), hi = max(mix(vec3(dot(light, vec3(0.333))), light, 1.45), vec3(0.0));
     vec3 gtint = vec3(0.55, 1.15, 0.75);
     lo = mix(lo, lo * gtint, green); hi = mix(hi, hi * gtint, green);
     vec3 c = mix(lo, hi, smoothstep(0.1, 0.9, v));
-    vec3 rgb = clamp(v * c + clamp(v - 0.95, 0.0, 1.0) * (vec3(1.0) - hi) * 0.6, 0.0, 1.0) * gain;
+    vec3 rgb = clamp(v * c + clamp(v - 1.05, 0.0, 1.0) * (vec3(1.0) - hi) * 0.3, 0.0, 1.0) * gain;
     fragColor = TDOutputSwizzle(vec4(min(rgb + video, vec3(1.0)), 1.0));
 }
 """
@@ -343,16 +344,16 @@ class Reference:
         v[v[..., 0] < 0.015] = 0
         self.fb = v
         light, gain, mid = p[0, 1, :3], p[0, 1, 3], p[0, 4, :3]
-        x = np.minimum(v[..., 0], 1.6)[..., None]
+        x = np.minimum(v[..., 0], 1.25)[..., None]
         with np.errstate(divide='ignore', invalid='ignore'):
             green = np.where(v[..., 0] > 1e-4, np.clip(v[..., 1] / v[..., 0], 0, 1), 0)[..., None]
         gt = np.array([0.55, 1.15, 0.75])
-        lo, hi = mid * 1.7, light
+        lo, hi = mid * 1.7, np.maximum(light.mean() + (light - light.mean()) * 1.45, 0)
         lo = lo + (lo * gt - lo) * green
         hi = hi + (hi * gt - hi) * green
         s_ = np.clip((x - 0.1) / 0.8, 0, 1)
         c = lo + (hi - lo) * (s_ * s_ * (3 - 2 * s_))
-        rgb = np.clip(x * c + np.clip(x - 0.95, 0, 1) * (1 - hi) * 0.6, 0, 1) * gain
+        rgb = np.clip(x * c + np.clip(x - 1.05, 0, 1) * (1 - hi) * 0.3, 0, 1) * gain
         if video is not None:
             rgb = rgb + video[::-1]
         return np.minimum(rgb, 1)[::-1].astype(np.float32)
