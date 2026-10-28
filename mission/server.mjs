@@ -84,6 +84,7 @@ import { scrubCreds } from './lib/scrub.mjs';
 import { CONTACTS, derive, calDryRun, REGISTRY } from './public/model.js';
 import { modalInputView } from './public/modal-input.js';
 import { fillingView } from './public/filling.js';
+import { looksView } from './public/looks.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const env = process.env;
@@ -265,6 +266,8 @@ function localStatus(scenario) {
     ...(m.show.modal_input ? { modal_input: modalInputView(m.show.modal_input, m.show.fresh.probe_age_s ?? 0, now) } : {}),
     // the filling glass: what its dials were last set to and what it reports now (public/filling.js fillingView), while it runs
     ...(m.show.filling ? { filling: fillingView(m.show.filling, m.show.fresh.probe_age_s ?? 0) } : {}),
+    // the river (all looks): Auto or Manual, what was asked and the look it shows now (public/looks.js looksView), while it runs
+    ...(m.show.looks ? { looks: { look: m.show.look, ...looksView(m.show.looks, m.show.fresh.probe_age_s ?? 0) } } : {}),
     // everything Modal sends, as its public endpoints last answered (lib/modal-feed.mjs), whatever show runs
     ...(snap.modal_feed ? { modal_feed: snap.modal_feed } : {}),
     boot_file: typeof pv?.boot_file === 'string' ? pv.boot_file : null,

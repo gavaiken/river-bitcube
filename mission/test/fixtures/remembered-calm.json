@@ -264,6 +264,9 @@
           "file": "zones-2026-10-27.json",
           "pool_height_m": 0.6,
           "light": "off"
+        },
+        "screens": {
+          "video": 0.25
         }
       }
     },
@@ -495,6 +498,9 @@
         "pool_height_m": 0.6,
         "light": "off",
         "opening_night": false,
+        "screens": {
+          "video": 0.25
+        },
         "at": "2026-10-23T08:59:00Z"
       }
     }

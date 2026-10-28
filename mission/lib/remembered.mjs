@@ -11,11 +11,15 @@
 //     state:    gallery_state\state.json         (Dave's scene, mirrored by sync.py): only { memory, surge_at, scene, set_at }
 //     reflex:   gallery_state\reflex.json         (Dave's reflex: offsets and heard)
 //     presence: presence.json                     (the people counter: presence, usual, relative, lingerers, people)
-//     control:  remembered\control.json           (the last request mission control wrote: { pool_height_m, light, opening_night, at }) }
+//     control:  remembered\control.json           (the last request mission control wrote: { pool_height_m, light, opening_night,
+//                                                  screens: { video }, at })
+//     looks:    looks\status.json                 (river-looks.toe's own report: which look shows; docs/mission-ui.md "Looks") }
 //   each file part is { age_s, json } (age from the file's write time), { missing: true } or { error }.
-// probe.ps1 -Action remembered-zones -Light off|pool|eddies [-PoolHeight 0.60] / -Action remembered-opening [-On]
+// probe.ps1 -Action remembered-zones -Light off|pool|eddies [-PoolHeight 0.60] / -Action remembered-opening [-On] /
+//   -Action remembered-screens -Video 0.25 (the river video under the particle windows, M9: screens.video)
 //   -> the same answer after writing control.json (merged with what was there, written atomically), plus written: { ...control }, or
-//   { ok: false, error, refused } when the remembered river isn't running (TouchDesigner's status.json older than 10 s or another show).
+//   { ok: false, error, refused } when the remembered river isn't running (TouchDesigner's status.json older than 10 s or another show;
+//   in river-looks.toe: its looks\status.json under 10 s old with look 'remembered').
 //
 // GET /api/remembered -> shapeRemembered(raw, { tdFile }):
 //   { ok: true, running, show, read_at (ms, the mini's clock when read), age_s (seconds since then: the cache's age),
@@ -23,16 +27,18 @@
 //     reflex: <reflex.json> | null, presence: <presence.json> | null, control: <control.json> | null,
 //     profile: { flow, rain, temp, snow, is_day } | null (the playing day's 24 hours: TouchDesigner's day.profile, else Dave's
 //               memory.profile when it is that day), profile_date, problems: [plain sentences] }
-//   running: TouchDesigner's status.json is fresh (under STATUS_FRESH_S old) and names river-remembered.toe. Everything is scrubbed of
+//   look: { look, target, fading } while river-looks.toe reports (its looks\status.json fresh), else null.
+//   running: TouchDesigner's status.json is fresh (under STATUS_FRESH_S old) and names river-remembered.toe, or river-looks.toe reports
+//   the remembered river as the look showing (and the remembered river's status.json is fresh). Everything is scrubbed of
 //   logins (scrubCreds), as every other answer.
 //   503 { ok: false, error } in plain words when bitcube couldn't be read at all.
 import { scrubCreds } from './scrub.mjs';
 import { sshProbe } from './mission.mjs';
-import { REMEMBERED_FILE } from '../public/model.js';
+import { REMEMBERED_FILE, LOOKS_FILE, LOOKS } from '../public/model.js';
 
 export const REMEMBERED_CACHE_MS = 1500;
 export const STATUS_FRESH_S = 10;
-const PARTS = ['status', 'state', 'reflex', 'presence', 'control'];
+const PARTS = ['status', 'state', 'reflex', 'presence', 'control', 'looks'];
 const obj = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : null);
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
 
@@ -62,7 +68,13 @@ export function shapeRemembered(raw, { tdFile = null, readAt = Date.now(), now =
   const problems = [];
   for (const k of PARTS) { const p = obj(r[k]); if (p?.error) problems.push(`${WHAT[k]} couldn't be read: ${String(p.error).slice(0, 160)}`); }
   const st = part('status'), sv = st ? st.json : null, stAge = st ? num(st.age_s) : null;
-  const running = !!sv && sv.show === REMEMBERED_FILE && stAge != null && stAge < STATUS_FRESH_S;
+  // river-looks.toe's report: which look shows (fresh, or nothing: an old report says nothing about now)
+  const lp = part('looks'), lj = lp && lp.json.show === LOOKS_FILE && num(lp.age_s) != null && lp.age_s < STATUS_FRESH_S ? lp.json : null;
+  const look = lj ? { look: LOOKS.includes(lj.look) ? lj.look : null, target: LOOKS.includes(lj.target) ? lj.target : null,
+                      fading: lj.fading === 'out' || lj.fading === 'in' ? lj.fading : null } : null;
+  const fresh = !!sv && stAge != null && stAge < STATUS_FRESH_S;
+  // while river-looks.toe reports, only its look counts (the remembered look may write its status as river-remembered.toe's own)
+  const running = fresh && (look ? look.look === 'remembered' : sv.show === REMEMBERED_FILE);
   const dp = part('state'), d = dp ? dp.json : null;
   const dave = d ? { memory: obj(d.memory), surge_at: num(d.surge_at), scene: obj(d.scene), set_at: typeof d.set_at === 'string' ? d.set_at : null } : null;
   // the playing day's hours: TouchDesigner's own when it sends them, else Dave's when the day playing is his
@@ -71,7 +83,7 @@ export function shapeRemembered(raw, { tdFile = null, readAt = Date.now(), now =
   if (!profile && dave?.memory && (!playing || dave.memory.date === playing)) { profile = profileOf(dave.memory.profile); profileDate = profile ? dave.memory.date ?? null : null; }
   if (dave?.memory && 'profile' in dave.memory) { const { profile: _served, ...rest } = dave.memory; dave.memory = rest; }   // served once, as `profile`
   return scrubCreds({
-    ok: true, running, show: running ? REMEMBERED_FILE : typeof tdFile === 'string' ? tdFile : (typeof sv?.show === 'string' ? sv.show : null),
+    ok: true, running, show: running ? (look ? LOOKS_FILE : REMEMBERED_FILE) : look ? LOOKS_FILE : typeof tdFile === 'string' ? tdFile : (typeof sv?.show === 'string' ? sv.show : null), look,
     read_at: readAt, age_s: Math.max(0, Math.round((now - readAt) / 1000)),
     status: sv, status_age_s: stAge,
     dave, dave_age_s: dp ? num(dp.age_s) : null,
@@ -79,7 +91,8 @@ export function shapeRemembered(raw, { tdFile = null, readAt = Date.now(), now =
     profile, profile_date: profileDate, problems,
   });
 }
-const WHAT = { status: "TouchDesigner's status file", state: "Dave's scene (state.json)", reflex: "Dave's reflex (reflex.json)", presence: "the people counter's file", control: 'the control file' };
+const WHAT = { status: "TouchDesigner's status file", state: "Dave's scene (state.json)", reflex: "Dave's reflex (reflex.json)", presence: "the people counter's file", control: 'the control file',
+  looks: "the river (all looks)'s status file" };
 
 /** Why bitcube's remembered-river files couldn't be read, in the team's words. */
 export function plainRememberedError(raw) {

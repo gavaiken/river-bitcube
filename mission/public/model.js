@@ -123,6 +123,29 @@ export function fillingWords(b) {
                  o.speed != null && pct(o.speed) ? `speed ${pct(o.speed)}` : null].filter(Boolean);
   return parts.length ? parts.join(', ') : null;
 }
+// ---- The river (all looks) (river-looks.toe; docs/mission-ui.md "Looks"; the card, the modes and the words: public/looks.js) ------
+export const LOOKS_FILE = 'river-looks.toe';
+export const LOOKS = ['remembered', 'fill-simple', 'fill-configurable'];
+export const LOOK_IN_LINE = { remembered: 'the remembered river', 'fill-simple': 'Fill my cup (simple)', 'fill-configurable': 'Fill my cup (configurable)' };
+export const FILL_LOOKS = ['fill-simple', 'fill-configurable'];
+export const LOOKS_ONLY = "the river (all looks) isn't running (its looks can be picked only while it runs)";
+export const LOOK_UNKNOWN = "which look the river (all looks) is showing isn't known yet";
+export const REMEMBERED_LOOK_ONLY = "the remembered river isn't the look showing now (pick it under Looks on Status first)";
+export const FILLING_LOOK_ONLY = "Fill my cup isn't the look showing now (pick it under Looks on Status first)";
+/** The look river-looks.toe shows by the full check (probe.ps1's answer): its looks status under 10 s old, else null. */
+export function lookShowing(pr) {
+  const td = obj(obj(pr)?.td), st = obj(obj(pr?.looks)?.status), j = obj(st?.json);
+  return td && td.ok !== false && td.file === LOOKS_FILE && j && LOOKS.includes(j.look) && (num(st.age_s) ?? 99) <= 10 ? j.look : null;
+}
+/** Why a show-bound control can't run on what runs now, or null (derive()'s controls and the server's 409: one rule). */
+export function showBoundWhy(action, pr) {
+  const td = obj(obj(pr)?.td), file = td && td.ok !== false ? td.file : null, look = lookShowing(pr), lk = file === LOOKS_FILE;
+  const pick = (ok, own, not) => (file === own ? null : !lk ? not : ok ? null : look ? (own === FILLING_FILE ? FILLING_LOOK_ONLY : REMEMBERED_LOOK_ONLY) : LOOK_UNKNOWN);
+  if (action === 'looks') return lk ? null : LOOKS_ONLY;
+  if (action === 'filling') return pick(FILL_LOOKS.includes(look), FILLING_FILE, FILLING_ONLY);
+  return /^remembered-/.test(action) ? pick(look === 'remembered', REMEMBERED_FILE, REMEMBERED_ONLY) : null;
+}
+export const looksWords = (b) => (b?.mode === 'auto' ? 'Auto' : b?.mode === 'manual' ? (LOOK_IN_LINE[b.look] ? `${LOOK_IN_LINE[b.look]} (manual)` : 'Manual') : null);
 /** Each choice's button and its one line, in the pages' words (docs/mission-ui.md "Modal input"). */
 export const MODAL_SOURCE_WORDS = {
   off: { label: 'Off', line: 'The river on its own, without Modal' },
@@ -168,11 +191,11 @@ export const calNoLights = (c) => calDryRun(c) || (!!c && typeof c === 'object' 
 // Applying a change (docs/mission-ui.md): what a change in flight blocks, when the server's entry names no blocks of its own.
 // A switch or a rebuild restarts TouchDesigner on the year: everything that touches either waits; a boot-file change only
 // the file controls (and a calibration's start); a lighting port change the lights; the rest only a second copy of itself.
-const TD_TOUCHING = ['overlay', 'modalinput', 'filling', 'remembered-zones', 'remembered-opening', 'ropes', 'hub75', 'test', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
+const TD_TOUCHING = ['overlay', 'modalinput', 'filling', 'remembered-zones', 'remembered-opening', 'remembered-screens', 'looks', 'ropes', 'hub75', 'test', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
 export const APPLY_BLOCKS = {
   switch: TD_TOUCHING, rebuild: TD_TOUCHING, bootfile: ['switch', 'rebuild', 'bootfile', 'calibrate'], lightsroute: ['ropes', 'hub75', 'test', 'lightsroute', 'calibrate'],
-  overlay: ['overlay'], modalinput: ['modalinput'], filling: ['filling'], 'remembered-zones': ['remembered-zones'], 'remembered-opening': ['remembered-opening'], ropes: ['ropes', 'test'], hub75: ['hub75'], test: ['test', 'ropes', 'calibrate'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
-  calibrate: ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'calibrate', 'overlay', 'modalinput', 'filling', 'remembered-zones'],   // a calibration's start: what a running one blocks, and a second start
+  overlay: ['overlay'], modalinput: ['modalinput'], filling: ['filling'], 'remembered-zones': ['remembered-zones'], 'remembered-opening': ['remembered-opening'], 'remembered-screens': ['remembered-screens'], looks: ['looks'], ropes: ['ropes', 'test'], hub75: ['hub75'], test: ['test', 'ropes', 'calibrate'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
+  calibrate: ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'calibrate', 'overlay', 'modalinput', 'filling', 'remembered-zones', 'remembered-screens', 'looks'],   // a calibration's start: what a running one blocks, and a second start
 };
 /** The changes that wait for the server's verdict before they are done, and what shows each on bitcube: a full check's reading
  *  (TouchDesigner answering on its file, the boot file, the lighting port: R8 #31, #32) or the run's own progress (a calibration,
@@ -191,7 +214,8 @@ export const dryStart = (action, body) => action === 'calibrate' && !!body && ty
 export const APPLY_LABEL = { switch: 'a show-file switch', rebuild: "the rebuild of the river's year", bootfile: 'the change of the default', lightsroute: 'the change of the lighting port',
   overlay: 'the change of the overlay', modalinput: 'the change of the Modal input', filling: 'the change of the filling glass', ropes: 'the change of the ropes', hub75: 'the change of the panels', mode: 'the change of the mode', target: 'the change of the target', rules: 'the change of the rules',
   'rules-reset': 'the reset of the rules', calibrate: 'the calibration start', test: 'the test pattern',
-  'remembered-zones': 'the change of the pool and eddies', 'remembered-opening': 'the change of opening night' };
+  'remembered-zones': 'the change of the pool and eddies', 'remembered-opening': 'the change of opening night', 'remembered-screens': 'the change of the river video under the particles',
+  looks: 'the change of the looks' };
 /** One name per change (R7 #19), made here for the server's entries (lib/applying.mjs), this phone's own applying
  *  line, every other phone's band, Last done and the unconfirmed line: a noun phrase that names what it changes to, and reads in
  *  every frame ("Applying: …", "Wait: … is being applied.", "Waiting for bitcube to show …", "Last done: …", "… was sent at
@@ -217,6 +241,8 @@ export function changeLabel(action, body = {}, { running = null } = {}) {
       return b.light === 'pool' ? `the lighting of the pool${at}` : b.light === 'eddies' ? `the lighting of the eddies${at}` : b.light === 'off' ? `the pool and eddies back to the show${at}` : 'the change of the pool and eddies';
     }
     case 'remembered-opening': return b.on === true ? 'the opening-night switch on' : b.on === false ? 'the opening-night switch off' : 'the change of opening night';
+    case 'remembered-screens': { const v = num(typeof b.video === 'string' ? Number(b.video) : b.video); return v != null ? `the change of the river video under the particles to ${Math.round(Math.min(1, Math.max(0, v)) * 100)} %` : 'the change of the river video under the particles'; }
+    case 'looks': { const w = looksWords(b); return w ? `the change of the looks to ${w}` : 'the change of the looks'; }
     case 'hub75': return x != null ? `the change of the panels to ${Math.round(Math.min(1, Math.max(0, x)) * 100)} %` : 'the change of the panels';
     case 'mode': return typeof b.mode === 'string' && b.mode ? `the change of the mode to ${cap(b.mode)}` : 'the change of the mode';
     case 'target': {
@@ -234,7 +260,7 @@ export function changeLabel(action, body = {}, { running = null } = {}) {
 }
 /** The usual time of each change, in seconds, until bitcube's reading shows it: the server's own table (lib/applying.mjs EXPECT_S,
  *  kept equal by test/model.test.mjs), so a page can say "usually about 1 min" for its own change before status.applying has it. */
-export const EXPECT_S = { overlay: 15, modalinput: 15, filling: 15,'remembered-zones': 10, 'remembered-opening': 10, switch: 60, rebuild: 150, bootfile: 15, lightsroute: 20, ropes: 15, hub75: 15, test: 15, mode: 3, target: 3, rules: 3, 'rules-reset': 3, calibrate: 10,
+export const EXPECT_S = { overlay: 15, modalinput: 15, filling: 15,'remembered-zones': 10, 'remembered-opening': 10, 'remembered-screens': 10, looks: 10, switch: 60, rebuild: 150, bootfile: 15, lightsroute: 20, ropes: 15, hub75: 15, test: 15, mode: 3, target: 3, rules: 3, 'rules-reset': 3, calibrate: 10,
   check: 30 };   // the full check (an SSH round trip): never a lock (lib/applying.mjs records only what APPLY_BLOCKS names), only its usual time
 /** What the boot file's confirming line says in place of a usual time: its reading comes with bitcube's next full check. */
 export const BOOT_USUAL = "bitcube's full check shows it within a minute";
@@ -1064,7 +1090,10 @@ export function derive(status, nowMs) {
     modal_input: miRaw,
     // the filling glass's files as the full check read them ({ control, status }; {} from a probe.ps1 that doesn't read them yet),
     // only while it runs: pages show it through filling.js fillingView (with fresh.probe_age_s, so its ages read on the server's clock)
-    filling: tdOk && td.file === FILLING_FILE ? obj(pr?.filling) ?? {} : null,
+    filling: tdOk && (td.file === FILLING_FILE || (td.file === LOOKS_FILE && FILL_LOOKS.includes(lookShowing(pr)))) ? obj(pr?.filling) ?? {} : null,
+    // river-looks.toe's files ({ control, status }), only while it runs (looks.js looksView); look: the look showing (null: not known)
+    looks: tdOk && td.file === LOOKS_FILE ? obj(pr?.looks) ?? {} : null,
+    look: tdOk && td.file === LOOKS_FILE ? lookShowing(pr) : null,
     boot_file: bootNow,
     // the files a switch or "Set as default" offers (shows.json offered, and on bitcube)
     show_files: showFiles,
@@ -1143,11 +1172,13 @@ export function derive(status, nowMs) {
       ?? (td?.file === MODAL_INPUT_FILE && obj(td.modal_input) ? null : `${FILES[MODAL_INPUT_FILE]?.label ?? 'the Modal input show'} isn't running or hasn't answered`)),
     // the filling glass's dials: only while it runs; they change what the ropes and screens show, so never during a calibration or
     // the test pattern
-    filling: ctl(first('filling') ?? cantTd ?? cantCal ?? (testOn ? TEST_ON : null) ?? (td?.file === FILLING_FILE ? null : FILLING_ONLY)),
+    filling: ctl(first('filling') ?? cantTd ?? cantCal ?? (testOn ? TEST_ON : null) ?? showBoundWhy('filling', pr)),
+    looks: ctl(first('looks') ?? cantTd ?? cantCal ?? (testOn ? TEST_ON : null) ?? showBoundWhy('looks', pr)),
     // the remembered river's adjusters and opening-night switch: only while it runs; lighting the pool or the eddies changes the
     // ropes, so never during a calibration or the test pattern (the opening-night switch changes no LED by itself)
-    'remembered-zones': ctl(first('remembered-zones') ?? cantTd ?? cantCal ?? (testOn ? TEST_ON : null) ?? (td?.file === REMEMBERED_FILE ? null : REMEMBERED_ONLY)),
-    'remembered-opening': ctl(first('remembered-opening') ?? cantTd ?? (td?.file === REMEMBERED_FILE ? null : REMEMBERED_ONLY)),
+    'remembered-zones': ctl(first('remembered-zones') ?? cantTd ?? cantCal ?? (testOn ? TEST_ON : null) ?? showBoundWhy('remembered-zones', pr)),
+    'remembered-opening': ctl(first('remembered-opening') ?? cantTd ?? showBoundWhy('remembered-opening', pr)),
+    'remembered-screens': ctl(first('remembered-screens') ?? cantTd ?? cantCal ?? (testOn ? TEST_ON : null) ?? showBoundWhy('remembered-screens', pr)),
     hub75: ctl(first('hub75') ?? cantTd ?? cantCal),   // the camera is photographing the panels and ropes
     // never while TouchDesigner is restarting (a second switch kills the half-opened file: another minute dark), and never on
     // a full check too old to say what runs now (the buttons' labels come from it)

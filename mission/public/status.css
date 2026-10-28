@@ -152,6 +152,11 @@ footer.foot .fine-print { margin-top: 4px; }
 .fl-seg button { background: var(--panel-solid); }
 .fl-seg button + button { border-left: 0; border-top: 0; }
 @media (min-width: 520px) { .fl-seg { grid-template-columns: repeat(4, 1fr); } }
+.lk-looks { display: grid; grid-template-columns: 1fr; gap: 1px; background: var(--line); }
+.lk-looks button { background: var(--panel-solid); }
+.lk-looks button + button { border-left: 0; }
+@media (min-width: 640px) { .lk-looks { grid-template-columns: repeat(3, 1fr); } }
+.lk-settings a { font-weight: 700; }
 .mi-sending { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
 .mi-params { display: flex; flex-direction: column; }
 .mi-row { display: grid; grid-template-columns: minmax(84px, auto) 1fr auto; gap: 2px 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }

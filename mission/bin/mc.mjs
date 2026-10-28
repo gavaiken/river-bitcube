@@ -20,7 +20,14 @@
 //                                                       river, glacier, midnight or teal; brightness and intensity 0 to 1; speed
 //                                                       0.25 to 3, 1 = about 84 s a cycle; all four every time)
 //     remembered-zones '{"light":"pool","pool_height_m":0.6}'   remembered-opening '{"on":true}'   (only while the remembered
-//                                                       river runs; light off, pool or eddies; the pool line 0 to 1.5 m)
+//                                                       river runs, or is the look showing in the river (all looks); light off,
+//                                                       pool or eddies; the pool line 0 to 1.5 m)
+//     remembered-screens '{"video":0.25}'              (the same: how strongly the river video shows under the particle
+//                                                       windows, 0 to 1)
+//     looks '{"mode":"auto"}'   looks '{"mode":"manual","look":"fill-simple"}'   (only while the river (all looks) runs; auto:
+//                                                       four loops of the remembered river, then one cycle of Fill my cup
+//                                                       (simple), again; manual: fade to remembered, fill-simple or
+//                                                       fill-configurable and stay; status shows it under `looks`)
 //
 // Prints mission control's JSON answer, with the request_id it sent (its own id for this request: status names the entry by it
 // too, so a change whose answer was lost can still be found). A change that waits for bitcube's reading (a switch, a rebuild, a
@@ -36,7 +43,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const ACTIONS = ['ropes', 'hub75', 'test', 'switch', 'bootfile', 'rebuild', 'lightsroute', 'mode', 'target', 'rules', 'rules-reset', 'check', 'calibrate', 'modalinput', 'filling', 'remembered-zones', 'remembered-opening'];
+export const ACTIONS = ['ropes', 'hub75', 'test', 'switch', 'bootfile', 'rebuild', 'lightsroute', 'mode', 'target', 'rules', 'rules-reset', 'check', 'calibrate', 'modalinput', 'filling', 'remembered-zones', 'remembered-opening', 'remembered-screens', 'looks'];
 const LIMIT_S = { status: 10, rebuild: 420 };          // a rebuild builds, saves and restarts: minutes; the rest a little past 60 s
 const socketPath = (env) => env.MISSION_CONTROL_SOCKET || join(env.MISSION_STATE_DIR || join(homedir(), 'mission-state'), 'mc.sock');
 

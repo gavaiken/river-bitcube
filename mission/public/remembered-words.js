@@ -1,7 +1,10 @@
 // The Remembered river page's words and shapes (docs/mission-ui.md "Remembered river page"): GET /api/remembered (lib/remembered.mjs
 // CONTRACT) -> everything the page lays out, in the team's words (GLOSSARY.md: remembered day, loop, phase, surge, the pool,
 // lingerer). Pure: no DOM, so node tests it (test/remembered.test.mjs). The page (remembered.js) only places it.
-import { dur, FILES } from './model.js';
+import { dur, FILES, LOOKS_FILE, LOOK_IN_LINE } from './model.js';
+
+/** The river video's strength under the particle windows (M9) until someone sets it, 0..1. */
+export const REMEMBERED_VIDEO_DEFAULT = 0.25;
 
 export const PHASES = ['calm', 'building', 'surge', 'settling'];
 export const PHASE_WORDS = {
@@ -44,7 +47,13 @@ export function rememberedView(p, { now = Date.now(), sinceS = 0 } = {}) {
   const dave = obj(b.dave), mem = obj(dave?.memory), scene = obj(dave?.scene), reflex = obj(b.reflex), pres = obj(b.presence);
   const age = num(b.age_s) ?? 0, plus = age + sinceS;      // how much older everything is than when it was read
   const out = { running: !!st, show: typeof b.show === 'string' ? b.show : null, problems: Array.isArray(b.problems) ? b.problems.map(String) : [] };
-  out.notRunning = st ? null : `TouchDesigner is showing ${out.show ? FILES[out.show]?.label ?? out.show : "something else (or nothing)"}. Below: what Dave's agent and the room are doing.`;
+  // river-looks.toe (docs/mission-ui.md "Looks"): the remembered river is one of its looks; the page runs while it is the one showing
+  const lk = obj(b.look);
+  out.look = lk ? { look: lk.look ?? null, target: lk.target ?? null, fading: lk.fading ?? null } : null;
+  out.inLooks = out.show === LOOKS_FILE;
+  out.notRunning = st ? null : out.inLooks
+    ? `TouchDesigner is showing ${FILES[LOOKS_FILE]?.label ?? 'the river (all looks)'}, on ${out.look?.look ? LOOK_IN_LINE[out.look.look] : 'a look not known yet'} now${out.look?.fading && out.look.target === 'remembered' ? ', fading to the remembered river' : ''}. Pick the remembered river under Looks on Status. Below: what Dave's agent and the room are doing.`
+    : `TouchDesigner is showing ${out.show ? FILES[out.show]?.label ?? out.show : "something else (or nothing)"}. Below: what Dave's agent and the room are doing.`;
   out.statusAgeS = num(b.status_age_s);
 
   // ---- inputs: Dave's agent ----
@@ -102,6 +111,9 @@ export function rememberedView(p, { now = Date.now(), sinceS = 0 } = {}) {
   out.zones = obj(st?.zones);
   out.opening = typeof st?.opening_night === 'boolean' ? st.opening_night : typeof b.control?.opening_night === 'boolean' ? b.control.opening_night : null;
   out.control = obj(b.control);
+  // the river video under the particle windows (M9): what TouchDesigner reports, else what was asked last (control.json), 0..1
+  const vid = (x) => { const n = num(x); return n != null && n >= 0 && n <= 1 ? n : null; };
+  out.video = { now: vid(obj(st?.screens)?.video), asked: vid(obj(out.control?.screens)?.video), default: REMEMBERED_VIDEO_DEFAULT };
   return out;
 }
 

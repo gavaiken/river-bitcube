@@ -87,6 +87,31 @@
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-27",
       "last_change": "Fixture entry, offered, until the real one is"
+    },
+    {
+      "file": "river-looks.toe",
+      "title": "The river (all looks)",
+      "label": "the river (all looks)",
+      "kind": "viz",
+      "offered": true,
+      "build": "td/build/build_looks.py",
+      "calibration": {
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
+        "screens": "tools/pixelmap/screens-2026-10-27.json",
+        "zones": null
+      },
+      "description": "One show file with several looks: the remembered river, Fill my cup (simple) and Fill my cup (configurable). It fades between them without restarting TouchDesigner: on Auto, four loops of the remembered river, then one full cycle of Fill my cup (simple), again; on Manual, the chosen look stays.",
+      "inputs": [
+        "Dave's agent (remembered day, palette, knobs, heard)",
+        "river camera (recorded clip as fallback)",
+        "gallery camera (people counter)",
+        "the LED map and screens (calibration, measured tilts)"
+      ],
+      "created_by": "gavin",
+      "created": "2026-10-28",
+      "updated_by": "gavin",
+      "updated": "2026-10-28",
+      "last_change": "Fixture entry until the show is in shows.json"
     }
   ]
 }

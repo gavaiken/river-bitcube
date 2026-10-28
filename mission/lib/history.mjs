@@ -69,7 +69,7 @@
 //   nothing here ever throws: history never stops the show.
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { derive, FILES, intensityWord, awaited, changeLabel, confirmLimitS, EXPECT_S, calDryRun, calStep, CAL_STAGE_WORDS, MODAL_SOURCE_WORDS, fillingWords } from '../public/model.js';
+import { derive, FILES, intensityWord, awaited, changeLabel, confirmLimitS, EXPECT_S, calDryRun, calStep, CAL_STAGE_WORDS, MODAL_SOURCE_WORDS, fillingWords, looksWords } from '../public/model.js';
 import { scrubCreds } from './scrub.mjs';
 import { REQUEST_ID } from './applying.mjs';
 
@@ -626,6 +626,8 @@ export function actionPhrase(ev) {
     }
     case 'filling': return ['Set', 'set', `the filling glass to ${fillingWords(b) ?? 'new settings'}`];
     case 'remembered-opening': return ['Switched', 'switch', `opening night ${b.on === true ? 'on' : 'off'}`];
+    case 'remembered-screens': return ['Set', 'set', `the river video under the particles to ${Number.isFinite(Number(b.video)) && b.video != null ? Math.round(Number(b.video) * 100) + ' %' : 'a new strength'}`];
+    case 'looks': return ['Set', 'set', `the looks to ${looksWords(b) ?? 'a new choice'}`];
     case 'test': return b.on === true ? ['Started', 'start', 'the test pattern on the ropes and panels'] : ['Stopped', 'stop', 'the test pattern'];
     // a switch to the file TouchDesigner was running is the button's "Restart on …" (its label says so, model.js changeLabel)
     case 'switch': return /^the restart on /.test(String(ev.label ?? '')) ? ['Restarted', 'restart', `TouchDesigner on ${fileLabel(b.file)}`]

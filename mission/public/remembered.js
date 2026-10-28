@@ -6,14 +6,14 @@
 // GET /api/remembered every 2 s, /api/status every 5 s, /api/lights every 4 s, the stills every 30 s. Plain ES module, no build step.
 import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, DOC_LINKS, serverNow } from '/ui.js';
 import { fetchTimed } from '/app.js';
-import { derive, changeLabel, dur, EXPECT_S, REMEMBERED_POOL_M } from '/model.js';
+import { derive, changeLabel, dur, EXPECT_S, REMEMBERED_POOL_M, REMEMBERED_ONLY } from '/model.js';
 import { decodeLights, fitCanvas, paintStrips, paintScreens, paintEmpty, litMeterHTML } from '/frames-view.js';
 import { rememberedView, dayStripSVG, mss, hourWords, dateWords, PANEL_RULE_PCT } from '/remembered-words.js';
 
 const REM_MS = 2000, LIGHTS_MS = 4000, STILL_MS = 30_000;
 const $ = (s) => document.querySelector(s);
 const since = (at) => (at == null ? 0 : (performance.now() - at) / 1000);
-const S = { m: null, rem: null, remAt: null, remError: null, v: null, lights: null, lightsAt: null, lightsError: null, fetching: {}, pool: null, poolTouched: false, html: {} };
+const S = { m: null, rem: null, remAt: null, remError: null, v: null, lights: null, lightsAt: null, lightsError: null, fetching: {}, pool: null, poolTouched: false, video: null, videoTouched: false, html: {} };
 const put = (id, html) => { if (S.html[id] !== html) { S.html[id] = html; const el = document.getElementById(id); if (el) el.innerHTML = html; } };
 
 const shell = mountShell({ page: 'remembered', title: 'Remembered river' });
@@ -80,7 +80,7 @@ function renderNow(v) {
     line.innerHTML = `${v.loop ? `<b>${esc(v.loop.words)}</b> of the loop` : 'The loop'} · reliving ${esc(day)}${v.hour != null ? ` at <b>${esc(hourWords(v.hour))}</b>` : ''}`;
     nr.hidden = true;
   } else {
-    phase.textContent = "The remembered river isn't running";
+    phase.textContent = v.inLooks ? "The remembered river isn't the look showing" : "The remembered river isn't running";
     phase.className = 'phase ph-off';
     line.textContent = '';
     nr.textContent = v.notRunning; nr.hidden = false;
@@ -214,13 +214,28 @@ ctls.opening = control($('#z-opening'), { action: 'remembered-opening', expectS:
   noAnswer: 'the line above says what bitcube has', done: 'Sent', run: () => api('/api/control/remembered-opening', { on: S.openingWant === true }),
   onSent: () => { pollRemembered(); status.refresh(); }, onFail: () => status.refresh() });
 S.openingShown = undefined;
+// the river video under the particle windows (M9): a draft in percent until Apply; it follows bitcube's value until moved here
+const videoInput = $('#video');
+function setVideo(pct, touched = true) {
+  S.video = Math.round(Math.min(100, Math.max(0, pct)) / 5) * 5; if (touched) S.videoTouched = true;
+  videoInput.value = String(S.video); $('#video-out').textContent = fmt.nb(`${S.video} %`);
+  ctls.video?.update({ what: changeLabel('remembered-screens', { video: S.video / 100 }) });
+}
+videoInput.addEventListener('input', () => setVideo(Number(videoInput.value)));
+ctls.video = control($('#z-video'), { action: 'remembered-screens', expectS: EXPECT_S['remembered-screens'], label: 'Apply', kind: 'primary',
+  before: 'Moves only the screens: the ropes keep the show.', what: changeLabel('remembered-screens', { video: 0.25 }),
+  noAnswer: 'the line above the button says what bitcube has',
+  done: (r) => `Asked TouchDesigner for the river video at ${fmt.nb(`${Math.round(Number(r?.written?.screens?.video ?? S.video / 100) * 100)} %`)} under the particles`,
+  run: () => api('/api/control/remembered-screens', { video: S.video / 100 }),
+  onSent: () => { S.videoTouched = false; pollRemembered(); status.refresh(); }, onFail: () => status.refresh(),
+  lock: () => [videoInput] });
 
 function whyFor(action, v) {
   if (contact.lost) return "mission control isn't answering";
   const m = S.m?.controls?.[action];
   if (m?.why) return m.why;
   if (S.remError && !v) return `the remembered river's files can't be read (${S.remError})`;
-  if (v && !v.running) return "the remembered river isn't running (its controls work only while it runs)";
+  if (v && !v.running) return v.inLooks ? (v.notRunning ?? REMEMBERED_ONLY) : REMEMBERED_ONLY;
   return null;
 }
 function renderControls(v) {
@@ -242,6 +257,11 @@ function renderControls(v) {
         confirm: { title: 'Turn opening night on?', body: 'Calm runs about 45 % and a surge comes at least every 5 minutes, until someone turns it off.', ok: 'Turn it on', cancel: 'Not now', destructive: false } });
   }
   ctls.opening.update({ why: owhy, whyBy: S.m?.controls?.['remembered-opening']?.by ?? null });
+  const vnow = v?.video?.now ?? null, vasked = v?.video?.asked ?? null;
+  $('#video-now').textContent = vnow != null ? fmt.nb(`${Math.round(vnow * 100)} %`) : vasked != null ? `${fmt.nb(`${Math.round(vasked * 100)} %`)} asked (TouchDesigner hasn't said)` : 'not known';
+  if (!S.videoTouched && (vnow ?? vasked) != null) setVideo((vnow ?? vasked) * 100, false);
+  else if (S.video == null) setVideo((v?.video?.default ?? 0.25) * 100, false);
+  ctls.video.update({ why: whyFor('remembered-screens', v), whyBy: S.m?.controls?.['remembered-screens']?.by ?? null });
 }
 /** Each status answer: the controls see the model (their own change's entry, the server's verdict). */
 function judge() {

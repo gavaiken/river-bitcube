@@ -11,7 +11,8 @@ import { checkedCalibrate, noAnswer } from './lights.mjs';
 import { ModalSeen, withSeen } from './modal-seen.mjs';
 import { ModalFeed, MODAL_FEED_EVERY_MS } from './modal-feed.mjs';
 import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights, TEST_ON, testShowing, FILES, MODAL_INPUT_FILE, MODAL_SOURCES,
-  FILLING_FILE, FILLING_ONLY, FILLING_PALETTES, FILLING_RANGE, REMEMBERED_FILE, REMEMBERED_LIGHTS, REMEMBERED_POOL_M, REMEMBERED_ONLY } from '../public/model.js';
+  FILLING_PALETTES, FILLING_RANGE, REMEMBERED_LIGHTS, REMEMBERED_POOL_M, LOOKS, showBoundWhy } from '../public/model.js';
+import { LOOK_MODES } from '../public/looks.js';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 const PROBE = PS + 'probe.ps1';
@@ -22,10 +23,10 @@ export const MODAL_INPUT_ONLY = 'the Modal input is only available while the Mod
 /** Controls refused while a calibration runs (model.js refuses the same ones on the pages). A rebuild ends in the switch
  *  path (TouchDesigner stopped and restarted), so it spoils a run as surely as a switch. A dry run (or a decode of earlier
  *  photos) touches no lights, camera or TouchDesigner: it refuses none of them (R7 #20). */
-export const CAL_BLOCKED = ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'overlay', 'filling'];
+export const CAL_BLOCKED = ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'overlay', 'filling', 'looks'];
 /** Refused during a calibration here too, though probe.ps1's own $CAL_BLOCKED doesn't list it yet (tools/tests/test_mission_guards.py
  *  keeps CAL_BLOCKED equal to it): fold it into CAL_BLOCKED when probe.ps1 adds modalinput. */
-const CAL_BLOCKED_HERE = ['modalinput', 'remembered-zones'];
+const CAL_BLOCKED_HERE = ['modalinput', 'remembered-zones', 'remembered-screens'];
 /** The 409 a switch or a rebuild gets while TouchDesigner is starting or restarting (model.js tdStartingWhy, the pages' words; shared
  *  with fixture mode), or null. probe: the full check's reading as kept ({ at, value } or { at, error }), judged by itself, never
  *  the whole page model; a reading the rule can't read, or a slip in it, refuses (closed, CR9 #11). */
@@ -40,7 +41,7 @@ export function startingBlocked(action, probe) {
  *  decode of earlier photos) touches no lights: never refused. probe: the full check's reading as kept ({ at, value }). */
 export function testBlocked(action, body, probe) {
   const start = action === 'calibrate' && body?.action === 'start' && body.dry_run !== true && !body.decode_only;
-  if (action !== 'ropes' && action !== 'overlay' && action !== 'modalinput' && action !== 'filling' && action !== 'remembered-zones' && !start) return null;
+  if (!['ropes', 'overlay', 'modalinput', 'filling', 'remembered-zones', 'remembered-screens', 'looks'].includes(action) && !start) return null;
   const p = probe && typeof probe === 'object' && !probe.error ? probe.value : null;
   return testShowing(p) ? Object.assign(new Error(TEST_ON), { status: 409 }) : null;
 }
@@ -350,12 +351,11 @@ export class Mission {
       throw Object.assign(new Error('overlay control is only available while combined-v0 is running'), { status: 409 });
     if (action === 'modalinput' && this.data.probe?.value?.td?.file !== MODAL_INPUT_FILE)
       throw Object.assign(new Error(MODAL_INPUT_ONLY), { status: 409 });     // only what the whitelist read goes into status.applying
-    // the filling glass's dials only while it runs (by the full check; probe.ps1 refuses too, by TouchDesigner's own answer)
-    if (action === 'filling' && this.data.probe?.value?.td?.file !== FILLING_FILE)
-      throw Object.assign(new Error(FILLING_ONLY), { status: 409 });
-    // the remembered river's controls only while it runs (by the full check; probe.ps1 refuses too, by TouchDesigner's own status file)
-    if (plan.kind === 'remembered' && this.data.probe?.value?.td?.file !== REMEMBERED_FILE)
-      throw Object.assign(new Error(REMEMBERED_ONLY), { status: 409 });
+    // the filling glass's dials, the remembered river's controls and the looks only while their show (or, in river-looks.toe, their
+    // look) runs, by the full check (model.js showBoundWhy, the pages' rule); probe.ps1 refuses too, by TouchDesigner's own answer
+    // and status files
+    const bound = showBoundWhy(action, this.data.probe?.error ? null : this.data.probe?.value);
+    if (bound) throw Object.assign(new Error(bound), { status: 409 });
     // a calibration photographs the ropes and the panels: anything that changes them, restarts TouchDesigner or moves the
     // lighting port spoils the run (the pages refuse these too; this covers the studio chat and a stale page)
     const blocked = calBlocked(action, this.calibration()) ?? testBlocked(action, checked, this.data.probe);
@@ -530,6 +530,20 @@ export function planControl(action, body = {}) {
       if (typeof body.on !== 'boolean') throw bad('on is true or false');
       return { kind: 'remembered', args: `-Action remembered-opening${body.on ? ' -On' : ''}` };
     }
+    case 'remembered-screens': {
+      // the river video under the particle windows (docs/remembered-river.md M9): 0..1, merged into control.json as screens.video
+      const v = num(body.video);
+      if (!(v >= 0 && v <= 1)) throw bad('video is 0 to 1');
+      return { kind: 'remembered', args: `-Action remembered-screens -Video ${v.toFixed(2)}` };
+    }
+    case 'looks': {
+      // the river (all looks) (docs/mission-ui.md "Looks"): auto (four loops of the remembered river, then one cycle of Fill my cup
+      // (simple), again) or manual (fade to the look and stay on it); probe.ps1 writes River\looks\control.json
+      if (!LOOK_MODES.includes(body.mode)) throw bad('mode is auto or manual');
+      if (body.look !== undefined && !LOOKS.includes(body.look)) throw bad(`look is ${LOOKS.join(', ')}`);
+      if (body.mode === 'manual' && body.look === undefined) throw bad('manual needs a look');
+      return { kind: 'probe', args: `-Action looks -Mode ${body.mode}${body.look !== undefined ? ` -Look ${body.look}` : ''}` };
+    }
     case 'hub75': {
       const x = num(body.brightness);
       if (!(x >= 0 && x <= 1)) throw bad('brightness is 0 to 1');
@@ -582,6 +596,8 @@ export function checkedControl(action, body = {}) {
     case 'filling': return { palette: body.palette, brightness: Number(num(body.brightness).toFixed(2)), intensity: Number(num(body.intensity).toFixed(2)), speed: Number(num(body.speed).toFixed(2)) };
     case 'remembered-zones': return { light: body.light, ...(body.pool_height_m !== undefined ? { pool_height_m: Number(num(body.pool_height_m).toFixed(2)) } : {}) };
     case 'remembered-opening': return { on: body.on === true };
+    case 'remembered-screens': return { video: Number(num(body.video).toFixed(2)) };
+    case 'looks': return { mode: body.mode, ...(body.look !== undefined ? { look: body.look } : {}) };
     case 'bootfile': case 'switch': case 'rebuild': return { file: body.file };
     case 'lightsroute': return { route: body.route };
     default: return {};

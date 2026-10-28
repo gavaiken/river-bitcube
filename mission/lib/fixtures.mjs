@@ -48,7 +48,7 @@ import { CAMERAS, calBlocked, checkedControl, awaitsReading, startingBlocked, te
 import { Applying } from './applying.mjs';
 import { readLocalPixelmap, summarizePixelmap, checkedCalibrate } from './lights.mjs';
 import { atlasFromUprights } from '../public/screens.js';
-import { changeLabel, FILES, MODAL_INPUT_FILE, REMEMBERED_FILE, REMEMBERED_ONLY, FILLING_FILE, FILLING_ONLY } from '../public/model.js';
+import { changeLabel, FILES, MODAL_INPUT_FILE, FILLING_FILE, FILLING_ONLY, LOOKS_FILE, showBoundWhy } from '../public/model.js';
 import { FRAME_ELEMENTS } from '../public/modal-input.js';
 
 // ---- the Modal input show (docs/modal-inputs.md) in fixture mode -------------------------------------------------------------
@@ -254,11 +254,19 @@ export class FixtureMission {
     }
     // the filling glass's dials this world set (as probe.ps1 -Action filling writes control.json), and TouchDesigner (in this world)
     // taking them at once into its status.json
-    if (w.filling && out.probe?.value?.td?.file === FILLING_FILE && out.probe.value.td.ok !== false) {
+    if (w.filling && [FILLING_FILE, LOOKS_FILE].includes(out.probe?.value?.td?.file) && out.probe.value.td.ok !== false) {
       const f = out.probe.value.filling ?? {}, st = f.status?.json && typeof f.status.json === 'object' ? f.status.json : {};
       const { at, ...set } = w.filling;
       out.probe = { ...out.probe, value: { ...out.probe.value, filling: { ...f, control: { age_s: 0, json: { ...w.filling } },
         status: { age_s: f.status?.age_s ?? 0.4, json: { ...st, ...set } } } } };
+    }
+    // the looks this world chose (as probe.ps1 -Action looks writes control.json), and TouchDesigner (in this world) taking them:
+    // manual fades straight to its look (the fade itself is the looks-fading scenario's), auto keeps the look it shows
+    if (w.looks && out.probe?.value?.td?.file === LOOKS_FILE && out.probe.value.td.ok !== false) {
+      const l = out.probe.value.looks ?? {}, st = l.status?.json && typeof l.status.json === 'object' ? l.status.json : {};
+      const look = w.looks.mode === 'manual' ? w.looks.look : st.look ?? w.looks.look;
+      out.probe = { ...out.probe, value: { ...out.probe.value, looks: { ...l, control: { age_s: 0, json: { ...w.looks } },
+        status: { age_s: l.status?.age_s ?? 0.3, json: { ...st, mode: w.looks.mode, look, target: look, fading: null, fade: 1 } } } } };
     }
     if (out.probe?.value) w.applying.confirm(out.probe.value, this.now());
     out.applying = w.applying.list(clock);
@@ -311,10 +319,11 @@ export class FixtureMission {
     let td = null;                 // TouchDesigner in this world: a switch to the file it runs reads "the restart on ..."
     try { td = this.snapshot(scenario).probe?.value?.td ?? null; } catch { /* a half-edited scenario: plain words */ }
     const running = typeof td?.file === 'string' ? td.file : null;
-    // the remembered river's controls only while it runs (as Mission.control, by the full check's file)
-    if ((action === 'remembered-zones' || action === 'remembered-opening') && (!td || td.ok === false || running !== REMEMBERED_FILE))
-      throw Object.assign(new Error(REMEMBERED_ONLY), { status: 409 });
-    if (action === 'filling' && running !== FILLING_FILE) throw Object.assign(new Error(FILLING_ONLY), { status: 409 });   // as Mission.control
+    // the remembered river's controls, the filling dials and the looks only while their show (or look) runs (as Mission.control, by
+    // the full check: model.js showBoundWhy)
+    { let pv = null; try { pv = this.snapshot(scenario).probe?.value ?? null; } catch { /* a half-edited scenario: closed */ }
+      const bound = showBoundWhy(action, pv);
+      if (bound) throw Object.assign(new Error(bound), { status: 409 }); }
     let baked = null;              // a rebuild's map: the map in use once the rebuild is confirmed (as live)
     return w.applying.run(action, checked, async () => {
       this.#log(action, checked);
@@ -340,14 +349,20 @@ export class FixtureMission {
         w.modalinput = { source: checked.source, strength: checked.strength };
       }
       if (action === 'filling') {        // as probe.ps1 -Action filling: only while TouchDesigner answers on the filling glass
-        if (!td || td.ok === false || running !== FILLING_FILE) return { ok: false, error: FILLING_ONLY, refused: action, fixture: true };
+        if (!td || td.ok === false || ![FILLING_FILE, LOOKS_FILE].includes(running)) return { ok: false, error: FILLING_ONLY, refused: action, fixture: true };
         w.filling = { ...checked, at: new Date(this.clock(scenario)).toISOString().replace(/\.\d{3}Z$/, 'Z') };
         return { ok: true, fixture: true, action, body: checked, written: w.filling, note: 'fixture mode: nothing was changed' };
       }
-      if (action === 'remembered-zones' || action === 'remembered-opening') {
+      if (action === 'looks') {          // as probe.ps1 -Action looks: control.json { mode, look, at } (auto keeps the look it had)
+        const look = checked.look ?? w.looks?.look ?? 'remembered';
+        w.looks = { mode: checked.mode, look, at: new Date(this.clock(scenario)).toISOString().replace(/\.\d{3}Z$/, 'Z') };
+        return { ok: true, fixture: true, action, body: checked, written: w.looks, note: 'fixture mode: nothing was changed' };
+      }
+      if (action === 'remembered-zones' || action === 'remembered-opening' || action === 'remembered-screens') {
         // as probe.ps1: control.json merged and written; TouchDesigner (in this world) takes it at once
         const c = { ...(w.remembered ?? {}), at: new Date(this.clock(scenario)).toISOString() };
         if (action === 'remembered-zones') { c.light = checked.light; if (checked.pool_height_m !== undefined) c.pool_height_m = checked.pool_height_m; }
+        else if (action === 'remembered-screens') c.screens = { ...(c.screens ?? {}), video: checked.video };
         else c.opening_night = checked.on;
         w.remembered = c;
         return { ok: true, fixture: true, action, body: checked, written: c, note: 'fixture mode: nothing was changed' };
@@ -427,6 +442,8 @@ export class FixtureMission {
     const missing = { missing: true };
     const raw = { ok: true, action: 'remembered', now_s: clock / 1000, status: missing, state: missing, reflex: missing, presence: missing, control: missing,
                   ...structuredClone(rebase(f.remembered ?? {}, delta)) };
+    // river-looks.toe's own status file (probe.ps1 -Action remembered reads it too: which look shows), as this world's full check has it
+    try { const l = this.snapshot(n).probe?.value?.looks?.status; if (l && typeof l === 'object') raw.looks = structuredClone(l); } catch { /* none */ }
     const c = this.worldFor(n).remembered;
     if (c) {
       raw.control = { age_s: 0, json: { ...(raw.control?.json ?? {}), ...c } };
@@ -434,6 +451,7 @@ export class FixtureMission {
       if (sj && typeof sj === 'object') {
         if (c.light !== undefined || c.pool_height_m !== undefined) sj.zones = { ...(sj.zones ?? {}), ...(c.light !== undefined ? { light: c.light } : {}), ...(c.pool_height_m !== undefined ? { pool_height_m: c.pool_height_m } : {}) };
         if (c.opening_night !== undefined) sj.opening_night = c.opening_night;
+        if (c.screens?.video !== undefined) sj.screens = { ...(sj.screens ?? {}), video: c.screens.video };
       }
     }
     return raw;

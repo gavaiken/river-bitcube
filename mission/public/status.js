@@ -18,6 +18,7 @@ import { apiTimeout } from '/app.js';
 import { modalInputView, FROM_WORDS, FACTOR_INFO } from '/modal-input.js';
 import { modalFeedView } from '/modal-feed.js';
 import { fillingView, toPct, fromPct, askedIs, cycleWords, FILLING_DIAL_WORDS } from '/filling.js';
+import { looksView, askedIs as looksAskedIs, LOOK_MODE_WORDS, LOOK_MODES, LOOK_WORDS } from '/looks.js';
 const $ = (sel, root = document) => root.querySelector(sel);
 const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
 // One name per thing (the copy rules); descriptors live on the card, never in the name.
@@ -57,6 +58,7 @@ const lastHTML = new Map();   // section -> the HTML it holds (no churn when not
 let overlayDraft = null, framingDraft = null, screensDraft = null;
 let miSourceDraft = null, miStrengthDraft = null;   // the Modal input choice before Apply (percent)
 let flDraft = null;           // the filling glass's dials before Apply: { palette?, brightness?, intensity?, speed? } (percent)
+let lkDraft = null;           // the river (all looks)'s choice before Apply: { mode?, look? }
 let hubDraft = null;          // the brightness stepper, before "Set"
 const targetDraft = { season: null, intensity: null };
 const rulesDraft = {};        // what was typed into the rules form, kept across re-renders and a failed Apply
@@ -702,7 +704,7 @@ function showingHTML(m) {
     ${line ? `<p class="showing-desc">${esc(line)}</p>` : ''}
     <div class="row-btns"><button type="button" class="btn primary" id="ctl-showing-change" data-act="show-list" ${s.show_files.length ? '' : 'disabled'}>Change</button>${back}</div>
     <div class="effect">Default: <b>${esc(bootWords(s.boot_file))}</b>, what opens when bitcube restarts. Switching never changes it.</div>
-    ${statusLine('ctl-showing', ['switch', 'bootfile'])}</div>${combinedHTML(m)}${modalInputHTML(m)}${fillingHTML(m)}`;
+    ${statusLine('ctl-showing', ['switch', 'bootfile'])}</div>${combinedHTML(m)}${modalInputHTML(m)}${looksHTML(m)}${fillingHTML(m)}`;
 }
 /** Change: every offered show (shows.json), its kind, and which is showing and which is the default; a tap opens its card. */
 function screenChoice(s) { return { mode: s?.mode ?? 'current', blend: s?.blend ?? 0, hold: s?.hold ?? 30, recorded: s?.recorded ?? 0, offset: s?.offset ?? 0 }; }
@@ -834,7 +836,8 @@ function flChanged(v) {
 const flSpeedLine = (pct) => `${FILLING_DIAL_WORDS.speed.line} 100 % is ${cycleWords(1)}${pct === 100 ? '' : `; at ${nb(pct + ' %')}, ${cycleWords(pct / 100)}`}.`;
 const FL_DIALS = [['brightness', 0, 100, 5], ['intensity', 0, 100, 5], ['speed', 25, 300, 5]];
 function fillingHTML(m) {
-  if (m.show.file?.name !== M.FILLING_FILE) { flDraft = null; return ''; }
+  // the filling glass, or a fill look of the river (all looks): show.filling is the model's (null for anything else)
+  if (!m.show.filling) { flDraft = null; return ''; }
   const v = flView(m), o = off('filling'), d = flNow(v), PW = M.FILLING_PALETTE_WORDS;
   const btn = (id) => `<button type="button" id="ctl-fl-${id}" data-act="fl-palette" data-palette="${id}" class="${d.palette === id ? 'lit' : ''}" aria-pressed="${d.palette === id}" ${o ? 'disabled' : ''}>${esc(PW[id])}</button>`;
   const dial = ([k, lo, hi, step]) => {
@@ -851,13 +854,48 @@ function fillingHTML(m) {
   const extra = n && (n.intensity != null || n.speed != null)
     ? `<p class="effect">Its intensity ${n.intensity == null ? 'not known' : nb(Math.round(n.intensity * 100) + ' %')}, speed ${n.speed == null ? 'not known' : nb(Math.round(n.speed * 100) + ' %')}.</p>` : '';
   return `<div class="ctl ${whyOf('filling') && !busy('filling') ? 'off' : ''}" id="ctl-filling" data-ctl="filling"${busy('filling') ? ' aria-busy="true"' : ''}>
-    <div class="ctl-h">The filling glass</div>${whyLine('filling')}
+    <div class="ctl-h">${m.show.look ? `${esc(LOOK_WORDS[m.show.look])}: its dials` : 'The filling glass'}</div>${whyLine('filling')}
     <label id="fl-pal-l">Palette</label>
     <div class="seg fl-seg" role="group" aria-labelledby="fl-pal-l">${M.FILLING_PALETTES.map(btn).join('')}</div>
     ${FL_DIALS.map(dial).join('')}
     ${now}${extra}
     <div class="row-btns"><button type="button" class="btn primary" id="ctl-fl-set" data-act="fl-set" ${o || !v || !flChanged(v) ? 'disabled' : ''}>Apply</button></div>
     ${statusLine('ctl-filling', ['filling'])}</div>`;
+}
+/** The river (all looks) (river-looks.toe, docs/mission-ui.md "Looks"): Auto or Manual and, in Manual, the look, a draft until Apply
+ *  (as every control); then what the show itself reports now, with its age; then the look's own settings (the fill's dials are the
+ *  filling card under this one; the remembered river's are on its page). Nothing of it shows for any other show. */
+const lkView = (m) => looksView(m?.show.looks, m?.show.fresh.probe_age_s ?? 0);
+const lkNow = (v) => ({ ...(v?.base ?? { mode: 'auto', look: 'remembered' }), ...(lkDraft ?? {}) });
+function lkChanged(v) {
+  if (!v || !lkDraft) return false;
+  const a = v.base, d = lkNow(v);
+  return d.mode !== a.mode || (d.mode === 'manual' && d.look !== a.look);
+}
+const lkBody = (d) => (d.mode === 'manual' ? { mode: 'manual', look: d.look } : { mode: 'auto' });
+function looksHTML(m) {
+  if (!m.show.looks) { lkDraft = null; return ''; }
+  const v = lkView(m), o = off('looks'), d = lkNow(v), W = LOOK_MODE_WORDS;
+  const mbtn = (id) => `<button type="button" id="ctl-lk-${id}" data-act="lk-mode" data-mode="${id}" class="${d.mode === id ? 'lit' : ''}" aria-pressed="${d.mode === id}" ${o ? 'disabled' : ''}>${W[id].label}</button>`;
+  const lbtn = (id) => `<button type="button" id="ctl-lk-look-${id}" data-act="lk-look" data-look="${id}" class="${d.look === id ? 'lit' : ''}" aria-pressed="${d.look === id}" ${o ? 'disabled' : ''}>${esc(LOOK_WORDS[id])}</button>`;
+  const n = v?.now, seen = nowOr(item(m, 'touchdesigner'));
+  const now = !n ? `<p class="effect" id="lk-now">Now on bitcube: <b>not known yet</b>: ${esc(v?.problems?.[0] ?? "the show hasn't reported")}.</p>`
+    : n.old ? `<p class="effect" id="lk-now">Last report from the show: <b>${esc(n.words)}</b> · ${ageSpan(n.age_s)}. It reports twice a second: an old report means it has stopped reporting.</p>`
+    : `<p class="effect" id="lk-now">${seen.pre}: <b>${esc(n.words)}</b> · reported ${ageSpan(n.age_s)}${seen.tail}.</p>`;
+  const look = m.show.look;
+  const settings = look === 'remembered'
+    ? `<p class="effect lk-settings">The remembered river's settings (the pool line, opening night, the river video under the particles) are on its page: <a href="/remembered" id="lk-remembered">Remembered river page</a>.</p>`
+    : look ? `<p class="effect lk-settings">${esc(LOOK_WORDS[look])}'s dials are below.</p>` : '';
+  return `<div class="ctl ${whyOf('looks') && !busy('looks') ? 'off' : ''}" id="ctl-looks" data-ctl="looks"${busy('looks') ? ' aria-busy="true"' : ''}>
+    <div class="ctl-h">Looks</div>${whyLine('looks')}
+    <div class="seg lk-seg" role="group" aria-label="Looks: Auto or Manual" aria-describedby="lk-line">${LOOK_MODES.map(mbtn).join('')}</div>
+    <p class="effect" id="lk-line">${esc(W[d.mode].line)}</p>
+    ${d.mode === 'manual' ? `<label id="lk-look-l">Look</label>
+    <div class="seg lk-looks" role="group" aria-labelledby="lk-look-l">${M.LOOKS.map(lbtn).join('')}</div>` : ''}
+    <div class="row-btns"><button type="button" class="btn primary" id="ctl-lk-set" data-act="lk-set" ${o || !v || !lkChanged(v) ? 'disabled' : ''}>Apply</button></div>
+    ${statusLine('ctl-looks', ['looks'])}
+    ${now}
+    ${settings}</div>`;
 }
 /** "What Modal is sending" for the chosen source, its stale warning, and the other sources' freshness on one line. */
 function sendingHTML(v) {
@@ -1531,6 +1569,21 @@ document.addEventListener('click', async (e) => {
         fail: 'The filling glass is unchanged', kept: 'Your choice is kept.', noAnswer: 'the Now line shows what the show reports',
         holds: (mm) => askedIs(flView(mm), body),
         onDone: () => { if (flDraft && Object.entries(sent).every(([k, x]) => flDraft[k] === x)) flDraft = null; } });
+      break;
+    }
+    case 'lk-mode': lkDraft = { ...(lkDraft ?? {}), mode: b.dataset.mode }; render(); break;
+    case 'lk-look': lkDraft = { ...(lkDraft ?? {}), look: b.dataset.look }; render(); break;
+    case 'lk-set': {
+      const v = lkView(m);
+      if (!v) break;
+      const body = lkBody(lkNow(v)), sent = { ...lkDraft };
+      runControl('looks', '/api/control/looks', body, { btn: b, what: changeLabel('looks', body),
+        // when you chose it; what the show reports is the Now line under the button
+        doneAt: (t) => body.mode === 'auto' ? `You chose Auto at ${t}: ${LOOK_MODE_WORDS.auto.line[0].toLowerCase()}${LOOK_MODE_WORDS.auto.line.slice(1)}`
+          : `You chose ${M.LOOK_IN_LINE[body.look]} at ${t}: it fades over in a few seconds and stays on it`,
+        fail: 'The looks are unchanged', kept: 'Your choice is kept.', noAnswer: 'the Now line shows what the show reports',
+        holds: (mm) => looksAskedIs(lkView(mm), body),
+        onDone: () => { if (lkDraft && Object.entries(sent).every(([k, x]) => lkDraft[k] === x)) lkDraft = null; } });
       break;
     }
     case 'mi-source': miSourceDraft = b.dataset.source; render(); break;
