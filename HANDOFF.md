@@ -2,8 +2,12 @@
 
 - **Holder:** nobody (free)
 - **Where:** bitcube running Combined v0 (Will's settings); the default is still the river's year
-- **Updated:** 2026-10-27 17:55 PT
+- **Updated:** 2026-10-27 18:55 PT
 - **Next holder:** Will (Codex), for visual tuning.
+
+## HUB75 simulator in mission control (27 Oct, Gavin, repo only)
+- New experiment page **`/hub75`** (link at the bottom of Lights): the river footage with only the **moving water** kept (motion mask), zoomed into four windows (or one across all four) and drawn on four simulated 128 × 256 portrait screens, LED by LED, with true black everywhere else. Intensity 0–1, looks Water / Foam / Motion, black floor, grey depth, glow. Design: `docs/mission-ui.md` "HUB75 simulator". Footage: `mission/media/river-cascade.mp4`. Nothing reaches bitcube; no show file changed.
+- Next, if the team likes a look: build it as a TD viz show from the baseline template on the live river cam (Copy settings gives the windows and parameters).
 
 ## Ropes brighter (27 Oct, Gavin): `a5d4c6d`
 - Rope brightness 1.0 and max 1.0 on every show (were 0.4), and one software limit of **1,400 W for both boxes together** (both share one circuit; sized for 15 A) instead of 600 W per box. Saved show files are raised as they run. Live at 18:30: the Modal input show at 465 W + 414 W. If Seabrook confirms a 20 A circuit, raise `TOTAL_WATTS` in `td/ropes/artnet_out.py`.
