@@ -5,6 +5,9 @@
 - **Updated:** 2026-10-27 17:55 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
+## Ropes brighter (27 Oct, Gavin): `a5d4c6d`
+- Rope brightness 1.0 and max 1.0 on every show (were 0.4), and one software limit of **1,400 W for both boxes together** (both share one circuit; sized for 15 A) instead of 600 W per box. Saved show files are raised as they run. Live at 18:30: the Modal input show at 465 W + 414 W. If Seabrook confirms a 20 A circuit, raise `TOTAL_WATTS` in `td/ropes/artnet_out.py`.
+
 ## Combined with Modal Input Selector (27 Oct, Gavin): `river-combined-modal-inputs.toe`
 - New show cloned from Combined v0 (Combined v0's file and settings untouched; SHA-checked). Mission control, while it runs: **Modal input** Off / Canvas / Scene / Frames + strength (fades, no restart), and **What Dave's agent is sending** (each value, what it drives, its age; Dave's journal line or frame note and thumbnails). Default on first open: Canvas 18 % (today's look). Interface: [`docs/modal-inputs.md`](docs/modal-inputs.md); contract for frames: [`modal-frames/`](modal-frames/README.md).
 - Sources: Canvas = Dave's JS canvas overlay; Scene = `state.json`/`reflex.json` mirror (palette recolour + speed/density/brightness/turbulence); Frames = `tools/modal/frames_sync.py` (new child of `modal_link.py`, lock port 8773) → `gallery_state/frames/`, OKLCH journeys × river ripple. A stale source fades back to the river by itself.
