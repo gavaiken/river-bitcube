@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** studio agent (repo only; bitcube untouched)
+- **Holder:** Gavin (Mac mini session: multi-view pan/tilt calibration; repo only for now, camera untouched)
 - **Where:** bitcube running Combined v0 (Will's settings); the default is still the river's year
-- **Updated:** 2026-10-27 PT
+- **Updated:** 2026-10-27 19:55 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
 ## New season palettes show (27 Oct, studio agent, repo only)
