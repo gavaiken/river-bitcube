@@ -28,3 +28,13 @@ Live (Gavin's OK, 20:05–20:45)
 Still to do
 - Pin the pair in a show of our own and rebuild it (the multi-view frame lays the river over the whole sculpture, floor to rig, so the look moves).
 - `NEIGHBOUR` in screens.py still encodes the old hang; screen 1 needs a hand place (or a darker room and a lower threshold) whenever screens are re-located.
+
+# Session: every show on the multi-view map (Gavin, River Calibrate, 27 Oct, 21:30–22:35)
+
+SESSION SUMMARY
+- Gavin saw the old map in mission control: the new pair had been committed as `*-views.json` so it wouldn't be "newest", and no show pinned it. Gavin: camera and lights are final, everything uses the new map.
+- Renamed to `pixelmap-2026-10-27.json` / `screens-2026-10-27.json`. Lights page: a multi-view map (meta.space) is drawn over the live gallery cam through `hu`/`hv`; screens through their new `home` corners (`screens.py home_corners`, backfilled). Mission tests follow the newest map.
+- `shows.json`: every entry pins the pair (session A pinned the remembered river itself, with `zones-2026-10-27.json`). Template/Combined notes: the field is the map's frame (floor to rig), not gallery-cam space.
+- bitcube (baton from session A): backups in `River\checkpoints\before-multiview-repin-20261027\`; baseline, live river, Combined v0, Combined Modal inputs rebuilt with their build scripts and saved; the river's year through mission control's Rebuild (probe.ps1), after fixing its quote bug. Every rebuild: 8,000 uv rows, ropes 1–20 mapped, screens from the 27 Oct file, 60 fps, 0 errors; the year's baked uv_table matches the map exactly. toeexpand secret scan: 0 hits in 2,769 parts. Committed from bitcube (a01bf36).
+- End-to-end: the live river's UV test (green = v) photographed from the home and up views: orange at the floor coils rising to yellow-white at the rig, continuous across the views. Uvtest off again.
+- Left: `river-remembered.toe` running (boot default), camera home.

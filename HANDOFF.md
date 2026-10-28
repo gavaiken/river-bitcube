@@ -1,9 +1,9 @@
 # Handoff: where things stand
 
-- **Holder:** River Calibrate (Gavin's Mac mini): ON BITCUBE, rebuilding the 5 existing shows on the 27 Oct map, then back to river-remembered.toe
-- **Where:** bitcube running **`river-remembered.toe`**, which is now the **boot default** (Gavin); fallback = the river's year
-- **Updated:** 2026-10-27 22:00 PT
-- **Next holder:** River Calibrate (Gavin's Mac mini), then session A again for the artists' round 2 on the remembered river.
+- **Holder:** free → session A (River Artist Vision) for the artists' round 2. River Calibrate finished on bitcube 22:35 PT.
+- **Where:** bitcube running **`river-remembered.toe`** (the boot default), 60 fps, 0 errors; gallery cam home (3241, 0)
+- **Updated:** 2026-10-27 22:35 PT
+- **Next holder:** session A (artists' round 2 on the remembered river), then Will (Codex) for visual tuning.
 
 
 ## The remembered river (27 Oct, Gavin, session A): `river-remembered.toe`, boot default
@@ -12,8 +12,11 @@
 - Not yet: driftwood eddies (logs not marked: `tools/remembered/logs-<date>.json`), the counter not restarted with zones (lingerers' ropes empty until it is), fps below 60, the artists' round-2 feedback (pool ripple, more dynamic, screens like /hub75, black dots in the surge, easing, a "filling pool" animation).
 - Dave's repo: `c9de2e6` (prompt: the interpreter, not the river) and `322e92b` (trust the camera over the model; at most one dry day in four) are live on Modal.
 
-## Calibration through camera views (27 Oct, Gavin): see `docs/sessions/calibrate.md`
-- Calibrate now pans/tilts the gallery cam through `tools/cameras/views.json` (home 3241/0, mid, up to the rig), stitches the views by shared LEDs (1.8–1.9 px), and always returns it home (verified exact). New map `pixelmap-2026-10-27.json` (all 20 ropes, floor to rig) and `screens-2026-10-27.json` (2, 3, 4 located and checked against Gavin's marks; 1 hand-placed) are committed; **no show pins them yet** (next: pin the pair in a show of our own and rebuild; the river then spans the whole sculpture). bitcube has a leftover `stash@{0}: autostash` (an interim screens file plus the old river_masks deletions); harmless, drop it when convenient. The show (river's year) was restored after each step.
+## Every show on the 27 Oct multi-view map (Gavin, River Calibrate): see `docs/sessions/calibrate.md`
+- All seven shows now use `pixelmap-2026-10-27.json` + `screens-2026-10-27.json` (three gallery-cam views stitched, floor to rig; screens 2–4 located, 1 hand-placed). The five existing ones were rebuilt on bitcube, saved, secret-scanned (0 hits) and committed (a01bf36); the remembered river was built on it by session A. Backups of the five old `.toe` files: `River\checkpoints\before-multiview-repin-20261027\`.
+- The field (river picture) now spans the whole sculpture, floor to rig, not the gallery cam's own framing. Mission control's Lights page draws the map over the live gallery cam through each LED's home-view place (`hu`, `hv`); the rope tops and screens 1–2 sit above that picture.
+- Fixed on the way: mission control's **Rebuild** button was always refused (probe.ps1 compared the show name with td.ps1's quotes). Verified: Rebuild of the river's year went through end to end.
+- bitcube has a leftover `stash@{0}: autostash` (an interim screens file and the old river_masks deletions); harmless, drop it when convenient.
 
 ## New season palettes show (27 Oct, studio agent, repo only)
 - Requested: icier winter (whites/greys), deeper teal spring, sparse blue-green summer, deep cerulean autumn, pale leaf flecks. Built as a **new show**, not an edit of the default: `td/build/build_seasons_palettes.py` + `shows.json` entry `river-seasons-palettes.toe` (**offered: false**, the `.toe` doesn't exist yet) + page `docs/files/river-seasons-palettes.md`. `seasons_td.py` now reads tints/glints from an optional `season_looks` DAT (absent in the river's year = unchanged).
