@@ -1,9 +1,17 @@
 # Handoff: where things stand
 
-- **Holder:** Will (Codex), applying Will-requested direct recorded video / mask bypass; diagnostic capture retained
+- **Holder:** Will (Codex), direct recorded-video update complete; no active visual edit; diagnostic capture retained
 - **Where:** bitcube running **`river-all-looks.toe`** ("The river: all looks (playlist)", auto, ~58–60 fps), **the boot default since 11:20** (Gavin); `river-looks.toe` (three looks) retired as `old-river-looks.toe`, its frozen copy `river-two-looks.toe` stays offered
-- **Updated:** 2026-10-28 13:32 PT
+- **Updated:** 2026-10-28 13:39 PT
 - **Next holder:** Will. All-looks stays default / Auto, softer ribbons retained. Approved 30 fps footage is now persistent for all-looks; reload/reboot retains it. Originals and frozen shows preserved. Rollback below removes the preference too.
+
+## Direct recorded video at 30 fps, slow mask bypassed (28 Oct, Will / Codex)
+- Will requested 30 fps water and explicitly accepted removing the mask. Source `0bde30b`: all-looks recorded input alone can bypass the low-rate motion mask (`River/remembered/control.json`, `screens.motion_mask: false`). The GPU still samples the selected movie directly with its existing grade/tint/crops and softer ribbons. Live camera masking and other shows retain their prior behavior. The CPU motion signal for ropes remains unchanged.
+- Also skips four unused GPU-to-CPU crop readbacks in this GPU-only particle mode. CPU water mode and GPU failure fallback retain fresh crop readbacks. No shader/graph changes, movie reset, reload/restart, project save, playlist clock reset or build. Existing profiler wrapper identities are preserved by the updater; capture hooks had already expired when it ran.
+- Applied `tools/remembered/direct_video.py` at **epoch1793219784.1061287 / 13:36:24 PT**; use that boundary for any later diagnostics. Earlier25min capture ended before this update, so it contains no after-change comparison. Same TD PID12944, GPU active, mask min/max1, no project errors, output window open. Actual movie upload advanced **622frames in20.717s (~30.02fps)**;20 status samples55–62fps, frame17.21–19.26ms. These observations do not prove every physical display frame is presented smoothly; physical feedback requested.
+- Checkpoint `River/checkpoints/before-direct-video-20261028-will` preserves remembered controls, video preference and baseline hashes. Saved .toe (41732bc6…), playlist control, boot file and video preference hashes are identical; remembered control differs only by the new flag. Approved30fps assets/originals unchanged. Source and flag retain this mode on startup; no reboot performed.
+- **Rollback this mask/readback change while retaining30fps clips:** `.\tools\td.ps1 "exec(open('C:/Users/user/River/river-bitcube/tools/remembered/direct_video.py').read(), dict(globals(), DIRECT_VIDEO=False))"`. No restart/save needed. This is separate from `video_trial.py` rollback, which restores the old media.
+- Validation: **531 Python passed/3 skipped;503 mission passed**. Tests cover recorded-only/show scope, default/rollback mask, healthy GPU bypass, CPU mode and GPU-failure readbacks; actual updater also exercised locally with a profiler-wrapped runtime and rollback. Pre-existing bitcube dirty files preserved.
 
 ## Approved 30 fps footage kept across startup (28 Oct, Will / Codex)
 - Will said “keep the new better fps video; lock it in.” Source `dd54413` adds `td/remembered/video_library.py`, used only when `show._holder()` initializes the recorded clip list. `River\remembered\video-library.json` selects the existing `motion30-trial-20261028` directory for **river-all-looks.toe only**. Both full-length30fps clips remain unchanged from the approved trial. Directory name is historical; the preference is no longer temporary.
