@@ -55,15 +55,16 @@ export const mark = (level, extra = '') => `<span class="mk lv-${lv(level)} ${ex
 export const chip = (level, word = WORD[lv(level)], extra = '') => `<span class="chip lv-${lv(level)} ${extra}">${mark(level)}<span>${esc(word)}</span></span>`;
 
 const LINKS = {
+  explainer: ['What is happening (for the press)', '/explainer'],
   map: ['System map (for engineers)', '/map'],
   files: ['Show files', 'https://gavaiken.github.io/river-bitcube/show-files'],
   install: ['Install guide', 'https://gavaiken.github.io/river-bitcube/install'],
   plan: ['The plan', 'https://gavaiken.github.io/river-bitcube/execution-plan'],
 };
 /** The footer's links, in order: [label, href]. */
-export const DOC_LINKS = [LINKS.map, LINKS.files, LINKS.install, LINKS.plan];
+export const DOC_LINKS = [LINKS.explainer, LINKS.map, LINKS.files, LINKS.install, LINKS.plan];
 // which part of the Help page each page's ? opens
-const HELP_SECTION = { status: 'status', lights: 'lights', looks: 'looks', chat: 'chat', remembered: 'remembered', hub75: 'hub75', map: 'status', help: 'toc' };
+const HELP_SECTION = { status: 'status', lights: 'lights', looks: 'looks', chat: 'chat', remembered: 'remembered', hub75: 'hub75', map: 'status', help: 'toc', explainer: 'big-picture' };
 const TABS = [
   ['status', 'Status', '/status', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>'],
   ['lights', 'Lights', '/lights', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.6 1 1.3 1 2.5h6c0-1.2.3-1.9 1-2.5A6 6 0 0 0 12 3z"/></svg>'],
@@ -1204,7 +1205,7 @@ export function mountShell({ page = 'status', title = '' } = {}) {
   if (main) main.before(header); else document.body.prepend(header);
   // the System map has no tab of its own: it is reached from Status, so Status is marked as where you are (its parent); the
   // HUB75 simulator and the Remembered river page likewise sit under Lights
-  const tabOf = page === 'map' ? 'status' : page === 'hub75' || page === 'remembered' ? 'lights' : page;
+  const tabOf = page === 'map' || page === 'explainer' ? 'status' : page === 'hub75' || page === 'remembered' ? 'lights' : page;
   if (!$('nav.tabs')) document.body.append(el(`<nav class="tabs" aria-label="Pages">${TABS.map(([k, l, h, svg]) =>
     `<a href="${h}" class="${k === tabOf ? 'on' : ''}" ${k === tabOf ? `aria-current="${k === page ? 'page' : 'true'}"` : ''}>${svg}${esc(l)}</a>`).join('')}</nav>`));
   // the focus order follows where the tabs are drawn: last on a phone (the bar at the bottom), right after the header from

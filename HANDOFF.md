@@ -1,9 +1,13 @@
 # Handoff: where things stand
 
-- **Holder:** Will (Codex), mask restored with independent GPU video delivery; no active visual edit; diagnostic capture retained
+- **Holder:** nobody on bitcube (Will finished 13:58; Gavin's agent did repo-only work after). Last on bitcube: Will (Codex), mask restored with independent GPU video delivery; no active visual edit; diagnostic capture retained
 - **Where:** bitcube running **`river-all-looks.toe`** ("The river: all looks (playlist)", auto, ~58–60 fps), **the boot default since 11:20** (Gavin); `river-looks.toe` (three looks) retired as `old-river-looks.toe`, its frozen copy `river-two-looks.toe` stays offered
-- **Updated:** 2026-10-28 13:58 PT
+- **Updated:** 2026-10-28 14:40 PT (repo only: the `/explainer` page in mission control; nothing on bitcube)
 - **Next holder:** Will. All-looks stays default / Auto, softer ribbons retained. Approved 30 fps footage is now persistent for all-looks; reload/reboot retains it. Originals and frozen shows preserved. The latest cascade revision has its own rollback below; restore it before using the older media rollback.
+
+## The explainer page (28 Oct, 14:40, Gavin / Claude; repo only)
+- Gavin asked for a page Justine and Colin can read before speaking to the press: exactly what is happening, what feeds what, and how that shapes the visuals of the file running now. **`/explainer`** in mission control ("What is happening"), reached from the menu (first link) and the top of Help; `docs/mission-ui.md` "Explainer page". Static words and two inline SVG diagrams; no code paths on bitcube touched, no control writes, no show change.
+- Its facts are from the code as of `a0708e5`: Modal ticks every 5 min; the mirror every 3 s; one remembered day per 300 s loop, the surge 90–216 s in, room shift ±30 s; Dave's choice counts for 15 min, then notable days; palette 60 % Dave / 40 % season; the ropes follow `heard` else the picture; today's playlist remembered ×4 loops then fill-simple ×1 cycle. **If any of those change, change the page in the same commit.**
 
 ## Mask restored; video and mask rates independent (28 Oct, Will / Codex)
 - Will requests masking again while retaining30fps video. Source **347085d** decouples CPU crop-readback suppression from the mask-bypass flag: healthy all-looks recorded GPU particle mode skips the four unused CPU crop readbacks regardless of mask setting. The shader already has independent movie and mask inputs. It multiplies each fresh movie frame by the latest mask texture; mask analysis remains every sixth show tick. CPU water mode/GPU failure still receive crops; other shows and live camera behavior preserved.

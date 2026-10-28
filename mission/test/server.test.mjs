@@ -114,7 +114,7 @@ test('server in fixture mode: /version, login, /fixtures, status, stills, contro
   assert.equal((await (await get('/api/history', { cookie: both })).json()).last_action, null);     // the other scenario is its own world
 
   // the pages (a page not built yet is a 404 that says so, never a 500), the redirects, and the fake agent's two moods
-  for (const page of ['/status', '/lights', '/chat', '/map', '/hub75', '/login']) {
+  for (const page of ['/status', '/lights', '/chat', '/map', '/hub75', '/looks', '/remembered', '/help', '/explainer', '/login']) {
     const r = await get(page, { cookie: mc });
     if (r.status === 404) assert.deepEqual(await r.json(), { error: 'not built yet' }, page);
     else assert.deepEqual([r.status, /text\/html/.test(r.headers.get('content-type'))], [200, true], page);

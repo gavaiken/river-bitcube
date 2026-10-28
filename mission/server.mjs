@@ -278,7 +278,7 @@ function withWords(ev) { return ev ? { ...ev, words: describeEvent(ev), ago_s: M
 
 // ---- helpers ---------------------------------------------------------------------------------------------
 // The v2 pages (docs/mission-ui.md). A page file that is not built yet answers 404 { error: 'not built yet' } rather than 500.
-const PAGES = { '/status': 'status.html', '/lights': 'lights.html', '/chat': 'chat.html', '/map': 'map.html', '/hub75': 'hub75.html', '/remembered': 'remembered.html', '/looks': 'looks.html', '/help': 'help.html', '/login': 'login.html' };
+const PAGES = { '/status': 'status.html', '/lights': 'lights.html', '/chat': 'chat.html', '/map': 'map.html', '/hub75': 'hub75.html', '/remembered': 'remembered.html', '/looks': 'looks.html', '/help': 'help.html', '/explainer': 'explainer.html', '/login': 'login.html' };
 const REDIRECTS = { '/': '/status', '/mission': '/status', '/status.html': '/status' };     // the v1 addresses
 // Assets under public/ (styles, scripts, icons, the manifest) are served to anyone, like the login page itself: they hold no data.
 // HTML is only served through PAGES (behind the login); the design prototypes (public/proto/) are in git history.
