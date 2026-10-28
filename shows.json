@@ -135,6 +135,32 @@
       "updated_by": "studio agent",
       "updated": "2026-10-27",
       "last_change": "New: copy of the river's year with the winter, spring, summer and autumn palettes changed"
+    },
+    {
+      "file": "river-remembered.toe",
+      "title": "The remembered river",
+      "label": "the remembered river",
+      "kind": "show",
+      "offered": false,
+      "build": "td/build/build_remembered.py",
+      "calibration": {
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",
+        "screens": "tools/pixelmap/screens-2026-10-23.json",
+        "zones": null
+      },
+      "description": "Dry Creek relives one remembered day from its past every five minutes: calm drips, a building flow, then the surge, a white front falling down every rope into a churning pool, then settling. Dave's agent picks the day (bitcube picks a notable one when he is late); a new day arrives with one slow wave down the ropes. The screens show only the river's moving highlights, mostly black. People standing still slow the light and draw it to their ropes.",
+      "inputs": [
+        "Dave's agent (memory, surge hour, palette and knobs in gallery_state)",
+        "remembered days (data/remembered)",
+        "river camera (recorded clip as fallback)",
+        "people counter (River\\presence.json, lingerers)",
+        "River\\remembered\\control.json (pool line, light checks, opening night)"
+      ],
+      "created_by": "Gavin (session A)",
+      "created": "2026-10-27",
+      "updated_by": "Gavin (session A)",
+      "updated": "2026-10-27",
+      "last_change": "New, not yet built on bitcube: logic in td/remembered/, build script td/build/build_remembered.py"
     }
   ]
 }
