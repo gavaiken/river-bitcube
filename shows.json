@@ -94,8 +94,9 @@
     {
       "file": "river-combined-modal-inputs.toe",
       "title": "Combined with Modal Input Selector",
+      "label": "the Modal input show",
       "kind": "viz",
-      "offered": false,
+      "offered": true,
       "build": "td/build/build_combined_modal_inputs.py",
       "calibration": {
         "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",
@@ -111,7 +112,7 @@
       "created": "2026-10-27",
       "updated_by": "gavin",
       "updated": "2026-10-27",
-      "last_change": "Created: cloned Combined v0 and added the Modal input selector (off / canvas / scene / frames)"
+      "last_change": "Built and verified on bitcube (all four sources, fades, stale fallback); offered in mission control"
     }
   ]
 }

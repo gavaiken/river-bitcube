@@ -30,5 +30,8 @@ Mission control Status, while this show runs. Script form: `probe.ps1 -Action mo
 
 Never edit Combined v0's file, build script or settings for this show. Rebuild through `tools/td.ps1`, save with `tools/td_save.ps1`. A rebuild creates any new GLSL TOP bypassed: save, then un-bypass `viz/fr_*_out` and save again.
 
+## Verified on bitcube (27 Oct)
+Built from a Save As of Combined v0 (whose file and settings stayed byte-identical). All four sources switched through `probe.ps1 -Action modalinput`, each fading in about 4 s with no TouchDesigner restart (same process throughout), 60 fps, zero errors. Modal Frames from Dave's live app: screens and ropes match his pictures top-up (rope picture row 0 = the top of every rope, as sent to Art-Net); rope draw about 110/90 W per box at full frames strength; a 20 s journey with a `via` colour checked mid-way; an empty frames folder faded back to Combined with "no Modal frame has arrived yet", and recovered by itself. Saved .toe expanded: 855 parts, no secret values. The scene recolours the ropes and the screens' Current look; Will's screen cycle still shows his Gavin-style looks on their turns.
+
 ## Reverting
 Choose **Off** (Combined alone) or **Canvas 0.18** (Combined v0's look) in mission control; or switch back to Combined v0.
