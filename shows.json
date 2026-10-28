@@ -190,7 +190,7 @@
       "title": "Fill my cup (simple)",
       "label": "fill my cup (simple)",
       "kind": "viz",
-      "offered": false,
+      "offered": true,
       "build": "td/build/build_fill_simple.py",
       "calibration": {
         "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
@@ -205,7 +205,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-27",
-      "last_change": "New: the first filling-glass look (b2a7064) on the real-height space, soft particles; not yet built on bitcube"
+      "last_change": "Built and running on bitcube 27 Oct: the first filling-glass look (b2a7064) on the real-height space, soft particles"
     }
   ]
 }
