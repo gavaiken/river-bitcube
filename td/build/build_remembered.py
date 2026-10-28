@@ -98,7 +98,7 @@ for _n, _f, _l in (('Mapfile', PIXELMAP, 'LED map (the particle field: every rop
                    ('Screensfile', SCREENS, 'Screens (the particle field: where each screen hangs, its rotation)')):
     if not hasattr(rem.par, _n):
         pg.appendStr(_n, label=_l)
-    getattr(rem.par, _n).val = (REPO + '/' + _f) if _f else ''
+    getattr(rem.par, _n).val = '' if not _f else (_f if (':' in _f or _f.startswith('/')) else REPO + '/' + _f)   # registry paths may be absolute
 note(rem, "THE REMEMBERED RIVER (built by td/build/build_remembered.py; docs/files/river-remembered.md)\n"
           "The logic is in the repo, td/remembered/*.py (not in this file): edit there, git pull, rebuild.\n"
           "remembered_exec -> show.frame(): inputs (state.json, reflex.json, presence.json, control.json, data/remembered),\n"

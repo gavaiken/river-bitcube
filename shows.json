@@ -160,7 +160,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-27",
-      "last_change": "Round 2b: the screens are windows into one particle field in the room (particles.py), the same particles lighting the ropes they pass"
+      "last_change": "The particle field now loads the LED map and screens (their paths were doubled, so it ran on a default layout)"
     },
     {
       "file": "river-filling.toe",

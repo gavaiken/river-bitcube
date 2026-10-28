@@ -36,10 +36,11 @@ ROPE_GAIN = 0.85
 
 
 def _load(path):
+    """A calibration file; a path that can't be read is an error, never a silent default layout."""
     try:
         return json.loads(Path(path).read_text(encoding='utf-8'))
-    except (OSError, ValueError, TypeError):
-        return None
+    except (OSError, ValueError, TypeError) as e:
+        raise RuntimeError(f'calibration file {path} unreadable ({e})') from e
 
 
 def _box(a, r):
