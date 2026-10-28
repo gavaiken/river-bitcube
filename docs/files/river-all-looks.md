@@ -57,3 +57,10 @@ Will approved the physical-panel trial and asked to keep it. The remembered-rive
 `River\remembered\video-library.json` holds an all-looks-only preference; `td/remembered/video_library.py` reads it when the runtime initializes its clip list. Other shows keep the originals. Invalid/incomplete preferences fall back to the original library. Reloads/reboots now retain this choice. Startup selection was verified in a fresh process without interrupting the running animation.
 
 Apply/keep/status/rollback: [`tools/remembered/video_trial.py`](../../tools/remembered/video_trial.py), executed through `tools/td.ps1` with `TRIAL_ACTION`. **Rollback** removes this show’s matching preference and restores the original movie/list immediately, preserving unrelated preferences. No project save or rebuild is needed. Full checkpoint and exact command are in HANDOFF.
+
+
+## Direct recorded video beneath the ribbons
+
+Will requested full-rate video without the slow moving-water mask. For this show only, `River\remembered\control.json` → `screens.motion_mask: false` bypasses the mask on recorded footage. The existing river shader then samples the 30 fps movie directly; crop positions, grade, tint and additive ribbons are preserved. Four CPU crop readbacks that are unused by the GPU are skipped in this mode. Live input, other shows, CPU-only water mode and CPU fallback retain their existing inputs.
+
+`tools/remembered/direct_video.py` applies the scoped change without restarting the movie, rebuilding/saving the project, cooking a new shader, or resetting the look. Rollback through td.ps1: execute that file with `DIRECT_VIDEO=False`; the mask and readbacks return. The boolean is read at startup, so the choice persists. Physical cadence still depends on frame delivery; a 30 fps file alone is not a guarantee of 30 unique panel presentations each second.

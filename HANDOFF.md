@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** Will (Codex), 25-minute diagnostic capture running; no active visual edit
+- **Holder:** Will (Codex), applying Will-requested direct recorded video / mask bypass; diagnostic capture retained
 - **Where:** bitcube running **`river-all-looks.toe`** ("The river: all looks (playlist)", auto, ~58–60 fps), **the boot default since 11:20** (Gavin); `river-looks.toe` (three looks) retired as `old-river-looks.toe`, its frozen copy `river-two-looks.toe` stays offered
-- **Updated:** 2026-10-28 13:13 PT
+- **Updated:** 2026-10-28 13:32 PT
 - **Next holder:** Will. All-looks stays default / Auto, softer ribbons retained. Approved 30 fps footage is now persistent for all-looks; reload/reboot retains it. Originals and frozen shows preserved. Rollback below removes the preference too.
 
 ## Approved 30 fps footage kept across startup (28 Oct, Will / Codex)

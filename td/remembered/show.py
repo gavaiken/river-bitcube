@@ -60,7 +60,7 @@ CONTROL_DEFAULT = {'pool_height_m': None, 'light': 'off', 'leds': [], 'opening_n
                                                      # wants the river clips playing behind the ribbons; 0.7: "see the
                                                      # water video more")
                    'screen_field': 'ribbons',        # what the particle windows look onto (FIELDS)
-                   'screen_gpu': True}               # ribbons drawn on the GPU when its shaders are healthy (ribbons_gpu.py)
+                   'screen_gpu': True, 'screen_motion_mask': True}               # ribbons drawn on the GPU when its shaders are healthy (ribbons_gpu.py)
 # the particle fields: ribbons (silk of glitter, Gavin's reference, 28 Oct, the default) | fine (M2's smoky streaks with
 # ledges, flow.py) | streaks (round 2b, particles.py, checkpoint remembered-particles-v1)
 FIELDS = ('ribbons', 'fine', 'streaks')
@@ -106,6 +106,8 @@ def parse_control(c):
         ctl['screen_field'] = sc['field']
     if isinstance(sc.get('gpu'), bool):
         ctl['screen_gpu'] = sc['gpu']
+    if isinstance(sc.get('motion_mask'), bool):
+        ctl['screen_motion_mask'] = sc['motion_mask']
     for key, name in (('screen_intensity', 'intensity'), ('screen_threshold', 'threshold')):
         v = sc.get(name, c.get(key))
         if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 1:
@@ -646,9 +648,26 @@ def params_image(show, fade=1.0, on=True):
     return np.ascontiguousarray(ribbons_gpu.params(show.field, show.pal_now, gain, video))
 
 
+def direct_recorded_video(show):
+    """All-looks only: recorded video bypasses the slow mask when explicitly requested."""
+    return (show is not None and show.show == 'river-all-looks.toe'
+            and show.river_source == 'clip' and show.control.get('screen_motion_mask', True) is False)
+
+
+def cpu_video_crops(show):
+    """The GPU reads the movie directly; avoid four unused synchronous CPU readbacks in direct mode.
+    CPU fallback still receives fresh crops on the very next tick if the GPU fails.
+    """
+    return show.wants_video() and not (direct_recorded_video(show)
+                                       and show.control.get('screen_mode', 'particles') == 'particles'
+                                       and show.gpu_active())
+
+
 def mask_image(show):
     """river_mask: water.py's motion mask (320 x 180, 1 = moving water) for river_gpu, upright in TD."""
     m = show.water.mask if show is not None else np.zeros((water_mod.MH, water_mod.MW), np.float32)
+    if direct_recorded_video(show):
+        return np.ones((water_mod.MH, water_mod.MW, 4), np.float32)
     img = np.empty((m.shape[0], m.shape[1], 4), np.float32)
     img[..., 0] = img[..., 1] = img[..., 2] = m[::-1]
     img[..., 3] = 1.0
@@ -701,7 +720,7 @@ def step(comp):
             a = small.numpyArray(delayed=True) if small is not None else None
             if a is not None:
                 show.feed_river(np.ascontiguousarray(a[::-1, :, :3]), 'live' if getattr(h, 'live', False) else 'clip', now)
-        if h.frame % 2 == 0 and show.wants_video():                # each screen's window of the footage
+        if h.frame % 2 == 0 and cpu_video_crops(show):                # each screen's window of the footage
             for k in range(4):
                 w = comp.op(f'win{k + 1}_fit')
                 a = w.numpyArray(delayed=True) if w is not None else None
