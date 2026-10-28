@@ -1,11 +1,64 @@
 # Handoff: where things stand
 
-- **Holder:** Gavin (Mac mini session A) **until noon 28 Oct**, working through the night on M2-M7 (docs/remembered-river.md); then **Will**
-- **Where:** bitcube running **`river-looks.toe`** (auto), now also the **boot default**; all four of session A's shows on the 28 Oct calibration
-- **Updated:** 2026-10-28 00:35 PT
-- **Next holder:** Will (Codex), from noon 28 Oct: visual tuning. Read the night's section below first.
+- **Holder:** Gavin (Mac mini session A) **until noon 28 Oct**; then **Will** (Codex), visual tuning
+- **Where:** bitcube running **`river-looks.toe`** (auto), the **boot default**; checkpoint tag `river-looks-gpu-ribbons-v1`
+- **Updated:** 2026-10-28 09:20 PT
+- **Next holder:** Will, from noon 28 Oct. After noon: **freeze**, fixes only, each with Gavin's OK. Read the next section first.
 
+## Morning of 28 Oct (session A): the screens as GPU silk ribbons; M2 and M7 done. **Will: start here**
+**What's on the piece now.** `river-looks.toe` on auto: four loops of the remembered river, then one Fill my cup (simple),
+again (a flood day brings the fill right after its loop). In the remembered look the four screens show **silk ribbons of
+glitter drawn on the GPU** (Gavin's reference picture: twisting translucent sheets of sparkles, brighter where they fold) in
+the palette's blues and greens, with **the river clips playing behind them**, tinted toward the palette. Everything on the
+screens flows along the ropes beside each screen (allowing for the screen's tilt). Gavin saw it on the piece and pushed it
+this way step by step ("more blues and greens… more density… brighter… river clips in the background… flow in the same
+direction as the rope lights"). 31 fps (was 26).
 
+**How it works** (page: `docs/files/river-remembered.md`, "The screens, silk ribbons" and "On the GPU"):
+- `td/remembered/ribbons.py`: the ribbons' state (four sheets, one homed on each screen's column; level, turbulence, time,
+  flow), the ropes' light from them (CPU, ~3 ms), and `rope_down()` (the ropes' downward direction by each screen). Also a
+  numpy renderer of the screens: **the automatic fallback**.
+- `td/remembered/ribbons_gpu.py`: `params()` (a 6 x 9 float texture of everything the shaders need, written every frame by
+  the Script TOP `ribbon_params`) and the GLSL: `ribbons_draw` (each LED: its place in the room, then each ribbon's sheet
+  there: glitter from a hash streaming down the sheet, sheen, folds, rims, dust) → `ribbons_glow` (Blur) → `ribbons_trail`
+  (+ `ribbons_fb` Feedback) → `ribbons_out` (palette colour ramp, every other ribbon leaning green) + `river_gpu` (the
+  footage `river_src` through water.py's motion mask `river_mask`, graded and tinted, each window turned so the river runs
+  along the ropes) → `screens_mix` (+ `panel_render`, so the fills pass through) → `screens_src` (Switch) → the screen crops.
+  `Reference` is the same chain in numpy: render offline to check a shader change before it reaches the piece.
+- `show.check_gpu()` (every 90 frames, ~3 s) uses the GPU path only while `ribbons_draw`, `ribbons_trail`, `ribbons_out` and `river_gpu`
+  report no errors; otherwise `screens_src` goes back to `panel_render` (numpy ribbons + numpy video). `status.json`
+  `panels.field` says `ribbons-gpu` or `ribbons`.
+
+**Knobs for visual tuning** (all repo code; after a change: push, `git pull` on bitcube, `td.ps1 -File td\build\build_looks.py`,
+check `River\remembered\status.json` and `td.ps1 -Screenshot /project1/remembered/screens_src`):
+- Live, no code: mission control's **Remembered river page → Screens**: Intensity (default 82 %), Threshold (the river's motion
+  threshold, 35 %), River video (35 %). They write `River\remembered\control.json` `screens`. Also `screens.field`
+  (`ribbons` | `fine` | `streaks`) and `screens.gpu: false` (numpy only), by hand in that file.
+- Look: top of `ribbons_gpu.py`: `SPARKLE` (glitter density), `SHEEN`, `WIDTH`, `GAIN`, `DUST`, `CELLS` (glitter size),
+  `TRAIL`, `RIVER_TINT`, `FOOTAGE_FLOW_DEG`; in `OUT_GLSL` the colour ramp and the green tint `gtint`. The ribbons' shapes:
+  `ribbons.py` (`N_RIB`, `kx` wander, `kt` twist, `w` width, `_shown()` how many show with the level).
+- Keep the shaders safe (19 Oct: a bad shader hung the Iris Xe driver): inputs only behind `TD_NUM_2D_INPUTS`, literal
+  indices (a test checks this). **Save first** (`tools\td_save.ps1`) before building a new shader.
+
+**Done this morning** (commits `037eeb7`..`dbabb2d`, each message says what and why):
+- M2: `flow.py` (fine smoky particles with ledges at the screens' edges, selectable) then the ribbons (Gavin: "too sparse and
+  dark"), then on the GPU.
+- M7: the Remembered river page's Screens sliders (intensity, threshold, river video; `status.json` `screens` reports what TD
+  runs); `/hub75` back to the first version on the artists' settings with Drift; frame rate 26 → 31 fps.
+- A rebuild had kept the old ribbons module (screens black for a few minutes): `build_remembered.py` now reloads every
+  `td/remembered` module.
+
+**Open / not done** (none is half-done in the code):
+- Frame rate: TD is vsync-bound (a frame is 33 or 50 ms): 30 fps steady, not 60. Left on the CPU each frame: the ropes
+  (`ropes.step`, the ribbons' rope light), the looks mixer, Art-Net (~6 ms in `ropes/exec`). 60 needs the frame under 16.7 ms.
+- `river-remembered.toe` (standalone) was not rebuilt with the GPU chain (it isn't running; the looks file is). Its build is
+  the same script: switch to it and run `build_remembered.py` to bring it up to date.
+- The Remembered river page still marks screens over 30 % lit as "over the rule"; the artists dropped that rule with the
+  simulator version they rejected, and the ribbons now light 40-70 %. Worth removing the meter's rule line.
+- The ribbons flow along the ropes by each screen, but at a fixed speed per ribbon; matching the ropes' own speed in a surge
+  more closely is a tuning question.
+- bitcube's checkout shows `river_masks/` moved into a subfolder and an untracked `pixelmap-2026-10-26.json`: not ours, left
+  alone.
 
 ## Night of 27 Oct (session A): fill my cup, the looks show (M8), river video under the particles (M9)
 - **Shows:** `river-fill-simple.toe` Fill my cup (simple), `river-filling.toe` Fill my cup (configurable, dials on Status), `river-looks.toe` The river (all looks: auto / manual with 2 s fades, no restarts; Looks card on Status). All offered, built, secret-scanned, committed. Plan and milestones: `docs/remembered-river.md`.

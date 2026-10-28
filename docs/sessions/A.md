@@ -109,3 +109,19 @@ Notes kept here while another session is editing the shared docs; folded into th
 - Built mission control's `/hub75` page: a WebGL2 simulation of the four HUB75 screens showing only the moving water from a 22 s river-cam clip (cut from bitcube's 27 Oct 14:49 main-stream recording with a stream copy, transcoded on the mini). Motion mask from a slow running average of frame change; four auto-placed, draggable windows or one spanning window; Intensity 0–1; looks Water / Foam / Motion; true black outside the water.
 - Server: `GET /media/<name>.mp4` behind the login with byte ranges; `/hub75` added to PAGES. Tests: server test covers the page, the 206 range answer and the 404s. `tools/check` green.
 - Not done: a TD show of the chosen look on the live river cam.
+
+
+## SESSION SUMMARY: M2, M7 and the GPU silk ribbons (28 Oct 2026, 07:00-09:30 PT, Mac mini + bitcube)
+- **Asked:** finish the round 2 milestones overnight (M2 finer particles, M7 speed, sliders, simulator), then Gavin on the piece:
+  "too sparse and dark" (a reference picture: silk of glitter), "we should be using a GPU shader", then "more blues and greens…
+  more density… brighter… river clips in the background… flow in the same direction as the rope lights around them".
+- **Did:** `flow.py` (M2 smoky particles with ledges, selectable); `ribbons.py` (procedural silk ribbons, the default, numpy);
+  the Remembered river page's Screens sliders and `status.json` `screens`; `/hub75` restored on the artists' settings with
+  Drift; the numpy screens sped up (one-pass render, colour lookup, work split across frames); then `ribbons_gpu.py`: the
+  ribbons and the river video drawn per LED in GLSL TOPs with the numpy path as automatic fallback, in the palette's blues and
+  greens, along the ropes by each screen. 26 → 31 fps. `river-looks.toe` saved, scanned (0 hits), committed; tag
+  `river-looks-gpu-ribbons-v1`.
+- **Broke and fixed:** a rebuild kept the old ribbons module, so the screens went black for a few minutes (status lit 0 %):
+  `build_remembered.py` now reloads every module. A forced re-tag was refused by the permission classifier; used a new tag.
+- **Left:** see HANDOFF.md "Open / not done" (60 fps needs a <16.7 ms frame; standalone river-remembered.toe not rebuilt; the
+  30 % meter on the Remembered river page).

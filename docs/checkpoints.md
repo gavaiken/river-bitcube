@@ -23,6 +23,20 @@ At that moment bitcube's boot file was `river-local-oct-22-seasons.toe`, TouchDe
 3. **bitcube.** `git pull` in `C:\Users\user\River\river-bitcube`. If a `.toe` or `boot-file.txt` still differs, copy it back from the archive's `River\` folder (close TD first). Untracked files (`secrets.local.json`, RopeLights config) come from the archive too. Restore a scheduled task with `Register-ScheduledTask -Xml (Get-Content <file>.xml -Raw) -TaskName <name> -Force`.
 4. Reboot bitcube, or run `Start-River.cmd` through a one-off interactive scheduled task (see `CLAUDE.md`), and check the ropes and panels.
 
+## river-looks-gpu-ribbons-v1: the river (all looks) with the GPU silk ribbons (28 Oct, 09:15 PT)
+
+`river-looks.toe` (the boot default) on auto, as Gavin approved it on the piece the morning of 28 Oct: the remembered river with its
+screens as GPU silk ribbons of glitter in the palette's blues and greens over the river clips (tinted, turned to run along the
+ropes by each screen), the pool, dynamics, easing and black dots (M3-M5), the flood-day fill (M6), Fill my cup (simple) every
+fourth loop. 31 fps.
+
+| What | Where |
+|---|---|
+| river-bitcube | tag `river-looks-gpu-ribbons-v1` → `dbabb2d` (river-looks.toe committed in it) |
+| bitcube | boot file `river-looks.toe` |
+
+Going back: `git checkout river-looks-gpu-ribbons-v1 -- td/remembered td/looks td/build/build_remembered.py td/build/build_looks.py river-looks.toe`, commit, pull on bitcube, then `td.ps1 -File td\build\build_looks.py` (or reopen the file). Only the numpy ribbons (no GPU): `control.json` `screens.gpu: false`. Before the ribbons: tag `before-m2-ribbons`.
+
 ## remembered-particles-v1: the remembered river with the particle windows (27 Oct, 22:20 PT)
 
 The remembered river as the artists saw it on the night of 27 Oct: the remembered-day loop on the ropes, and the screens as windows into one particle field in the room (round 2b, `td/remembered/particles.py`, measured tilts). The boot default.
