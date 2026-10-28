@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** Will (Codex), softer ribbon deployment complete; no active live edit
+- **Holder:** Will (Codex), preparing a reversible 30 fps recorded-video trial on bitcube
 - **Where:** bitcube running **`river-all-looks.toe`** ("The river: all looks (playlist)", auto, ~58–60 fps), **the boot default since 11:20** (Gavin); `river-looks.toe` (three looks) retired as `old-river-looks.toe`, its frozen copy `river-two-looks.toe` stays offered
-- **Updated:** 2026-10-28 12:39 PT
+- **Updated:** 2026-10-28 12:55 PT
 - **Next holder:** Will. Current default remains all-looks, Auto. Softer screen ribbons deployed; original/frozen shows and current controls preserved. See rollback below.
 
 ## Softer ribbon folds deployed (28 Oct, Will / Codex)
