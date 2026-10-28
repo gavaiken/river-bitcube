@@ -2,7 +2,8 @@
 
 APPLY (default): exec(open('C:/Users/user/River/river-bitcube/tools/remembered/video_trial.py').read())
 ROLLBACK: exec(open('C:/Users/user/River/river-bitcube/tools/remembered/video_trial.py').read(), dict(globals(), TRIAL_ACTION='rollback'))
-STATUS: same, TRIAL_ACTION='status'. Never saves the project or changes the source/defaults.
+KEEP: same, TRIAL_ACTION='keep' persists an all-looks media preference for startup.
+STATUS: same, TRIAL_ACTION='status'. Rollback also removes this preference. Never saves the project.
 The trial videos and manifest must already be verified outside TD and staged in TRIAL_DIR.
 """
 import json
@@ -15,8 +16,8 @@ ORIGINAL = Path('C:/Users/user/River/recordings/river/remembered')
 NAMES = ('a-cascade-2026-10-27-1451-640.mp4', 'b-evening-2026-10-27-1813-640.mp4')
 
 def trial():
-    if ACTION not in ('apply', 'rollback', 'status'):
-        raise RuntimeError('Expected apply, rollback or status')
+    if ACTION not in ('apply', 'keep', 'rollback', 'status'):
+        raise RuntimeError('Expected apply, keep, rollback or status')
     if project.name != 'river-all-looks.toe':
         raise RuntimeError('This trial is only for the running all-looks show')
     holder = sys.modules.get('remembered_live')
@@ -29,11 +30,23 @@ def trial():
     if current not in (before, after):
         raise RuntimeError('Unexpected clip list; preserve it and investigate before changing anything')
     statefile = ROOT / 'trial-state.json'
+    preference = ORIGINAL.parents[2] / 'remembered' / 'video-library.json'
+    previous = preference.read_bytes() if preference.exists() else None
+    config = json.loads(previous.decode('utf-8-sig')) if previous is not None else {'shows': {}}
+    if not isinstance(config, dict) or not isinstance(config.get('shows'), dict):
+        raise RuntimeError('Unexpected existing video preference; nothing changed')
+    choice = {'directory': ROOT.name, 'files': list(NAMES)}
+    selected = config['shows'].get(project.name)
+    persistent = selected == choice
+    def write_preference(data):
+        temp = preference.with_suffix('.json.tmp')
+        temp.write_text(json.dumps(data, indent=2), encoding='utf-8')
+        temp.replace(preference)
     if ACTION == 'status':
         print(json.dumps({'active': current == after, 'clips': current, 'file': player.par.file.eval(),
-                          'temporary': True, 'saved_project_unchanged': True}))
+                          'temporary': not persistent, 'persistent': persistent, 'saved_project_unchanged': True}))
         return
-    if ACTION == 'apply':
+    if ACTION in ('apply', 'keep'):
         manifest = json.loads((ROOT / 'manifest.json').read_text())
         if [m['name'] for m in manifest] != list(NAMES):
             raise RuntimeError('Unexpected render manifest')
@@ -57,6 +70,8 @@ def trial():
         if not all(Path(p).is_file() for p in before):
             raise RuntimeError('Original footage missing; nothing changed')
         target = before
+    if ACTION in ('keep', 'rollback') and selected not in (None, choice):
+        raise RuntimeError('Another preference is configured; preserve it and investigate')
     oldfile = player.par.file.eval().replace('\\', '/')
     # Keep the currently selected clip's identity. The normal loop selector keeps rotating the two entries.
     if oldfile not in before + after:
@@ -64,14 +79,25 @@ def trial():
     index = (before if oldfile in before else after).index(oldfile)
     oldlist = list(holder.clips)
     try:
+        if ACTION == 'keep':
+            config['shows'][project.name] = choice
+            write_preference(config)
+        elif ACTION == 'rollback' and persistent:
+            del config['shows'][project.name]
+            write_preference(config)
         holder.clips = list(target)
         if oldfile != target[index]:
             player.par.file = target[index]
     except Exception:
+        if ACTION in ('keep', 'rollback'):
+            if previous is None:
+                preference.unlink(missing_ok=True)
+            else:
+                preference.write_bytes(previous)
         holder.clips = oldlist
         player.par.file = oldfile
         raise
     print(json.dumps({'action': ACTION, 'clips': holder.clips, 'file': player.par.file.eval(),
-                      'temporary': True, 'rollback': str(statefile)}))
+                      'temporary': ACTION != 'keep', 'persistent': ACTION == 'keep', 'rollback': str(statefile)}))
 
 trial()

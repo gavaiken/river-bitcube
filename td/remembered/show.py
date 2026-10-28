@@ -30,6 +30,7 @@ from . import panels as panels_mod
 from . import ropes as ropes_mod
 from . import status as status_mod
 from . import water as water_mod
+from . import video_library
 from . import particles as particles_mod
 from . import flow as flow_mod
 from . import ribbons as ribbons_mod
@@ -553,7 +554,7 @@ def _holder():
         if not hasattr(h, k):
             setattr(h, k, v)
     if not hasattr(h, 'clips'):                               # the artists' approved footage, in turn (round 2, Q6)
-        h.clips = sorted(str(p).replace('\\', '/') for p in (RIVER / 'recordings' / 'river' / 'remembered').glob('*.mp4'))
+        h.clips = video_library.clips_for(RIVER, _project_name())
     return h
 
 
