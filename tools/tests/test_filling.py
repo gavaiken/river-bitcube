@@ -28,8 +28,23 @@ def test_fills_from_the_floor_and_drains():
 
 def test_frames_shapes_and_power():
     f = fill.Fill(geom())
-    ropes, panels, t = f.frames(1000.0)
-    ropes, panels, t = f.frames(1000.0 + fill.FILL_S + 5)
+    now = 1000.0
+    for _ in range(int((fill.FILL_S + 5) * 30)):           # time advances frame by frame (dt is capped)
+        now += 1 / 30
+        ropes, panels, t = f.frames(now)
     assert ropes.shape == (20, 400, 3) and panels.shape == (256, 512, 3)
     assert ropes.sum() * 150 / 3 / 400 < 1400               # under the ropes' power limit, full column
     assert panels.max() <= 1 and panels.mean() > 0.02
+
+
+def test_dials_change_the_look():
+    f = fill.Fill(geom())
+    f.set({'palette': 'midnight', 'brightness': 0.4, 'intensity': 1.0, 'speed': 2.0, 'junk': 1})
+    assert f.settings == {'palette': 'midnight', 'brightness': 0.4, 'intensity': 1.0, 'speed': 2.0}
+    f.set({'palette': 'nope', 'speed': 99})
+    assert f.settings['palette'] == 'midnight' and f.settings['speed'] == 3.0
+    now = 1000.0
+    for _ in range(300):
+        now += 1 / 30
+        f.frames(now)
+    assert abs(f.t - 30.0) < 0.5                            # 10 s at the top speed (3x) = 30 s into the cycle
