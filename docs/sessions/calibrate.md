@@ -18,7 +18,13 @@ SESSION SUMMARY
 - **ptz.py:** `pos`, `moveto <pan> <tilt|max|min>`, `view <name>`, `home` (preset, then a closed loop on the read-back position; directions and speeds learnt from the first nudge).
 - Tests: synthetic two-view stitching recovers a 35° tilt to <0.2° and the lens to 1 %; calibrate's camera tour, home on failure/cancel, dry run never moves. `tools/check` green (411 Python, 457 mission).
 
-Still to do (needs Gavin's OK: moves the camera, and the full run interrupts the show)
-- `git pull` on bitcube; save preset 3 "show" at the current position (`ptz.py gallery save 3 show`; until then `home` moves by position).
-- Camera-only check: `ptz.py gallery view up`, a `cam_snap`, `ptz.py gallery home`, `ptz.py gallery pos` = 3241, 0. Confirms Up raises Tpos, the top stop's tilt, that `up` sees the rope tops with overlap, and how exactly home is reached (tol 3 units is a guess).
-- A real Calibrate (two views, ~8–9 min), then `screens.py --map <new map>`; pin both in a show of our own and rebuild it.
+Live (Gavin's OK, 20:05–20:45)
+- Preset 3 "show" saved at pan 3241, tilt 0; `home` returns there exactly (image shift 0 px). Tilt runs 0 to 1240 (top stop, sees the rope tops at the rig). A middle view (620) added so neighbours overlap.
+- Run 1 stopped after the home view: "drift 37". The camera had not moved (phase correlation: 0 px); the room's light changed. Drift is now the measured picture shift (`capture.camera_shift`), limit 8 px.
+- Run 2 (20:17–20:29): ok. Views home / mid (27.7° up) / up (56.5° up), stitch error 1.8–1.9 px over 1,542 and 827 shared LEDs, all 20 ropes (rope 5 weakest: 21 LEDs seen), 8,000 points; camera home at 3241, 0. The one-term lens model couldn't reach the picture's corners (k1 -0.45): switched to the division model and re-decoded the same captures (f 1088 px, k1 -0.555). Panorama: `frames/pixelmap-20261027-201707/panorama.png` on bitcube.
+- Screens (`screens.py --map`): tilt nudges don't repeat (mid: 651, 565, 652), so each revisited view is corrected by its picture's shift against the calibration's frame (2–24 px). A camera still swaying after a tilt outlined the whole room: masks opened, 4 s wait. Result `screens-2026-10-27.json`: screens 2 and 4 seen (mid), 1 and 3 estimated (3 was seen in an earlier, uncorrected pass; the room lights came on during this one).
+- Committed: `tools/pixelmap/pixelmap-2026-10-27-views.json` (multi-view; named so mission control's "newest map" stays the 23 Oct one until a show adopts it; the untracked single-view 19:38 map is backed up in `River\checkpoints\pixelmap-before-multiview-20261027\`) and `screens-2026-10-27-views.json`. **No show pins them yet.**
+
+Still to do
+- Pin the pair in a show of our own and rebuild it (the multi-view frame lays the river over the whole sculpture, floor to rig, so the look moves).
+- Re-run `screens.py --map tools\pixelmap\pixelmap-2026-10-27.json` with the room dark to see screen 3 rather than estimate it.

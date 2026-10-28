@@ -1,12 +1,12 @@
 # Handoff: where things stand
 
-- **Holder:** Gavin (Mac mini session: multi-view calibration; ON BITCUBE: moving the gallery cam, running Calibrate)
+- **Holder:** Gavin (Mac mini; done on bitcube: camera home, show restored)
 - **Where:** bitcube running Combined v0 (Will's settings); the default is still the river's year
-- **Updated:** 2026-10-27 20:25 PT
+- **Updated:** 2026-10-27 20:50 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
-## Calibration through camera views (27 Oct, Gavin, repo only): see `docs/sessions/calibrate.md`
-- The gallery cam's show position (pan 3241, tilt 0) can't see the rope tops. Calibrate now pans/tilts through `tools/cameras/views.json` (home, then up), stitches the views into one 3D-aware map, and **always returns the cam home**. Code and tests on main; **bitcube not pulled, camera not moved yet**, preset 3 "show" not saved yet. Next: Gavin's OK for a camera-only check, then a real Calibrate.
+## Calibration through camera views (27 Oct, Gavin): see `docs/sessions/calibrate.md`
+- Calibrate now pans/tilts the gallery cam through `tools/cameras/views.json` (home 3241/0, mid, up to the rig), stitches the views by shared LEDs (1.8–1.9 px), and always returns it home (verified exact). New map `pixelmap-2026-10-27-views.json` (all 20 ropes, floor to rig) and `screens-2026-10-27-views.json` (2 and 4 seen, 1 and 3 estimated) are committed; **no show pins them yet**. The show (river's year) was restored after each step.
 
 ## New season palettes show (27 Oct, studio agent, repo only)
 - Requested: icier winter (whites/greys), deeper teal spring, sparse blue-green summer, deep cerulean autumn, pale leaf flecks. Built as a **new show**, not an edit of the default: `td/build/build_seasons_palettes.py` + `shows.json` entry `river-seasons-palettes.toe` (**offered: false**, the `.toe` doesn't exist yet) + page `docs/files/river-seasons-palettes.md`. `seasons_td.py` now reads tints/glints from an optional `season_looks` DAT (absent in the river's year = unchanged).

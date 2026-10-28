@@ -1,0 +1,102 @@
+{
+ "meta": {
+  "capture": "screens-20261027-204159",
+  "camera": "gallery",
+  "frame_size": [
+   1440,
+   808
+  ],
+  "uv": "TD convention: u left->right, v bottom->top; corners as seen (tl = top left of the upright picture)",
+  "map": "pixelmap-2026-10-27-views.json",
+  "frame": "the map's virtual frame (its meta.space): pin both together",
+  "views": [
+   "home",
+   "mid",
+   "up"
+  ]
+ },
+ "screens": {
+  "1": {
+   "tl": [
+    0.52736,
+    0.69312
+   ],
+   "tr": [
+    0.53657,
+    0.69895
+   ],
+   "br": [
+    0.53706,
+    0.62857
+   ],
+   "bl": [
+    0.52831,
+    0.62541
+   ],
+   "estimated": true,
+   "from": 2
+  },
+  "2": {
+   "tl": [
+    0.52845,
+    0.61525
+   ],
+   "tr": [
+    0.53766,
+    0.62107
+   ],
+   "br": [
+    0.53814,
+    0.5507
+   ],
+   "bl": [
+    0.52939,
+    0.54753
+   ],
+   "px": 4321,
+   "balance": 0.63,
+   "view": "mid"
+  },
+  "3": {
+   "tl": [
+    0.49328,
+    0.42024
+   ],
+   "tr": [
+    0.51023,
+    0.43808
+   ],
+   "br": [
+    0.52753,
+    0.36983
+   ],
+   "bl": [
+    0.5097,
+    0.3533
+   ],
+   "estimated": true,
+   "from": 4
+  },
+  "4": {
+   "tl": [
+    0.47949,
+    0.50259
+   ],
+   "tr": [
+    0.49643,
+    0.52042
+   ],
+   "br": [
+    0.51374,
+    0.45217
+   ],
+   "bl": [
+    0.4959,
+    0.43564
+   ],
+   "px": 9687,
+   "balance": 0.74,
+   "view": "mid"
+  }
+ }
+}
