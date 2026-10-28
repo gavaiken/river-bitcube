@@ -26,18 +26,29 @@
 #                                                                (off|pool|eddies) and the pool line (0..1.5 m); writes
 #                                                                River\remembered\control.json for TouchDesigner, then as above
 #   [-Action remembered-opening -On]                             the remembered river only: the opening-night switch (without -On: off)
+#   [-Action remembered-screens -Video 0.25]                     the remembered river only: how strongly the river video shows under
+#                                                                the particle windows (0..1, M9): screens.video in control.json
+#                                                                The remembered river's three controls also work while river-looks.toe
+#                                                                shows it (its looks\status.json, under 10 s old, says look remembered)
+#   [-Action looks -Mode auto|manual [-Look remembered|fill-simple|fill-configurable]]
+#                                                                the river (all looks) only (TouchDesigner answering on river-looks.toe):
+#                                                                writes River\looks\control.json { mode, look, at } atomically (auto
+#                                                                without -Look keeps the look there; manual needs one), then the full
+#                                                                check. Every full check carries probe.looks { control, status }
+#                                                                (River\looks\control.json and status.json) while River\looks exists
 #   [-Action filling -Palette midnight -Brightness 0.8 -Intensity 0.6 -Speed 1]
-#                                                                the filling glass only (TouchDesigner answering on river-filling.toe):
+#                                                                the filling glass only (TouchDesigner answering on river-filling.toe,
+#                                                                or on river-looks.toe while a fill look shows):
 #                                                                its four dials, all four every time (palette river|glacier|midnight|
 #                                                                teal; brightness and intensity 0..1; speed 0.25..3); writes
 #                                                                River\filling\control.json atomically for td/filling/fill.py, then
 #                                                                the full check. Every full check carries probe.filling { control,
 #                                                                status } (River\filling\control.json and status.json, each { age_s,
 #                                                                json }) while River\filling exists (docs/mission-ui.md)
-#   ropes, hub75, test, switch, rebuild, lightsroute, overlay and filling are refused while a calibration runs ({ ok: false, error: "a calibration is
+#   ropes, hub75, test, switch, rebuild, lightsroute, overlay, filling and looks are refused while a calibration runs ({ ok: false, error: "a calibration is
 #   running. Stop it on the Lights page first", refused: <action> } with the status), whoever runs this script; a dry run (or a
 #   decode of earlier photos) touches no lights and refuses nothing.
-param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25, [ValidateSet('auto','original','channel','channel-multi','pool','pool-multi')][string]$Framing, [ValidateSet('current','gavin','recorded','manual','cycle')][string]$Screenmode, [ValidateRange(0,1)][double]$Screenblend=0, [ValidateSet(15,30,60,120)][int]$Screenhold=30, [ValidateRange(0,1)][Nullable[double]]$Screenrecorded, [ValidateRange(0,120)][Nullable[double]]$Screenoffset, [ValidateSet('off','canvas','scene','frames')][string]$Source, [ValidateRange(0,1)][Nullable[double]]$Strength, [ValidateSet('off','pool','eddies')][string]$Light, [ValidateRange(0,1.5)][Nullable[double]]$PoolHeight, [ValidateSet('river','glacier','midnight','teal')][string]$Palette, [ValidateRange(0,1)][Nullable[double]]$Intensity, [ValidateRange(0.25,3)][Nullable[double]]$Speed)
+param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25, [ValidateSet('auto','original','channel','channel-multi','pool','pool-multi')][string]$Framing, [ValidateSet('current','gavin','recorded','manual','cycle')][string]$Screenmode, [ValidateRange(0,1)][double]$Screenblend=0, [ValidateSet(15,30,60,120)][int]$Screenhold=30, [ValidateRange(0,1)][Nullable[double]]$Screenrecorded, [ValidateRange(0,120)][Nullable[double]]$Screenoffset, [ValidateSet('off','canvas','scene','frames')][string]$Source, [ValidateRange(0,1)][Nullable[double]]$Strength, [ValidateSet('off','pool','eddies')][string]$Light, [ValidateRange(0,1.5)][Nullable[double]]$PoolHeight, [ValidateSet('river','glacier','midnight','teal')][string]$Palette, [ValidateRange(0,1)][Nullable[double]]$Intensity, [ValidateRange(0.25,3)][Nullable[double]]$Speed, [ValidateSet('auto','manual')][string]$Mode, [ValidateSet('remembered','fill-simple','fill-configurable')][string]$Look, [ValidateRange(0,1)][Nullable[double]]$Video)
 $ErrorActionPreference = 'Continue'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $river = Split-Path $repo -Parent
@@ -101,7 +112,7 @@ $tdPs1 = Join-Path $repo 'tools\td.ps1'
 # studio chat, a hand-run SSH). The same rule as mission control's calBlocked (mission/lib/mission.mjs CAL_BLOCKED). The
 # action is refused and only the status is reported; Stop goes through calibrate.ps1 -Action cancel, never through here. A dry
 # run (or a decode of earlier photos) photographs nothing and touches no lights or TouchDesigner: it refuses nothing.
-$CAL_BLOCKED = @('ropes', 'hub75', 'test', 'switch', 'rebuild', 'lightsroute', 'overlay', 'filling')
+$CAL_BLOCKED = @('ropes', 'hub75', 'test', 'switch', 'rebuild', 'lightsroute', 'overlay', 'filling', 'looks')
 if ($CAL_BLOCKED -contains $Action) {
     $calRun = $null
     $calFile = Join-Path $river 'calibration.json'
@@ -133,21 +144,43 @@ function Read-RiverJson([string]$path) {
     }
     return [ordered]@{ error = "unreadable $(Split-Path $path -Leaf)" }
 }
-if ($Action -in 'remembered', 'remembered-zones', 'remembered-opening') {
+# The river (all looks) (river-looks.toe; docs/mission-ui.md "Looks"): its own report, looks\status.json, written twice a second.
+# The look it shows now, when that report is under 10 s old and names river-looks.toe; else $null.
+$ldir = Join-Path $river 'looks'
+function Get-LookShowing {
+    $ls = Read-RiverJson (Join-Path $ldir 'status.json')
+    if ($ls.json -and $ls.json.show -eq 'river-looks.toe' -and $ls.age_s -lt 10) { return [string]$ls.json.look }
+    return $null
+}
+if ($Action -in 'remembered', 'remembered-zones', 'remembered-opening', 'remembered-screens') {
     $rdir = Join-Path $river 'remembered'
     $out.action = $Action
     $out.now_s = [math]::Round(([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) / 1000.0, 2)
     $ctlFile = Join-Path $rdir 'control.json'
     if ($Action -ne 'remembered') {
+        # runs: the remembered river's own file fresh, or river-looks.toe reporting the remembered river as the look showing (then only
+        # its look counts: the remembered look may write its status as river-remembered.toe's own)
         $st = Read-RiverJson (Join-Path $rdir 'status.json')
-        $runs = $st.json -and $st.json.show -eq 'river-remembered.toe' -and $st.age_s -lt 10
-        if (-not $runs) { $out.ok = $false; $out.error = "the remembered river isn't running (its controls work only while it runs)"; $out.refused = $Action }
+        $lookNow = Get-LookShowing
+        $runs = $(if ($lookNow) { $lookNow -eq 'remembered' } else { $st.json -and $st.json.show -eq 'river-remembered.toe' -and $st.age_s -lt 10 })
+        if (-not $runs) {
+            $out.ok = $false; $out.refused = $Action
+            $out.error = $(if ($lookNow) { "the remembered river isn't the look showing now (pick it under Looks on Status first)" } else { "the remembered river isn't running (its controls work only while it runs)" })
+        }
         elseif ($Action -eq 'remembered-zones' -and -not $Light) { $out.ok = $false; $out.error = 'remembered-zones needs -Light off|pool|eddies'; $out.refused = $Action }
+        elseif ($Action -eq 'remembered-screens' -and $null -eq $Video) { $out.ok = $false; $out.error = 'remembered-screens needs -Video 0..1'; $out.refused = $Action }
         else {
+            # merged with what was there: every field kept (screens too), only the one asked for changed
             $ctl = [ordered]@{ pool_height_m = $null; light = 'off'; opening_night = $false; at = $null }
             $was = Read-RiverJson $ctlFile
-            if ($was.json) { foreach ($k in 'pool_height_m', 'light', 'opening_night') { if ($null -ne $was.json.$k) { $ctl[$k] = $was.json.$k } } }
+            if ($was.json) { foreach ($pp in $was.json.PSObject.Properties) { if ($null -ne $pp.Value) { $ctl[$pp.Name] = $pp.Value } } }
             if ($Action -eq 'remembered-zones') { $ctl.light = $Light; if ($null -ne $PoolHeight) { $ctl.pool_height_m = [math]::Round([double]$PoolHeight, 2) } }
+            elseif ($Action -eq 'remembered-screens') {
+                $sc = [ordered]@{}
+                if ($ctl.Contains('screens') -and $ctl.screens) { foreach ($pp in $ctl.screens.PSObject.Properties) { $sc[$pp.Name] = $pp.Value } }
+                $sc.video = [math]::Round([double]$Video, 2)
+                $ctl.screens = $sc
+            }
             else { $ctl.opening_night = [bool]$On }
             $ctl.at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
             $null = New-Item -ItemType Directory -Force -Path $rdir
@@ -164,6 +197,7 @@ if ($Action -in 'remembered', 'remembered-zones', 'remembered-opening') {
     $out.reflex = Read-RiverJson (Join-Path $river 'gallery_state\reflex.json')
     $out.presence = Read-RiverJson (Join-Path $river 'presence.json')
     $out.control = Read-RiverJson $ctlFile
+    if (Test-Path -LiteralPath $ldir) { $out.looks = Read-RiverJson (Join-Path $ldir 'status.json') }
     $out | ConvertTo-Json -Compress -Depth 10
     exit 0
 }
@@ -251,8 +285,10 @@ $fdir = Join-Path $river 'filling'
 if ($Action -eq 'filling') {
     if (-not $Palette -or -not $PSBoundParameters.ContainsKey('Brightness') -or $Brightness -lt 0 -or $Brightness -gt 1 -or $null -eq $Intensity -or $null -eq $Speed) {
         $out.ok = $false; $out.error = 'filling needs -Palette river|glacier|midnight|teal, -Brightness 0..1, -Intensity 0..1 and -Speed 0.25..3'; $out.refused = $Action
-    } elseif (-not $td -or $td.ok -eq $false -or $td.file -ne 'river-filling.toe') {
+    } elseif (-not $td -or $td.ok -eq $false -or $td.file -notin 'river-filling.toe', 'river-looks.toe') {
         $out.ok = $false; $out.error = "the filling glass isn't running (its dials work only while it runs)"; $out.refused = $Action
+    } elseif ($td.file -eq 'river-looks.toe' -and (Get-LookShowing) -notin 'fill-simple', 'fill-configurable') {
+        $out.ok = $false; $out.error = "Fill my cup isn't the look showing now (pick it under Looks on Status first)"; $out.refused = $Action
     } else {
         $ctl = [ordered]@{ palette = $Palette; brightness = [math]::Round([double]$Brightness, 2); intensity = [math]::Round([double]$Intensity, 2)
                            speed = [math]::Round([double]$Speed, 2); at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') }
@@ -268,6 +304,32 @@ if ($Action -eq 'filling') {
 }
 if (Test-Path -LiteralPath $fdir) {
     $out.filling = [ordered]@{ control = Read-RiverJson (Join-Path $fdir 'control.json'); status = Read-RiverJson (Join-Path $fdir 'status.json') }
+}
+
+# The river (all looks) (river-looks.toe; docs/mission-ui.md "Looks"): Auto or Manual and the look go to looks\control.json
+# { mode, look, at }, which TouchDesigner reads; it answers in looks\status.json { t, show, mode, look, target, fading, fade, auto,
+# looks }. Taken only while TouchDesigner (just asked, above) answers on that very file; written to a temporary file and swapped in.
+if ($Action -eq 'looks') {
+    if (-not $Mode -or ($Mode -eq 'manual' -and -not $Look)) {
+        $out.ok = $false; $out.error = 'looks needs -Mode auto|manual (manual with -Look remembered|fill-simple|fill-configurable)'; $out.refused = $Action
+    } elseif (-not $td -or $td.ok -eq $false -or $td.file -ne 'river-looks.toe') {
+        $out.ok = $false; $out.error = "the river (all looks) isn't running (its looks can be picked only while it runs)"; $out.refused = $Action
+    } else {
+        $ctlFile = Join-Path $ldir 'control.json'
+        $keep = $Look
+        if (-not $keep) { $was = Read-RiverJson $ctlFile; $keep = $(if ($was.json -and $was.json.look -in 'remembered', 'fill-simple', 'fill-configurable') { [string]$was.json.look } else { 'remembered' }) }
+        $ctl = [ordered]@{ mode = $Mode; look = $keep; at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') }
+        try {
+            $null = New-Item -ItemType Directory -Force -Path $ldir -ErrorAction Stop
+            $tmp = "$ctlFile.tmp"
+            [IO.File]::WriteAllText($tmp, ($ctl | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding $false))
+            if (Test-Path -LiteralPath $ctlFile) { [IO.File]::Replace($tmp, $ctlFile, $null) } else { [IO.File]::Move($tmp, $ctlFile) }
+            $out.written = $ctl
+        } catch { $out.ok = $false; $out.error = "couldn't write the looks control file: $($_.Exception.Message)" }
+    }
+}
+if (Test-Path -LiteralPath $ldir) {
+    $out.looks = [ordered]@{ control = Read-RiverJson (Join-Path $ldir 'control.json'); status = Read-RiverJson (Join-Path $ldir 'status.json') }
 }
 
 # Boot file: the show file Start-River.cmd opens at the next start, worked out as it does (tools/shows.ps1 Resolve-BootFile):

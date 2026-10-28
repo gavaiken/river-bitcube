@@ -28,7 +28,7 @@ def test_probe_refuses_what_a_calibration_blocks_the_same_list_as_mission_contro
     ps = re.search(r"^\$CAL_BLOCKED = @\(([^)]*)\)", src, re.M)
     js = re.search(r"export const CAL_BLOCKED = \[([^\]]*)\]", MISSION_MJS.read_text(encoding='utf-8'))
     assert ps and js
-    assert quoted(ps.group(1)) == quoted(js.group(1)) == sorted(['ropes', 'hub75', 'test', 'switch', 'rebuild', 'lightsroute', 'overlay', 'filling'])
+    assert quoted(ps.group(1)) == quoted(js.group(1)) == sorted(['ropes', 'hub75', 'test', 'switch', 'rebuild', 'lightsroute', 'overlay', 'filling', 'looks'])
     assert WORDS in src and WORDS in MODEL_JS.read_text(encoding='utf-8'), 'the team words, the same on both sides'
 
 
@@ -70,8 +70,10 @@ def test_probe_param_block_is_well_formed_and_the_filling_dials_match_mission_co
     assert rng, 'model.js FILLING_RANGE is what probe.ps1 validates'
     block = src[src.index("if ($Action -eq 'filling') {"):]
     assert "$PSBoundParameters.ContainsKey('Brightness')" in block and '$Brightness -lt 0' in block and '$Brightness -gt 1' in block
-    # written only while TouchDesigner answers on the filling glass, atomically (a temporary file swapped in)
-    assert "$td.file -ne 'river-filling.toe'" in block
+    # written only while TouchDesigner answers on the filling glass (or on river-looks.toe with a fill look showing), atomically (a
+    # temporary file swapped in)
+    assert "$td.file -notin 'river-filling.toe', 'river-looks.toe'" in block
+    assert "(Get-LookShowing) -notin 'fill-simple', 'fill-configurable'" in block
     assert '.tmp' in block and '[IO.File]::Replace(' in block and '[IO.File]::Move(' in block
     assert src.index('if ($CAL_BLOCKED -contains $Action)') < src.index("if ($Action -eq 'filling') {")
 
@@ -134,3 +136,26 @@ def test_calibrate_start_answers_started_with_the_pid_and_its_clock_and_pending_
     assert 'pid = $procId' in later and 'requested = $t0' in later
     assert 'calibration =' not in later, "the file there is the run before: it isn't this run"
     assert "within 6 s" not in later, 'not a refusal: no "did not report" error'
+
+
+def test_probe_looks_and_the_remembered_screens_match_mission_control():
+    """river-looks.toe (docs/mission-ui.md "Looks"): -Mode and -Look as model.js LOOK_MODES and LOOKS, -Video 0..1; control.json
+    written only while TouchDesigner answers on river-looks.toe, atomically; the remembered river's controls accept its look."""
+    src = PROBE.read_text(encoding='utf-8')
+    attrs = {n: a for a, n, _ in param_block(src)}
+    model = MODEL_JS.read_text(encoding='utf-8')
+    assert quoted(re.search(r"ValidateSet\(([^)]*)\)", attrs['Mode']).group(1)) == quoted(re.search(r"export const LOOK_MODES = \[([^\]]*)\]", (MODEL_JS.parent / 'looks.js').read_text(encoding='utf-8')).group(1))
+    assert quoted(re.search(r"ValidateSet\(([^)]*)\)", attrs['Look']).group(1)) == quoted(re.search(r"export const LOOKS = \[([^\]]*)\]", model).group(1))
+    assert '[ValidateRange(0,1)]' in attrs['Video'] and 'Nullable[double]' in attrs['Video']
+    block = src[src.index("if ($Action -eq 'looks') {"):]
+    assert "$td.file -ne 'river-looks.toe'" in block
+    assert '.tmp' in block and '[IO.File]::Replace(' in block and '[IO.File]::Move(' in block
+    assert src.index('if ($CAL_BLOCKED -contains $Action)') < src.index("if ($Action -eq 'looks') {")
+    assert src.index('$td = $null') < src.index("if ($Action -eq 'looks') {"), 'TouchDesigner is asked first'
+    rem = src[src.index("if ($Action -in 'remembered', 'remembered-zones', 'remembered-opening', 'remembered-screens') {"):src.index("if ($Action -eq 'rebuild') {")]
+    assert "$lookNow -eq 'remembered'" in rem and 'Get-LookShowing' in rem
+    assert '$sc.video' in rem and '$was.json.PSObject.Properties' in rem, 'screens.video merged, every other field kept'
+    for words in ("the river (all looks) isn't running (its looks can be picked only while it runs)",
+                  "the remembered river isn't the look showing now (pick it under Looks on Status first)",
+                  "Fill my cup isn't the look showing now (pick it under Looks on Status first)"):
+        assert words in src and words in model, words
