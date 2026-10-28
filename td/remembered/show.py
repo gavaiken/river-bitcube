@@ -47,6 +47,7 @@ NIGHT_TAU = 1.5
 REFLEX_MTIME_S = 90.0              # reflex.json without updated_epoch: stale when the file is older
 DAY_PALETTE_S = 8.0                 # a new day's palette glides in with the decision wave
 RIVER_STALE_S = 10.0
+ROPE_EVERY = 2                      # the ropes step every 2nd frame (30 Hz), alternating with the ribbons
 PANEL_EVERY = 2                     # screens step every 2nd frame
 KNOBS = ('speed', 'density', 'brightness', 'turbulence')
 NEUTRAL = {k: 0.5 for k in KNOBS}
@@ -313,6 +314,7 @@ class Show:
         self.river_t = None
         self.fps = 0.0
         self.rope_frame = np.zeros((ropes_mod.N_ROPES, ropes_mod.N_PX, 3), np.float32)
+        self.rope_dt = 0.0
         self.panel_frame = np.zeros((panels_mod.QH, panels_mod.QW * panels_mod.NQ, 3), np.float32)
         self.last_status = None
         self.last_day = None
@@ -488,7 +490,11 @@ class Show:
                                     if self.control['screen_video'] > 0 and not self.gpu_active() else None)
         else:
             self.ropes.overlay = None
-        self.rope_frame = self.ropes.step(dt, ctx)
+        # (M7 speed) the ropes at 30 Hz, on the frames the ribbons don't step: each frame does about half the work
+        self.rope_dt += dt
+        if self.ticks % ROPE_EVERY == 1 or self.ticks < ROPE_EVERY:
+            self.rope_frame = self.ropes.step(self.rope_dt, ctx)
+            self.rope_dt = 0.0
         ctx['rope_speed'] = self.ropes.v_now
         self.ticks += 1
         self.panel_dt += dt

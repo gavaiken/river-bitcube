@@ -289,6 +289,13 @@ note(out_c, "OUTPUTS (river-remembered.toe, built by td/build/build_remembered.p
             "  -> panels (td/build/screens.py, the pinned screens file only sets each screen's orientation here).\n"
             "screens_preview = ropes + the four screens upright, for td.ps1 -Screenshot.")
 
+# ==== the panels window: no vsync (M7, 28 Oct). With vsync on, a frame over 16.7 ms waits for the next refresh, so the show
+# ran at a steady 30 fps; off, it runs as fast as it draws (~45 fps measured on the piece). The Colorlight sender samples the
+# HDMI on its own clock either way. Put 'enabled' back here if the screens show tearing.
+_win = proj.op('panels/window')
+if _win is not None and hasattr(_win.par, 'vsyncmode') and 'disabled' in _win.par.vsyncmode.menuNames:
+    _win.par.vsyncmode = 'disabled'
+
 # ==== ropes ===========================================================================================================
 ropes = proj.op('ropes')
 ropes.par.Canvas = rc.path
