@@ -32,10 +32,15 @@
 #                                                                .intensity, .threshold in control.json
 #                                                                The remembered river's three controls also work while river-looks.toe
 #                                                                shows it (its looks\status.json, under 10 s old, says look remembered)
-#   [-Action looks -Mode auto|manual [-Look remembered|fill-simple|fill-configurable]]
-#                                                                the river (all looks) only (TouchDesigner answering on river-looks.toe):
-#                                                                writes River\looks\control.json { mode, look, at } atomically (auto
-#                                                                without -Look keeps the look there; manual needs one), then the full
+#   [-Action looks -Mode auto|manual [-Look remembered|fill-simple|fill-configurable|seasons|modal] [-Playlist '<json>']]
+#                                                                the river (all looks) only (TouchDesigner answering on river-looks.toe,
+#                                                                river-two-looks.toe or river-all-looks.toe): merges { mode, look, at }
+#                                                                into River\looks\control.json atomically, every other field kept (auto
+#                                                                without -Look keeps the look there; manual needs one). -Playlist (auto
+#                                                                only): compact JSON [{"look":"remembered","for":{"loops":4}}, ...],
+#                                                                1..12 entries, loops 1..20 only for remembered, cycles 1..20 only for
+#                                                                the fills, minutes 1..120 for any look; refused whole if bad. Mission
+#                                                                control sends it with each " as \" (cmd.exe and -File keep it). Then the full
 #                                                                check. Every full check carries probe.looks { control, status }
 #                                                                (River\looks\control.json and status.json) while River\looks exists
 #   [-Action filling -Palette midnight -Brightness 0.8 -Intensity 0.6 -Speed 1]
@@ -50,7 +55,7 @@
 #   ropes, hub75, test, switch, rebuild, lightsroute, overlay, filling and looks are refused while a calibration runs ({ ok: false, error: "a calibration is
 #   running. Stop it on the Lights page first", refused: <action> } with the status), whoever runs this script; a dry run (or a
 #   decode of earlier photos) touches no lights and refuses nothing.
-param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25, [ValidateSet('auto','original','channel','channel-multi','pool','pool-multi')][string]$Framing, [ValidateSet('current','gavin','recorded','manual','cycle')][string]$Screenmode, [ValidateRange(0,1)][double]$Screenblend=0, [ValidateSet(15,30,60,120)][int]$Screenhold=30, [ValidateRange(0,1)][Nullable[double]]$Screenrecorded, [ValidateRange(0,120)][Nullable[double]]$Screenoffset, [ValidateSet('off','canvas','scene','frames')][string]$Source, [ValidateRange(0,1)][Nullable[double]]$Strength, [ValidateSet('off','pool','eddies')][string]$Light, [ValidateRange(0,1.5)][Nullable[double]]$PoolHeight, [ValidateSet('river','glacier','midnight','teal')][string]$Palette, [ValidateRange(0,1)][Nullable[double]]$Intensity, [ValidateRange(0.25,3)][Nullable[double]]$Speed, [ValidateSet('auto','manual')][string]$Mode, [ValidateSet('remembered','fill-simple','fill-configurable')][string]$Look, [ValidateRange(0,1)][Nullable[double]]$Video, [ValidateRange(0,1)][Nullable[double]]$Threshold)
+param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25, [ValidateSet('auto','original','channel','channel-multi','pool','pool-multi')][string]$Framing, [ValidateSet('current','gavin','recorded','manual','cycle')][string]$Screenmode, [ValidateRange(0,1)][double]$Screenblend=0, [ValidateSet(15,30,60,120)][int]$Screenhold=30, [ValidateRange(0,1)][Nullable[double]]$Screenrecorded, [ValidateRange(0,120)][Nullable[double]]$Screenoffset, [ValidateSet('off','canvas','scene','frames')][string]$Source, [ValidateRange(0,1)][Nullable[double]]$Strength, [ValidateSet('off','pool','eddies')][string]$Light, [ValidateRange(0,1.5)][Nullable[double]]$PoolHeight, [ValidateSet('river','glacier','midnight','teal')][string]$Palette, [ValidateRange(0,1)][Nullable[double]]$Intensity, [ValidateRange(0.25,3)][Nullable[double]]$Speed, [ValidateSet('auto','manual')][string]$Mode, [ValidateSet('remembered','fill-simple','fill-configurable','seasons','modal')][string]$Look, [string]$Playlist, [ValidateRange(0,1)][Nullable[double]]$Video, [ValidateRange(0,1)][Nullable[double]]$Threshold)
 $ErrorActionPreference = 'Continue'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $river = Split-Path $repo -Parent
@@ -148,10 +153,13 @@ function Read-RiverJson([string]$path) {
 }
 # The river (all looks) (river-looks.toe; docs/mission-ui.md "Looks"): its own report, looks\status.json, written twice a second.
 # The look it shows now, when that report is under 10 s old and names river-looks.toe; else $null.
+# The three files that share River\looks (river-all-looks.toe also plays a playlist and has five looks).
 $ldir = Join-Path $river 'looks'
+$LOOKS_FILES = @('river-looks.toe', 'river-two-looks.toe', 'river-all-looks.toe')
+$LOOK_NAMES = @('remembered', 'fill-simple', 'fill-configurable', 'seasons', 'modal')
 function Get-LookShowing {
     $ls = Read-RiverJson (Join-Path $ldir 'status.json')
-    if ($ls.json -and $ls.json.show -eq 'river-looks.toe' -and $ls.age_s -lt 10) { return [string]$ls.json.look }
+    if ($ls.json -and $ls.json.show -in $LOOKS_FILES -and $ls.age_s -lt 10) { return [string]$ls.json.look }
     return $null
 }
 if ($Action -in 'remembered', 'remembered-zones', 'remembered-opening', 'remembered-screens') {
@@ -289,9 +297,9 @@ $fdir = Join-Path $river 'filling'
 if ($Action -eq 'filling') {
     if (-not $Palette -or -not $PSBoundParameters.ContainsKey('Brightness') -or $Brightness -lt 0 -or $Brightness -gt 1 -or $null -eq $Intensity -or $null -eq $Speed) {
         $out.ok = $false; $out.error = 'filling needs -Palette river|glacier|midnight|teal, -Brightness 0..1, -Intensity 0..1 and -Speed 0.25..3'; $out.refused = $Action
-    } elseif (-not $td -or $td.ok -eq $false -or $td.file -notin 'river-filling.toe', 'river-looks.toe') {
+    } elseif (-not $td -or $td.ok -eq $false -or ($td.file -notin 'river-filling.toe', 'river-looks.toe' -and $td.file -notin $LOOKS_FILES)) {
         $out.ok = $false; $out.error = "the filling glass isn't running (its dials work only while it runs)"; $out.refused = $Action
-    } elseif ($td.file -eq 'river-looks.toe' -and (Get-LookShowing) -notin 'fill-simple', 'fill-configurable') {
+    } elseif ($td.file -in $LOOKS_FILES -and (Get-LookShowing) -notin 'fill-simple', 'fill-configurable') {
         $out.ok = $false; $out.error = "Fill my cup isn't the look showing now (pick it under Looks on Status first)"; $out.refused = $Action
     } else {
         $ctl = [ordered]@{ palette = $Palette; brightness = [math]::Round([double]$Brightness, 2); intensity = [math]::Round([double]$Intensity, 2)
@@ -313,20 +321,56 @@ if (Test-Path -LiteralPath $fdir) {
 # The river (all looks) (river-looks.toe; docs/mission-ui.md "Looks"): Auto or Manual and the look go to looks\control.json
 # { mode, look, at }, which TouchDesigner reads; it answers in looks\status.json { t, show, mode, look, target, fading, fade, auto,
 # looks }. Taken only while TouchDesigner (just asked, above) answers on that very file; written to a temporary file and swapped in.
+# -Playlist as mission control checks it (mission/public/looks.js playlistProblem): the entries, or an error in words.
+function Test-Playlist([string]$text) {
+    $t = $text.Trim()
+    if ($t.Length -ge 2 -and $t.StartsWith("'") -and $t.EndsWith("'")) { $t = $t.Substring(1, $t.Length - 2) }
+    # Windows PowerShell 5.1 hands a JSON array back as one object: piped, it is the entries again
+    try { $parsed = ConvertFrom-Json -InputObject $t -ErrorAction Stop; $list = @($parsed | ForEach-Object { $_ }) } catch { return @{ error = 'playlist is a list of { look, for }' } }
+    if ($t -notmatch '^\s*\[') { return @{ error = 'playlist is a list of { look, for }' } }
+    if ($list.Count -lt 1 -or $list.Count -gt 12) { return @{ error = 'playlist has 1 to 12 entries' } }
+    $out = New-Object System.Collections.ArrayList; $i = 0
+    foreach ($e in $list) {
+        $i++; $at = "playlist entry $i"
+        if ($e -isnot [PSCustomObject]) { return @{ error = "$at is { look, for }" } }
+        if ([string]$e.look -notin $LOOK_NAMES) { return @{ error = "${at}: look is $($LOOK_NAMES -join ', ')" } }
+        $props = @(if ($e.for -is [PSCustomObject]) { $e.for.PSObject.Properties })
+        if ($props.Count -ne 1 -or $props[0].Name -notin 'loops', 'cycles', 'minutes') { return @{ error = "${at}: for is { loops: n }, { cycles: n } or { minutes: m }" } }
+        $u = $props[0].Name; $n = $props[0].Value
+        $ok = $(switch ($u) { 'loops' { $e.look -eq 'remembered' } 'cycles' { $e.look -in 'fill-simple', 'fill-configurable' } default { $true } })
+        if (-not $ok) { return @{ error = "${at}: $($e.look) can't play for $u" } }
+        $hi = $(if ($u -eq 'minutes') { 120 } else { 20 })
+        if (-not ($n -is [int] -or $n -is [long]) -or $n -lt 1 -or $n -gt $hi) { return @{ error = "${at}: $u is a whole number from 1 to $hi" } }
+        [void]$out.Add([ordered]@{ 'look' = [string]$e.look; 'for' = [ordered]@{ $u = [int]$n } })
+    }
+    return @{ list = $out }
+}
 if ($Action -eq 'looks') {
+    $pl = $null
+    if ($PSBoundParameters.ContainsKey('Playlist')) { $pl = Test-Playlist $Playlist }
     if (-not $Mode -or ($Mode -eq 'manual' -and -not $Look)) {
-        $out.ok = $false; $out.error = 'looks needs -Mode auto|manual (manual with -Look remembered|fill-simple|fill-configurable)'; $out.refused = $Action
-    } elseif (-not $td -or $td.ok -eq $false -or $td.file -ne 'river-looks.toe') {
+        $out.ok = $false; $out.error = 'looks needs -Mode auto|manual (manual with -Look remembered|fill-simple|fill-configurable|seasons|modal)'; $out.refused = $Action
+    } elseif ($pl -and $Mode -ne 'auto') {
+        $out.ok = $false; $out.error = 'a playlist goes with -Mode auto'; $out.refused = $Action
+    } elseif ($pl -and $pl.error) {
+        $out.ok = $false; $out.error = $pl.error; $out.refused = $Action
+    } elseif (-not $td -or $td.ok -eq $false -or ($td.file -ne 'river-looks.toe' -and $td.file -notin $LOOKS_FILES)) {
         $out.ok = $false; $out.error = "the river (all looks) isn't running (its looks can be picked only while it runs)"; $out.refused = $Action
     } else {
         $ctlFile = Join-Path $ldir 'control.json'
+        $was = Read-RiverJson $ctlFile
         $keep = $Look
-        if (-not $keep) { $was = Read-RiverJson $ctlFile; $keep = $(if ($was.json -and $was.json.look -in 'remembered', 'fill-simple', 'fill-configurable') { [string]$was.json.look } else { 'remembered' }) }
-        $ctl = [ordered]@{ mode = $Mode; look = $keep; at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') }
+        if (-not $keep) { $keep = $(if ($was.json -and $was.json.look -in $LOOK_NAMES) { [string]$was.json.look } else { 'remembered' }) }
+        # merged with what was there: every field kept (the playlist too), only mode, look, at (and a new playlist) changed
+        $ctl = [ordered]@{}
+        if ($was.json) { foreach ($p in $was.json.PSObject.Properties) { $ctl[$p.Name] = $p.Value } }
+        $ctl.mode = $Mode; $ctl.look = $keep
+        if ($pl) { $ctl.playlist = @($pl.list.ToArray()) }
+        $ctl.at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
         try {
             $null = New-Item -ItemType Directory -Force -Path $ldir -ErrorAction Stop
             $tmp = "$ctlFile.tmp"
-            [IO.File]::WriteAllText($tmp, ($ctl | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding $false))
+            [IO.File]::WriteAllText($tmp, (ConvertTo-Json -InputObject $ctl -Compress -Depth 6), (New-Object Text.UTF8Encoding $false))
             if (Test-Path -LiteralPath $ctlFile) { [IO.File]::Replace($tmp, $ctlFile, $null) } else { [IO.File]::Move($tmp, $ctlFile) }
             $out.written = $ctl
         } catch { $out.ok = $false; $out.error = "couldn't write the looks control file: $($_.Exception.Message)" }

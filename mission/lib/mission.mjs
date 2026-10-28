@@ -12,7 +12,7 @@ import { ModalSeen, withSeen } from './modal-seen.mjs';
 import { ModalFeed, MODAL_FEED_EVERY_MS } from './modal-feed.mjs';
 import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights, TEST_ON, testShowing, FILES, MODAL_INPUT_FILE, MODAL_SOURCES,
   FILLING_PALETTES, FILLING_RANGE, REMEMBERED_LIGHTS, REMEMBERED_POOL_M, LOOKS, showBoundWhy } from '../public/model.js';
-import { LOOK_MODES } from '../public/looks.js';
+import { LOOK_MODES, playlistProblem, checkPlaylist } from '../public/looks.js';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 const PROBE = PS + 'probe.ps1';
@@ -544,12 +544,19 @@ export function planControl(action, body = {}) {
       return { kind: 'remembered', args: `-Action remembered-screens ${parts.join(' ')}` };
     }
     case 'looks': {
-      // the river (all looks) (docs/mission-ui.md "Looks"): auto (four loops of the remembered river, then one cycle of Fill my cup
-      // (simple), again) or manual (fade to the look and stay on it); probe.ps1 writes River\looks\control.json
+      // the river (all looks) (docs/mission-ui.md "Looks"): auto (the playlist, looping: the one given, else the one control.json has,
+      // else the file's default) or manual (fade to the look and stay on it); probe.ps1 writes River\looks\control.json
       if (!LOOK_MODES.includes(body.mode)) throw bad('mode is auto or manual');
       if (body.look !== undefined && !LOOKS.includes(body.look)) throw bad(`look is ${LOOKS.join(', ')}`);
       if (body.mode === 'manual' && body.look === undefined) throw bad('manual needs a look');
-      return { kind: 'probe', args: `-Action looks -Mode ${body.mode}${body.look !== undefined ? ` -Look ${body.look}` : ''}` };
+      let pl = '';
+      if (body.playlist !== undefined) {
+        if (body.mode !== 'auto') throw bad('a playlist goes with mode auto');
+        const why = playlistProblem(body.playlist);
+        if (why) throw bad(why);
+        pl = ` -Playlist ${playlistArg(checkPlaylist(body.playlist))}`;
+      }
+      return { kind: 'probe', args: `-Action looks -Mode ${body.mode}${body.look !== undefined ? ` -Look ${body.look}` : ''}${pl}` };
     }
     case 'hub75': {
       const x = num(body.brightness);
@@ -604,13 +611,16 @@ export function checkedControl(action, body = {}) {
     case 'remembered-zones': return { light: body.light, ...(body.pool_height_m !== undefined ? { pool_height_m: Number(num(body.pool_height_m).toFixed(2)) } : {}) };
     case 'remembered-opening': return { on: body.on === true };
     case 'remembered-screens': return Object.fromEntries(['video', 'intensity', 'threshold'].filter((k) => body[k] !== undefined).map((k) => [k, Number(num(body[k]).toFixed(2))]));
-    case 'looks': return { mode: body.mode, ...(body.look !== undefined ? { look: body.look } : {}) };
+    case 'looks': return { mode: body.mode, ...(body.look !== undefined ? { look: body.look } : {}), ...(body.playlist !== undefined ? { playlist: checkPlaylist(body.playlist) } : {}) };
     case 'bootfile': case 'switch': case 'rebuild': return { file: body.file };
     case 'lightsroute': return { route: body.route };
     default: return {};
   }
 }
 
+/** A checked playlist as one probe.ps1 argument: compact JSON (no spaces; only looks, unit names and whole numbers, all checked), its
+ *  double quotes escaped \" so ssh's cmd.exe and powershell.exe -File hand probe.ps1 the JSON itself. */
+export const playlistArg = (p) => JSON.stringify(p).replace(/"/g, '\\"');
 function bad(msg) { return Object.assign(new Error(msg), { status: 400 }); }
 /** A number from a request: a number, or a string that is one ("0.8"); null, "", false, [] and true are NaN, never 0. */
 export function num(v) {

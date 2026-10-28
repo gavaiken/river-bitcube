@@ -1,7 +1,7 @@
 // The Remembered river page's words and shapes (docs/mission-ui.md "Remembered river page"): GET /api/remembered (lib/remembered.mjs
 // CONTRACT) -> everything the page lays out, in the team's words (GLOSSARY.md: remembered day, loop, phase, surge, the pool,
 // lingerer). Pure: no DOM, so node tests it (test/remembered.test.mjs). The page (remembered.js) only places it.
-import { dur, FILES, LOOKS_FILE, LOOK_IN_LINE } from './model.js';
+import { dur, FILES, LOOKS_FILES, LOOK_IN_LINE } from './model.js';
 
 /** The river video's strength under the particle windows (M9) until someone sets it, 0..1. */
 export const REMEMBERED_VIDEO_DEFAULT = 0.7;
@@ -52,9 +52,9 @@ export function rememberedView(p, { now = Date.now(), sinceS = 0 } = {}) {
   // river-looks.toe (docs/mission-ui.md "Looks"): the remembered river is one of its looks; the page runs while it is the one showing
   const lk = obj(b.look);
   out.look = lk ? { look: lk.look ?? null, target: lk.target ?? null, fading: lk.fading ?? null } : null;
-  out.inLooks = out.show === LOOKS_FILE;
+  out.inLooks = LOOKS_FILES.includes(out.show);
   out.notRunning = st ? null : out.inLooks
-    ? `TouchDesigner is showing ${FILES[LOOKS_FILE]?.label ?? 'the river (all looks)'}, on ${out.look?.look ? LOOK_IN_LINE[out.look.look] : 'a look not known yet'} now${out.look?.fading && out.look.target === 'remembered' ? ', fading to the remembered river' : ''}. Pick the remembered river under Looks on Status. Below: what Dave's agent and the room are doing.`
+    ? `TouchDesigner is showing ${FILES[out.show]?.label ?? 'the river (all looks)'}, on ${out.look?.look ? LOOK_IN_LINE[out.look.look] : 'a look not known yet'} now${out.look?.fading && out.look.target === 'remembered' ? ', fading to the remembered river' : ''}. Pick the remembered river under Looks on Status. Below: what Dave's agent and the room are doing.`
     : `TouchDesigner is showing ${out.show ? FILES[out.show]?.label ?? out.show : "something else (or nothing)"}. Below: what Dave's agent and the room are doing.`;
   out.statusAgeS = num(b.status_age_s);
 

@@ -48,8 +48,9 @@ import { CAMERAS, calBlocked, checkedControl, awaitsReading, startingBlocked, te
 import { Applying } from './applying.mjs';
 import { readLocalPixelmap, summarizePixelmap, checkedCalibrate } from './lights.mjs';
 import { atlasFromUprights } from '../public/screens.js';
-import { changeLabel, FILES, MODAL_INPUT_FILE, FILLING_FILE, FILLING_ONLY, LOOKS_FILE, showBoundWhy } from '../public/model.js';
+import { changeLabel, FILES, MODAL_INPUT_FILE, FILLING_FILE, FILLING_ONLY, LOOKS_FILES, showBoundWhy } from '../public/model.js';
 import { FRAME_ELEMENTS } from '../public/modal-input.js';
+import { DEFAULT_PLAYLIST } from '../public/looks.js';
 
 // ---- the Modal input show (docs/modal-inputs.md) in fixture mode -------------------------------------------------------------
 // td.modal_input as probe.ps1 reports it while river-combined-modal-inputs.toe runs: the fixtures (test/fixtures/build.mjs) and a
@@ -254,19 +255,29 @@ export class FixtureMission {
     }
     // the filling glass's dials this world set (as probe.ps1 -Action filling writes control.json), and TouchDesigner (in this world)
     // taking them at once into its status.json
-    if (w.filling && [FILLING_FILE, LOOKS_FILE].includes(out.probe?.value?.td?.file) && out.probe.value.td.ok !== false) {
+    if (w.filling && [FILLING_FILE, ...LOOKS_FILES].includes(out.probe?.value?.td?.file) && out.probe.value.td.ok !== false) {
       const f = out.probe.value.filling ?? {}, st = f.status?.json && typeof f.status.json === 'object' ? f.status.json : {};
       const { at, ...set } = w.filling;
       out.probe = { ...out.probe, value: { ...out.probe.value, filling: { ...f, control: { age_s: 0, json: { ...w.filling } },
         status: { age_s: f.status?.age_s ?? 0.4, json: { ...st, ...set } } } } };
     }
-    // the looks this world chose (as probe.ps1 -Action looks writes control.json), and TouchDesigner (in this world) taking them:
-    // manual fades straight to its look (the fade itself is the looks-fading scenario's), auto keeps the look it shows
-    if (w.looks && out.probe?.value?.td?.file === LOOKS_FILE && out.probe.value.td.ok !== false) {
+    // the looks this world chose (as probe.ps1 -Action looks merges into control.json), and TouchDesigner (in this world) taking them:
+    // manual fades straight to its look (the fade itself is the looks-fading scenario's), auto keeps the look it shows; a file that
+    // reports a playlist (river-all-looks.toe) plays a new one from its first entry
+    if (w.looks && LOOKS_FILES.includes(out.probe?.value?.td?.file) && out.probe.value.td.ok !== false) {
       const l = out.probe.value.looks ?? {}, st = l.status?.json && typeof l.status.json === 'object' ? l.status.json : {};
-      const look = w.looks.mode === 'manual' ? w.looks.look : st.look ?? w.looks.look;
-      out.probe = { ...out.probe, value: { ...out.probe.value, looks: { ...l, control: { age_s: 0, json: { ...w.looks } },
-        status: { age_s: l.status?.age_s ?? 0.3, json: { ...st, mode: w.looks.mode, look, target: look, fading: null, fade: 1 } } } } };
+      const ctl = { ...(l.control?.json && typeof l.control.json === 'object' ? l.control.json : {}), ...w.looks };
+      let look = w.looks.mode === 'manual' ? w.looks.look : st.look ?? w.looks.look;
+      const extra = {};
+      if ('playlist' in st) {
+        extra.playlist = Array.isArray(ctl.playlist) ? ctl.playlist : DEFAULT_PLAYLIST;
+        if (w.looks.mode === 'auto' && w.looks.playlist) {
+          const e = extra.playlist[0], unit = Object.keys(e.for)[0];
+          look = e.look; Object.assign(extra, { position: 0, progress: { done: 0, of: e.for[unit], unit } });
+        }
+      }
+      out.probe = { ...out.probe, value: { ...out.probe.value, looks: { ...l, control: { age_s: 0, json: ctl },
+        status: { age_s: l.status?.age_s ?? 0.3, json: { ...st, mode: w.looks.mode, look, target: look, fading: null, fade: 1, ...extra } } } } };
     }
     if (out.probe?.value) w.applying.confirm(out.probe.value, this.now());
     out.applying = w.applying.list(clock);
@@ -349,13 +360,14 @@ export class FixtureMission {
         w.modalinput = { source: checked.source, strength: checked.strength };
       }
       if (action === 'filling') {        // as probe.ps1 -Action filling: only while TouchDesigner answers on the filling glass
-        if (!td || td.ok === false || ![FILLING_FILE, LOOKS_FILE].includes(running)) return { ok: false, error: FILLING_ONLY, refused: action, fixture: true };
+        if (!td || td.ok === false || ![FILLING_FILE, ...LOOKS_FILES].includes(running)) return { ok: false, error: FILLING_ONLY, refused: action, fixture: true };
         w.filling = { ...checked, at: new Date(this.clock(scenario)).toISOString().replace(/\.\d{3}Z$/, 'Z') };
         return { ok: true, fixture: true, action, body: checked, written: w.filling, note: 'fixture mode: nothing was changed' };
       }
-      if (action === 'looks') {          // as probe.ps1 -Action looks: control.json { mode, look, at } (auto keeps the look it had)
+      if (action === 'looks') {          // as probe.ps1 -Action looks: control.json { mode, look, playlist?, at } merged (auto keeps the look it had)
         const look = checked.look ?? w.looks?.look ?? 'remembered';
-        w.looks = { mode: checked.mode, look, at: new Date(this.clock(scenario)).toISOString().replace(/\.\d{3}Z$/, 'Z') };
+        w.looks = { ...(w.looks ?? {}), mode: checked.mode, look, ...(checked.playlist ? { playlist: checked.playlist } : {}),
+                    at: new Date(this.clock(scenario)).toISOString().replace(/\.\d{3}Z$/, 'Z') };
         return { ok: true, fixture: true, action, body: checked, written: w.looks, note: 'fixture mode: nothing was changed' };
       }
       if (action === 'remembered-zones' || action === 'remembered-opening' || action === 'remembered-screens') {

@@ -889,13 +889,13 @@ function looksHTML(m) {
   return `<div class="ctl ${whyOf('looks') && !busy('looks') ? 'off' : ''}" id="ctl-looks" data-ctl="looks"${busy('looks') ? ' aria-busy="true"' : ''}>
     <div class="ctl-h">Looks</div>${whyLine('looks')}
     <div class="seg lk-seg" role="group" aria-label="Looks: Auto or Manual" aria-describedby="lk-line">${LOOK_MODES.map(mbtn).join('')}</div>
-    <p class="effect" id="lk-line">${esc(W[d.mode].line)}</p>
+    <p class="effect" id="lk-line">${esc(n?.playlist && d.mode === 'auto' ? 'Plays the playlist, again and again (edit it on the Looks page).' : W[d.mode].line)}</p>
     ${d.mode === 'manual' ? `<label id="lk-look-l">Look</label>
-    <div class="seg lk-looks" role="group" aria-labelledby="lk-look-l">${M.LOOKS.map(lbtn).join('')}</div>` : ''}
+    <div class="seg lk-looks" role="group" aria-labelledby="lk-look-l">${(n?.looks?.length ? n.looks : M.LOOKS.slice(0, 3)).map(lbtn).join('')}</div>` : ''}
     <div class="row-btns"><button type="button" class="btn primary" id="ctl-lk-set" data-act="lk-set" ${o || !v || !lkChanged(v) ? 'disabled' : ''}>Apply</button></div>
     ${statusLine('ctl-looks', ['looks'])}
     ${now}
-    ${settings}</div>`;
+    ${settings}${n?.playlist ? '<p class="effect"><a href="/looks" id="lk-page">Looks page: the playlist, each look\'s settings, the inputs</a></p>' : ''}</div>`;
 }
 /** "What Modal is sending" for the chosen source, its stale warning, and the other sources' freshness on one line. */
 function sendingHTML(v) {

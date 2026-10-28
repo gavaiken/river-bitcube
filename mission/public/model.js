@@ -124,9 +124,13 @@ export function fillingWords(b) {
   return parts.length ? parts.join(', ') : null;
 }
 // ---- The river (all looks) (river-looks.toe; docs/mission-ui.md "Looks"; the card, the modes and the words: public/looks.js) ------
+// three files share River\looks (the all-looks one has the playlist and 5 looks; the Looks page)
 export const LOOKS_FILE = 'river-looks.toe';
-export const LOOKS = ['remembered', 'fill-simple', 'fill-configurable'];
-export const LOOK_IN_LINE = { remembered: 'the remembered river', 'fill-simple': 'Fill my cup (simple)', 'fill-configurable': 'Fill my cup (configurable)' };
+export const ALL_LOOKS_FILE = 'river-all-looks.toe';
+export const LOOKS_FILES = [LOOKS_FILE, 'river-two-looks.toe', ALL_LOOKS_FILE];
+export const LOOKS = ['remembered', 'fill-simple', 'fill-configurable', 'seasons', 'modal'];
+export const LOOK_IN_LINE = { remembered: 'the remembered river', 'fill-simple': 'Fill my cup (simple)', 'fill-configurable': 'Fill my cup (configurable)',
+  seasons: "the river's year", modal: 'Combined with Modal Input Selector' };
 export const FILL_LOOKS = ['fill-simple', 'fill-configurable'];
 export const LOOKS_ONLY = "the river (all looks) isn't running (its looks can be picked only while it runs)";
 export const LOOK_UNKNOWN = "which look the river (all looks) is showing isn't known yet";
@@ -135,17 +139,18 @@ export const FILLING_LOOK_ONLY = "Fill my cup isn't the look showing now (pick i
 /** The look river-looks.toe shows by the full check (probe.ps1's answer): its looks status under 10 s old, else null. */
 export function lookShowing(pr) {
   const td = obj(obj(pr)?.td), st = obj(obj(pr?.looks)?.status), j = obj(st?.json);
-  return td && td.ok !== false && td.file === LOOKS_FILE && j && LOOKS.includes(j.look) && (num(st.age_s) ?? 99) <= 10 ? j.look : null;
+  return td && td.ok !== false && LOOKS_FILES.includes(td.file) && j && LOOKS.includes(j.look) && (num(st.age_s) ?? 99) <= 10 ? j.look : null;
 }
 /** Why a show-bound control can't run on what runs now, or null (derive()'s controls and the server's 409: one rule). */
 export function showBoundWhy(action, pr) {
-  const td = obj(obj(pr)?.td), file = td && td.ok !== false ? td.file : null, look = lookShowing(pr), lk = file === LOOKS_FILE;
+  const td = obj(obj(pr)?.td), file = td && td.ok !== false ? td.file : null, look = lookShowing(pr), lk = LOOKS_FILES.includes(file);
   const pick = (ok, own, not) => (file === own ? null : !lk ? not : ok ? null : look ? (own === FILLING_FILE ? FILLING_LOOK_ONLY : REMEMBERED_LOOK_ONLY) : LOOK_UNKNOWN);
   if (action === 'looks') return lk ? null : LOOKS_ONLY;
   if (action === 'filling') return pick(FILL_LOOKS.includes(look), FILLING_FILE, FILLING_ONLY);
   return /^remembered-/.test(action) ? pick(look === 'remembered', REMEMBERED_FILE, REMEMBERED_ONLY) : null;
 }
-export const looksWords = (b) => (b?.mode === 'auto' ? 'Auto' : b?.mode === 'manual' ? (LOOK_IN_LINE[b.look] ? `${LOOK_IN_LINE[b.look]} (manual)` : 'Manual') : null);
+export const looksWords = (b) => (b?.mode === 'auto' ? (Array.isArray(b.playlist) ? `a playlist of ${b.playlist.length} looks` : 'Auto')
+  : b?.mode === 'manual' ? (LOOK_IN_LINE[b.look] ? `${LOOK_IN_LINE[b.look]} (manual)` : 'Manual') : null);
 /** Each choice's button and its one line, in the pages' words (docs/mission-ui.md "Modal input"). */
 export const MODAL_SOURCE_WORDS = {
   off: { label: 'Off', line: 'The river on its own, without Modal' },
@@ -1097,10 +1102,10 @@ export function derive(status, nowMs) {
     modal_input: miRaw,
     // the filling glass's files as the full check read them ({ control, status }; {} from a probe.ps1 that doesn't read them yet),
     // only while it runs: pages show it through filling.js fillingView (with fresh.probe_age_s, so its ages read on the server's clock)
-    filling: tdOk && (td.file === FILLING_FILE || (td.file === LOOKS_FILE && FILL_LOOKS.includes(lookShowing(pr)))) ? obj(pr?.filling) ?? {} : null,
+    filling: tdOk && (td.file === FILLING_FILE || (LOOKS_FILES.includes(td.file) && FILL_LOOKS.includes(lookShowing(pr)))) ? obj(pr?.filling) ?? {} : null,
     // river-looks.toe's files ({ control, status }), only while it runs (looks.js looksView); look: the look showing (null: not known)
-    looks: tdOk && td.file === LOOKS_FILE ? obj(pr?.looks) ?? {} : null,
-    look: tdOk && td.file === LOOKS_FILE ? lookShowing(pr) : null,
+    looks: tdOk && LOOKS_FILES.includes(td.file) ? obj(pr?.looks) ?? {} : null,
+    look: tdOk && LOOKS_FILES.includes(td.file) ? lookShowing(pr) : null,
     boot_file: bootNow,
     // the files a switch or "Set as default" offers (shows.json offered, and on bitcube)
     show_files: showFiles,

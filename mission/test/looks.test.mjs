@@ -14,7 +14,8 @@ import { actionPhrase } from '../lib/history.mjs';
 import { shapeRemembered } from '../lib/remembered.mjs';
 import { APPLY_BLOCKS, EXPECT_S, changeLabel, derive, showBoundWhy, LOOKS_FILE, LOOKS, LOOKS_ONLY, LOOK_UNKNOWN, REMEMBERED_LOOK_ONLY, FILLING_LOOK_ONLY,
   REMEMBERED_ONLY, FILLING_ONLY, FILLING_FILE, REMEMBERED_FILE } from '../public/model.js';
-import { looksView, nowWords, askedIs, LOOK_MODES, LOOK_WORDS } from '../public/looks.js';
+import { looksView, nowWords, askedIs, LOOK_MODES, LOOK_WORDS, DEFAULT_PLAYLIST, playlistProblem, checkPlaylist, positionWords, entryWords, unitFor } from '../public/looks.js';
+import { playlistArg } from '../lib/mission.mjs';
 import { rememberedView } from '../public/remembered-words.js';
 import { ACTIONS } from '../bin/mc.mjs';
 
@@ -25,7 +26,7 @@ const run = (f) => derive({ ...f.status, now: f._scenario.now }, f._scenario.now
 const fixtureMission = () => new FixtureMission({ dir: FIXTURES, stateDir: mkdtempSync(join(tmpdir(), 'looks-')), applyS: 0 });
 
 test('looks: auto or manual with a listed look; remembered-screens: video 0 to 1; nothing else reaches the probe', () => {
-  assert.deepEqual([LOOKS, LOOK_MODES], [['remembered', 'fill-simple', 'fill-configurable'], ['auto', 'manual']]);
+  assert.deepEqual([LOOKS, LOOK_MODES], [['remembered', 'fill-simple', 'fill-configurable', 'seasons', 'modal'], ['auto', 'manual']]);
   assert.deepEqual(planControl('looks', { mode: 'auto' }), { kind: 'probe', args: '-Action looks -Mode auto' });
   assert.deepEqual(planControl('looks', { mode: 'manual', look: 'fill-simple' }), { kind: 'probe', args: '-Action looks -Mode manual -Look fill-simple' });
   assert.equal(planControl('looks', { mode: 'auto', look: 'remembered' }).args, '-Action looks -Mode auto -Look remembered');
@@ -211,4 +212,82 @@ test('remembered-screens: the M7 sliders (intensity, threshold) with or without 
   const fm = fixtureMission();
   const w = (await fm.control('remembered-screens', { intensity: 0.7, threshold: 0.45 }, 'looks-auto')).written;
   assert.deepEqual([w.screens.intensity, w.screens.threshold], [0.7, 0.45]);
+});
+
+// ---- the playlist (river-all-looks.toe; docs/mission-ui.md "Looks" and "Looks page") ----------------------------------------------
+const PL = [{ look: 'remembered', for: { loops: 4 } }, { look: 'fill-simple', for: { cycles: 1 } }, { look: 'seasons', for: { minutes: 10 } }];
+
+test('playlist: the shape, the units per look and the bounds, with a 400 that says why', () => {
+  assert.equal(playlistProblem(PL), null);
+  assert.equal(playlistProblem(DEFAULT_PLAYLIST), null);
+  assert.deepEqual(checkPlaylist([{ for: { minutes: 3 }, look: 'modal', extra: 1 }]), [{ look: 'modal', for: { minutes: 3 } }]);
+  assert.equal(checkPlaylist([]), null);
+  const bad = [
+    [{}, /list of \{ look, for \}/], [[], /1 to 12 entries/], [Array(13).fill(PL[0]), /1 to 12 entries/], [[null], /entry 1 is/],
+    [[{ look: 'disco', for: { loops: 1 } }], /entry 1: look is remembered, fill-simple/],
+    [[{ look: 'fill-simple', for: { loops: 2 } }], /plays for cycles or minutes, not loops/],
+    [[{ look: 'remembered', for: { cycles: 2 } }], /plays for loops or minutes, not cycles/],
+    [[{ look: 'seasons', for: { loops: 2 } }], /plays for minutes, not loops/],
+    [[PL[0], { look: 'modal', for: { minutes: 121 } }], /entry 2: minutes is a whole number from 1 to 120/],
+    [[{ look: 'remembered', for: { loops: 21 } }], /loops is a whole number from 1 to 20/],
+    [[{ look: 'remembered', for: { loops: 0 } }], /from 1 to 20/], [[{ look: 'remembered', for: { loops: 1.5 } }], /whole number/],
+    [[{ look: 'remembered', for: { loops: '4' } }], /whole number/],
+    [[{ look: 'remembered', for: { loops: 4, minutes: 2 } }], /for is \{ loops: n \}/], [[{ look: 'remembered', for: 4 }], /for is/],
+  ];
+  for (const [p, re] of bad) {
+    assert.match(playlistProblem(p), re, JSON.stringify(p));
+    assert.throws(() => planControl('looks', { mode: 'auto', playlist: p }), (e) => e.status === 400 && re.test(e.message), JSON.stringify(p));
+  }
+  assert.throws(() => planControl('looks', { mode: 'manual', look: 'seasons', playlist: PL }), /a playlist goes with mode auto/);
+  assert.deepEqual([unitFor('remembered'), unitFor('fill-configurable'), unitFor('seasons'), unitFor('modal')], ['loops', 'cycles', 'minutes', 'minutes']);
+});
+
+test('playlist: to probe.ps1 as one argument of compact JSON, quotes escaped; checkedControl keeps only what was checked', () => {
+  const args = planControl('looks', { mode: 'auto', playlist: PL }).args;
+  assert.equal(args, `-Action looks -Mode auto -Playlist ${playlistArg(PL)}`);
+  assert.equal(playlistArg([PL[0]]), '[{\\"look\\":\\"remembered\\",\\"for\\":{\\"loops\\":4}}]');
+  assert.doesNotMatch(args.split(' -Playlist ')[1], /[\s;&|<>'`$]/, 'nothing inside the playlist argument a shell would act on');
+  assert.equal(planControl('looks', { mode: 'manual', look: 'modal' }).args, '-Action looks -Mode manual -Look modal');
+  assert.deepEqual(checkedControl('looks', { mode: 'auto', playlist: [{ look: 'seasons', for: { minutes: 5 }, x: 1 }], file: 'y' }),
+    { mode: 'auto', playlist: [{ look: 'seasons', for: { minutes: 5 } }] });
+});
+
+test('playlist: the words (history, the applying line, the position line)', () => {
+  assert.equal(changeLabel('looks', { mode: 'auto', playlist: PL }), 'the change of the looks to a playlist of 3 looks');
+  assert.deepEqual(actionPhrase({ action: 'looks', body: { mode: 'auto', playlist: PL } }), ['Set', 'set', 'the looks to a playlist of 3 looks']);
+  assert.deepEqual(actionPhrase({ action: 'looks', body: { mode: 'manual', look: 'seasons' } }), ['Set', 'set', "the looks to the river's year (manual)"]);
+  assert.equal(entryWords(PL[1]), 'Fill my cup (simple) for 1 cycle');
+  assert.equal(entryWords(PL[2]), "The river's year for 10 minutes");
+  assert.equal(positionWords(1, 2, { done: 2, of: 4, unit: 'loops' }), '2 of 2 · loop 3 of 4');
+  assert.equal(positionWords(0, 3, null), '1 of 3');
+  assert.equal(positionWords(null, 3, { done: 9, of: 10, unit: 'minutes' }), 'minute 10 of 10');
+  assert.equal(nowWords({ mode: 'auto', look: 'remembered', playlist: PL, position: 0, progress: { done: 2, of: 4, unit: 'loops' } }),
+    'Showing the remembered river · playlist: 1 of 3 · loop 3 of 4');
+});
+
+test('playlist: the fixture world keeps it and plays it; the old file keeps its own Auto', async () => {
+  const m = run(fx('all-looks-auto')), v = looksView(m.show.looks, m.show.fresh.probe_age_s);
+  assert.equal(m.show.file.name, 'river-all-looks.toe');
+  assert.deepEqual([m.controls.looks.possible, m.show.look, m.controls['remembered-zones'].possible], [true, 'remembered', true]);
+  assert.deepEqual([v.now.looks.length, v.now.playlist.length, v.now.position, v.asked.playlist.length], [5, 3, 0, 3]);
+  assert.equal(v.now.words, 'Showing the remembered river · playlist: 1 of 3 · loop 3 of 4');
+  assert.equal(v.now.inputs.river.source, 'live');
+  const fm = fixtureMission();
+  const two = [{ look: 'modal', for: { minutes: 5 } }, { look: 'fill-configurable', for: { cycles: 2 } }];
+  const r = await fm.control('looks', { mode: 'auto', playlist: two }, 'all-looks-auto');
+  assert.deepEqual([r.ok, r.written.playlist], [true, two]);
+  let s = fm.snapshot('all-looks-auto'), lv = looksView(derive(s, s.now).show.looks, 0);
+  assert.deepEqual([lv.asked.playlist, lv.now.playlist, lv.now.look, lv.now.position, lv.now.progress], [two, two, 'modal', 0, { done: 0, of: 5, unit: 'minutes' }]);
+  assert.equal(askedIs(lv, { mode: 'auto', playlist: two }), true);
+  // pinned, the playlist stays in control.json for the way back
+  await fm.control('looks', { mode: 'manual', look: 'seasons' }, 'all-looks-auto');
+  s = fm.snapshot('all-looks-auto'); lv = looksView(derive(s, s.now).show.looks, 0);
+  assert.deepEqual([lv.asked.mode, lv.asked.look, lv.asked.playlist, lv.now.look], ['manual', 'seasons', two, 'seasons']);
+  // the old file: no playlist in its status, even after one was sent (it doesn't read it)
+  const fm2 = fixtureMission();
+  await fm2.control('looks', { mode: 'auto', playlist: two }, 'looks-auto');
+  const o = fm2.snapshot('looks-auto'), ov = looksView(derive(o, o.now).show.looks, 0);
+  assert.deepEqual([ov.now.playlist, ov.now.looks.length, ov.now.look], [null, 3, 'remembered']);
+  const manual = looksView(run(fx('all-looks-manual')).show.looks, 0);
+  assert.deepEqual([manual.now.mode, manual.now.look, manual.now.words], ['manual', 'seasons', "Showing the river's year · manual: it stays on it"]);
 });
