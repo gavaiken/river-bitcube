@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** Gavin (Mac mini session: multi-view pan/tilt calibration; repo only for now, camera untouched)
+- **Holder:** Gavin (Mac mini session: multi-view calibration; ON BITCUBE: moving the gallery cam, running Calibrate)
 - **Where:** bitcube running Combined v0 (Will's settings); the default is still the river's year
-- **Updated:** 2026-10-27 19:55 PT
+- **Updated:** 2026-10-27 20:25 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
 ## Calibration through camera views (27 Oct, Gavin, repo only): see `docs/sessions/calibrate.md`
