@@ -56,7 +56,9 @@ Will approved the physical-panel trial and asked to keep it. The remembered-rive
 
 `River\remembered\video-library.json` holds an all-looks-only preference; `td/remembered/video_library.py` reads it when the runtime initializes its clip list. Other shows keep the originals. Invalid/incomplete preferences fall back to the original library. Reloads/reboots now retain this choice. Startup selection was verified in a fresh process without interrupting the running animation.
 
-Apply/keep/status/rollback: [`tools/remembered/video_trial.py`](../../tools/remembered/video_trial.py), executed through `tools/td.ps1` with `TRIAL_ACTION`. **Rollback** removes this show’s matching preference and restores the original movie/list immediately, preserving unrelated preferences. No project save or rebuild is needed. Full checkpoint and exact command are in HANDOFF.
+The cascade was subsequently re-rendered with duplicate frames removed before interpolation (30 fps, same22s duration); the evening file is unchanged. Current library is `motion30-dedup-20261028`. To undo this revision, use the guarded helper in `River/checkpoints/before-dedup-cascade-20261028-will/apply.py` with `ROLLBACK=True` through td.ps1. This restores the previous30fps library and preference. See HANDOFF for the exact command.
+
+After that rollback, apply/keep/status/rollback of the earlier interpolation: [`tools/remembered/video_trial.py`](../../tools/remembered/video_trial.py), executed through `tools/td.ps1` with `TRIAL_ACTION`. **Rollback** removes this show’s matching preference and restores the original movie/list immediately, preserving unrelated preferences. No project save or rebuild is needed. Full checkpoint and exact command are in HANDOFF.
 
 
 ## Direct recorded video beneath the ribbons
