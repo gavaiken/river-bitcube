@@ -124,4 +124,4 @@ Notes kept here while another session is editing the shared docs; folded into th
 - **Broke and fixed:** a rebuild kept the old ribbons module, so the screens went black for a few minutes (status lit 0 %):
   `build_remembered.py` now reloads every module. A forced re-tag was refused by the permission classifier; used a new tag.
 - **Left:** see HANDOFF.md "Open / not done" (60 fps needs a <16.7 ms frame; standalone river-remembered.toe not rebuilt; the
-  30 % meter on the Remembered river page).
+  — both since done: 55-60 fps, meter without the rule; only the standalone rebuild is left).

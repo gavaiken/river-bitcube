@@ -2,7 +2,7 @@
 
 - **Holder:** Gavin (Mac mini session A) **until noon 28 Oct**; then **Will** (Codex), visual tuning
 - **Where:** bitcube running **`river-looks.toe`** (auto), the **boot default**; checkpoint tag `river-looks-gpu-ribbons-v1`
-- **Updated:** 2026-10-28 09:20 PT
+- **Updated:** 2026-10-28 09:40 PT
 - **Next holder:** Will, from noon 28 Oct. After noon: **freeze**, fixes only, each with Gavin's OK. Read the next section first.
 
 ## Morning of 28 Oct (session A): the screens as GPU silk ribbons; M2 and M7 done. **Will: start here**
@@ -12,7 +12,7 @@ glitter drawn on the GPU** (Gavin's reference picture: twisting translucent shee
 the palette's blues and greens, with **the river clips playing behind them**, tinted toward the palette. Everything on the
 screens flows along the ropes beside each screen (allowing for the screen's tilt). Gavin saw it on the piece and pushed it
 this way step by step ("more blues and greens… more density… brighter… river clips in the background… flow in the same
-direction as the rope lights"). 31 fps (was 26).
+direction as the rope lights", "see the water video more… still blacks… like the hub75 simulator… more visible during the torrent"). **55-60 fps** (was 26).
 
 **How it works** (page: `docs/files/river-remembered.md`, "The screens, silk ribbons" and "On the GPU"):
 - `td/remembered/ribbons.py`: the ribbons' state (four sheets, one homed on each screen's column; level, turbulence, time,
@@ -44,17 +44,20 @@ check `River\remembered\status.json` and `td.ps1 -Screenshot /project1/remembere
 - M2: `flow.py` (fine smoky particles with ledges at the screens' edges, selectable) then the ribbons (Gavin: "too sparse and
   dark"), then on the GPU.
 - M7: the Remembered river page's Screens sliders (intensity, threshold, river video; `status.json` `screens` reports what TD
-  runs); `/hub75` back to the first version on the artists' settings with Drift; frame rate 26 → 31 fps.
+  runs); `/hub75` back to the first version on the artists' settings with Drift; frame rate 26 → 55-60 fps: the screens on
+  the GPU, the ropes at 30 Hz opposite the ribbons, and **the panels window without vsync** (`build_remembered.py`; with vsync
+  every frame over 16.7 ms waited for the next refresh). If the screens ever show tearing, set it back to `enabled` there.
+- The Remembered river page's meter shows each screen's lit share without the 30 % rule (the artists dropped it).
 - A rebuild had kept the old ribbons module (screens black for a few minutes): `build_remembered.py` now reloads every
   `td/remembered` module.
 
 **Open / not done** (none is half-done in the code):
-- Frame rate: TD is vsync-bound (a frame is 33 or 50 ms): 30 fps steady, not 60. Left on the CPU each frame: the ropes
-  (`ropes.step`, the ribbons' rope light), the looks mixer, Art-Net (~6 ms in `ropes/exec`). 60 needs the frame under 16.7 ms.
-- `river-remembered.toe` (standalone) was not rebuilt with the GPU chain (it isn't running; the looks file is). Its build is
-  the same script: switch to it and run `build_remembered.py` to bring it up to date.
-- The Remembered river page still marks screens over 30 % lit as "over the rule"; the artists dropped that rule with the
-  simulator version they rejected, and the ribbons now light 40-70 %. Worth removing the meter's rule line.
+- Watch the screens for tearing now that vsync is off (none seen in TD's output; the Colorlight sender samples HDMI on its
+  own clock). Undo: `vsyncmode = 'enabled'` in `build_remembered.py`, rebuild.
+- `river-remembered.toe` (standalone, not running, not the default) has no GPU operators yet: opened as it is, it runs the
+  numpy ribbons automatically. To add them, when two short dark minutes are fine: `probe.ps1 -Action switch -BootFile
+  river-remembered.toe`, then `td.ps1 -File td\build\build_remembered.py`, `td_save.ps1`, `frames\toe_scan.py`, commit the
+  .toe, and switch back to `river-looks.toe`.
 - The ribbons flow along the ropes by each screen, but at a fixed speed per ribbon; matching the ropes' own speed in a surge
   more closely is a tuning question.
 - bitcube's checkout shows `river_masks/` moved into a subfolder and an untracked `pixelmap-2026-10-26.json`: not ours, left
