@@ -160,7 +160,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-27",
-      "last_change": "Built on bitcube 27 Oct 21:03; screens brought into outputs by Select TOPs (a wire can't cross COMPs)"
+      "last_change": "Built on bitcube 27 Oct 21:03; screens and the preview's ropes brought into outputs by Select TOPs (a wire can't cross COMPs)"
     }
   ]
 }

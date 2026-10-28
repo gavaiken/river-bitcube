@@ -150,7 +150,9 @@ for n in ('uv_table', 'uv_chop', 'sample_ropes', 'rope_rows', 'rope_flop', 'rope
     o = out_c.op(n)
     if o is not None:
         o.destroy()
-_g = dict(globals(), SCREENS_COMP=out_c, FIELD=out_c.op('field_out'), ROPE_CANVAS=rc, SCREEN_PREFIX='screen',
+rope_sel = out_c.op('rope_remembered') or out_c.create(selectTOP, 'rope_remembered')   # no wires across COMPs
+rope_sel.par.top = rc.path
+_g = dict(globals(), SCREENS_COMP=out_c, FIELD=out_c.op('field_out'), ROPE_CANVAS=rope_sel, SCREEN_PREFIX='screen',
           PINNED_SCREENS=SCREENS, get=maker(out_c))
 exec(open(REPO + '/td/build/screens.py', encoding='utf-8').read(), _g)
 for k, c in enumerate(crops, start=1):
