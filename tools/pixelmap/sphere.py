@@ -85,6 +85,8 @@ class Cam:
         z = d[:, 2:3]
         n = np.where(z > 1e-6, d[:, :2] / np.where(z > 1e-6, z, 1), np.nan)
         r2 = (n ** 2).sum(axis=1, keepdims=True)
+        if self.k1 < 0:                              # past r^2 = 1/(-3 k1) the model folds back: not in this lens's view
+            n = np.where(r2 < 1 / (-3 * self.k1), n, np.nan)
         return self.f * n * (1 + self.k1 * r2) + self.c
 
     def rays(self, px):

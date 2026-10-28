@@ -138,3 +138,11 @@ def test_camera_shift_sees_movement_not_light():
     assert camera_shift(img, img * 0.6 + 30) == 0                     # the room brightened: no movement
     moved = np.roll(np.roll(img, 3, axis=0), -4, axis=1)
     assert camera_shift(img, moved) == pytest.approx(5.0)
+
+
+def test_a_strong_barrel_lens_does_not_fold_far_rays_back_into_the_picture():
+    cam = sphere.Cam(1114, -0.45, W, H)
+    far = np.array([[1.4, 0.0, 1.0], [0.0, -1.3, 1.0]])         # far outside the view
+    assert np.isnan(cam.project(far)).all()
+    corner = cam.rays([[0.0, 0.0], [W, H]])                       # the picture's own corners still round-trip
+    assert np.allclose(cam.project(corner), [[0, 0], [W, H]], atol=1e-4)
