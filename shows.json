@@ -160,7 +160,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-28",
-      "last_change": "Build reloads flow.py and ribbons.py too (a rebuild had kept the old ribbons module: screens black); M7 speed: screens' work split across alternate frames, one-pass ribbons with a colour lookup"
+      "last_change": "Silk ribbons drawn on the GPU (td/remembered/ribbons_gpu.py: GLSL TOPs ribbons_draw/trail/out, every LED every frame, denser glitter, curls); numpy ribbons as the automatic fallback (screens_src); control.json screens.gpu"
     },
     {
       "file": "river-filling.toe",
@@ -233,7 +233,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-28",
-      "last_change": "Build reloads flow.py and ribbons.py too (a rebuild had kept the old ribbons module: screens black); M7 speed: screens' work split across alternate frames, one-pass ribbons with a colour lookup"
+      "last_change": "Silk ribbons drawn on the GPU (td/remembered/ribbons_gpu.py: GLSL TOPs ribbons_draw/trail/out, every LED every frame, denser glitter, curls); numpy ribbons as the automatic fallback (screens_src); control.json screens.gpu"
     }
   ]
 }

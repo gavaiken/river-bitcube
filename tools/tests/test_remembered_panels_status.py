@@ -207,7 +207,7 @@ def test_control_json_shapes():
                                               'leds': [{'rope': 1, 'from': 2, 'to': 3}]}})
     assert c == {'pool_height_m': 0.6, 'light': 'leds', 'leds': [{'rope': 1, 'from': 2, 'to': 3}], 'opening_night': True,
                  'screen_intensity': None, 'screen_threshold': None, 'screen_mode': 'particles',
-                 'screen_video': 0.15, 'screen_field': 'ribbons'}
+                 'screen_video': 0.15, 'screen_field': 'ribbons', 'screen_gpu': True}
     assert show.parse_control({'screens': {'field': 'fine'}})['screen_field'] == 'fine'
     assert show.parse_control({'screens': {'field': 'lasers'}})['screen_field'] == 'ribbons'
     assert show.CONTROL_DEFAULT['opening_night'] is True                   # opening night is on unless told otherwise
@@ -242,7 +242,16 @@ def test_build_script_and_registry_entry():
     ast.parse(src)
     assert "registry.require_build(project.name, 'td/build/build_remembered.py')" in src
     assert 'registry.zones_for(TOE)' in src and "'river-remembered.toe'" in src   # (river-looks.toe overrides TOE)
-    assert 'videostreaminTOP' not in src and 'glslTOP' not in src and 'project.save' not in src
+    assert 'videostreaminTOP' not in src and 'project.save' not in src
+    # GLSL only for the GPU ribbons (ribbons_gpu.py, 28 Oct), and only shaders that can't hang the Iris Xe driver (19 Oct):
+    # every input read behind a TD_NUM_2D_INPUTS guard, inputs indexed by literal constants
+    import re
+    sys.path.insert(0, str(ROOT / 'td'))
+    from remembered import ribbons_gpu
+    for text in (ribbons_gpu.DRAW_GLSL, ribbons_gpu.TRAIL_GLSL, ribbons_gpu.OUT_GLSL):
+        assert 'TD_NUM_2D_INPUTS' in text
+        assert set(re.findall(r'sTD2DInputs\[([^\]]*)\]', text)) <= {'0', '1', '2'}
+    assert src.count('glslTOP') == 1 and 'ribbons_gpu.' in src
     entry = next(s for s in json.loads((ROOT / 'shows.json').read_text())['shows'] if s['file'] == 'river-remembered.toe')
     assert entry['build'] == 'td/build/build_remembered.py' and entry['kind'] == 'show'
     assert entry['offered'] is False or (ROOT / 'river-remembered.toe').is_file()     # offered once the .toe lands

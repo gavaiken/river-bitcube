@@ -119,3 +119,19 @@ def test_calm_ribbons_are_quieter_than_a_surge():
             tot += float(f.render_screens((1, 1, 1)).mean())
         lit[lv] = tot
     assert lit[0.1] < 0.7 * lit[0.9]
+
+
+def test_gpu_params_and_the_numpy_mirror_of_the_shaders():
+    from remembered import ribbons, ribbons_gpu as G
+    f = ribbons.Ribbons.from_files(*[str(p) for p in FILES], seed=5)
+    for _ in range(30):
+        f.step(1 / 30, 0.8, 100, 0.6)
+    p = G.params(f, (0.6, 0.8, 1.0), gain=0.82)
+    assert p.shape == (G.PH, G.PW, 4) and p.dtype == np.float32 and np.isfinite(p).all()
+    assert abs(p[0, 1, 3] - 0.82) < 1e-6 and (p[1:1 + G.N_RIB, 1] <= 2 * math.pi).all()      # time folded into phases
+    ref = G.Reference()
+    for _ in range(3):
+        out = ref.render(p)
+    lit = [(out[:, k * 128:(k + 1) * 128].max(-1) > 0.03).mean() for k in range(4)]
+    assert out.shape == (G.QH, G.QW * G.NQ, 3) and out.max() <= 1.0 and min(lit) > 0.05, lit
+    assert G.Reference().render(G.params(f, (1, 1, 1), gain=0.0)).max() == 0.0             # gain 0: nothing on the screens

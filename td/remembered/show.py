@@ -33,6 +33,7 @@ from . import water as water_mod
 from . import particles as particles_mod
 from . import flow as flow_mod
 from . import ribbons as ribbons_mod
+from . import ribbons_gpu
 from . import zones as zones_mod
 
 RIVER = Path(r'C:\Users\user\River')
@@ -54,7 +55,8 @@ CONTROL_DEFAULT = {'pool_height_m': None, 'light': 'off', 'leds': [], 'opening_n
                    'screen_mode': 'particles',       # particles (one field, the screens as windows) | water (video)
                    'screen_video': 0.15,             # M9: how strongly the river video shows under the particles (0..1)
                                                      # (0.25 until 28 Oct: a grey haze under the ribbons on the piece)
-                   'screen_field': 'ribbons'}        # what the particle windows look onto (FIELDS)
+                   'screen_field': 'ribbons',        # what the particle windows look onto (FIELDS)
+                   'screen_gpu': True}               # ribbons drawn on the GPU when its shaders are healthy (ribbons_gpu.py)
 # the particle fields: ribbons (silk of glitter, Gavin's reference, 28 Oct, the default) | fine (M2's smoky streaks with
 # ledges, flow.py) | streaks (round 2b, particles.py, checkpoint remembered-particles-v1)
 FIELDS = ('ribbons', 'fine', 'streaks')
@@ -98,6 +100,8 @@ def parse_control(c):
         ctl['screen_mode'] = sc.get('mode', c.get('screen_mode'))
     if sc.get('field') in FIELDS:
         ctl['screen_field'] = sc['field']
+    if isinstance(sc.get('gpu'), bool):
+        ctl['screen_gpu'] = sc['gpu']
     for key, name in (('screen_intensity', 'intensity'), ('screen_threshold', 'threshold')):
         v = sc.get(name, c.get(key))
         if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 1:
@@ -287,6 +291,9 @@ class Show:
         self.drift_p = np.random.default_rng(seed + 3).uniform(0, 2 * math.pi, 2)
         self.field_dt = 0.0
         self.video_layer = None
+        self.gpu_ok = False                   # the GPU ribbons' shaders built and without errors (checked in step())
+        self.gpu_gain = 0.0                   # how bright the GPU draws the ribbons now (0: not the ribbons' turn)
+        self.light_rgb = (0.6, 0.8, 1.0)
         self.crops = [None] * 4
         self.wins = self.water.windows(0.0)
         self.screen_level = SCREEN_CALM
@@ -317,6 +324,9 @@ class Show:
         return {'mode': c['screen_mode'], 'field': self.field_kind, 'video': round(c['screen_video'], 2),
                 'intensity': round(c['screen_intensity'] if c['screen_intensity'] is not None else water_mod.SETTINGS['intensity'], 2),
                 'threshold': round(self.water.s['sens'] if c['screen_threshold'] is None else c['screen_threshold'], 2)}
+
+    def gpu_active(self):
+        return self.gpu_ok and self.control['screen_gpu'] and self.field_kind == 'ribbons'
 
     def use_field(self, kind):
         """Switch the particle windows to another field (built once, kept); round 2b's streaks if one can't be built."""
@@ -485,7 +495,19 @@ class Show:
         self.screen_level += (target - self.screen_level) * (1 - math.exp(-dt / 0.6))   # never a jump
         if self.ticks % PANEL_EVERY == 0:                 # the screens at 30 fps: half the work, still smooth
             # the artists' simulator look (water.py): the moving water through four drifting windows, everything else off
-            if self.control['screen_mode'] == 'particles':
+            self.gpu_gain = 0.0
+            self.light_rgb = tuple(float(c) for c in pal['light'])
+            if self.control['screen_mode'] == 'particles' and self.gpu_active():
+                # the GPU draws the ribbons (ribbon_params -> ribbons_draw ... ribbons_out); here only the river video under
+                # them, and now and then a numpy render for the lit share in status.json
+                self.gpu_gain = self.control['screen_intensity'] or 0.82
+                if self.ticks % 300 == 0:
+                    self.field.render_screens(pal['light'])
+                if self.control['screen_video'] > 0 and self.video_layer is not None:
+                    self.panel_frame = np.minimum(self.video_layer * np.float32(self.control['screen_video']), 1.0)
+                else:
+                    self.panel_frame = np.zeros((ribbons_gpu.QH, ribbons_gpu.QW * 4, 3), np.float32)
+            elif self.control['screen_mode'] == 'particles':
                 inten = self.control['screen_intensity'] or 0.82
                 if self.field_kind == 'ribbons':                 # intensity folded into the ribbons' colour lookup
                     frame = self.field.render_screens(pal['light'], gain=inten)
@@ -505,7 +527,7 @@ class Show:
                 now=now, show=self.show, fps=self.fps, loop=snap, day=day, plan=snap['plan'], knobs=knobs,
                 reflex=self.knobs.reflex, palette=palette.as_hex(pal), heard=heard,
                 river_motion=motion, river_source=self.river_source if river_live else 'none', room=room,
-                field=self.field_kind, screens=self.screens_now(), lit_pct=self.field.lit_pct if self.control['screen_mode'] == 'particles' else self.water.lit_pct, cap=round(self.screen_level, 2), watts=self.ropes.watts, opening_night=opening,
+                field=self.field_kind + ('-gpu' if self.gpu_active() else ''), screens=self.screens_now(), lit_pct=self.field.lit_pct if self.control['screen_mode'] == 'particles' else self.water.lit_pct, cap=round(self.screen_level, 2), watts=self.ropes.watts, opening_night=opening,
                 zones_file=self.z.file,
                 pool_height_m=self.control['pool_height_m'] if self.control['pool_height_m'] is not None
                 else self.z.pool_height_m, light=self.control['light'])
@@ -569,10 +591,42 @@ def get(comp):
 def frame(comp):
     """Execute DAT onFrameStart: a river frame now and then, one tick, then cook the two Script TOPs."""
     step(comp)
-    for n in ('rope_render', 'panel_render'):
+    for n in ('rope_render', 'panel_render', 'ribbon_params'):
         o = comp.op(n)
         if o is not None:
             o.cook(force=True)
+
+
+GPU_OPS = ('ribbons_draw', 'ribbons_trail', 'ribbons_out')
+
+
+def check_gpu(comp, show):
+    """The GPU ribbons in use only while their three shaders exist without errors; screens_src follows (1: ribbons_out, 0:
+    panel_render, the numpy ribbons). Never raises."""
+    ok = False
+    try:
+        ops = [comp.op(n) for n in GPU_OPS]
+        ok = all(o is not None and not o.errors() for o in ops)
+    except Exception:                                             # noqa: BLE001
+        ok = False
+    show.gpu_ok = ok
+    sw = comp.op('screens_src')
+    if sw is not None:
+        want = 1 if show.gpu_active() else 0
+        if int(sw.par.index.eval()) != want:
+            sw.par.index = want
+
+
+def params_image(show, fade=1.0, on=True):
+    """ribbon_params: the GPU ribbons' numbers (ribbons_gpu.params), gain 0 when they aren't on the screens."""
+    if show is None or show.field_kind != 'ribbons':
+        return np.zeros((ribbons_gpu.PH, ribbons_gpu.PW, 4), np.float32)
+    gain = show.gpu_gain * fade if (on and show.gpu_active()) else 0.0
+    return np.ascontiguousarray(ribbons_gpu.params(show.field, show.light_rgb, gain))
+
+
+def cook_params(scriptOp):
+    scriptOp.copyNumpyArray(params_image(_holder().show))
 
 
 def step(comp):
@@ -585,6 +639,8 @@ def step(comp):
         dt = 0.0 if h.last is None or now < h.last else now - h.last
         h.last = now
         h.frame += 1
+        if h.frame % 90 == 1:
+            check_gpu(comp, show)
         if h.frame % 30 == 1:                                    # twice a second: live cam, or the clips?
             live = False
             try:

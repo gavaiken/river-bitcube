@@ -195,7 +195,7 @@ def frame(comp):
     except Exception as e:                                        # noqa: BLE001 - never stop the show
         h.error = repr(e)
     t_cook = time.perf_counter()
-    for n in ('rope_render', 'panel_render'):
+    for n in ('rope_render', 'panel_render', 'ribbon_params'):
         o = comp.op(n)
         if o is not None:
             o.cook(force=True)
@@ -213,6 +213,11 @@ def frame(comp):
 def cook(scriptOp):
     h = _holder()
     k = h.looks.fade if h.looks is not None else 1.0
+    if scriptOp.name == 'ribbon_params':                        # the GPU ribbons: faded with the look, off for the fills
+        from remembered import show as rshow
+        on = h.looks is not None and h.looks.look == 'remembered'
+        scriptOp.copyNumpyArray(rshow.params_image(rshow._holder().show, fade=k, on=on))
+        return
     if scriptOp.name == 'rope_render':
         f = h.ropes
         if f is None:
