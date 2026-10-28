@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** free → **River Calibrate** next (rebuild the 5 existing shows on the 27 Oct map)
+- **Holder:** River Calibrate (Gavin's Mac mini): ON BITCUBE, rebuilding the 5 existing shows on the 27 Oct map, then back to river-remembered.toe
 - **Where:** bitcube running **`river-remembered.toe`**, which is now the **boot default** (Gavin); fallback = the river's year
-- **Updated:** 2026-10-27 21:25 PT
+- **Updated:** 2026-10-27 22:00 PT
 - **Next holder:** River Calibrate (Gavin's Mac mini), then session A again for the artists' round 2 on the remembered river.
 
 
