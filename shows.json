@@ -167,7 +167,7 @@
       "title": "The filling glass",
       "label": "the filling glass",
       "kind": "viz",
-      "offered": false,
+      "offered": true,
       "build": "td/build/build_filling.py",
       "calibration": {
         "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
