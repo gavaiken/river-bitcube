@@ -369,7 +369,7 @@ class Show:
         if self.control['screen_mode'] == 'particles' and self.control['light'] == 'off':
             self.field_dt += dt
             if self.ticks % PANEL_EVERY == 0 or self.ropes.overlay is None:   # the field at 30 Hz, like the screens
-                lvl = float(self.rope_frame.max(axis=-1).mean()) / 0.3       # how lit the ropes are, ~0..1
+                lvl = self.ropes.base_level / 0.3        # how lit the ropes are on their own (not the field's light), ~0..1
                 self.rope_level += (min(1.0, lvl) - self.rope_level) * (1 - math.exp(-self.field_dt / 0.8))
                 self.field.step(self.field_dt, max(self.rope_level, 0.6 if snap['phase'] == 'surge' else 0.0),
                                 max(self.ropes.v_now, 30.0), knobs.get('turbulence', 0.5))

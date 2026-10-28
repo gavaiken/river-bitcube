@@ -157,6 +157,7 @@ class Ropes:
         self.safety = Safety()
         self.watts = 0.0
         self.v_now = 0.0
+        self.base_level = 0.0
         self.overlay = None              # extra light to add (N_ROPES x N_PX x 3), set by the show each frame
         self.state = {}
 
@@ -376,6 +377,7 @@ class Ropes:
         return rope + np.where(pool[..., None], pool_rgb, 0.0)
 
     def _finish(self, frame, dt):
+        self.base_level = float(np.clip(frame, 0.0, 1.0).max(axis=-1).mean())   # the ropes' own light, before the overlay
         if self.overlay is not None:                                # the particle field (particles.py), before safety
             frame = frame + self.overlay
         out = self.safety.apply(np.clip(frame, 0.0, 1.0), dt)
