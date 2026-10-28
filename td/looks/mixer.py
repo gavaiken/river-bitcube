@@ -265,6 +265,13 @@ def frame(comp):
             h.wrote_at = now
             st = L.status(now)
             st['show'] = _project_name()
+            try:                                                  # the live inputs and what the look did with them
+                from looks import inputs as _inputs
+                rs = rshow._holder().show
+                st['inputs'] = _inputs.gather(RIVER, now, rs)
+                st['used'] = _inputs.used_by(L.look, rs)
+            except Exception as e:                                # noqa: BLE001
+                st['inputs'], st['used'] = None, {'error': repr(e)}
             st['perf'] = {'python_ms': round(getattr(h, 'ms', 0.0), 2), 'cook_ms': round(getattr(h, 'cook_ms', 0.0), 2),
                           'frame_ms': round(getattr(h, 'frame_ms', 0.0), 2)}
             _write(RIVER / 'looks' / 'status.json', st)
