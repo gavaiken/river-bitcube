@@ -13,7 +13,11 @@ Progress goes to C:/Users/user/River/calibration.json after every step (the shap
 probe and calibrate.ps1 -Action status read it). During ropes-capture, capture.py's stdout becomes step/of/pass/retakes:
 "pass A: pattern 12 of 29 (b03)" -> step 12, of 29, pass 'A' (capture.py prints one such line per pattern; a capture.py
 that only prints "pass A done" still moves step 0 -> 1 -> 2 of 2 passes); "  b04n: retaken, 3 takes, ..." -> retakes +1.
-The camera must not move during a run: when capture.py's meta drift (camera px between the first and last black frame)
+Camera views (tools/cameras/views.json): when the camera has views, the gallery cam is turned (pan/tilt) to each view
+in turn and both capture stages photograph every view; decode.py and hub75.py stitch the views into one map
+(tools/pixelmap/sphere.py). The camera ALWAYS goes back to its show position (views.json "home") once the panels are
+photographed, and also when a run fails or is cancelled; "camera" in the progress file says where it ended up.
+--no-views keeps the camera where it is (one view, as before). The camera must not move during one view's capture: when capture.py's meta drift (camera px between the first and last black frame)
 is above --max-drift (default 30), the run fails BEFORE decoding, so no map is saved, with the words the portal shows. A lock file refuses a second run; a full run also refuses to start
 when TouchDesigner's bridge does not answer. --dry-run walks the stages with short waits and no lights, camera or
 subprocesses (for exercising the portal); --decode-only decodes an existing capture (no lights).
@@ -101,6 +105,25 @@ _CREDS = re.compile(r'([a-z][a-z0-9+.-]*://)[^\s/?#"<>]*@', re.I)   # up to the 
 def scrub(text):
     """'rtsp://admin:pw@10.0.0.1/x' -> 'rtsp://***@10.0.0.1/x': no login in anything written or shown."""
     return _CREDS.sub(r'\1***@', str(text))
+
+
+class PtzMover:
+    """Turns the camera through views.json's views (tools/cameras/ptz.py), logging in afresh for each move."""
+
+    def __init__(self, cam, cfg, note):
+        self.cam, self.cfg, self.note = cam, cfg, note
+        self.views = cfg['views']
+        sys.path.insert(0, str(REPO / 'tools' / 'cameras'))
+        import ptz
+        self.ptz = ptz
+
+    def go(self, view):
+        with self.ptz.Ptz(self.cam, log=self.note) as c:
+            return c.go_view(self.cfg, view)
+
+    def home(self):
+        with self.ptz.Ptz(self.cam, log=self.note) as c:
+            return c.go_home(self.cfg)
 
 
 class Cancelled(Exception):
@@ -208,8 +231,14 @@ def summarize_map(path):
 class Job:
     def __init__(self, *, state_dir, repo=REPO, scripts=None, python=None, bridge=BRIDGE, cam='gallery',
                  brightness=0.4, settle=None, dry_run=False, dry_wait=1.0, decode_only=None, poll=0.25, now=time.time,
-                 max_drift=MAX_DRIFT_PX):
+                 max_drift=MAX_DRIFT_PX, camera=None):
         self.repo = Path(repo)
+        self.camera = None if (dry_run or decode_only) else camera     # a PtzMover (or a test's fake), None = stay put
+        self.views = self.camera.views if self.camera else [None]
+        self.session = time.strftime('%Y%m%d-%H%M%S') if self.camera else None
+        self.away = False           # the camera has been turned away from its show position
+        self.capture_dirs, self.hub75_dirs = [], []
+        self.capture_dir_now = None     # the OUT folder of the capture.py running now
         self.max_drift = max_drift
         self.scripts = Path(scripts) if scripts else self.repo / 'tools' / 'pixelmap'
         # launched windowless (pythonw.exe, calibrate.ps1's scheduled task): its children run on python.exe, CREATE_NO_WINDOW
@@ -239,7 +268,9 @@ class Job:
                 'ok': None, 'error': None, 'reason': None, 'cancelled': False, 'dry_run': self.dry_run,
                 'decode_only': str(self.decode_only) if self.decode_only else None, 'cam': self.cam,
                 'brightness_cap': self.brightness, 'max_drift': self.max_drift, 'before': None, 'restored': None,
-                'capture': None, 'hub75_capture': None, 'capture_info': None, 'result': None, 'log': []}
+                'capture': None, 'hub75_capture': None, 'capture_info': None, 'result': None, 'log': [],
+                'views': len(self.views), 'view': None, 'view_index': None,
+                'view_names': [v['name'] for v in self.views if v], 'camera': None}
 
     # -- progress file --
     def write(self, **changes):
@@ -316,8 +347,9 @@ class Job:
             self.write()
             for i, stage in enumerate(self.stages):
                 self.check_cancel()
+                n = len(self.views) if stage in CAPTURE_STAGES else 1
                 self.write(stage=stage, stage_index=i, step=0, of=STEPS[stage], **{'pass': None},
-                           expected_s=2 * self.dry_wait if self.dry_run else EXPECTED_S[stage], message=f'{stage} started')
+                           expected_s=2 * self.dry_wait if self.dry_run else EXPECTED_S[stage] * n, message=f'{stage} started')
                 getattr(self, 'stage_' + stage.replace('-', '_'))()
             self.write(running=False, ok=True, stage='done', stage_index=len(self.stages), step=1, of=1,
                        message='calibration done', result=self.result(), restored=self.restored)
@@ -325,15 +357,18 @@ class Job:
         except Cancelled:
             self.stop_child()
             self.restore_if_needed()
+            self.camera_home()
             self.write(running=False, ok=False, cancelled=True, error='cancelled', message='cancelled',
                        result=self.result(), restored=self.restored)
             return 4
         except StageFailed as e:
+            self.camera_home()
             self.write(running=False, ok=False, error=str(e), reason=e.reason, message=str(e), result=self.result(), restored=self.restored)
             return 1
         except Exception as e:
             self.stop_child()
             self.restore_if_needed()
+            self.camera_home()
             err = f'{e.__class__.__name__}: {e}'[:300]
             self.write(running=False, ok=False, error=err, reason='The run stopped with an error on bitcube; ask Gavin',
                        message=err, result=self.result(), restored=self.restored)
@@ -363,15 +398,53 @@ class Job:
             return {'error': f'{e.__class__.__name__}: {e}'[:200]}
 
     # -- stages --
+    # -- camera views --
+    def to_view(self, k, view):
+        """Turn the camera to view k (none: it stays put). Returns the position, or None."""
+        self.write(view=view['name'] if view else None, view_index=k)
+        if not view:
+            return None
+        self.check_cancel()
+        self.away = True
+        self.write(message=f"turning the camera to view {view['name']} ({k + 1} of {len(self.views)})")
+        pos = self.camera.go(view)
+        self.note(f"camera at view {view['name']}: pan {pos[0]}, tilt {pos[1]}")
+        self.write(camera={'at': view['name'], 'pos': list(pos), 'home_ok': None})
+        return pos
+
+    def view_args(self, k, view, pos):
+        if not view:
+            return []
+        return ['--session', self.session, '--view', view['name'], '--view-index', str(k)] + (
+            ['--ptz', f'{pos[0]},{pos[1]}'] if pos else [])
+
+    def camera_home(self):
+        """Back to the show position, whatever happened. Never raises: a camera that won't go home is recorded
+        (camera.home_ok false, the log) and the run's own outcome stands."""
+        if not (self.camera and self.away):
+            return
+        try:
+            self.write(message='turning the camera back to its show position')
+            ok, pos = self.camera.home()
+            self.away = not ok
+            self.note(f'camera home: pan {pos[0]}, tilt {pos[1]}' + ('' if ok else ' (NOT where it should be: python tools/cameras/ptz.py gallery home)'))
+            self.write(camera={'at': 'home' if ok else None, 'pos': list(pos), 'home_ok': ok})
+        except Exception as e:
+            self.note(f'CAMERA NOT BACK HOME ({e.__class__.__name__}: {e}): python tools/cameras/ptz.py gallery home')
+            self.write(camera={'at': None, 'pos': None, 'home_ok': False, 'error': f'{e.__class__.__name__}: {e}'[:200]})
+
     def stage_ropes_capture(self):
         if self.dry_run:
             return self.pretend([(0.5, 'pass A done'), (1.0, 'pass B done')])
-        self.run_capture('ropes')
+        for k, view in enumerate(self.views):
+            pos = self.to_view(k, view)
+            self.run_capture('ropes', self.view_args(k, view, pos))
+            # The camera moved: the patterns no longer line up with the first frame, so decoding would place every LED wrong.
+            drift = (self.p.get('capture_info') or {}).get('drift')
+            if isinstance(drift, (int, float)) and drift > self.max_drift:
+                raise StageFailed(drift_error(drift))
+        self.capture_dir = self.capture_dirs[0]
         self.write(capture=Path(self.capture_dir).name, step=self.p['of'], message='ropes captured')
-        # The camera moved: the patterns no longer line up with the first frame, so decoding would place every LED wrong.
-        drift = (self.p.get('capture_info') or {}).get('drift')
-        if isinstance(drift, (int, float)) and drift > self.max_drift:
-            raise StageFailed(drift_error(drift))
 
     def stage_ropes_decode(self):
         if self.dry_run:
@@ -384,7 +457,11 @@ class Job:
     def stage_hub75_capture(self):
         if self.dry_run:
             return self.pretend([(1.0, 'panels captured')])
-        self.run_capture('hub75')
+        for k, view in enumerate(self.views):
+            pos = self.to_view(k, view)
+            self.run_capture('hub75', self.view_args(k, view, pos))
+        self.hub75_dir = self.hub75_dirs[0]
+        self.camera_home()               # nothing after this needs the camera: back to the show position at once
         self.write(hub75_capture=Path(self.hub75_dir).name, step=1, message='panels captured')
 
     def stage_hub75_locate(self):
@@ -394,13 +471,17 @@ class Job:
         self.run_child(cmd, 'hub75-locate', self.on_hub75_line)
         self.write(step=1, message='HUB75 quad 1 located')
 
-    def run_capture(self, mode):
+    def run_capture(self, mode, extra=()):
         self.before, self.restored = None, None
         cmd = [self.python, str(self.scripts / 'capture.py'), mode, '--cam', self.cam, '--brightness', str(self.brightness)]
+        cmd += list(extra)
+        self.capture_dir_now = None
         if self.settle is not None:
             cmd += ['--settle', str(self.settle)]
         self.run_child(cmd, f'{mode}-capture', self.on_capture_line)
-        folder = self.capture_dir if mode == 'ropes' else self.hub75_dir
+        folder = self.capture_dir_now
+        if folder:
+            (self.capture_dirs if mode == 'ropes' else self.hub75_dirs).append(folder)
         if not folder:
             raise StageFailed(f'{mode}-capture: capture.py printed no OUT folder', stage_reason(f'{mode}-capture', "the pictures weren't saved"))
 
@@ -494,7 +575,7 @@ class Job:
             except (ValueError, SyntaxError):
                 pass
         elif line.startswith('OUT '):
-            folder = line[4:].strip()
+            folder = self.capture_dir_now = line[4:].strip()
             if 'hub75-' in Path(folder).name:
                 self.hub75_dir = folder
             else:
@@ -542,6 +623,7 @@ def main(argv=None):
     ap.add_argument('--settle', type=float)
     ap.add_argument('--max-drift', type=float, default=MAX_DRIFT_PX,
                     help=f'camera movement (px) during the capture that voids the run (default {MAX_DRIFT_PX:g})')
+    ap.add_argument('--no-views', action='store_true', help='keep the camera where it is: one view, no pan/tilt')
     ap.add_argument('--log', help='append all output to this file (calibrate.ps1 passes one under River\\logs)')
     ap.add_argument('--state', help='folder for calibration.json/.lock/.cancel (default: the River folder above the repo)')
     ap.add_argument('--repo', help=argparse.SUPPRESS)        # tests
@@ -558,9 +640,17 @@ def main(argv=None):
         decode_only = Path(a.decode_only)
         if not decode_only.is_absolute():
             decode_only = repo / 'frames' / decode_only
-    job = Job(state_dir=a.state or repo.parent, repo=repo, scripts=a.scripts, python=a.python, bridge=a.bridge,
+    camera = None
+    if not (a.dry_run or a.decode_only or a.no_views):
+        vf = repo / 'tools' / 'cameras' / 'views.json'
+        cfg = json.loads(vf.read_text(encoding='utf-8')).get(a.cam) if vf.exists() else None
+        if cfg and cfg.get('views'):
+            camera = PtzMover(a.cam, cfg, print)
+    job = Job(state_dir=a.state or repo.parent, camera=camera, repo=repo, scripts=a.scripts, python=a.python, bridge=a.bridge,
               cam=a.cam, brightness=a.brightness, settle=a.settle, dry_run=a.dry_run, dry_wait=a.dry_wait,
               decode_only=decode_only, max_drift=a.max_drift)
+    if camera:
+        camera.note = job.note
     return job.run()
 
 

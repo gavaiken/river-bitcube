@@ -473,3 +473,69 @@ def test_a_camera_login_never_reaches_the_log_or_the_error():
     job = type('J', (), {'log': []})()
     cal.Job.note(job, line)
     assert 'NOT-A-REAL-PW' not in job.log[0] and 'admin' not in job.log[0]
+
+
+# ---- camera views (tools/cameras/views.json): pan/tilt through every view, always back home -------------------------
+
+class FakeCamera:
+    def __init__(self, home_ok=True, fail_at=None):
+        self.views = [{'name': 'home'}, {'name': 'up', 'tilt': 'max'}]
+        self.calls, self.home_ok, self.fail_at = [], home_ok, fail_at
+
+    def go(self, view):
+        self.calls.append(view['name'])
+        if view['name'] == self.fail_at:
+            raise RuntimeError('camera unreachable')
+        return (3241, 0 if view['name'] == 'home' else 700)
+
+    def home(self):
+        self.calls.append('HOME')
+        return self.home_ok, ((3241, 0) if self.home_ok else (3241, 650))
+
+
+def views_job(env, camera):
+    return cal.Job(state_dir=env.state, repo=env.repo, scripts=env.scripts, python=sys.executable, bridge=env.bridge.url,
+                   camera=camera)
+
+
+def test_views_photograph_every_view_then_the_camera_goes_home(env, monkeypatch):
+    cam = FakeCamera()
+    job = views_job(env, cam)
+    cmds, orig = [], cal.Job.run_child
+    monkeypatch.setattr(cal.Job, 'run_child', lambda self, cmd, *a, **k: (cmds.append(cmd), orig(self, cmd, *a, **k))[1])
+    assert job.run() == 0
+    assert cam.calls == ['home', 'up', 'home', 'up', 'HOME']           # ropes in both views, panels in both, home
+    p = env.progress()
+    assert p['ok'] is True and p['views'] == 2 and p['view_names'] == ['home', 'up']
+    assert p['camera'] == {'at': 'home', 'pos': [3241, 0], 'home_ok': True}
+    ropes = [' '.join(c) for c in cmds if c[2] == 'ropes']
+    assert len(ropes) == 2 and '--view up --view-index 1 --ptz 3241,700' in ropes[1] and f'--session {job.session}' in ropes[1]
+    snaps = [s for s in env.snaps if s['stage'] == 'ropes-capture']
+    assert [s['view_index'] for s in snaps][-1] == 1 and snaps[0]['expected_s'] == 2 * cal.EXPECTED_S['ropes-capture']
+
+
+def test_a_failed_run_still_sends_the_camera_home(env, monkeypatch):
+    monkeypatch.setenv('FAKE_FAIL', 'capture-hub75')
+    cam = FakeCamera()
+    assert views_job(env, cam).run() == 1
+    assert cam.calls[-1] == 'HOME' and env.progress()['camera']['home_ok'] is True
+
+
+def test_a_camera_that_cannot_move_fails_the_run_and_is_sent_home(env):
+    cam = FakeCamera(fail_at='up')
+    assert views_job(env, cam).run() == 1
+    assert cam.calls == ['home', 'up', 'HOME']
+    assert env.progress()['restored'] in (True, None)
+
+
+def test_a_camera_that_does_not_get_home_is_reported(env):
+    cam = FakeCamera(home_ok=False)
+    assert views_job(env, cam).run() == 0
+    p = env.progress()
+    assert p['camera']['home_ok'] is False and any('NOT where it should be' in s for s in p['log'])
+
+
+def test_dry_run_never_moves_the_camera(env):
+    cam = FakeCamera()
+    job = cal.Job(state_dir=env.state, repo=env.repo, scripts=env.scripts, dry_run=True, dry_wait=0.2, camera=cam)
+    assert job.run() == 0 and cam.calls == []

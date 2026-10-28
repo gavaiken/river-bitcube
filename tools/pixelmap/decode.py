@@ -9,6 +9,14 @@ Writes tools/pixelmap/pixelmap-<date>.json and <capture>/overlay.png.
 
 UVs are normalised to the camera frame in TouchDesigner's texture convention: u left->right,
 v bottom->top (v = 1 - y/H).
+
+Several views (a multi-view calibration: capture.py --session, one capture per camera view): give any one of the
+session's captures and the others are found next to it. Each view is decoded as above; the views are put together
+from the LEDs two of them both see (tools/pixelmap/sphere.py: the lens and each view's rotation); every LED gets a
+direction from the camera (`d`, home-view coordinates: x right, y down, z forward) and (u, v) in one virtual frame
+that holds all the lights (meta.space says how). `hu`, `hv`: where it is in the home view's own frame (the show
+position; outside 0..1 when that view doesn't see it). Writes overlay.png into every view's capture and
+panorama.png (all views stitched, the map drawn on it) into the home view's.
 """
 import json
 import sys
@@ -18,7 +26,7 @@ import numpy as np
 
 if __package__ in (None, ''):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from pixelmap import graycode  # noqa: E402
+from pixelmap import graycode, sphere  # noqa: E402
 
 N_ROPES, N_PIXELS = 20, 400
 R = graycode.ROPE_BITS
@@ -219,9 +227,143 @@ def latest_pixelmap(folder=Path(__file__).parent):
     return maps[-1] if maps else None
 
 
+def session_captures(capture, mode='ropes'):
+    """All captures of capture's multi-view session, home view first (by view_index); [capture] when it has none."""
+    capture = Path(capture)
+    meta = json.loads((capture / 'meta.json').read_text())
+    if not meta.get('session'):
+        return [capture]
+    found = []
+    for m in capture.parent.glob('*/meta.json'):
+        try:
+            other = json.loads(m.read_text())
+        except ValueError:
+            continue
+        if other.get('session') == meta['session'] and other.get('mode') == meta.get('mode', mode):
+            found.append((other.get('view_index', 0), m.parent))
+    return [c for _, c in sorted(found)] or [capture]
+
+
+def _write_map(out_json, pmap):
+    out_json.write_text(json.dumps(pmap, indent=0).replace('\n', ' ').replace('} {', '},\n{') + '\n')
+
+
+def _report(pmap, count):
+    for r in range(N_ROPES):
+        s = pmap['ropes'].get(str(r))
+        print(f"rope {r + 1:2d}: " + (f"visible {s['visible']:3d}  filled {s['filled']:3d}" if s else 'not seen'))
+
+
+def main_views(captures, out_json=None):
+    """Decode a multi-view session (see the file header)."""
+    from PIL import Image
+    metas = [json.loads((c / 'meta.json').read_text()) for c in captures]
+    names = [m.get('view') or f'view{i}' for i, m in enumerate(metas)]
+    home = names[0]
+    per = {}
+    for c, m, name in zip(captures, metas, names):
+        rope, px, conf = decode_pair(load_pass(c / 'A'), load_pass(c / 'B'), weak_lsb=1)
+        u, v, count = aggregate(rope, px, conf)
+        h, w = rope.shape
+        obs = {(r, p): (float(u[r, p] * w), float((1 - v[r, p]) * h), int(count[r, p]))
+               for r, p in zip(*np.nonzero(~np.isnan(u)))}
+        per[name] = {'capture': c, 'meta': m, 'rope': rope, 'px': px, 'obs': obs}
+        print(f"view {name}: decoded camera px {(rope >= 0).sum()}, LEDs with a position {len(obs)}, "
+              f"camera at {m.get('ptz')}", flush=True)
+    cam, rots, rep = sphere.fit_views({n: per[n]['obs'] for n in names}, w, h, home)
+    for n in names[1:]:
+        r = rep[n]
+        print(f"view {n}: {r['shared']} LEDs shared with the others, pan/tilt/roll from home {r['pan_tilt_roll']} deg, "
+              f"stitch error {r['rms_px']} px", flush=True)
+    print(f'lens: f {cam.f:.1f} px, k1 {cam.k1:.4f}', flush=True)
+
+    # one direction per LED: the weighted mean of every view's ray (home coordinates)
+    acc = {}
+    for n in names:
+        keys = list(per[n]['obs'])
+        if not keys:
+            continue
+        xy = np.array([per[n]['obs'][k][:2] for k in keys])
+        wt = np.array([per[n]['obs'][k][2] for k in keys], float)
+        for k, d, wk in zip(keys, cam.rays(xy) @ rots[n], wt):
+            a = acc.setdefault(k, [np.zeros(3), 0.0])
+            a[0] += d * wk
+            a[1] += wk
+    keys = list(acc)
+    dirs = np.array([acc[k][0] / np.linalg.norm(acc[k][0]) for k in keys])
+    pre = sphere.make_frame(dirs, cam.f, w / h)
+    U = np.full((N_ROPES, N_PIXELS), np.nan)
+    V = np.full((N_ROPES, N_PIXELS), np.nan)
+    xy = pre.xy(dirs)
+    for (r, p), (x, y) in zip(keys, xy):
+        U[r, p], V[r, p] = x / w, -y / h              # camera-sized units, so build_map's distances mean what they did
+    date = metas[0].get('date', captures[0].name.split('-')[1])
+    out_json = Path(out_json or Path(__file__).parent / f"pixelmap-{date[:4]}-{date[4:6]}-{date[6:8]}.json")
+    pmap = build_map(U, V)
+    pd = pre.dirs(np.array([[p['u'] * w, -p['v'] * h] for p in pmap['points']]))
+    frame = sphere.make_frame(pd, cam.f, w / h)
+    uv = frame.uv(pd)
+    hpx = cam.project(pd)
+    for p, d, (u_, v_), (hx, hy) in zip(pmap['points'], pd, uv, hpx):
+        p['u'], p['v'] = round(float(u_), 5), round(float(v_), 5)
+        p['d'] = [round(float(c), 5) for c in d]
+        ok = np.isfinite(hx) and d[2] > 0.05
+        p['hu'] = round(float(hx / w), 5) if ok else None
+        p['hv'] = round(float(1 - hy / h), 5) if ok else None
+    space = sphere.Space(cam, rots, frame, {n: {'capture': per[n]['capture'].name, 'ptz': per[n]['meta'].get('ptz'),
+                                               'drift': per[n]['meta'].get('drift')} | rep[n] for n in names})
+    pmap['meta'] = {
+        'capture': captures[0].name, 'captures': [c.name for c in captures], 'session': metas[0].get('session'),
+        'camera': metas[0].get('camera'), 'frame_size': [w, h], 'drift': max((m.get('drift') or 0) for m in metas),
+        'uv': 'normalised virtual frame holding every view (meta.space.frame), TD convention: u left->right, v bottom->top',
+        'd': 'direction from the camera, home view coordinates: x right, y down, z forward (the show position\'s axis)',
+        'hu_hv': 'where the LED is in the home view (the show position), TD convention; null behind it, outside 0..1 out of view',
+        'rope': '0-based (rope 1 in the rope map = 0)', 'px': '0 = plug end (Art-Net pixel 0)',
+        'decoded_camera_px': int(sum((per[n]['rope'] >= 0).sum() for n in names)), 'space': space.to_meta()}
+    _write_map(out_json, pmap)
+    for n in names:
+        c = per[n]['capture']
+        vpx = space.uv_to_view_px(n, uv)
+        pts = [dict(p, u=float(x / w), v=float(1 - y / h)) for p, (x, y) in zip(pmap['points'], vpx)
+               if np.isfinite(x) and -0.05 * w < x < 1.05 * w and -0.05 * h < y < 1.05 * h]
+        base = np.maximum(*(np.asarray(Image.open(c / 'A' / f'b00{s_}.png').convert('RGB')) for s_ in 'pn'))
+        overlay(base, per[n]['rope'], per[n]['px'], {'points': pts}).save(c / 'overlay.png')
+    panorama(space, per, names, pmap, w, h).save(captures[0] / 'panorama.png')
+    print(f"decoded camera px: {pmap['meta']['decoded_camera_px']}  LEDs placed: {len(keys)}")
+    _report(pmap, None)
+    print(f'wrote {out_json} and {captures[0] / "panorama.png"}')
+
+
+def panorama(space, per, names, pmap, w, h, width=1440):
+    """Every view's lit frame rotated into the virtual frame (home on top where they overlap), the map drawn on it."""
+    from PIL import Image, ImageDraw
+    fr = space.frame
+    ph = int(round(width * fr.fh / fr.fw))
+    gu, gv = np.meshgrid((np.arange(width) + 0.5) / width, 1 - (np.arange(ph) + 0.5) / ph)
+    uv = np.c_[gu.ravel(), gv.ravel()]
+    out = np.zeros((ph * width, 3), np.uint8)
+    for n in reversed(names):
+        c = per[n]['capture']
+        img = np.maximum(*(np.asarray(Image.open(c / 'A' / f'b00{s_}.png').convert('RGB')) for s_ in 'pn'))
+        px = space.uv_to_view_px(n, uv)
+        ok = np.isfinite(px).all(axis=1) & (px[:, 0] >= 0) & (px[:, 0] < w) & (px[:, 1] >= 0) & (px[:, 1] < h)
+        xi, yi = px[ok, 0].astype(int), px[ok, 1].astype(int)
+        out[ok] = img[yi, xi]
+    im = Image.fromarray(out.reshape(ph, width, 3))
+    dr = ImageDraw.Draw(im)
+    for p in pmap['points']:
+        x, y = p['u'] * width, (1 - p['v']) * ph
+        col = PALETTE[p['rope'] % 10] if p['visible'] else (90, 90, 90)
+        dr.point((x, y), fill=col)
+    return im
+
+
 def main(capture, out_json=None):
     from PIL import Image
     capture = Path(capture)
+    captures = session_captures(capture)
+    if len(captures) > 1:
+        return main_views(captures, out_json)
     meta = json.loads((capture / 'meta.json').read_text())
     a, b = load_pass(capture / 'A'), load_pass(capture / 'B')
     rope, px, conf = decode_pair(a, b, weak_lsb=1)
@@ -230,6 +372,8 @@ def main(capture, out_json=None):
     out_json = Path(out_json or Path(__file__).parent / f"pixelmap-{date[:4]}-{date[4:6]}-{date[6:8]}.json")
     prev = out_json if out_json.exists() else latest_pixelmap()
     old = json.loads(prev.read_text()) if prev else {}
+    if (old.get('meta') or {}).get('space'):
+        old.pop('hub75_quad1', None)                  # a multi-view map's quad is in its own frame, not this camera's
     if 'hub75_quad1' in old and prev != out_json:
         print(f'hub75_quad1 carried over from {prev.name}: re-run hub75.py if the panel or camera moved')
     h, w = rope.shape

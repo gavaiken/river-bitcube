@@ -8,6 +8,10 @@ extreme points along the diagonals (fine for a roughly upright, convex quad). Ch
 the four coloured panels (red TL, green TR, blue BL, yellow BR) predict the corners through a
 homography; check_px is the largest disagreement. Corners are stored as TD UVs (v up) under
 'hub75_quad1' in the pixel-map JSON.
+
+A multi-view map (decode.py over several camera views; its meta.space): every view of the capture's session is
+searched, the quad is taken from the view that sees it whole and largest, and its corners are rotated into the map's
+virtual frame (corners stay a true perspective quad: a rotation of the camera is a homography).
 """
 import json
 import sys
@@ -106,25 +110,57 @@ def to_uv(corners, w, h):
     return {k: (round(x / w, 5), round(1 - y / h, 5)) for k, (x, y) in corners.items()}
 
 
+def _in_view(res, w, h, margin=4):
+    xs, ys = zip(*res['corners'].values())
+    return min(xs) > margin and min(ys) > margin and max(xs) < w - margin and max(ys) < h - margin
+
+
+def _area(c):
+    x, y = np.array([c[k] for k in CORNERS], float).T
+    return float(abs(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1))) / 2)
+
+
 def main(capture, pixelmap=None):
     from PIL import Image, ImageDraw
     capture = Path(capture)
-    load = lambda n: np.asarray(Image.open(capture / f'{n}.png').convert('RGB'), np.float32)
-    test = (load('test0') + load('test1')) / 2
-    black = (load('black0') + load('black1')) / 2
-    res = find_corners(test, black)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from pixelmap.decode import latest_pixelmap, session_captures
+    from pixelmap import sphere
+    pixelmap = Path(pixelmap) if pixelmap else latest_pixelmap()
+    pm = json.loads(pixelmap.read_text()) if pixelmap else None
+    space = (pm or {}).get('meta', {}).get('space')
+    tried = []
+    for c in (session_captures(capture, 'hub75') if space else [capture]):
+        load = lambda n, c=c: np.asarray(Image.open(c / f'{n}.png').convert('RGB'), np.float32)
+        test = (load('test0') + load('test1')) / 2
+        black = (load('black0') + load('black1')) / 2
+        try:
+            r = find_corners(test, black)
+        except ValueError as e:
+            if not space:
+                raise
+            print(f'{c.name}: {e}')
+            continue
+        view = json.loads((c / 'meta.json').read_text()).get('view') or 'home' if space else None
+        tried.append((_in_view(r, *test.shape[1::-1]), _area(r['corners']), c, view, r, test))
+    if not tried:
+        raise ValueError('the HUB75 test pattern was not seen in any view')
+    _, _, capture, view, res, test = max(tried, key=lambda t: (t[0], t[1]))
     h, w = test.shape[:2]
-    uv = to_uv(res['corners'], w, h)
+    if space:
+        sp = sphere.Space.from_meta(space)
+        uvs = sp.view_px_to_uv(view, np.array([res['corners'][k] for k in CORNERS]))
+        uv = {k: (round(float(a), 5), round(float(b), 5)) for k, (a, b) in zip(CORNERS, uvs)}
+        print(f'quad found in view {view} ({capture.name})')
+    else:
+        uv = to_uv(res['corners'], w, h)
     print(json.dumps(res, indent=1))
     if res['red_at'] != 'tl':
         print(f"WARNING: red panel is nearest the {res['red_at']} corner, not tl: check the orientation")
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from pixelmap.decode import latest_pixelmap
-    pixelmap = Path(pixelmap) if pixelmap else latest_pixelmap()
     if pixelmap is None:
         sys.exit('no tools/pixelmap/pixelmap-*.json yet: run capture.py ropes and decode.py first')
-    pm = json.loads(pixelmap.read_text())
-    pm['hub75_quad1'] = uv | {'capture': capture.name, 'frame_size': [w, h], 'check_px': res['check_px']}
+    pm['hub75_quad1'] = uv | {'capture': capture.name, 'frame_size': [w, h], 'check_px': res['check_px']} | (
+        {'view': view} if space else {})
     pixelmap.write_text(json.dumps(pm, indent=0).replace('\n', ' ').replace('} {', '},\n{') + '\n')
     im = Image.fromarray(test.astype(np.uint8))
     dr = ImageDraw.Draw(im)

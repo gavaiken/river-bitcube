@@ -766,6 +766,9 @@ function runFraction(p) {
   let done = 0; for (let k = 0; k < i; k++) done += CAL_STAGE_S[stages[k]];
   let within = p.of > 0 ? Math.min(1, (p.step ?? 0) / p.of) : 0;
   if (p.stage === 'ropes-capture' && p.pass) within = (p.pass === 'B' ? 0.5 : 0) + within / 2;   // two passes of the patterns
+  // camera views (calibrate.py views.json): each capture stage photographs every view in turn; its typical length is per view
+  const views = p.views > 1 && (p.stage === 'ropes-capture' || p.stage === 'hub75-capture') ? p.views : 1;
+  if (views > 1) within = Math.min(1, ((p.view_index ?? 0) + within) / views);
   return Math.min(1, (done + CAL_STAGE_S[p.stage] * within) / CAL_TOTAL_S);
 }
 /** The LEDs the map on this page saw, when it is the map a result names (an older result doesn't say), else null. */
@@ -902,7 +905,9 @@ function paintRun(p) {
     : p.stage === 'ropes-decode' && p.of > 0 && p.step >= 1 ? `Rope ${p.step} of ${p.of}`       // never "Rope 0 of 20": it reads as an error
     : p.stage === 'ropes-capture' && p.of > 0 && p.step > 0 ? `Pass ${p.step} of ${p.of} done` : '';
   const again = p.retakes ? `${p.retakes} ${p.retakes === 1 ? 'pattern' : 'patterns'} photographed again` : '';
-  const text = fmt.nb([line, again].filter(Boolean).join(' · '));
+  const view = p.views > 1 && p.view_index != null && (p.stage === 'ropes-capture' || p.stage === 'hub75-capture')
+    ? `Camera view ${p.view_index + 1} of ${p.views}` : '';
+  const text = fmt.nb([view, line, again].filter(Boolean).join(' · '));
   const el = $('#cal-line'); if (el && el.textContent !== text) el.textContent = text;
   // a dry run touches no lights and no camera: its stages are steps (R9 #19); what a dry run is and its steps, one rule with the
   // band and the history (model.js calDryRun, calStep: CR9 #7, #8, #16)

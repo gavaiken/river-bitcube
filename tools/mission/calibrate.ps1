@@ -14,7 +14,8 @@
 # (26 Oct: every run died 0.1 s in, as soon as this script answered). -Task is accepted and changes nothing (older
 # mission controls send it). -Detached uses Start-Process instead, only for running this script from a desktop console.
 # cancel is cooperative: calibration.cancel makes the job stop its child and restore the ropes itself (Stop-Process would
-# skip capture.py's own restore). Only if the job has not stopped after 20 s is it killed, and then "forced": true and
+# skip capture.py's own restore; the job also turns the camera back home). Only if the job has not stopped after 35 s is it killed
+# (and the camera sent home from here), and then "forced": true and
 # "restored": false tell the portal the ropes may still show a pattern (the Ropes control puts them back).
 param([ValidateSet('start', 'status', 'cancel')][string]$Action = 'status', [switch]$DryRun, [string]$DecodeOnly,
       [switch]$Task, [switch]$Detached, [ValidateSet('gallery', 'river')][string]$Cam = 'gallery')
@@ -98,7 +99,7 @@ if ($Action -eq 'cancel') {
     if (-not ($s -and $s.running -and $s.alive)) { Out-Json ([ordered]@{ ok = $true; cancelled = $false; forced = $false; note = 'nothing is running'; calibration = $s }); exit 0 }
     Set-Content -Path $cancelFile -Value ([string]$s.pid) -Encoding ascii
     # Wait for the job to write its final state (running false) or to vanish; a momentary unreadable file is neither.
-    $deadline = (Get-Date).AddSeconds(20)
+    $deadline = (Get-Date).AddSeconds(35)      # the job turns the camera home before its final write
     do {
         Start-Sleep -Milliseconds 500
         $n = Read-State
@@ -121,6 +122,13 @@ if ($Action -eq 'cancel') {
             Write-State $n
         }
         Remove-Item $lock -ErrorAction SilentlyContinue
+        # A killed job can't put the camera back: if it pans/tilts through views (views.json), send it home here.
+        $views = Join-Path $repo 'tools\cameras\views.json'
+        if ((Test-Path $views) -and ((Get-Content -Raw $views | ConvertFrom-Json).PSObject.Properties.Name -contains $Cam)) {
+            $back = & $py (Join-Path $repo 'tools\cameras\ptz.py') $Cam home 2>&1 | Select-Object -Last 1
+            $n = Read-State
+            if ($n) { Set-Field $n 'camera' ([ordered]@{ at = 'home'; home_ok = [bool]($back -notmatch 'WARNING|Error'); note = [string]$back }); Write-State $n }
+        }
     }
     Remove-Item $cancelFile -ErrorAction SilentlyContinue
     Out-Json ([ordered]@{ ok = $true; cancelled = $true; forced = $forced; calibration = (Read-State) })

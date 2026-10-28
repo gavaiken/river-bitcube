@@ -14,6 +14,8 @@ they were, also when the run fails.
 
 One ffmpeg RTSP reader stays open for the whole run (a fresh connect per frame takes seconds).
 Don't move the camera during a run; meta.json records the drift between the first and last black frame.
+A multi-view calibration (tools/mission/calibrate.py, tools/cameras/views.json) runs this once per camera view with
+--session, --view and --ptz: meta.json records them, and decode.py / hub75.py put a session's views together.
 """
 import argparse
 import json
@@ -198,6 +200,10 @@ def main():
     ap.add_argument('--cam', default='gallery')
     ap.add_argument('--brightness', type=float, default=0.4)
     ap.add_argument('--settle', type=float, help='seconds after a pattern change (default: measured)')
+    ap.add_argument('--session', help='multi-view calibration: the run these views belong to')
+    ap.add_argument('--view', help='multi-view calibration: this view\'s name (views.json)')
+    ap.add_argument('--view-index', type=int, default=0)
+    ap.add_argument('--ptz', help='multi-view calibration: the camera position, "pan,tilt" in its units')
     args = ap.parse_args()
 
     url = json.loads((REPO / 'secrets.local.json').read_text(encoding='utf-8-sig'))['cameras'][args.cam]
@@ -233,6 +239,9 @@ def main():
             'settle': settle, 'brightness_cap': CAP, 'before': before,
             'pattern_brightness': {p['name']: round(graycode.pattern_brightness(p, CAP), 4)
                                    for p in graycode.patterns()}} | info
+    if args.session:
+        meta |= {'session': args.session, 'view': args.view, 'view_index': args.view_index,
+                 'ptz': [int(x) for x in args.ptz.split(',')] if args.ptz else None}
     (out / 'meta.json').write_text(json.dumps(meta, indent=1))
     print(json.dumps({k: v for k, v in meta.items() if k != 'patterns'}))
     print(f'OUT {out}')
