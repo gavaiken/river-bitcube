@@ -151,3 +151,13 @@ Agreed with Gavin, Will and Justine after seeing it on the piece. Built in this 
 4. **Surge easing** (Q3): every surge eases into the torrent and out again over anywhere from 1 s to 1 min (chosen per surge), on an ease-in/out curve; the speed at full flow stays.
 5. **Black dots** (Q4): dark gaps moving with the flow in the surge body, as dense as the white foam.
 6. **The filling pool** (Q8), a second animation: ropes and screens as one canvas by height (the calibration); water fills from the floor like a torrent into a pool, sloshes violently and splashes to the top. It is the surge on flood days (flow in the record's top 10 %) and every fourth loop.
+
+### Round 2 milestones, as revised (27 Oct, 22:20, after the artists saw the particle windows)
+
+Done: **1** (screens like the simulator, kept as `screens.mode: water`) and **2b** (the screens as windows into one particle field in the room, measured tilts; checkpoint `remembered-particles-v1`).
+
+Next, in order:
+- **M1 The filling glass (now):** a separate show file, `river-filling.toe`. All ropes and all screens are one canvas, painted by where every LED really is (the calibration's frame, as the gallery camera sees the piece, screens at their measured tilts): water rises from the floor to the top like a glass filling, turbulent, sloshing and crashing, blues and blacks, a river filling a pool; then it drains all the way out to the floor, and again. A first sample that hits those notes, to judge on the piece.
+- **M2 Finer particles:** the particle field finer-grained and more fluid: closer to smoke or sloshing water than rope-sized drops, swirling, falling in from the top of each screen (their measured tilts) and sloshing between the screens and across the ropes, reacting at the screen edges.
+- **M3** the pool (ripples, sloshing waterline, soft edge), **M4** dynamics (continuous intensity, random and room-triggered surges), **M5** surge easing 1 s–1 min and black dots, **M6** the filling glass as the remembered river's surge on flood days and every fourth loop, **M7** debug page sliders, the simulator restored, the frame rate back to 60.
+
