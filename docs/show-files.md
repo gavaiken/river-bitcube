@@ -4,7 +4,7 @@ title: "A River Becoming: show files"
 
 # Show files: what the piece is doing
 
-For Colin and Justine (and the rest of the team): what each show file does, in plain words, and what you can ask to change. Words in **bold** are defined in the [glossary](https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md). Updated 27 Oct 2026.
+For Colin and Justine (and the rest of the team): what each show file does, in plain words, and what you can ask to change. Words in **bold** are defined in the [glossary](https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md). Updated 28 Oct 2026.
 
 A **show file** is the TouchDesigner file that runs the whole piece on bitcube: the 20 ropes and the HUB75 panels. Mission control offers these files:
 
@@ -15,6 +15,8 @@ A **show file** is the TouchDesigner file that runs the whole piece on bitcube: 
 | [**river-online-oct-23**](files/river-online-oct-23.html) | The live river and Dave's AI, set up for Gray Area (four screens, 23 Oct rope map). Shows the river camera live (over Starlink) and lets Dave's agent on Modal shape the colours and movement. | Internet, the river site online, Modal |
 | [**river-remembered**](files/river-remembered.html) | The remembered river: Dry Creek relives one real day from its past every five minutes (calm drips, a building flow, the surge down every rope into the pool, settling). Dave's agent picks the day. The boot default since 27 Oct. | Dave's agent (else bitcube's own notable days), the river camera (recorded fallback), the people counter |
 | [**river-looks**](files/river-looks.html) | The river (all looks): the remembered river and both Fill my cups in one file, faded between (auto: four remembered loops, then one fill; or a chosen look). | As the remembered river, plus the fill dials |
+| [**river-all-looks**](files/river-all-looks.html) | The river (all looks, playlist): every look in one file (the remembered river, both Fill my cups, the river's year, Combined with Modal), played in an order set in mission control's Looks tab, or one look pinned. Not offered yet. | Every look's inputs |
+| [**river-two-looks**](files/river-two-looks.html) | The river (two looks): a frozen copy of river-looks as it ran on 28 Oct, the rollback while the all-looks file grows. Not offered yet. | As river-looks |
 | [**river-filling**](files/river-filling.html) | Fill my cup (configurable): every rope and screen one canvas by real height; water fills the column from the floor to the top, turbulent, then drains out. Dials in mission control. | The calibration, the dials |
 | [**river-fill-simple**](files/river-fill-simple.html) | Fill my cup (simple): the first filling look, smooth churn and a crest, by real height. | The calibration only |
 | [**river-baseline-template**](files/river-baseline-template.html) | Starting point for making a new visualization; live river and gallery inputs | Live cameras, recorded river fallback |

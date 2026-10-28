@@ -60,8 +60,32 @@ Mission control restarts itself when `shows.json` changes on `main` (as it does 
 | `calibration.zones` | no | The remembered river's zones (`tools/pixelmap/zones-<date>.json`: LED heights, pool, eddies, rope feet, screen heights and tilts; `tools/remembered/zones.py`); `null` or absent = the show's built-in defaults. Read with `registry.zones_for()`; the people counter also reads it. |
 | `description` | yes | At most 100 words: what it does, what someone sees after switching. |
 | `inputs` | yes | What it reads: cameras, files, services (a list of short phrases). |
+| `looks` | no | Only for a file that plays several looks (`river-all-looks.toe`): its looks by name. See [Looks](#looks) below. |
 | `created_by`, `created` | yes | Who made it, `YYYY-MM-DD`. |
 | `updated_by`, `updated`, `last_change` | yes | Who changed it last, when, and one line on what. **Update them with every change to the `.toe` or its build script** (`tools/check` refuses otherwise). |
+
+## Looks
+
+A file that plays several looks in one show (the playlist file, `river-all-looks.toe`) lists them in `looks`, so whoever edits the playlist sees the same description each look had as its own show file:
+
+```json
+"looks": {
+  "remembered": {
+    "title": "The remembered river",
+    "description": "Its standalone entry's description, word for word.",
+    "inputs": ["Dave's agent (memory, surge hour, palette and knobs in gallery_state)", "..."],
+    "file": "river-remembered.toe",
+    "for": "loops"
+  }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| the key | The look's name, a lowercase slug (`remembered`, `fill-simple`, `fill-configurable`, `seasons`, `modal`): what the playlist (`River\looks\control.json`) names. |
+| `title`, `description`, `inputs` | The look's own standalone entry's, copied word for word (description at most 100 words). Mission control's Looks tab shows them when the look is configured. When the standalone entry's title, description or inputs change, change these with them. |
+| `file` | The look's standalone show file; must be a listed entry. |
+| `for` | What a playlist step counts for this look: `loops` (the remembered river: one remembered day, 5 min), `cycles` (the fills: one full fill and drain, about 84 s) or `minutes` (the river's year, Combined with Modal). |
 
 ## Calibration is pinned
 
@@ -97,7 +121,7 @@ In mission control the boot file is called **the default**: what opens when bitc
 
 Run `tools/check` before every push (Mac, Linux, or Git Bash on bitcube). It runs:
 
-- **the registry check** (`tools/shows_check.py`): the schema above; every offered `.toe`, every build script and every pinned calibration file exists; descriptions are at most 100 words; `boot_default` is an offered show; and **metadata freshness**: if the changes since `origin/main` (plus your working tree) touch an entry's `.toe` or its build script, that entry's `last_change` must change and `updated` must not go backwards (a new entry passes);
+- **the registry check** (`tools/shows_check.py`): the schema above; every offered `.toe`, every build script and every pinned calibration file exists; descriptions are at most 100 words; `looks`, when given, as above (slug names, every field, a listed file, `for` one of the three); `boot_default` is an offered show; and **metadata freshness**: if the changes since `origin/main` (plus your working tree) touch an entry's `.toe` or its build script, that entry's `last_change` must change and `updated` must not go backwards (a new entry passes);
 - the Python tests (`tools/tests`, `tools/pixelmap/tests`; a `.venv` is made on first run if pytest is missing);
 - mission control's tests (`cd mission && npm test`; `npm ci` first if `node_modules` is missing).
 

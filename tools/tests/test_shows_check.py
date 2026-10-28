@@ -84,3 +84,51 @@ def test_freshness_a_changed_toe_or_build_needs_new_metadata():
 def test_no_base_skips_freshness():
     assert shows_check.changed_paths('0000000000000000000000000000000000000000') is None
     assert shows_check.changed_paths('no-such-ref-anywhere') is None
+
+
+ALL_LOOKS = 'river-all-looks.toe'
+
+
+def all_looks(reg):
+    return next(s for s in reg['shows'] if s['file'] == ALL_LOOKS)
+
+
+def looks_problems(mutate):
+    """Problems after mutating the all-looks entry's looks object."""
+    return problems(lambda r: mutate(all_looks(r)['looks']))
+
+
+def test_the_all_looks_file_carries_each_looks_standalone_description():
+    reg = {s['file']: s for s in REAL['shows']}
+    looks = reg[ALL_LOOKS]['looks']
+    assert set(looks) == {'remembered', 'fill-simple', 'fill-configurable', 'seasons', 'modal'}
+    for name, lk in looks.items():
+        own = reg[lk['file']]
+        assert (lk['title'], lk['description'], lk['inputs']) == (own['title'], own['description'], own['inputs']), name
+    assert {n: lk['for'] for n, lk in looks.items()} == {
+        'remembered': 'loops', 'fill-simple': 'cycles', 'fill-configurable': 'cycles', 'seasons': 'minutes', 'modal': 'minutes'}
+
+
+def test_looks_are_optional_and_good_looks_pass():
+    assert problems(lambda r: all_looks(r).pop('looks')) == []
+    assert looks_problems(lambda l: l['fill-simple'].update(inputs=[])) == [], 'a look may read nothing'
+
+
+def test_bad_looks_are_named():
+    assert any('looks, if given, is an object' in p for p in looks_problems(lambda l: l.clear()))
+    assert any('looks, if given, is an object' in p for p in problems(lambda r: r['shows'][0].update(looks=['remembered'])))
+    assert any('lowercase slug' in p for p in looks_problems(lambda l: l.update(Fill_Simple=l.pop('fill-simple'))))
+    assert any('looks.modal: not an object' in p for p in looks_problems(lambda l: l.update(modal='modal')))
+    for k in ('title', 'description', 'file'):
+        assert any(f'looks.remembered: {k} must be a non-empty string' in p
+                   for p in looks_problems(lambda l, k=k: l['remembered'].pop(k)))
+    assert any('looks.seasons: description is 101 words' in p
+               for p in looks_problems(lambda l: l['seasons'].update(description=' '.join(['w'] * 101))))
+    assert looks_problems(lambda l: l['seasons'].update(description=' '.join(['w'] * 100))) == []
+    assert any('looks.modal: inputs must be a list' in p for p in looks_problems(lambda l: l['modal'].update(inputs='cams')))
+    assert any('looks.modal: inputs must be a list' in p for p in looks_problems(lambda l: l['modal'].update(inputs=[''])))
+    assert any('file river-nope.toe is not a listed show file' in p
+               for p in looks_problems(lambda l: l['remembered'].update(file='river-nope.toe')))
+    assert any('looks.remembered: for must be one of loops, cycles, minutes' in p
+               for p in looks_problems(lambda l: l['remembered'].update({'for': 'hours'})))
+    assert any('for must be one of' in p for p in looks_problems(lambda l: l['remembered'].pop('for')))
