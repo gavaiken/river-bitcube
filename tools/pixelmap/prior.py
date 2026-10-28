@@ -215,8 +215,14 @@ def main(argv=None):
             else:
                 print(f"  screen {k}: not detected -> prior")
             src = det if use == 'detected' else {c: [round(float(v), 5) for v in corners[c]] for c in corners}
-            new_sc['screens'][k] = dict(e, **{c: src[c] for c in corners}, **{'from': use})
-            new_sc['screens'][k].pop('home', None)
+            entry = dict(det if use == 'detected' else e)
+            entry.update({c: src[c] for c in corners})
+            # its corners in the camera's home view (TD convention), for the new camera
+            hp = space.uv_to_view_px('home', np.array([src[c] for c in ('tl', 'tr', 'br', 'bl')], float))
+            entry['home'] = {c: [round(float(hp[i, 0] / W), 5), round(float(1 - hp[i, 1] / H), 5)]
+                             for i, c in enumerate(('tl', 'tr', 'br', 'bl'))}
+            new_sc['screens'][k] = entry
+            new_sc['meta'].setdefault('prior', {})[k] = use
         Path(a.out_screens).write_text(json.dumps(new_sc, indent=1), encoding='utf-8')
         print(f"screens -> {a.out_screens}")
 

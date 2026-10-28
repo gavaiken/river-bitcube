@@ -209,8 +209,8 @@ test('the v2 routes on the real fixtures: lights, pixelmap, calibration (scripte
   const pm = await (await get('/api/pixelmap', on('all-good'))).json();
   assert.deepEqual(Object.keys(pm), ['map', 'screens', 'still']);
   assert.deepEqual([pm.map.file, pm.map.points.length, Object.keys(pm.map.ropes).length, pm.map.meta.frame_size, pm.map.meta.camera, !!pm.map.hub75_quad1, pm.still],
-                   ['pixelmap-2026-10-27.json', 8000, 20, [1440, 808], 'gallery', true, null]);
-  assert.deepEqual([pm.screens.file, Object.keys(pm.screens.screens), pm.screens.meta.frame_size], ['screens-2026-10-27.json', ['1', '2', '3', '4'], [1440, 808]]);
+                   ['pixelmap-2026-10-28.json', 8000, 20, [1440, 808], 'gallery', true, null]);
+  assert.deepEqual([pm.screens.file, Object.keys(pm.screens.screens), pm.screens.meta.frame_size], ['screens-2026-10-28.json', ['1', '2', '3', '4'], [1440, 808]]);
   assert.deepEqual(Object.keys(pm.screens.screens['2']).sort(), ['balance', 'bl', 'br', 'home', 'px', 'tl', 'tr', 'view']);   // a multi-view file: also its corners in the home view
 
   // who to call: names from model.js; numbers only from the untracked file
@@ -239,7 +239,7 @@ test('the v2 routes on the real fixtures: lights, pixelmap, calibration (scripte
   // the scripted calibration: none -> start -> progress -> done; the probe mirrors it; cancel; the drift flag
   // (the rebuild above went all the way: /api/calibration says which map the river's year now uses, on every phone)
   const none = await (await get('/api/calibration', on('all-good'))).json();
-  assert.deepEqual(none, { running: false, none: true, rebuilt: { at: none.rebuilt.at, map: 'pixelmap-2026-10-27.json', file: 'river-local-oct-22-seasons.toe' } });
+  assert.deepEqual(none, { running: false, none: true, rebuilt: { at: none.rebuilt.at, map: 'pixelmap-2026-10-28.json', file: 'river-local-oct-22-seasons.toe' } });
   assert.ok(Math.abs(Date.now() - none.rebuilt.at) < 60_000);
   assert.equal((await (await get('/api/calibration', on('td-low-fps'))).json()).rebuilt, null, 'the rebuild was in all-good only');
   assert.equal((await post('/api/control/calibrate', { action: 'explode' }, on('all-good'))).status, 400);
@@ -264,7 +264,7 @@ test('the v2 routes on the real fixtures: lights, pixelmap, calibration (scripte
   assert.equal((await (await post('/api/control/calibrate', { action: 'start' }, on('all-good'))).json()).error, 'a calibration is already running');
   let cal, stages = new Set();
   for (let i = 0; i < 200; i++) { await sleep(50); cal = await (await get('/api/calibration', on('all-good'))).json(); stages.add(cal.stage); if (!cal.running) break; }
-  assert.deepEqual([cal.running, cal.ok, cal.stage, cal.result.map, cal.result.points, cal.restored], [false, true, 'done', 'pixelmap-2026-10-27.json', 8000, true]);
+  assert.deepEqual([cal.running, cal.ok, cal.stage, cal.result.map, cal.result.points, cal.restored], [false, true, 'done', 'pixelmap-2026-10-28.json', 8000, true]);
   assert.ok(stages.has('ropes-capture') && stages.has('ropes-decode'), [...stages].join());
   assert.ok(cal.elapsed_s >= 2 && cal.elapsed_s < 10, `a 3 s scripted run: ${cal.elapsed_s}`);
   const s2 = await (await post('/api/control/calibrate', { action: 'start', dry_run: true }, on('all-good'))).json();

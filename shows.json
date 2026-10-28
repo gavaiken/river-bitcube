@@ -10,8 +10,8 @@
       "offered": true,
       "build": "td/build/build_seasons_local.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
-        "screens": "tools/pixelmap/screens-2026-10-27.json"
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-28.json",
+        "screens": "tools/pixelmap/screens-2026-10-28.json"
       },
       "description": "Plays the recorded river through a year that only turns forward: still white winter, green spring rain, a golden summer torrent, a rust-and-mud autumn. Automatic mode turns one season a minute; dynamic mode lets the people counter warm it toward summer as the room fills; manual picks a target season and intensity. Runs on bitcube alone, with no internet. Control page on port 9981.",
       "inputs": [
@@ -22,7 +22,7 @@
       "created": "2026-10-22",
       "updated_by": "gavin",
       "updated": "2026-10-27",
-      "last_change": "Rebuilt on the 27 Oct multi-view map (three gallery-cam views, floor to rig): 20 ropes, screens 2-4 located, 1 hand-placed"
+      "last_change": "Re-pinned to the 28 Oct calibration (camera moved; checked against 27 Oct with prior.py): rebuild to take it"
     },
     {
       "file": "river-online-oct-23.toe",
@@ -33,8 +33,8 @@
       "offered": true,
       "build": "td/build/build_river_local.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
-        "screens": "tools/pixelmap/screens-2026-10-27.json"
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-28.json",
+        "screens": "tools/pixelmap/screens-2026-10-28.json"
       },
       "description": "The river as it is right now: the river camera streams over Starlink and fills the ropes and screens, with a time-slice memory and sparkle on moving water. Dave's AI agent on Modal watches the room and the river, and every few minutes sets the palette, flow, rain and gain; his canvas plays as a faint layer. If the river feed drops it falls back to rain. Needs the internet, the river site and Modal.",
       "inputs": [
@@ -46,7 +46,7 @@
       "created": "2026-10-23",
       "updated_by": "gavin",
       "updated": "2026-10-27",
-      "last_change": "Rebuilt on the 27 Oct multi-view map (three gallery-cam views, floor to rig): 20 ropes, screens 2-4 located, 1 hand-placed"
+      "last_change": "Re-pinned to the 28 Oct calibration (camera moved; checked against 27 Oct with prior.py): rebuild to take it"
     },
     {
       "file": "river-baseline-template.toe",
@@ -55,8 +55,8 @@
       "offered": true,
       "build": "td/build/build_baseline.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
-        "screens": "tools/pixelmap/screens-2026-10-27.json"
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-28.json",
+        "screens": "tools/pixelmap/screens-2026-10-28.json"
       },
       "description": "The starting point for a new visualization: the river camera (with the recorded clip as fallback) and the gallery camera in, the river out on the four HUB75 screens and down the 20 ropes through the pinned calibration. Copy it to make your own show file; it is not meant to be shown to visitors.",
       "inputs": [
@@ -67,7 +67,7 @@
       "created": "2026-10-26",
       "updated_by": "gavin",
       "updated": "2026-10-27",
-      "last_change": "Rebuilt on the 27 Oct multi-view map (three gallery-cam views, floor to rig): 20 ropes, screens 2-4 located, 1 hand-placed"
+      "last_change": "Re-pinned to the 28 Oct calibration (camera moved; checked against 27 Oct with prior.py): rebuild to take it"
     },
     {
       "file": "river-combined-v0.toe",
@@ -76,8 +76,8 @@
       "offered": true,
       "build": "td/build/build_combined_v0.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
-        "screens": "tools/pixelmap/screens-2026-10-27.json"
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-28.json",
+        "screens": "tools/pixelmap/screens-2026-10-28.json"
       },
       "description": "Live river with recorded fallback, Gavin's fixed summer base and Dave's additive canvas. Auto recognizes two river-camera views and selects masked, shadow-lifted crops; manual framing and Original bypass remain available. The four screens can fade independently among the current look, Gavin's seasonal treatment on live footage, and his processed three-speed river recording, with manual blending or cycles spread across the screens. The ropes keep the current Combined look. Mission control saves framing, overlay and screen settings. No audio.",
       "inputs": [
@@ -89,7 +89,7 @@
       "created": "2026-10-26",
       "updated_by": "gavin",
       "updated": "2026-10-27",
-      "last_change": "Rebuilt on the 27 Oct multi-view map (three gallery-cam views, floor to rig): 20 ropes, screens 2-4 located, 1 hand-placed"
+      "last_change": "Re-pinned to the 28 Oct calibration (camera moved; checked against 27 Oct with prior.py): rebuild to take it"
     },
     {
       "file": "river-combined-modal-inputs.toe",
@@ -99,8 +99,8 @@
       "offered": true,
       "build": "td/build/build_combined_modal_inputs.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
-        "screens": "tools/pixelmap/screens-2026-10-27.json"
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-28.json",
+        "screens": "tools/pixelmap/screens-2026-10-28.json"
       },
       "description": "Will's Combined v0 (live river, summer look, framing, screen-look cycle) with one Modal input chosen in mission control: off; Dave's canvas added on top (today's look); Dave's scene recolouring the river with its palette and steering speed, density, brightness and turbulence; or Modal Frames, Dave's own pictures for each screen and the ropes, journeyed to in OKLCH and rippled by the live river. One strength slider; switching fades over 4 s without a restart. Stale Modal data fades back to plain Combined.",
       "inputs": [
@@ -112,7 +112,7 @@
       "created": "2026-10-27",
       "updated_by": "gavin",
       "updated": "2026-10-27",
-      "last_change": "Rebuilt on the 27 Oct multi-view map (three gallery-cam views, floor to rig): 20 ropes, screens 2-4 located, 1 hand-placed"
+      "last_change": "Re-pinned to the 28 Oct calibration (camera moved; checked against 27 Oct with prior.py): rebuild to take it"
     },
     {
       "file": "river-seasons-palettes.toe",
@@ -122,8 +122,8 @@
       "offered": false,
       "build": "td/build/build_seasons_palettes.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
-        "screens": "tools/pixelmap/screens-2026-10-27.json"
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-28.json",
+        "screens": "tools/pixelmap/screens-2026-10-28.json"
       },
       "description": "The river's year, unchanged in how it behaves, with new colours: an icy winter of whites and greys, a deeper teal spring, a sparse blue-green summer with few glints, and a deep cerulean autumn whose leaf flecks are pale orange. Same modes and control page (port 9981) as the river's year, which stays the default. Runs on bitcube alone.",
       "inputs": [
@@ -134,7 +134,7 @@
       "created": "2026-10-27",
       "updated_by": "gavin",
       "updated": "2026-10-27",
-      "last_change": "Pins the 27 Oct multi-view map (three gallery-cam views stitched, floor to rig); rebuild on bitcube to bake it"
+      "last_change": "Re-pinned to the 28 Oct calibration (camera moved; checked against 27 Oct with prior.py): rebuild to take it"
     },
     {
       "file": "river-remembered.toe",
@@ -144,9 +144,9 @@
       "offered": true,
       "build": "td/build/build_remembered.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
-        "screens": "tools/pixelmap/screens-2026-10-27.json",
-        "zones": "tools/pixelmap/zones-2026-10-27.json"
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-28.json",
+        "screens": "tools/pixelmap/screens-2026-10-28.json",
+        "zones": "tools/pixelmap/zones-2026-10-28.json"
       },
       "description": "Dry Creek relives one remembered day from its past every five minutes: calm drips, a building flow, then the surge, a white front falling down every rope into a churning pool, then settling. Dave's agent picks the day (bitcube picks a notable one when he is late); a new day arrives with one slow wave down the ropes. The screens show only the river's moving highlights, mostly black. People standing still slow the light and draw it to their ropes.",
       "inputs": [
@@ -160,7 +160,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-27",
-      "last_change": "M9: the river video faintly under the particle windows (screens.video, default 0.25); the build also builds river-looks.toe"
+      "last_change": "Re-pinned to the 28 Oct calibration (camera moved; checked against 27 Oct with prior.py): rebuild to take it"
     },
     {
       "file": "river-filling.toe",
@@ -170,9 +170,9 @@
       "offered": true,
       "build": "td/build/build_filling.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
-        "screens": "tools/pixelmap/screens-2026-10-27.json",
-        "zones": "tools/pixelmap/zones-2026-10-27.json"
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-28.json",
+        "screens": "tools/pixelmap/screens-2026-10-28.json",
+        "zones": "tools/pixelmap/zones-2026-10-28.json"
       },
       "description": "Every rope and every screen is one canvas, by each LED's real height above the floor. Water rises from the floor to the top like a cup filling, turbulent and sloshing, a crashing white crest, soft spray, bubbles and drips, deep colour broken by churning black; it holds at the top, then drains all the way out, and fills again (about 84 s a cycle). Dials in mission control: palette, brightness, intensity, speed.",
       "inputs": [
@@ -183,7 +183,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-27",
-      "last_change": "The zones file now loads (its path was doubled): the ropes fill by real height like the screens"
+      "last_change": "Re-pinned to the 28 Oct calibration (camera moved; checked against 27 Oct with prior.py): rebuild to take it"
     },
     {
       "file": "river-fill-simple.toe",
@@ -193,9 +193,9 @@
       "offered": true,
       "build": "td/build/build_fill_simple.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
-        "screens": "tools/pixelmap/screens-2026-10-27.json",
-        "zones": "tools/pixelmap/zones-2026-10-27.json"
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-28.json",
+        "screens": "tools/pixelmap/screens-2026-10-28.json",
+        "zones": "tools/pixelmap/zones-2026-10-28.json"
       },
       "description": "The first filling-cup look the artists liked best: every rope and screen one canvas, by real height; smooth churning blue and black water rises from the floor to the top with a slosh and a crest, soft spray and drips, holds, then drains all the way out, and again (about 84 s a cycle).",
       "inputs": [
@@ -205,7 +205,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-27",
-      "last_change": "The zones file now loads (its path was doubled): the ropes fill by real height like the screens"
+      "last_change": "Re-pinned to the 28 Oct calibration (camera moved; checked against 27 Oct with prior.py): rebuild to take it"
     },
     {
       "file": "river-looks.toe",
@@ -215,9 +215,9 @@
       "offered": true,
       "build": "td/build/build_looks.py",
       "calibration": {
-        "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
-        "screens": "tools/pixelmap/screens-2026-10-27.json",
-        "zones": "tools/pixelmap/zones-2026-10-27.json"
+        "pixelmap": "tools/pixelmap/pixelmap-2026-10-28.json",
+        "screens": "tools/pixelmap/screens-2026-10-28.json",
+        "zones": "tools/pixelmap/zones-2026-10-28.json"
       },
       "description": "The remembered river, Fill my cup (simple) and Fill my cup (configurable) in one show file, moved between by fading to black and back in, never by restarting. Auto: four loops of the remembered river, then one full Fill my cup (simple), again. Manual: fade to a chosen look and stay on it. Each look keeps its own settings (the remembered river's page, the fill dials).",
       "inputs": [
@@ -233,7 +233,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-27",
-      "last_change": "Built and running on bitcube 27 Oct 23:25 (M8); fades verified on the piece"
+      "last_change": "Re-pinned to the 28 Oct calibration (camera moved; checked against 27 Oct with prior.py): rebuild to take it"
     }
   ]
 }

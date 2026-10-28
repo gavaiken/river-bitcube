@@ -203,19 +203,19 @@ test('Lights caches frames (one fetch at a time), refetches the map per new file
 test('readLocalPixelmap and readLocalScreens read the newest files in the clone like pixelmap.ps1 prints them', () => {
   const dir = join(HERE, '..', '..', 'tools', 'pixelmap');
   const m = readLocalPixelmap(dir);
-  assert.equal(m.file, 'pixelmap-2026-10-27.json');      // the newest: the multi-view map (three camera views, floor to rig)
+  assert.equal(m.file, 'pixelmap-2026-10-28.json');      // the newest: the multi-view map (three camera views, floor to rig; 28 Oct after the camera moved)
   assert.match(m.modified, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
   assert.equal(m.points.length, 8000);
   assert.equal(Object.keys(m.ropes).length, 20);
   assert.deepEqual(m.meta.frame_size, [1440, 808]);
   assert.equal(m.meta.camera, 'gallery');
-  assert.equal(summarizePixelmap(m).date, '2026-10-27');
+  assert.equal(summarizePixelmap(m).date, '2026-10-28');
   assert.ok(m.meta.space && m.points.every((p) => 'hu' in p && 'hv' in p), 'a multi-view map: every LED also has its place in the home view');
   assert.equal(readLocalPixelmap(dir), m, 'the same file is parsed once');
   const sc = readLocalScreens(dir);
-  assert.equal(sc.file, 'screens-2026-10-27.json');
+  assert.equal(sc.file, 'screens-2026-10-28.json');
   assert.deepEqual(Object.keys(sc.screens), ['1', '2', '3', '4']);
-  assert.deepEqual(Object.keys(sc.meta).sort(), ['camera', 'capture', 'frame', 'frame_size', 'map', 'note', 'uv', 'views']);
+  assert.deepEqual(Object.keys(sc.meta).sort(), ['camera', 'capture', 'frame', 'frame_size', 'map', 'note', 'prior', 'uv', 'views']);
   assert.deepEqual([sc.screens['1'].estimated, sc.screens['2'].estimated, sc.screens['2'].tl.length], [true, undefined, 2]);
   // an empty folder, an unreadable file, a rewritten file
   const tmp = mkdtempSync(join(tmpdir(), 'pm-'));

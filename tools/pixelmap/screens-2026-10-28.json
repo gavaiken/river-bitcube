@@ -1,0 +1,182 @@
+{
+ "meta": {
+  "capture": "screens-20261028-000026",
+  "camera": "gallery",
+  "frame_size": [
+   1440,
+   808
+  ],
+  "uv": "TD convention: u left->right, v bottom->top; corners as seen (tl = top left of the upright picture)",
+  "map": "pixelmap-2026-10-28.json",
+  "frame": "the map's virtual frame (its meta.space): pin both together",
+  "views": [
+   "home",
+   "mid",
+   "up"
+  ],
+  "prior": {
+   "1": "prior",
+   "2": "detected",
+   "3": "detected",
+   "4": "detected"
+  },
+  "note": "Located 28 Oct 00:00 after the camera moved; checked against the 27 Oct calibration moved to the new camera pose (tools/pixelmap/prior.py): screens 2-4 detected within 2-9 px of the prediction, screen 1 (not seen) from the prediction."
+ },
+ "screens": {
+  "1": {
+   "tl": [
+    0.46484,
+    0.70128
+   ],
+   "tr": [
+    0.47105,
+    0.70099
+   ],
+   "br": [
+    0.47041,
+    0.61721
+   ],
+   "bl": [
+    0.46421,
+    0.61737
+   ],
+   "estimated": true,
+   "from": "hand: Gavin, panorama 27 Oct",
+   "home": {
+    "tl": [
+     0.42088,
+     1.34543
+    ],
+    "tr": [
+     0.43504,
+     1.34631
+    ],
+    "br": [
+     0.43107,
+     1.18748
+    ],
+    "bl": [
+     0.41642,
+     1.18648
+    ]
+   }
+  },
+  "2": {
+   "tl": [
+    0.53119,
+    0.67733
+   ],
+   "tr": [
+    0.53978,
+    0.68203
+   ],
+   "br": [
+    0.53845,
+    0.61345
+   ],
+   "bl": [
+    0.53042,
+    0.60694
+   ],
+   "px": 4928,
+   "balance": 0.59,
+   "view": "mid",
+   "home": {
+    "tl": [
+     0.57433,
+     1.3027
+    ],
+    "tr": [
+     0.59384,
+     1.30904
+    ],
+    "br": [
+     0.59344,
+     1.17732
+    ],
+    "bl": [
+     0.57468,
+     1.16593
+    ]
+   }
+  },
+  "3": {
+   "tl": [
+    0.45585,
+    0.46821
+   ],
+   "tr": [
+    0.47745,
+    0.45165
+   ],
+   "br": [
+    0.46096,
+    0.38004
+   ],
+   "bl": [
+    0.4405,
+    0.38866
+   ],
+   "px": 15453,
+   "balance": 0.97,
+   "view": "home",
+   "home": {
+    "tl": [
+     0.39418,
+     0.85553
+    ],
+    "tr": [
+     0.4465,
+     0.81927
+    ],
+    "br": [
+     0.40805,
+     0.64866
+    ],
+    "bl": [
+     0.36004,
+     0.66693
+    ]
+   }
+  },
+  "4": {
+   "tl": [
+    0.48164,
+    0.56533
+   ],
+   "tr": [
+    0.49959,
+    0.58012
+   ],
+   "br": [
+    0.51566,
+    0.51462
+   ],
+   "bl": [
+    0.49939,
+    0.4959
+   ],
+   "px": 14371,
+   "balance": 0.8,
+   "view": "mid",
+   "home": {
+    "tl": [
+     0.45713,
+     1.08017
+    ],
+    "tr": [
+     0.50083,
+     1.113
+    ],
+    "br": [
+     0.54031,
+     0.96688
+    ],
+    "bl": [
+     0.50035,
+     0.92435
+    ]
+   }
+  }
+ }
+}
