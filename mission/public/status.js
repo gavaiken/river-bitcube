@@ -95,8 +95,8 @@ const fileId = (f) => (FILES[f]?.kind === 'year' || FILES[f]?.kind === 'live' ? 
 /** A show's title (its preview card's), for the What's showing card and the show list. */
 const showTitle = (f) => M.showCard(f)?.title ?? cap(fileLabel(f));
 /** The kind under a show's title: composites (several looks inside, changed without a restart) say so in their own colour. */
-const kindSpan = (card) => card?.composite ? '<span class="kind composite">composite: several looks inside, changed without a restart</span>'
-  : `<span class="kind">${esc(kindWords(card?.kind))}${card ? ' · one visualization' : ''}</span>`;
+const kindSpan = (card) => card?.composite ? '<span class="kind composite">Composite: several looks inside, changed without a restart</span>'
+  : `<span class="kind">${esc(cap(kindWords(card?.kind)))}${card ? ' · one visualization' : ''}</span>`;
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const item = (m, id) => m.items.find((x) => x.id === id);
 /** Contact with mission control is lost (the model's 'page' problem, whatever else outranks it in the headline). */
@@ -695,7 +695,7 @@ function fineHTML(m) {
 function showingHTML(m) {
   const s = m.show, boot = s.boot_file?.name ?? null, running = s.file?.name ?? null, td = item(m, 'touchdesigner');
   const card = running ? M.showCard(running) : null;
-  const head = s.file ? `<b>${esc(showTitle(running))}</b>${card ? kindSpan(card) : ''}${running === boot ? '<span class="tag def">Default</span>' : ''}`
+  const head = s.file ? `<b>${esc(showTitle(running))}</b>${running === boot ? '<span class="tag def">Default</span>' : ''}${card ? `<span class="sub">${kindSpan(card)}</span>` : ''}`
     : s.restart ? `Restarting on <b>${esc(s.restart.on)}</b>` : s.held ? `Maybe restarting on <b>${esc(s.held.on)}</b>` : '<b>Not known</b>';
   const stale = td?.stale && s.file ? ` <span class="muted">· last seen ${ageSpan(td.age_s)}</span>` : '';
   const line = card?.description ? firstSentence(card.description) : s.file ? '' : (td?.summary ?? '');
@@ -986,7 +986,7 @@ function openShowList() {
   const s = model?.show;
   if (!s) return;
   const boot = s.boot_file?.name, running = s.file?.name;
-  const rows = s.show_files.map((f) => `<button type="button" class="show-row" id="show-row-${esc(fileId(f))}" data-act="show-card" data-file="${esc(f)}"><span class="t">${esc(showTitle(f))}</span>${kindSpan(M.showCard(f))}${f === running ? '<span class="tag on">Showing</span>' : ''}${f === boot ? '<span class="tag def">Default</span>' : ''}<span class="chev" aria-hidden="true">›</span></button>`).join('');
+  const rows = s.show_files.map((f) => `<button type="button" class="show-row" id="show-row-${esc(fileId(f))}" data-act="show-card" data-file="${esc(f)}"><span class="t">${esc(showTitle(f))}</span>${f === running ? '<span class="tag on">Showing</span>' : ''}${f === boot ? '<span class="tag def">Default</span>' : ''}<span class="chev" aria-hidden="true">›</span><span class="sub">${kindSpan(M.showCard(f))}</span></button>`).join('');
   sheet({ title: "Change what's showing", body: `<p>Pick a show to see what it does before switching to it.</p><div class="show-list">${rows || '<p>No shows offered.</p>'}</div>` });
 }
 /** A show's preview card, before anything is sent: Switch to it (the card is the question: the lights go dark for about a

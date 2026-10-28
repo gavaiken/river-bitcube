@@ -130,9 +130,12 @@ footer.foot .fine-print { margin-top: 4px; }
 .tag.def { color: var(--text); }
 .show-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .show-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-height: 48px; width: 100%; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-solid); color: var(--text); font: inherit; cursor: pointer; }
-.show-row { flex-wrap: nowrap; }
+.show-row { flex-wrap: wrap; }
 .show-row .t { font-weight: 750; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-.show-row .kind, .show-row .tag { flex: 0 0 auto; }
+.show-row .tag { flex: 0 0 auto; }
+/* the kind is a subtitle on its own line under the title (28 Oct: inline, a long kind squeezed the title to a letter a line) */
+.show-row .sub, .showing .showing-h .sub { flex: 1 0 100%; font-size: 14px; line-height: 1.3; font-weight: 400; }
+.show-row .sub .kind, .showing .showing-h .sub .kind { margin: 0; }
 .show-row .chev { color: var(--muted); }
 .show-card { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 4px 0 8px; }
 .show-card-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; font-size: 18px; overflow-wrap: anywhere; }
