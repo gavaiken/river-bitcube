@@ -1,9 +1,9 @@
 # Handoff: where things stand
 
-- **Holder:** Gavin (Mac mini session A, with Will and Justine on site)
-- **Where:** bitcube running **`river-looks.toe`, The river (all looks)**, auto (four remembered loops, then one Fill my cup (simple)); the boot default is still `river-remembered.toe`
-- **Updated:** 2026-10-27 23:35 PT
-- **Next holder:** session A (artists' round 2 on the remembered river), then Will (Codex) for visual tuning.
+- **Holder:** Gavin (Mac mini session A) **until noon 28 Oct**, working through the night on M2-M7 (docs/remembered-river.md); then **Will**
+- **Where:** bitcube running **`river-looks.toe`** (auto), now also the **boot default**; all four of session A's shows on the 28 Oct calibration
+- **Updated:** 2026-10-28 00:35 PT
+- **Next holder:** Will (Codex), from noon 28 Oct: visual tuning. Read the night's section below first.
 
 
 
