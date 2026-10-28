@@ -48,7 +48,7 @@ import { CAMERAS, calBlocked, checkedControl, awaitsReading, startingBlocked, te
 import { Applying } from './applying.mjs';
 import { readLocalPixelmap, summarizePixelmap, checkedCalibrate } from './lights.mjs';
 import { atlasFromUprights } from '../public/screens.js';
-import { changeLabel, FILES, MODAL_INPUT_FILE, REMEMBERED_FILE, REMEMBERED_ONLY } from '../public/model.js';
+import { changeLabel, FILES, MODAL_INPUT_FILE, REMEMBERED_FILE, REMEMBERED_ONLY, FILLING_FILE, FILLING_ONLY } from '../public/model.js';
 import { FRAME_ELEMENTS } from '../public/modal-input.js';
 
 // ---- the Modal input show (docs/modal-inputs.md) in fixture mode -------------------------------------------------------------
@@ -252,6 +252,14 @@ export class FixtureMission {
       // what Modal's public endpoints answered: the scenario's own copy, else (a world switched to the show) the fixtures' usual one
       if (!out.modal_feed) out.modal_feed = rebase(fixtureModalFeed(), delta);
     }
+    // the filling glass's dials this world set (as probe.ps1 -Action filling writes control.json), and TouchDesigner (in this world)
+    // taking them at once into its status.json
+    if (w.filling && out.probe?.value?.td?.file === FILLING_FILE && out.probe.value.td.ok !== false) {
+      const f = out.probe.value.filling ?? {}, st = f.status?.json && typeof f.status.json === 'object' ? f.status.json : {};
+      const { at, ...set } = w.filling;
+      out.probe = { ...out.probe, value: { ...out.probe.value, filling: { ...f, control: { age_s: 0, json: { ...w.filling } },
+        status: { age_s: f.status?.age_s ?? 0.4, json: { ...st, ...set } } } } };
+    }
     if (out.probe?.value) w.applying.confirm(out.probe.value, this.now());
     out.applying = w.applying.list(clock);
     const ended = w.applying.ended(clock);
@@ -306,6 +314,7 @@ export class FixtureMission {
     // the remembered river's controls only while it runs (as Mission.control, by the full check's file)
     if ((action === 'remembered-zones' || action === 'remembered-opening') && (!td || td.ok === false || running !== REMEMBERED_FILE))
       throw Object.assign(new Error(REMEMBERED_ONLY), { status: 409 });
+    if (action === 'filling' && running !== FILLING_FILE) throw Object.assign(new Error(FILLING_ONLY), { status: 409 });   // as Mission.control
     let baked = null;              // a rebuild's map: the map in use once the rebuild is confirmed (as live)
     return w.applying.run(action, checked, async () => {
       this.#log(action, checked);
@@ -329,6 +338,11 @@ export class FixtureMission {
       if (action === 'modalinput') {     // as probe.ps1 -Action modalinput: only while that show answers
         if (!td || td.ok === false || running !== MODAL_INPUT_FILE) return { ok: false, error: MODAL_INPUT_ONLY, fixture: true };
         w.modalinput = { source: checked.source, strength: checked.strength };
+      }
+      if (action === 'filling') {        // as probe.ps1 -Action filling: only while TouchDesigner answers on the filling glass
+        if (!td || td.ok === false || running !== FILLING_FILE) return { ok: false, error: FILLING_ONLY, refused: action, fixture: true };
+        w.filling = { ...checked, at: new Date(this.clock(scenario)).toISOString().replace(/\.\d{3}Z$/, 'Z') };
+        return { ok: true, fixture: true, action, body: checked, written: w.filling, note: 'fixture mode: nothing was changed' };
       }
       if (action === 'remembered-zones' || action === 'remembered-opening') {
         // as probe.ps1: control.json merged and written; TouchDesigner (in this world) takes it at once

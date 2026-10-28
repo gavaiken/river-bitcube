@@ -16,6 +16,9 @@
 //     rules '{"rules":{"cycle_seconds":240}}'   rules-reset   check   calibrate '{"action":"start"}'   calibrate '{"action":"cancel"}'
 //     modalinput '{"source":"scene","strength":0.6}'   (only while Combined with Modal Input Selector runs; source off, canvas,
 //                                                       scene or frames; strength 0 to 1)
+//     filling '{"palette":"midnight","brightness":0.8,"intensity":0.6,"speed":1}'   (only while the filling glass runs; palette
+//                                                       river, glacier, midnight or teal; brightness and intensity 0 to 1; speed
+//                                                       0.25 to 3, 1 = about 84 s a cycle; all four every time)
 //     remembered-zones '{"light":"pool","pool_height_m":0.6}'   remembered-opening '{"on":true}'   (only while the remembered
 //                                                       river runs; light off, pool or eddies; the pool line 0 to 1.5 m)
 //
@@ -33,7 +36,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const ACTIONS = ['ropes', 'hub75', 'test', 'switch', 'bootfile', 'rebuild', 'lightsroute', 'mode', 'target', 'rules', 'rules-reset', 'check', 'calibrate', 'modalinput', 'remembered-zones', 'remembered-opening'];
+export const ACTIONS = ['ropes', 'hub75', 'test', 'switch', 'bootfile', 'rebuild', 'lightsroute', 'mode', 'target', 'rules', 'rules-reset', 'check', 'calibrate', 'modalinput', 'filling', 'remembered-zones', 'remembered-opening'];
 const LIMIT_S = { status: 10, rebuild: 420 };          // a rebuild builds, saves and restarts: minutes; the rest a little past 60 s
 const socketPath = (env) => env.MISSION_CONTROL_SOCKET || join(env.MISSION_STATE_DIR || join(homedir(), 'mission-state'), 'mc.sock');
 

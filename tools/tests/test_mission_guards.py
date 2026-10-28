@@ -28,8 +28,52 @@ def test_probe_refuses_what_a_calibration_blocks_the_same_list_as_mission_contro
     ps = re.search(r"^\$CAL_BLOCKED = @\(([^)]*)\)", src, re.M)
     js = re.search(r"export const CAL_BLOCKED = \[([^\]]*)\]", MISSION_MJS.read_text(encoding='utf-8'))
     assert ps and js
-    assert quoted(ps.group(1)) == quoted(js.group(1)) == sorted(['ropes', 'hub75', 'test', 'switch', 'rebuild', 'lightsroute', 'overlay'])
+    assert quoted(ps.group(1)) == quoted(js.group(1)) == sorted(['ropes', 'hub75', 'test', 'switch', 'rebuild', 'lightsroute', 'overlay', 'filling'])
     assert WORDS in src and WORDS in MODEL_JS.read_text(encoding='utf-8'), 'the team words, the same on both sides'
+
+
+def param_block(src):
+    """probe.ps1's one shared param(...) line, split into its parameters: [(attributes, type, name, default)]."""
+    line = next(l for l in src.splitlines() if l.startswith('param('))
+    body, depth, parts, cur = line[len('param('):].rstrip(), 0, [], ''
+    assert body.endswith(')')
+    for ch in body[:-1]:
+        depth += ch in '([{' and 1 or 0
+        depth -= ch in ')]}' and 1 or 0
+        if ch == ',' and depth == 0:
+            parts.append(cur.strip()); cur = ''
+        else:
+            cur += ch
+    parts.append(cur.strip())
+    out = []
+    for p in parts:
+        m = re.fullmatch(r"((?:\[[^$]*\]\s*)*)\$(\w+)(?:\s*=\s*(.+))?", p)
+        assert m, f'unreadable parameter: {p}'
+        out.append((m.group(1), m.group(2), m.group(3)))
+    return out
+
+
+def test_probe_param_block_is_well_formed_and_the_filling_dials_match_mission_control():
+    """One shared param block for every action: each name once, and the filling glass's ranges as lib/mission.mjs checks them
+    (model.js FILLING_PALETTES and FILLING_RANGE); -Brightness is hub75's too, so the filling action checks its range itself."""
+    src = PROBE.read_text(encoding='utf-8')
+    params = param_block(src)
+    names = [n.lower() for _, n, _ in params]
+    assert len(names) == len(set(names)), 'a parameter twice'
+    attrs = {n: a for a, n, _ in params}
+    model = MODEL_JS.read_text(encoding='utf-8')
+    palettes = quoted(re.search(r"export const FILLING_PALETTES = \[([^\]]*)\]", model).group(1))
+    assert quoted(re.search(r"ValidateSet\(([^)]*)\)", attrs['Palette']).group(1)) == palettes
+    assert '[ValidateRange(0,1)]' in attrs['Intensity'] and 'Nullable[double]' in attrs['Intensity']
+    assert '[ValidateRange(0.25,3)]' in attrs['Speed'] and 'Nullable[double]' in attrs['Speed']
+    rng = re.search(r"export const FILLING_RANGE = \{ brightness: \[0, 1\], intensity: \[0, 1\], speed: \[0\.25, 3\] \}", model)
+    assert rng, 'model.js FILLING_RANGE is what probe.ps1 validates'
+    block = src[src.index("if ($Action -eq 'filling') {"):]
+    assert "$PSBoundParameters.ContainsKey('Brightness')" in block and '$Brightness -lt 0' in block and '$Brightness -gt 1' in block
+    # written only while TouchDesigner answers on the filling glass, atomically (a temporary file swapped in)
+    assert "$td.file -ne 'river-filling.toe'" in block
+    assert '.tmp' in block and '[IO.File]::Replace(' in block and '[IO.File]::Move(' in block
+    assert src.index('if ($CAL_BLOCKED -contains $Action)') < src.index("if ($Action -eq 'filling') {")
 
 
 def test_probe_checks_before_anything_acts_and_then_only_reports():

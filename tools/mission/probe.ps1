@@ -26,10 +26,18 @@
 #                                                                (off|pool|eddies) and the pool line (0..1.5 m); writes
 #                                                                River\remembered\control.json for TouchDesigner, then as above
 #   [-Action remembered-opening -On]                             the remembered river only: the opening-night switch (without -On: off)
-#   ropes, hub75, test, switch, rebuild and lightsroute are refused while a calibration runs ({ ok: false, error: "a calibration is
+#   [-Action filling -Palette midnight -Brightness 0.8 -Intensity 0.6 -Speed 1]
+#                                                                the filling glass only (TouchDesigner answering on river-filling.toe):
+#                                                                its four dials, all four every time (palette river|glacier|midnight|
+#                                                                teal; brightness and intensity 0..1; speed 0.25..3); writes
+#                                                                River\filling\control.json atomically for td/filling/fill.py, then
+#                                                                the full check. Every full check carries probe.filling { control,
+#                                                                status } (River\filling\control.json and status.json, each { age_s,
+#                                                                json }) while River\filling exists (docs/mission-ui.md)
+#   ropes, hub75, test, switch, rebuild, lightsroute, overlay and filling are refused while a calibration runs ({ ok: false, error: "a calibration is
 #   running. Stop it on the Lights page first", refused: <action> } with the status), whoever runs this script; a dry run (or a
 #   decode of earlier photos) touches no lights and refuses nothing.
-param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25, [ValidateSet('auto','original','channel','channel-multi','pool','pool-multi')][string]$Framing, [ValidateSet('current','gavin','recorded','manual','cycle')][string]$Screenmode, [ValidateRange(0,1)][double]$Screenblend=0, [ValidateSet(15,30,60,120)][int]$Screenhold=30, [ValidateRange(0,1)][Nullable[double]]$Screenrecorded, [ValidateRange(0,120)][Nullable[double]]$Screenoffset, [ValidateSet('off','canvas','scene','frames')][string]$Source, [ValidateRange(0,1)][Nullable[double]]$Strength, [ValidateSet('off','pool','eddies')][string]$Light, [ValidateRange(0,1.5)][Nullable[double]]$PoolHeight)
+param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25, [ValidateSet('auto','original','channel','channel-multi','pool','pool-multi')][string]$Framing, [ValidateSet('current','gavin','recorded','manual','cycle')][string]$Screenmode, [ValidateRange(0,1)][double]$Screenblend=0, [ValidateSet(15,30,60,120)][int]$Screenhold=30, [ValidateRange(0,1)][Nullable[double]]$Screenrecorded, [ValidateRange(0,120)][Nullable[double]]$Screenoffset, [ValidateSet('off','canvas','scene','frames')][string]$Source, [ValidateRange(0,1)][Nullable[double]]$Strength, [ValidateSet('off','pool','eddies')][string]$Light, [ValidateRange(0,1.5)][Nullable[double]]$PoolHeight, [ValidateSet('river','glacier','midnight','teal')][string]$Palette, [ValidateRange(0,1)][Nullable[double]]$Intensity, [ValidateRange(0.25,3)][Nullable[double]]$Speed)
 $ErrorActionPreference = 'Continue'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $river = Split-Path $repo -Parent
@@ -93,7 +101,7 @@ $tdPs1 = Join-Path $repo 'tools\td.ps1'
 # studio chat, a hand-run SSH). The same rule as mission control's calBlocked (mission/lib/mission.mjs CAL_BLOCKED). The
 # action is refused and only the status is reported; Stop goes through calibrate.ps1 -Action cancel, never through here. A dry
 # run (or a decode of earlier photos) photographs nothing and touches no lights or TouchDesigner: it refuses nothing.
-$CAL_BLOCKED = @('ropes', 'hub75', 'test', 'switch', 'rebuild', 'lightsroute', 'overlay')
+$CAL_BLOCKED = @('ropes', 'hub75', 'test', 'switch', 'rebuild', 'lightsroute', 'overlay', 'filling')
 if ($CAL_BLOCKED -contains $Action) {
     $calRun = $null
     $calFile = Join-Path $river 'calibration.json'
@@ -113,19 +121,20 @@ if ($CAL_BLOCKED -contains $Action) {
 # { missing = true } or { error }. A control is taken only while TouchDesigner's own status file says the remembered river runs (written
 # twice a second: under 10 s old, show river-remembered.toe); it writes control.json ({ pool_height_m, light, opening_night, at }, merged
 # with what was there) to a temporary file and swaps it in, so TouchDesigner never reads half a file. Nothing else runs.
+# A file a show writes for mission control (the remembered river's, the filling glass's): { age_s, json }, { missing = $true } or { error }.
+function Read-RiverJson([string]$path) {
+    if (-not (Test-Path -LiteralPath $path)) { return [ordered]@{ missing = $true } }
+    foreach ($try in 1..3) {        # TouchDesigner replaces its status file every second or faster; a read can land on the swap
+        try {
+            $item = Get-Item -LiteralPath $path -ErrorAction Stop
+            $json = Get-Content -Raw -LiteralPath $path -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            return [ordered]@{ age_s = [math]::Round(((Get-Date) - $item.LastWriteTime).TotalSeconds, 1); json = $json }
+        } catch { Start-Sleep -Milliseconds 60 }
+    }
+    return [ordered]@{ error = "unreadable $(Split-Path $path -Leaf)" }
+}
 if ($Action -in 'remembered', 'remembered-zones', 'remembered-opening') {
     $rdir = Join-Path $river 'remembered'
-    function Read-RiverJson([string]$path) {
-        if (-not (Test-Path -LiteralPath $path)) { return [ordered]@{ missing = $true } }
-        foreach ($try in 1..3) {        # TouchDesigner replaces status.json twice a second; a read can land on the swap
-            try {
-                $item = Get-Item -LiteralPath $path -ErrorAction Stop
-                $json = Get-Content -Raw -LiteralPath $path -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
-                return [ordered]@{ age_s = [math]::Round(((Get-Date) - $item.LastWriteTime).TotalSeconds, 1); json = $json }
-            } catch { Start-Sleep -Milliseconds 60 }
-        }
-        return [ordered]@{ error = "unreadable $(Split-Path $path -Leaf)" }
-    }
     $out.action = $Action
     $out.now_s = [math]::Round(([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) / 1000.0, 2)
     $ctlFile = Join-Path $rdir 'control.json'
@@ -233,6 +242,33 @@ elseif (Get-Process TouchDesigner -ErrorAction SilentlyContinue) {
 $out.td = $td
 # ropes / hub75 / test act through TouchDesigner: if it didn't carry the action out, the action failed (the page must not say done)
 if ($Action -in 'ropes', 'hub75', 'test', 'overlay', 'modalinput' -and $td -and $td.ok -eq $false) { $out.ok = $false; $out.error = "$($td.error)" }
+
+# The filling glass (river-filling.toe; docs/mission-ui.md "Filling glass dials"): its four dials go to control.json, which
+# td/filling/fill.py reads every second; it answers in status.json { t, palette, brightness, intensity, speed, level, phase }. Taken
+# only while TouchDesigner (just asked, above) answers on that very file; written to a temporary file and swapped in, so the show
+# never reads half a file. -Brightness is hub75's parameter too (no range of its own there): its range is checked here.
+$fdir = Join-Path $river 'filling'
+if ($Action -eq 'filling') {
+    if (-not $Palette -or -not $PSBoundParameters.ContainsKey('Brightness') -or $Brightness -lt 0 -or $Brightness -gt 1 -or $null -eq $Intensity -or $null -eq $Speed) {
+        $out.ok = $false; $out.error = 'filling needs -Palette river|glacier|midnight|teal, -Brightness 0..1, -Intensity 0..1 and -Speed 0.25..3'; $out.refused = $Action
+    } elseif (-not $td -or $td.ok -eq $false -or $td.file -ne 'river-filling.toe') {
+        $out.ok = $false; $out.error = "the filling glass isn't running (its dials work only while it runs)"; $out.refused = $Action
+    } else {
+        $ctl = [ordered]@{ palette = $Palette; brightness = [math]::Round([double]$Brightness, 2); intensity = [math]::Round([double]$Intensity, 2)
+                           speed = [math]::Round([double]$Speed, 2); at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') }
+        $ctlFile = Join-Path $fdir 'control.json'
+        try {
+            $null = New-Item -ItemType Directory -Force -Path $fdir -ErrorAction Stop
+            $tmp = "$ctlFile.tmp"
+            [IO.File]::WriteAllText($tmp, ($ctl | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding $false))
+            if (Test-Path -LiteralPath $ctlFile) { [IO.File]::Replace($tmp, $ctlFile, $null) } else { [IO.File]::Move($tmp, $ctlFile) }
+            $out.written = $ctl
+        } catch { $out.ok = $false; $out.error = "couldn't write the filling glass's control file: $($_.Exception.Message)" }
+    }
+}
+if (Test-Path -LiteralPath $fdir) {
+    $out.filling = [ordered]@{ control = Read-RiverJson (Join-Path $fdir 'control.json'); status = Read-RiverJson (Join-Path $fdir 'status.json') }
+}
 
 # Boot file: the show file Start-River.cmd opens at the next start, worked out as it does (tools/shows.ps1 Resolve-BootFile):
 # boot-file.txt's file when it names a listed show that exists (mission control sets it; the last such line wins),

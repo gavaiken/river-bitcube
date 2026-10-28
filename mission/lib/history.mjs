@@ -69,7 +69,7 @@
 //   nothing here ever throws: history never stops the show.
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { derive, FILES, intensityWord, awaited, changeLabel, confirmLimitS, EXPECT_S, calDryRun, calStep, CAL_STAGE_WORDS, MODAL_SOURCE_WORDS } from '../public/model.js';
+import { derive, FILES, intensityWord, awaited, changeLabel, confirmLimitS, EXPECT_S, calDryRun, calStep, CAL_STAGE_WORDS, MODAL_SOURCE_WORDS, fillingWords } from '../public/model.js';
 import { scrubCreds } from './scrub.mjs';
 import { REQUEST_ID } from './applying.mjs';
 
@@ -624,6 +624,7 @@ export function actionPhrase(ev) {
       const h = Number.isFinite(Number(b.pool_height_m)) && b.pool_height_m != null ? `, the pool line at ${Number(b.pool_height_m).toFixed(2)} m` : '';
       return b.light === 'pool' ? ['Lit', 'light', `the pool${h}`] : b.light === 'eddies' ? ['Lit', 'light', `the eddies${h}`] : ['Put', 'put', `the pool and eddies back to the show${h}`];
     }
+    case 'filling': return ['Set', 'set', `the filling glass to ${fillingWords(b) ?? 'new settings'}`];
     case 'remembered-opening': return ['Switched', 'switch', `opening night ${b.on === true ? 'on' : 'off'}`];
     case 'test': return b.on === true ? ['Started', 'start', 'the test pattern on the ropes and panels'] : ['Stopped', 'stop', 'the test pattern'];
     // a switch to the file TouchDesigner was running is the button's "Restart on …" (its label says so, model.js changeLabel)

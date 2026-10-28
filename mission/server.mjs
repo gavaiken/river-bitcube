@@ -83,6 +83,7 @@ import { Zipper } from './lib/zip.mjs';
 import { scrubCreds } from './lib/scrub.mjs';
 import { CONTACTS, derive, calDryRun, REGISTRY } from './public/model.js';
 import { modalInputView } from './public/modal-input.js';
+import { fillingView } from './public/filling.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const env = process.env;
@@ -262,6 +263,8 @@ function localStatus(scenario) {
     show_file: m.show.file ? { file: m.show.file.name, label: m.show.file.label } : null,
     // the Modal input show: which of Dave's inputs drives the river and what his agent is sending (model.js modalInputView)
     ...(m.show.modal_input ? { modal_input: modalInputView(m.show.modal_input, m.show.fresh.probe_age_s ?? 0, now) } : {}),
+    // the filling glass: what its dials were last set to and what it reports now (public/filling.js fillingView), while it runs
+    ...(m.show.filling ? { filling: fillingView(m.show.filling, m.show.fresh.probe_age_s ?? 0) } : {}),
     // everything Modal sends, as its public endpoints last answered (lib/modal-feed.mjs), whatever show runs
     ...(snap.modal_feed ? { modal_feed: snap.modal_feed } : {}),
     boot_file: typeof pv?.boot_file === 'string' ? pv.boot_file : null,

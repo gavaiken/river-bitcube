@@ -51,6 +51,16 @@ export const MODAL_ENTRY = {
   inputs: ['river camera (recorded clip as fallback)', "Dave's Modal canvas, scene and frames"],
   created_by: 'gavin', created: '2026-10-27', updated_by: 'gavin', updated: '2026-10-27', last_change: 'Fixture entry until the show is in shows.json',
 };
+// The filling glass (docs/mission-ui.md "Filling glass dials"): the real entry is offered: false (27 Oct, a first sample); the
+// fixtures' entry is offered, so a fixture running it reads as a listed show (later entries win in model.js FILES).
+export const FILLING_FILE = 'river-filling.toe';
+export const FILLING_ENTRY = {
+  file: FILLING_FILE, title: 'The filling glass', label: 'the filling glass', kind: 'viz', offered: true, build: 'td/build/build_filling.py',
+  calibration: { pixelmap: 'tools/pixelmap/pixelmap-2026-10-27.json', screens: 'tools/pixelmap/screens-2026-10-27.json', zones: null },
+  description: 'Every rope and every screen is one canvas, painted by where each LED really is in the room. Water rises from the floor to the top like a glass filling, turbulent and sloshing, then drains all the way out and fills again (about 84 seconds a cycle).',
+  inputs: ['the LED map and screens (calibration, measured tilts)'],
+  created_by: 'Gavin (session A)', created: '2026-10-27', updated_by: 'Gavin (session A)', updated: '2026-10-27', last_change: 'Fixture entry, offered, until the real one is',
+};
 const RULES = recorded.seasons.value.rules;            // the defaults, as served by the control page
 const ADDRESSES = recorded.probe.value.addresses;      // bitcube's addresses at Gray Area
 const SCENE_COLORS = recorded.modal.value.scene.colors;
@@ -431,6 +441,22 @@ const SCENARIOS = {
     build: () => ({ status: base(), ...CAMS_GOOD, remembered: rememberedRaw({ statusAge: 5400 }) }),
   },
 
+  // ---- the filling glass: its dials on Status (public/filling.js) ----------------------------------------------------------------
+  'filling-running': {
+    title: 'The filling glass is showing, filling up',
+    description: `TouchDesigner runs ${FILLING_FILE}. Its dials were last set 12 min ago to Midnight, brightness 80 %, intensity 60 %, speed 100 % (River\\filling\\control.json); the show's own report (status.json, written every second) says the same, 42 % full and filling. Everything else is up.`,
+    expect: { headline: 'Everything is up: the filling glass is showing; lights and cameras fine', severity: 'ok',
+      items: items({ touchdesigner: 'ok: the filling glass at 60 fps', seasons: 'ok: not used (this show has no year)', ropes: 'ok: showing the show, sender open' }),
+      action: "Nothing to do. The filling glass's dials under What's showing change its colours, brightness, turbulence and pace." },
+    build: () => fillingShow(fillingRaw({})),
+  },
+  'filling-not-running': {
+    title: "The filling glass isn't running (the river's year is)",
+    description: "TouchDesigner runs the river's year, as on any normal evening. The filling glass's files are still on bitcube from when it last ran (its status file is 2 h old): the full check reads them, but nothing shows them and its dials are refused.",
+    expect: { headline: "Everything is up: the river's year is showing; lights and cameras fine", severity: 'ok', items: OK_ITEMS, action: 'Nothing to do.' },
+    build: () => { const st = base(); st.probe.value.filling = fillingRaw({ statusAge: 7200, controlAge: 7300 }); return { status: st, ...CAMS_GOOD }; },
+  },
+
   'no-internet': {
     title: 'No internet at Gray Area',
     description: 'bitcube can\'t open connections to the internet (1.1.1.1:443 fails) while the install router answers: the router\'s uplink (the venue\'s staff Wi-Fi) has dropped. bitcube\'s existing Tailscale tunnel to the mini still carries traffic, so the mini can still probe it. Dave\'s agent is fine as seen from the mini, but the Modal link on bitcube can\'t upload: its last successful clips (the last INFO lines) are from 02:38, 20 minutes ago, and every clip since has failed with an ERROR line, so the log files are still fresh; the sync has logged nothing since its last update. The river camera (via Starlink and Will\'s tailnet) is unreachable, and the recorder\'s current run can\'t connect. The show is unaffected: the seasons file needs no network.',
@@ -508,6 +534,24 @@ function rememberedShow(remembered, { watts = [210, 200] } = {}) {
 }
 function rememberedItems() { return items({ touchdesigner: 'ok: the remembered river at 60 fps', seasons: 'ok: not used (this show has no year)', ropes: 'ok: showing the show, sender open' }); }
 
+/** probe.ps1's probe.filling at the fixtures' moment: control.json and status.json, each { age_s, json }. */
+function fillingRaw({ statusAge = 0.6, controlAge = 720, palette = 'midnight', brightness = 0.8, intensity = 0.6, speed = 1, level = 0.42, phase = 'filling' } = {}) {
+  const set = { palette, brightness, intensity, speed };
+  return { control: { age_s: controlAge, json: { ...set, at: new Date(NOW - controlAge * S).toISOString().replace(/\.\d{3}Z$/, 'Z') } },
+           status: { age_s: statusAge, json: { t: Math.round((NOW - statusAge * S) / 10) / 100, ...set, level, phase } } };
+}
+/** The filling glass running (like viz-running), with its files as given. */
+function fillingShow(filling) {
+  const st = base();
+  st.seasons = err(SEASONS_AT, 'fetch failed');
+  st.probe.value.show_files = [...SHOW_FILES, TEMPLATE_FILE, FILLING_FILE];
+  st.probe.value.td = td({ file: FILLING_FILE, fps: 60.0, ropes: { active: true, source: 'canvas', box_watts_cap: 600, status: sender({ watts: [260, 250], seq: 92 }) },
+                           seasons: null, river_cam: relay() });
+  st.probe.value.devices.seasons_page = false;
+  st.probe.value.filling = filling;
+  return { status: st, ...CAMS_GOOD };
+}
+
 /** The Modal input show running (like viz-running), with td.modal_input as given. */
 function modalShow(mi) {
   const st = base();
@@ -533,6 +577,6 @@ export function buildAll() {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const all = buildAll();
   for (const [name, fixture] of Object.entries(all)) writeFileSync(join(DIR, `${name}.json`), JSON.stringify(fixture, null, 2) + '\n');
-  writeFileSync(join(DIR, '_shows.extra.json'), JSON.stringify({ shows: [VIZ_ENTRY, MODAL_ENTRY, REMEMBERED_ENTRY] }, null, 2) + '\n');
+  writeFileSync(join(DIR, '_shows.extra.json'), JSON.stringify({ shows: [VIZ_ENTRY, MODAL_ENTRY, REMEMBERED_ENTRY, FILLING_ENTRY] }, null, 2) + '\n');
   console.log(`wrote ${Object.keys(all).length} fixtures to ${DIR}`);
 }

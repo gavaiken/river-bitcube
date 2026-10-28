@@ -104,6 +104,25 @@ export const REMEMBERED_LIGHTS = ['off', 'pool', 'eddies'];
 export const REMEMBERED_POOL_M = [0, 1.5];          // the pool line's height above the floor, metres (the slider's range)
 /** The 409 a remembered-river control gets while another show runs (the server and the pages, one sentence). */
 export const REMEMBERED_ONLY = "the remembered river isn't running (its controls work only while it runs)";
+// ---- The filling glass (river-filling.toe, docs/mission-ui.md "Filling glass dials") ---------------------------------------
+// Its four dials write River\filling\control.json on bitcube through probe.ps1 -Action filling (lib/mission.mjs planControl), only
+// while it runs; td/filling/fill.py reads that file every second and reports River\filling\status.json, which the full check
+// carries as probe.filling { control, status } (each { age_s, json }, as probe.ps1 Read-RiverJson). The card's view: public/filling.js.
+export const FILLING_FILE = 'river-filling.toe';
+export const FILLING_PALETTES = ['river', 'glacier', 'midnight', 'teal'];
+export const FILLING_PALETTE_WORDS = { river: 'River blues', glacier: 'Glacier', midnight: 'Midnight', teal: 'Teal' };
+/** Each dial's range as sent (brightness and intensity 0..1, speed 0.25..3 = 25-300 %) and the show's own defaults. */
+export const FILLING_RANGE = { brightness: [0, 1], intensity: [0, 1], speed: [0.25, 3] };
+export const FILLING_DEFAULTS = { palette: 'river', brightness: 0.8, intensity: 0.6, speed: 1 };
+/** The 409 a filling-glass change gets while another show runs (the server, fixture mode and the pages: one sentence). */
+export const FILLING_ONLY = "the filling glass isn't running (its dials work only while it runs)";
+/** "the change of the filling glass to Midnight, 80 %, intensity 60 %, speed 100 %" (changeLabel; the history says the same). */
+export function fillingWords(b) {
+  const o = obj(b) ?? {}, pct = (x) => { const n = num(typeof x === 'string' && x !== '' ? Number(x) : x); return n == null ? null : `${Math.round(n * 100)} %`; };
+  const parts = [FILLING_PALETTE_WORDS[o.palette] ?? null, pct(o.brightness), o.intensity != null && pct(o.intensity) ? `intensity ${pct(o.intensity)}` : null,
+                 o.speed != null && pct(o.speed) ? `speed ${pct(o.speed)}` : null].filter(Boolean);
+  return parts.length ? parts.join(', ') : null;
+}
 /** Each choice's button and its one line, in the pages' words (docs/mission-ui.md "Modal input"). */
 export const MODAL_SOURCE_WORDS = {
   off: { label: 'Off', line: 'The river on its own, without Modal' },
@@ -149,11 +168,11 @@ export const calNoLights = (c) => calDryRun(c) || (!!c && typeof c === 'object' 
 // Applying a change (docs/mission-ui.md): what a change in flight blocks, when the server's entry names no blocks of its own.
 // A switch or a rebuild restarts TouchDesigner on the year: everything that touches either waits; a boot-file change only
 // the file controls (and a calibration's start); a lighting port change the lights; the rest only a second copy of itself.
-const TD_TOUCHING = ['overlay', 'modalinput', 'remembered-zones', 'remembered-opening', 'ropes', 'hub75', 'test', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
+const TD_TOUCHING = ['overlay', 'modalinput', 'filling', 'remembered-zones', 'remembered-opening', 'ropes', 'hub75', 'test', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
 export const APPLY_BLOCKS = {
   switch: TD_TOUCHING, rebuild: TD_TOUCHING, bootfile: ['switch', 'rebuild', 'bootfile', 'calibrate'], lightsroute: ['ropes', 'hub75', 'test', 'lightsroute', 'calibrate'],
-  overlay: ['overlay'], modalinput: ['modalinput'], 'remembered-zones': ['remembered-zones'], 'remembered-opening': ['remembered-opening'], ropes: ['ropes', 'test'], hub75: ['hub75'], test: ['test', 'ropes', 'calibrate'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
-  calibrate: ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'calibrate', 'overlay', 'modalinput', 'remembered-zones'],   // a calibration's start: what a running one blocks, and a second start
+  overlay: ['overlay'], modalinput: ['modalinput'], filling: ['filling'], 'remembered-zones': ['remembered-zones'], 'remembered-opening': ['remembered-opening'], ropes: ['ropes', 'test'], hub75: ['hub75'], test: ['test', 'ropes', 'calibrate'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
+  calibrate: ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'calibrate', 'overlay', 'modalinput', 'filling', 'remembered-zones'],   // a calibration's start: what a running one blocks, and a second start
 };
 /** The changes that wait for the server's verdict before they are done, and what shows each on bitcube: a full check's reading
  *  (TouchDesigner answering on its file, the boot file, the lighting port: R8 #31, #32) or the run's own progress (a calibration,
@@ -170,7 +189,7 @@ export const dryStart = (action, body) => action === 'calibrate' && !!body && ty
   && (body.dry_run === true || (typeof body.decode_only === 'string' && body.decode_only !== ''));
 /** The team's words for a change in flight when the server's entry has no label of its own (an older server). */
 export const APPLY_LABEL = { switch: 'a show-file switch', rebuild: "the rebuild of the river's year", bootfile: 'the change of the default', lightsroute: 'the change of the lighting port',
-  overlay: 'the change of the overlay', modalinput: 'the change of the Modal input', ropes: 'the change of the ropes', hub75: 'the change of the panels', mode: 'the change of the mode', target: 'the change of the target', rules: 'the change of the rules',
+  overlay: 'the change of the overlay', modalinput: 'the change of the Modal input', filling: 'the change of the filling glass', ropes: 'the change of the ropes', hub75: 'the change of the panels', mode: 'the change of the mode', target: 'the change of the target', rules: 'the change of the rules',
   'rules-reset': 'the reset of the rules', calibrate: 'the calibration start', test: 'the test pattern',
   'remembered-zones': 'the change of the pool and eddies', 'remembered-opening': 'the change of opening night' };
 /** One name per change (R7 #19), made here for the server's entries (lib/applying.mjs), this phone's own applying
@@ -192,6 +211,7 @@ export function changeLabel(action, body = {}, { running = null } = {}) {
     case 'test': return b.on === true ? 'the test pattern start' : 'the test pattern stop';   // as planControl: only a real true starts it
     case 'overlay': return `the change of Dave's overlay to ${Math.round(Number(b.strength) * 100)} %${b.framing ? '; river framing: ' + b.framing : ''}${b.screens ? '; screens: ' + b.screens.mode + (b.screens.mode === 'cycle' ? ', ' + b.screens.hold + ' s per look' + (b.screens.offset !== undefined ? ', ' + b.screens.offset + ' s between screens' : '') : '') : ''}`;
     case 'modalinput': return MODAL_SOURCES.includes(b.source) ? `the change of the Modal input to ${MODAL_SOURCE_WORDS[b.source].label}${b.source !== 'off' && num(b.strength) != null ? ` at ${Math.round(Math.min(1, Math.max(0, b.strength)) * 100)} %` : ''}` : 'the change of the Modal input';
+    case 'filling': { const w = fillingWords(b); return w ? `the change of the filling glass to ${w}` : 'the change of the filling glass'; }
     case 'remembered-zones': {
       const h = num(typeof b.pool_height_m === 'string' ? Number(b.pool_height_m) : b.pool_height_m), at = h != null ? ` (pool line ${h.toFixed(2)} m)` : '';
       return b.light === 'pool' ? `the lighting of the pool${at}` : b.light === 'eddies' ? `the lighting of the eddies${at}` : b.light === 'off' ? `the pool and eddies back to the show${at}` : 'the change of the pool and eddies';
@@ -214,7 +234,7 @@ export function changeLabel(action, body = {}, { running = null } = {}) {
 }
 /** The usual time of each change, in seconds, until bitcube's reading shows it: the server's own table (lib/applying.mjs EXPECT_S,
  *  kept equal by test/model.test.mjs), so a page can say "usually about 1 min" for its own change before status.applying has it. */
-export const EXPECT_S = { overlay: 15, modalinput: 15, 'remembered-zones': 10, 'remembered-opening': 10, switch: 60, rebuild: 150, bootfile: 15, lightsroute: 20, ropes: 15, hub75: 15, test: 15, mode: 3, target: 3, rules: 3, 'rules-reset': 3, calibrate: 10,
+export const EXPECT_S = { overlay: 15, modalinput: 15, filling: 15,'remembered-zones': 10, 'remembered-opening': 10, switch: 60, rebuild: 150, bootfile: 15, lightsroute: 20, ropes: 15, hub75: 15, test: 15, mode: 3, target: 3, rules: 3, 'rules-reset': 3, calibrate: 10,
   check: 30 };   // the full check (an SSH round trip): never a lock (lib/applying.mjs records only what APPLY_BLOCKS names), only its usual time
 /** What the boot file's confirming line says in place of a usual time: its reading comes with bitcube's next full check. */
 export const BOOT_USUAL = "bitcube's full check shows it within a minute";
@@ -1042,6 +1062,9 @@ export function derive(status, nowMs) {
     // the Modal input show's reading as TouchDesigner gave it, only while it runs: pages show it through modal-input.js modalInputView
     // (with fresh.probe_age_s, so its ages read on the server's clock)
     modal_input: miRaw,
+    // the filling glass's files as the full check read them ({ control, status }; {} from a probe.ps1 that doesn't read them yet),
+    // only while it runs: pages show it through filling.js fillingView (with fresh.probe_age_s, so its ages read on the server's clock)
+    filling: tdOk && td.file === FILLING_FILE ? obj(pr?.filling) ?? {} : null,
     boot_file: bootNow,
     // the files a switch or "Set as default" offers (shows.json offered, and on bitcube)
     show_files: showFiles,
@@ -1118,6 +1141,9 @@ export function derive(status, nowMs) {
       ?? (td?.file === 'river-combined-v0.toe' && typeof td.combined?.overlay === 'number' ? null : 'combined-v0 is not running or has not answered')),
     modalinput: ctl(first('modalinput') ?? cantTd ?? cantCal ?? (testOn ? TEST_ON : null)
       ?? (td?.file === MODAL_INPUT_FILE && obj(td.modal_input) ? null : `${FILES[MODAL_INPUT_FILE]?.label ?? 'the Modal input show'} isn't running or hasn't answered`)),
+    // the filling glass's dials: only while it runs; they change what the ropes and screens show, so never during a calibration or
+    // the test pattern
+    filling: ctl(first('filling') ?? cantTd ?? cantCal ?? (testOn ? TEST_ON : null) ?? (td?.file === FILLING_FILE ? null : FILLING_ONLY)),
     // the remembered river's adjusters and opening-night switch: only while it runs; lighting the pool or the eddies changes the
     // ropes, so never during a calibration or the test pattern (the opening-night switch changes no LED by itself)
     'remembered-zones': ctl(first('remembered-zones') ?? cantTd ?? cantCal ?? (testOn ? TEST_ON : null) ?? (td?.file === REMEMBERED_FILE ? null : REMEMBERED_ONLY)),

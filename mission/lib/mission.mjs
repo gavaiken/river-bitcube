@@ -10,7 +10,8 @@ import { Applying } from './applying.mjs';
 import { checkedCalibrate, noAnswer } from './lights.mjs';
 import { ModalSeen, withSeen } from './modal-seen.mjs';
 import { ModalFeed, MODAL_FEED_EVERY_MS } from './modal-feed.mjs';
-import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights, TEST_ON, testShowing, FILES, MODAL_INPUT_FILE, MODAL_SOURCES, REMEMBERED_FILE, REMEMBERED_LIGHTS, REMEMBERED_POOL_M, REMEMBERED_ONLY } from '../public/model.js';
+import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights, TEST_ON, testShowing, FILES, MODAL_INPUT_FILE, MODAL_SOURCES,
+  FILLING_FILE, FILLING_ONLY, FILLING_PALETTES, FILLING_RANGE, REMEMBERED_FILE, REMEMBERED_LIGHTS, REMEMBERED_POOL_M, REMEMBERED_ONLY } from '../public/model.js';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 const PROBE = PS + 'probe.ps1';
@@ -21,7 +22,7 @@ export const MODAL_INPUT_ONLY = 'the Modal input is only available while the Mod
 /** Controls refused while a calibration runs (model.js refuses the same ones on the pages). A rebuild ends in the switch
  *  path (TouchDesigner stopped and restarted), so it spoils a run as surely as a switch. A dry run (or a decode of earlier
  *  photos) touches no lights, camera or TouchDesigner: it refuses none of them (R7 #20). */
-export const CAL_BLOCKED = ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'overlay'];
+export const CAL_BLOCKED = ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'overlay', 'filling'];
 /** Refused during a calibration here too, though probe.ps1's own $CAL_BLOCKED doesn't list it yet (tools/tests/test_mission_guards.py
  *  keeps CAL_BLOCKED equal to it): fold it into CAL_BLOCKED when probe.ps1 adds modalinput. */
 const CAL_BLOCKED_HERE = ['modalinput', 'remembered-zones'];
@@ -39,7 +40,7 @@ export function startingBlocked(action, probe) {
  *  decode of earlier photos) touches no lights: never refused. probe: the full check's reading as kept ({ at, value }). */
 export function testBlocked(action, body, probe) {
   const start = action === 'calibrate' && body?.action === 'start' && body.dry_run !== true && !body.decode_only;
-  if (action !== 'ropes' && action !== 'overlay' && action !== 'modalinput' && action !== 'remembered-zones' && !start) return null;
+  if (action !== 'ropes' && action !== 'overlay' && action !== 'modalinput' && action !== 'filling' && action !== 'remembered-zones' && !start) return null;
   const p = probe && typeof probe === 'object' && !probe.error ? probe.value : null;
   return testShowing(p) ? Object.assign(new Error(TEST_ON), { status: 409 }) : null;
 }
@@ -349,6 +350,9 @@ export class Mission {
       throw Object.assign(new Error('overlay control is only available while combined-v0 is running'), { status: 409 });
     if (action === 'modalinput' && this.data.probe?.value?.td?.file !== MODAL_INPUT_FILE)
       throw Object.assign(new Error(MODAL_INPUT_ONLY), { status: 409 });     // only what the whitelist read goes into status.applying
+    // the filling glass's dials only while it runs (by the full check; probe.ps1 refuses too, by TouchDesigner's own answer)
+    if (action === 'filling' && this.data.probe?.value?.td?.file !== FILLING_FILE)
+      throw Object.assign(new Error(FILLING_ONLY), { status: 409 });
     // the remembered river's controls only while it runs (by the full check; probe.ps1 refuses too, by TouchDesigner's own status file)
     if (plan.kind === 'remembered' && this.data.probe?.value?.td?.file !== REMEMBERED_FILE)
       throw Object.assign(new Error(REMEMBERED_ONLY), { status: 409 });
@@ -499,6 +503,18 @@ export function planControl(action, body = {}) {
       if (!(x >= 0 && x <= 1)) throw bad('modal input strength is 0 to 1');
       return { kind: 'probe', args: `-Action modalinput -Source ${body.source} -Strength ${x.toFixed(2)}` };
     }
+    case 'filling': {
+      // the filling glass's four dials (docs/mission-ui.md "Filling glass dials"): all four every time, each checked, nothing else
+      // on the command line; probe.ps1 writes them to River\filling\control.json for td/filling/fill.py
+      if (!FILLING_PALETTES.includes(body.palette)) throw bad(`palette is ${FILLING_PALETTES.join(', ')}`);
+      const v = {};
+      for (const k of ['brightness', 'intensity', 'speed']) {
+        const x = num(body[k]), [lo, hi] = FILLING_RANGE[k];
+        if (!(x >= lo && x <= hi)) throw bad(`${k} is ${lo} to ${hi}`);
+        v[k] = x.toFixed(2);
+      }
+      return { kind: 'probe', args: `-Action filling -Palette ${body.palette} -Brightness ${v.brightness} -Intensity ${v.intensity} -Speed ${v.speed}` };
+    }
     case 'remembered-zones': {
       // the pool and eddy adjusters (docs/remembered-river.md section 5): what to light, and optionally the pool line in metres
       if (!REMEMBERED_LIGHTS.includes(body.light)) throw bad('light is off, pool or eddies');
@@ -563,6 +579,7 @@ export function checkedControl(action, body = {}) {
     case 'overlay': return { strength: Number(num(body.strength).toFixed(2)), ...(body.framing !== undefined ? { framing: body.framing } : {}), ...(body.screens !== undefined ? { screens: checkedScreens(body.screens) } : {}) };
     case 'modalinput': return { source: body.source, strength: Number(num(body.strength).toFixed(2)) };
     case 'test': return { on: body.on === true };
+    case 'filling': return { palette: body.palette, brightness: Number(num(body.brightness).toFixed(2)), intensity: Number(num(body.intensity).toFixed(2)), speed: Number(num(body.speed).toFixed(2)) };
     case 'remembered-zones': return { light: body.light, ...(body.pool_height_m !== undefined ? { pool_height_m: Number(num(body.pool_height_m).toFixed(2)) } : {}) };
     case 'remembered-opening': return { on: body.on === true };
     case 'bootfile': case 'switch': case 'rebuild': return { file: body.file };
