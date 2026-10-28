@@ -146,3 +146,18 @@ def test_a_strong_barrel_lens_does_not_fold_far_rays_back_into_the_picture():
     assert np.isnan(cam.project(far)).all()
     corner = cam.rays([[0.0, 0.0], [W, H]])                       # the picture's own corners still round-trip
     assert np.allclose(cam.project(corner), [[0, 0], [W, H]], atol=1e-4)
+
+
+def test_image_shift_sign_and_a_view_corrected_by_it():
+    from pixelmap.capture import image_shift
+    rng = np.random.default_rng(0)
+    img = rng.uniform(0, 255, (200, 300)).astype(np.float32)
+    assert image_shift(img, np.roll(np.roll(img, 3, axis=0), -4, axis=1)) == (-4.0, 3.0)
+    cam = sphere.Cam(760, -0.2, W, H)
+    true_up = sphere.rot([-0.6, 0.01, 0])
+    sp = sphere.Space(cam, {'home': np.eye(3), 'up': true_up}, sphere.make_frame(np.array(list(ropes().values())), 760, W / H))
+    back = sphere.rot([-0.03, 0, 0]) @ true_up                      # the camera came back 1.7 degrees off
+    d = np.array([[0.05, -0.9, 1.0]]) / np.linalg.norm([0.05, -0.9, 1.0])
+    p_ref, p_now = cam.project(d @ true_up.T)[0], cam.project(d @ back.T)[0]
+    r = sp.corrected('up', p_now - p_ref)
+    assert np.degrees(np.linalg.norm(sphere.rotvec(r @ back.T))) < 0.05

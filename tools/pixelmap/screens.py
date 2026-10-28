@@ -23,6 +23,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from PIL import Image
+
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -163,7 +165,7 @@ def main():
     stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
     out = capture.REPO / 'frames' / f'screens-{stamp}'
     out.mkdir(parents=True, exist_ok=True)
-    per_view = {}
+    per_view, rots = {}, {}
     try:
         capture.td(f"c = op('{comp}'); c.par.Screentest = False; c.par.Screencorners = True\n"
                    f"op('/project1/ropes').par.Source = 'black'; op('/project1/panels').par.Brightness = {a.brightness}")
@@ -176,6 +178,12 @@ def main():
                     print(f'view {name}: camera to', c.move_to(pan, tilt, (views_cfg or {}).get('tol', 3)))
                 time.sleep(1.0)
                 per_view[name] = shoot(capture, comp, cam, out, a.settle, f'{name}-')
+                # The camera never lands exactly where the calibration had it: measure the difference in the picture.
+                ref = capture.REPO / 'frames' / v['capture'] / 'A' / 'black.png'
+                if ref.exists():
+                    s_ = capture.image_shift(np.asarray(Image.open(ref).convert('RGB'), np.float32), per_view[name][9, 0])
+                    rots[name] = space.corrected(name, s_)
+                    print(f'view {name}: picture {s_} px from the calibration\'s')
     finally:
         if space and views_cfg:
             try:
@@ -200,7 +208,8 @@ def main():
             if view is None:
                 seen[k] = {c: tuple(v) for c, v in to_uv(r['corners'], w, h).items()}
             else:
-                uvs = space.view_px_to_uv(view, np.array([r['corners'][c] for c in CORNERS]))
+                rv = rots.get(view, space.rots[view])
+                uvs = space.frame.uv(space.cam.rays(np.array([r['corners'][c] for c in CORNERS])) @ rv)
                 seen[k] = {c: (float(u), float(v)) for c, (u, v) in zip(CORNERS, uvs)}
             info[k] = {'px': r['px'], 'balance': r['balance']} | ({'view': view} if view else {})
     screens = {}
@@ -217,7 +226,7 @@ def main():
     first = next(iter(per_view))
     for k, s in screens.items():
         uvs = np.array([s[c] for c in CORNERS], float)
-        pts = [tuple(p) for p in (space.uv_to_view_px(first, uvs) if space else np.c_[uvs[:, 0] * w, (1 - uvs[:, 1]) * h])]
+        pts = [tuple(p) for p in (space.cam.project(space.frame.uv_to_dirs(uvs) @ rots.get(first, space.rots[first]).T) if space else np.c_[uvs[:, 0] * w, (1 - uvs[:, 1]) * h])]
         dr.polygon(pts, outline=(255, 255, 0) if not s.get('estimated') else (255, 128, 0))
         dr.text((pts[0][0] + 3, pts[0][1] + 3), f"{k} tl" + (' est' if s.get('estimated') else ''), fill=(255, 255, 0))
     im.save(out / 'corners.png')

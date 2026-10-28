@@ -150,6 +150,11 @@ def camera_shift(a, b):
     """How far the picture moved between two frames (px), by phase correlation of their edges: blind to the room's
     light changing (auto exposure, house lights) and mostly to people walking, which a plain frame difference is not
     (27 Oct: a still camera read as drift 37 because the room brightened)."""
+    return float(np.hypot(*image_shift(a, b)))
+
+
+def image_shift(a, b):
+    """(dx, dy) px such that what is at p in frame a is at p + (dx, dy) in frame b (phase correlation of edges)."""
     def edges(f):
         g = f.max(axis=2) if f.ndim == 3 else f
         gy, gx = np.gradient(g.astype(np.float32))
@@ -160,7 +165,7 @@ def camera_shift(a, b):
     r = np.fft.ifft2(r / (np.abs(r) + 1e-9)).real
     y, x = np.unravel_index(int(r.argmax()), r.shape)
     h, w = r.shape
-    return float(np.hypot(x if x < w / 2 else x - w, y if y < h / 2 else y - h))
+    return -float(x if x < w / 2 else x - w), -float(y if y < h / 2 else y - h)
 
 
 def disagreement(a, b, lit):

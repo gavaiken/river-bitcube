@@ -374,6 +374,17 @@ class Space:
     def uv_to_view_px(self, view, uv):
         return self.cam.project(self.frame.uv_to_dirs(uv) @ self.rots[view].T)
 
+    def corrected(self, view, shift):
+        """This view's rotation when the camera came back to it slightly off: the picture had moved by shift (dx, dy)
+        px against the calibration's frame of the view (PTZ positions don't repeat to the pixel: tilt nudges are
+        coarse). The small rotation that carries the picture's centre ray to centre + shift, then the view's own."""
+        c = self.cam.c
+        a, b = self.cam.rays([c])[0], self.cam.rays([c + np.asarray(shift, float)])[0]
+        axis = np.cross(a, b)
+        s_ = np.linalg.norm(axis)
+        r = np.eye(3) if s_ < 1e-12 else rot(axis / s_ * math.atan2(s_, float(a @ b)))
+        return r @ self.rots[view]
+
     def to_meta(self):
         return {'camera': self.cam.to_meta(), 'frame': self.frame.to_meta(),
                 'views': [self.views.get(v, {}) | {'name': v, 'rotvec': np.round(rotvec(r), 6).tolist()} for v, r in self.rots.items()]}
