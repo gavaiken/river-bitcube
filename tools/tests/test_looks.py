@@ -46,4 +46,14 @@ def test_status_shape():
     L = mixer.Looks('auto')
     st = L.status(1.0)
     assert set(st) == {'t', 'show', 'mode', 'look', 'target', 'fading', 'fade', 'auto', 'looks'}
-    assert st['auto'] == {'remembered_loops': 0, 'next': 'fill-simple'} and st['looks'] == list(mixer.LOOKS)
+    assert st['auto'] == {'remembered_loops': 0, 'next': 'fill-simple', 'flood': False, 'why': None}
+    assert st['looks'] == list(mixer.LOOKS)
+
+
+def test_a_flood_day_brings_the_fill_on_after_its_loop():
+    L = mixer.Looks('auto')
+    run(L, 1, remembered_loop=0, flow_pct=40)
+    run(L, 1, remembered_loop=1, flow_pct=96)                 # a flood day starts playing
+    assert L.target == 'remembered' and L.flood
+    run(L, 0.1, remembered_loop=2, flow_pct=30)               # its loop ended: the fill follows
+    assert L.target == 'fill-simple' and L.why == 'a flood day'

@@ -8,6 +8,7 @@ title: "The river, all looks (river-looks.toe)"
 
 - **Looks:** [the remembered river](river-remembered.html), [Fill my cup (simple)](river-fill-simple.html), [Fill my cup (configurable)](river-filling.html).
 - **Auto** (the default): four loops of the remembered river (about 20 min), then one full cycle of Fill my cup (simple) from an empty cup (about 84 s), again.
+- **A flood day** (M6, 28 Oct): when the remembered day that just played was a flood (its flow in the top 10 % of the record), the fill comes on right after that loop instead of waiting for the fourth. `status.json` `auto.flood` / `auto.why` say so.
 - **Manual:** fade to the chosen look and stay on it, looping.
 - **Settings:** each look keeps its own: the remembered river's page (pool line, opening night, the river video under the particles, M9), the fill dials.
 

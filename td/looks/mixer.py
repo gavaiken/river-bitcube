@@ -5,7 +5,9 @@ Looks: the remembered river (td/remembered/show.py), Fill my cup (simple) and Fi
 (td/filling). Each draws the same two images: the ropes (20 x 400) and the screens (256 x 512). Only the look on the
 lights runs.
 
-  auto     four loops of the remembered river, then one full cycle of Fill my cup (simple) (from an empty cup), again
+  auto     four loops of the remembered river, then one full cycle of Fill my cup (simple) (from an empty cup), again;
+           a flood day (the remembered day's flow in the top 10 % of the record, FLOOD_PCT) brings the fill on right
+           after that loop (M6: the fill as the river's flood)
   manual   fade to the chosen look and stay on it, looping
 Control: River\\looks\\control.json {"mode": "auto" | "manual", "look": ...}; status: River\\looks\\status.json twice a
 second {t, show, mode, look, target, fading, fade, auto: {remembered_loops, next}, looks}. The looks' own controls stay
@@ -22,6 +24,7 @@ import numpy as np
 LOOKS = ('remembered', 'fill-simple', 'fill-configurable')
 FADE_S = 2.0                        # to black, and back in
 AUTO_REMEMBERED_LOOPS = 4
+FLOOD_PCT = 90                      # a remembered day this high in the record is a flood: the fill follows it (M6)
 RIVER = Path(r'C:\Users\user\River')
 SHOW = 'river-looks.toe'
 
@@ -38,6 +41,8 @@ class Looks:
         self.loops_done = 0
         self.last_loop = None
         self.started = None          # a fill's cycle time when it came on (auto: one full cycle)
+        self.flood = False           # the remembered day playing now is a flood (M6)
+        self.why = None              # why the look changes next, in words (status)
         self.fill_seen_end = False
 
     def set(self, control):
@@ -50,8 +55,9 @@ class Looks:
             self.loops_done = 0
         self.mode = mode
 
-    def auto_next(self, remembered_loop=None, fill_t=None):
-        """In auto: the remembered river's loop index while it shows; a fill's cycle time while it shows."""
+    def auto_next(self, remembered_loop=None, fill_t=None, flow_pct=None):
+        """In auto: the remembered river's loop index (and its day's flow percentile) while it shows; a fill's cycle
+        time while it shows."""
         if self.mode != 'auto' or self.fading:
             return
         if self.look == 'remembered' and remembered_loop is not None:
@@ -60,8 +66,12 @@ class Looks:
             elif remembered_loop > self.last_loop:
                 self.loops_done += remembered_loop - self.last_loop
                 self.last_loop = remembered_loop
+                if self.flood:                                   # the loop that just ended relived a flood
+                    self.target, self.why = 'fill-simple', 'a flood day'
+            if self.target == 'remembered':
+                self.flood = flow_pct is not None and flow_pct >= FLOOD_PCT
             if self.loops_done >= AUTO_REMEMBERED_LOOPS:
-                self.target = 'fill-simple'
+                self.target, self.why = 'fill-simple', 'four loops'
         elif self.look.startswith('fill') and fill_t is not None:
             if self.started is None:
                 self.started = fill_t
@@ -79,7 +89,7 @@ class Looks:
                 self.look = self.target
                 self.fading = 'in'
                 changed = True
-                self.loops_done, self.last_loop, self.started = 0, None, None
+                self.loops_done, self.last_loop, self.started, self.flood = 0, None, None, False
         elif self.fading == 'in':
             self.fade = min(1.0, self.fade + dt / FADE_S)
             if self.fade >= 1.0:
@@ -92,7 +102,8 @@ class Looks:
             nxt = 'fill-simple' if self.look == 'remembered' else 'remembered'
         return {'t': now, 'show': SHOW, 'mode': self.mode, 'look': self.look, 'target': self.target,
                 'fading': self.fading, 'fade': round(self.fade, 3),
-                'auto': {'remembered_loops': self.loops_done, 'next': nxt}, 'looks': list(LOOKS)}
+                'auto': {'remembered_loops': self.loops_done, 'next': nxt, 'flood': self.flood, 'why': self.why},
+                'looks': list(LOOKS)}
 
 
 # ---- TouchDesigner side --------------------------------------------------------------------------------------------
@@ -151,7 +162,12 @@ def frame(comp):
             s = rshow.step(comp)
             if s is not None:
                 h.ropes, h.panels = s.rope_frame, s.panel_frame
-                L.auto_next(remembered_loop=s.loop.index)
+                st = (s.loop.day or {}).get('stats') or {} if hasattr(s.loop, 'day') else {}
+                try:
+                    fp = float(st.get('flow_pct')) if st.get('flow_pct') is not None else None
+                except (TypeError, ValueError):
+                    fp = None
+                L.auto_next(remembered_loop=s.loop.index, flow_pct=fp)
         else:
             variant = 'simple' if look == 'fill-simple' else 'configurable'
             f = h.fills.get(look)
