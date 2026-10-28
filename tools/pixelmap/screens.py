@@ -10,6 +10,11 @@ cyan and white when bright, greyed when dim; 23 Oct). Screens the camera can't s
 estimated place next to a neighbour and are marked "estimated": they still show the water near where they hang.
 Writes tools/pixelmap/screens-<date>.json (TD UVs, v up; read by td/build/screens.py) and
 frames/screens-<stamp>/ (frames and corners.png). Puts the show back as it was, also when the run fails.
+
+With a multi-view map (--map, default the newest; decode.py over several camera views, its meta.space) the screens
+must land in that map's frame: the camera is turned to each of the map's views (the pan/tilt recorded there), each
+screen is taken from the view that sees it, its corners are rotated into the map's frame, and the camera goes back to
+its show position (tools/cameras/views.json home) at the end, also when the run fails.
 """
 import argparse
 import json
@@ -115,14 +120,37 @@ def to_uv(corners, w, h):
             for k, (x, y) in corners.items()}
 
 
+def shoot(capture, comp, cam, out, settle, prefix=''):
+    """Black, then each quarter of each screen: {(screen, quarter): frame}, saved under out."""
+    from PIL import Image
+    frames = {}
+    shots = [(9, 0)] + [(k, q) for k in (1, 2, 3, 4) for q in (1, 2, 3, 4)]    # all black first
+    for k, q in shots:
+        capture.td(f"c = op('{comp}'); c.par.Screensolo = {k}; c.par.Screenquarter = {q}")
+        time.sleep(settle)
+        frames[k, q] = cam.after(time.monotonic(), n=3)
+        Image.fromarray(np.clip(frames[k, q], 0, 255).astype(np.uint8)).save(out / f'{prefix}screen{k}-q{q}.png')
+    return frames
+
+
 def main():
     from PIL import Image, ImageDraw
-    from pixelmap import capture
+    from pixelmap import capture, decode, sphere
     ap = argparse.ArgumentParser()
     ap.add_argument('--cam', default='gallery')
     ap.add_argument('--settle', type=float, default=2.0)
     ap.add_argument('--brightness', type=float, default=0.3, help='panels brightness while locating')
+    ap.add_argument('--map', help='the pixel map whose frame the screens go in (default: the newest)')
     a = ap.parse_args()
+    mpath = Path(a.map) if a.map else decode.latest_pixelmap()
+    space_meta = (json.loads(mpath.read_text()).get('meta') or {}).get('space') if mpath else None
+    space = sphere.Space.from_meta(space_meta) if space_meta else None
+    ptz, views_cfg = None, None
+    if space:
+        sys.path.insert(0, str(capture.REPO / 'tools' / 'cameras'))
+        import ptz
+        views_cfg = ptz.views(a.cam)
+        print('multi-view map', mpath.name, '- views', list(space.rots))
     comp = capture.td("print([p for p in ('/project1/seasons', '/project1/river_local') "
                       "if op(p) is not None and hasattr(op(p).par, 'Screencorners')][0])")['stdout'].strip()
     keep = json.loads(capture.td(
@@ -135,49 +163,70 @@ def main():
     stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
     out = capture.REPO / 'frames' / f'screens-{stamp}'
     out.mkdir(parents=True, exist_ok=True)
-    frames = {}
+    per_view = {}
     try:
         capture.td(f"c = op('{comp}'); c.par.Screentest = False; c.par.Screencorners = True\n"
                    f"op('/project1/ropes').par.Source = 'black'; op('/project1/panels').par.Brightness = {a.brightness}")
-        shots = [(9, 0)] + [(k, q) for k in (1, 2, 3, 4) for q in (1, 2, 3, 4)]    # all black first
-        for k, q in shots:
-            capture.td(f"c = op('{comp}'); c.par.Screensolo = {k}; c.par.Screenquarter = {q}")
-            time.sleep(a.settle)
-            frames[k, q] = cam.after(time.monotonic(), n=3)
-            Image.fromarray(np.clip(frames[k, q], 0, 255).astype(np.uint8)).save(out / f'screen{k}-q{q}.png')
+        if not space:
+            per_view[None] = shoot(capture, comp, cam, out, a.settle)
+        else:
+            for name, v in space.views.items():
+                with ptz.Ptz(a.cam) as c:
+                    pan, tilt = v.get('ptz') or (None, None)
+                    print(f'view {name}: camera to', c.move_to(pan, tilt, (views_cfg or {}).get('tol', 3)))
+                time.sleep(1.0)
+                per_view[name] = shoot(capture, comp, cam, out, a.settle, f'{name}-')
     finally:
+        if space and views_cfg:
+            try:
+                with ptz.Ptz(a.cam) as c:
+                    ok, pos = c.go_home(views_cfg)
+                print('camera home:', pos, '' if ok else 'NOT where it should be: python tools/cameras/ptz.py gallery home')
+            except Exception as e:
+                print(f'CAMERA NOT BACK HOME ({e}): python tools/cameras/ptz.py gallery home')
         capture.td(f"c = op('{comp}'); c.par.Screencorners = {keep['corners']}; c.par.Screensolo = {keep['solo']}; "
                    f"c.par.Screenquarter = 0; "
                    f"c.par.Screentest = {keep['test']}\nop('/project1/ropes').par.Source = '{keep['source']}'\n"
                    f"op('/project1/panels').par.Brightness = {keep['bright']}")
         cam.close()
-    black = frames[9, 0]
-    h, w = black.shape[:2]
-    seen, info = {}, {}
-    for k in (1, 2, 3, 4):
-        r = locate({q: frames[k, q] for q in (1, 2, 3, 4)}, black)
-        if r:
-            seen[k] = r['corners']
-            info[k] = {'px': r['px'], 'balance': r['balance']}
-        print(f'screen {k}:', 'seen' if r else 'not seen', r and info[k])
+    h, w = next(iter(per_view.values()))[9, 0].shape[:2]
+    seen, info = {}, {}                                    # corners in TD UVs of the map's frame (or the camera's)
+    for view, frames in per_view.items():
+        for k in (1, 2, 3, 4):
+            r = locate({q: frames[k, q] for q in (1, 2, 3, 4)}, frames[9, 0])
+            print(f'screen {k}' + (f' in view {view}' if view else '') + ':', 'seen' if r else 'not seen', r and r['px'])
+            if not r or (k in info and info[k]['px'] >= r['px']):
+                continue
+            if view is None:
+                seen[k] = {c: tuple(v) for c, v in to_uv(r['corners'], w, h).items()}
+            else:
+                uvs = space.view_px_to_uv(view, np.array([r['corners'][c] for c in CORNERS]))
+                seen[k] = {c: (float(u), float(v)) for c, (u, v) in zip(CORNERS, uvs)}
+            info[k] = {'px': r['px'], 'balance': r['balance']} | ({'view': view} if view else {})
     screens = {}
     for k in (1, 2, 3, 4):
         if k in seen:
-            screens[k] = to_uv(seen[k], w, h) | info[k]
+            screens[k] = {c: [round(min(max(u, -0.5), 1.5), 5), round(min(max(v, -0.5), 1.5), 5)] for c, (u, v) in seen[k].items()} | info[k]
         else:
             est = estimate(seen, k)
             if est:
-                screens[k] = keep_inside(to_uv(est, w, h)) | {'estimated': True, 'from': NEIGHBOUR[k][0]}
+                screens[k] = keep_inside({c: [round(u, 5), round(v, 5)] for c, (u, v) in est.items()}) | {'estimated': True, 'from': NEIGHBOUR[k][0]}
+    frames = per_view[next(iter(per_view))]
     im = Image.fromarray(np.clip(np.maximum.reduce([frames[k, q] for k in (1, 2, 3, 4) for q in (1, 2, 3, 4)]), 0, 255).astype(np.uint8))
     dr = ImageDraw.Draw(im)
+    first = next(iter(per_view))
     for k, s in screens.items():
-        pts = [(s[c][0] * w, (1 - s[c][1]) * h) for c in CORNERS]
+        uvs = np.array([s[c] for c in CORNERS], float)
+        pts = [tuple(p) for p in (space.uv_to_view_px(first, uvs) if space else np.c_[uvs[:, 0] * w, (1 - uvs[:, 1]) * h])]
         dr.polygon(pts, outline=(255, 255, 0) if not s.get('estimated') else (255, 128, 0))
         dr.text((pts[0][0] + 3, pts[0][1] + 3), f"{k} tl" + (' est' if s.get('estimated') else ''), fill=(255, 255, 0))
     im.save(out / 'corners.png')
     path = capture.REPO / 'tools' / 'pixelmap' / f"screens-{datetime.now():%Y-%m-%d}.json"
     meta = {'capture': out.name, 'camera': a.cam, 'frame_size': [w, h],
             'uv': 'TD convention: u left->right, v bottom->top; corners as seen (tl = top left of the upright picture)'}
+    if space:
+        meta |= {'map': mpath.name, 'frame': 'the map\'s virtual frame (its meta.space): pin both together',
+                 'views': list(per_view)}
     path.write_text(json.dumps({'meta': meta, 'screens': {str(k): v for k, v in screens.items()}}, indent=1) + '\n')
     print('wrote', path, 'and', out / 'corners.png')
 

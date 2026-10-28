@@ -207,7 +207,10 @@ class Ptz:
         the recorded pan/tilt. Returns (ok, (pan, tilt))."""
         home, tol = cfg['home'], cfg.get('tol', 3)
         if home.get('preset') is not None:
-            self.goto_preset(home['preset'])
+            try:
+                self.goto_preset(home['preset'])
+            except RuntimeError as e:          # not saved on this camera (yet): the closed loop below still gets there
+                self.log(f"{self.name}: preset {home['preset']} refused ({e}); moving by position instead")
         p = self.move_to(home['pan'], home['tilt'], tol)
         ok = abs(p[0] - home['pan']) <= tol and abs(p[1] - home['tilt']) <= tol
         return ok, p
