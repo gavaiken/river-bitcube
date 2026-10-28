@@ -31,6 +31,8 @@ from . import ropes as ropes_mod
 from . import status as status_mod
 from . import water as water_mod
 from . import particles as particles_mod
+from . import flow as flow_mod
+from . import ribbons as ribbons_mod
 from . import zones as zones_mod
 
 RIVER = Path(r'C:\Users\user\River')
@@ -50,7 +52,11 @@ NEUTRAL = {k: 0.5 for k in KNOBS}
 CONTROL_DEFAULT = {'pool_height_m': None, 'light': 'off', 'leds': [], 'opening_night': True,   # opening night ON unless told
                    'screen_intensity': None, 'screen_threshold': None,                          # None: water.SETTINGS
                    'screen_mode': 'particles',       # particles (one field, the screens as windows) | water (video)
-                   'screen_video': 0.25}             # M9: how strongly the river video shows under the particles (0..1)
+                   'screen_video': 0.25,             # M9: how strongly the river video shows under the particles (0..1)
+                   'screen_field': 'ribbons'}        # what the particle windows look onto (FIELDS)
+# the particle fields: ribbons (silk of glitter, Gavin's reference, 28 Oct, the default) | fine (M2's smoky streaks with
+# ledges, flow.py) | streaks (round 2b, particles.py, checkpoint remembered-particles-v1)
+FIELDS = ('ribbons', 'fine', 'streaks')
 # M4 (the artists, 27 Oct: "more dynamic"): small surges between the main ones
 MINI_EMPTY_S = (60.0, 240.0)        # an empty room: a random small surge every 1-4 minutes
 MINI_ROOM_GAP_S = 60.0              # a busy room or a lingerer: at most one a minute
@@ -89,6 +95,8 @@ def parse_control(c):
         ctl['screen_video'] = float(v)
     if sc.get('mode', c.get('screen_mode')) in ('particles', 'water'):
         ctl['screen_mode'] = sc.get('mode', c.get('screen_mode'))
+    if sc.get('field') in FIELDS:
+        ctl['screen_field'] = sc['field']
     for key, name in (('screen_intensity', 'intensity'), ('screen_threshold', 'threshold')):
         v = sc.get(name, c.get(key))
         if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 1:
@@ -256,7 +264,7 @@ class PaletteGlide:
 
 
 class Show:
-    def __init__(self, zones=None, river_dir=RIVER, data_dir=None, seed=0, show=SHOW, pixelmap=None, screens=None):
+    def __init__(self, zones=None, river_dir=RIVER, data_dir=None, seed=0, show=SHOW, pixelmap=None, screens=None, zones_path=None):
         self.z = zones or zones_mod.Zones()
         self.river = Path(river_dir)
         self.data = Path(data_dir) if data_dir else REPO / 'data' / 'remembered'
@@ -265,7 +273,10 @@ class Show:
         self.ropes = ropes_mod.Ropes(self.z, seed)
         self.panels = panels_mod.Panels(self.z, seed)
         self.water = water_mod.Water()
-        self.field = particles_mod.Field(particles_mod.Geometry(pixelmap, screens), seed)
+        self.calib = (pixelmap, screens, zones_path, seed)
+        self.fields = {}
+        self.field, self.field_kind = None, None
+        self.use_field(CONTROL_DEFAULT['screen_field'])
         self.rope_level = 0.0                 # the ropes' brightness, smoothed: how busy the particle field is
         self.mini_t0 = None                   # M4: the small surge playing now (when it started), and why
         self.mini_kind = None
@@ -298,6 +309,19 @@ class Show:
         self.ticks = 0
         self.panel_dt = 0.0
 
+    def use_field(self, kind):
+        """Switch the particle windows to another field (built once, kept); round 2b's streaks if one can't be built."""
+        if kind == self.field_kind:
+            return
+        if kind not in self.fields:
+            try:
+                self.fields[kind] = _build_field(kind, *self.calib)
+            except Exception as e:                                # noqa: BLE001
+                print(f'remembered: the {kind} field failed ({e}); using the round 2b streaks')
+                kind = 'streaks'
+                if kind not in self.fields:
+                    self.fields[kind] = _build_field(kind, *self.calib)
+        self.field, self.field_kind = self.fields[kind], kind
     def _calm_level(self, opening, preset, day, hour, room, now):
         """M4: calm is a continuous curve, not one fixed level: the remembered day's hours (its rain and flow), the
         room (busier than usual: higher) and a slow drift, around the usual calm level."""
@@ -377,6 +401,7 @@ class Show:
         if now >= self.next['control']:
             self.next['control'] = now + READ_CONTROL_S
             self.control = parse_control(read_json(self.river / 'remembered' / 'control.json'))
+            self.use_field(self.control['screen_field'])
         if now >= self.next['library']:
             self.next['library'] = now + READ_LIBRARY_S
             self.lib = clock.load_library(self.data)
@@ -465,7 +490,7 @@ class Show:
                 now=now, show=self.show, fps=self.fps, loop=snap, day=day, plan=snap['plan'], knobs=knobs,
                 reflex=self.knobs.reflex, palette=palette.as_hex(pal), heard=heard,
                 river_motion=motion, river_source=self.river_source if river_live else 'none', room=room,
-                lit_pct=self.field.lit_pct if self.control['screen_mode'] == 'particles' else self.water.lit_pct, cap=round(self.screen_level, 2), watts=self.ropes.watts, opening_night=opening,
+                field=self.field_kind, lit_pct=self.field.lit_pct if self.control['screen_mode'] == 'particles' else self.water.lit_pct, cap=round(self.screen_level, 2), watts=self.ropes.watts, opening_night=opening,
                 zones_file=self.z.file,
                 pool_height_m=self.control['pool_height_m'] if self.control['pool_height_m'] is not None
                 else self.z.pool_height_m, light=self.control['light'])
@@ -506,6 +531,14 @@ def _project_name():
         return SHOW
 
 
+def _build_field(kind, pixelmap, screens, zones_path, seed):
+    if kind == 'ribbons':
+        return ribbons_mod.Ribbons.from_files(pixelmap, screens, zones_path, seed)
+    if kind == 'fine':
+        return flow_mod.FineField.from_files(pixelmap, screens, zones_path, seed)
+    return particles_mod.Field(particles_mod.Geometry(pixelmap, screens), seed)
+
+
 def get(comp):
     h = _holder()
     if h.show is None:
@@ -513,7 +546,8 @@ def get(comp):
         mf = comp.par.Mapfile.eval() if hasattr(comp.par, 'Mapfile') else ''
         sf = comp.par.Screensfile.eval() if hasattr(comp.par, 'Screensfile') else ''
         h.show = Show(zones_mod.load(zf or None), seed=int(comp.par.Seed.eval()) if hasattr(comp.par, 'Seed') else 0,
-                      pixelmap=mf or None, screens=sf or None, show=_project_name())
+                      pixelmap=mf or None, screens=sf or None, zones_path=zf or None,
+                      show=_project_name())
     return h.show
 
 

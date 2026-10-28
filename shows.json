@@ -148,7 +148,7 @@
         "screens": "tools/pixelmap/screens-2026-10-28.json",
         "zones": "tools/pixelmap/zones-2026-10-28.json"
       },
-      "description": "Dry Creek relives one remembered day from its past every five minutes: calm drips, a building flow, then the surge, a white front falling down every rope into a churning pool, then settling. Dave's agent picks the day (bitcube picks a notable one when he is late); a new day arrives with one slow wave down the ropes. The screens show only the river's moving highlights, mostly black. People standing still slow the light and draw it to their ropes.",
+      "description": "Dry Creek relives one remembered day from its past every five minutes: calm drips, a building flow, then the surge, a white front falling down every rope into a churning pool, then settling. Dave's agent picks the day (bitcube picks a notable one when he is late); a new day arrives with one slow wave down the ropes. The screens are windows onto twisting silk ribbons of glitter falling through the room, the river's moving water faint beneath. People standing still slow the light and draw it to their ropes.",
       "inputs": [
         "Dave's agent (memory, surge hour, palette and knobs in gallery_state)",
         "remembered days (data/remembered)",
@@ -159,8 +159,8 @@
       "created_by": "Gavin (session A)",
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
-      "updated": "2026-10-27",
-      "last_change": "M7 speed: the river video under the particles at half resolution and without the linear-light round trip (8.8 -> 5.6 ms a frame offline); M3-M5 before it"
+      "updated": "2026-10-28",
+      "last_change": "Screens: silk ribbons of glitter (td/remembered/ribbons.py, Gavin's reference) as the default particle field; M2's fine smoky field with ledges (flow.py) and round 2b's streaks selectable (control.json screens.field)"
     },
     {
       "file": "river-filling.toe",
@@ -232,8 +232,8 @@
       "created_by": "Gavin (session A)",
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
-      "updated": "2026-10-27",
-      "last_change": "M7 speed: the river video under the particles at half resolution and without the linear-light round trip (8.8 -> 5.6 ms a frame offline); M3-M5 before it"
+      "updated": "2026-10-28",
+      "last_change": "Screens: silk ribbons of glitter (td/remembered/ribbons.py, Gavin's reference) as the default particle field; M2's fine smoky field with ledges (flow.py) and round 2b's streaks selectable (control.json screens.field)"
     }
   ]
 }

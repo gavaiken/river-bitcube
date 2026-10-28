@@ -17,7 +17,7 @@ def _r(x, n=2):
 
 
 def build(*, now, show, fps, loop, day, plan, knobs, reflex, palette, heard, river_motion, river_source, room,
-          lit_pct, cap, watts, opening_night, zones_file, pool_height_m, light):
+          lit_pct, cap, watts, opening_night, zones_file, pool_height_m, light, field=None):
     """The status object. loop: Loop.snapshot(); day: the playing remembered day; plan: the surge plan."""
     chosen = day.get('chosen_at') if day else None
     return {
@@ -41,7 +41,7 @@ def build(*, now, show, fps, loop, day, plan, knobs, reflex, palette, heard, riv
         'river_source': river_source,
         'room': {'presence': _r(room.get('presence'), 1), 'usual': _r(room.get('usual'), 1),
                  'relative': _r(room.get('relative')), 'lingerers': list(room.get('lingerers') or [])},
-        'panels': {'lit_pct': [int(v) for v in lit_pct], 'cap': cap},
+        'panels': {'lit_pct': [int(v) for v in lit_pct], 'cap': cap, 'field': field},
         'ropes': {'watts': int(round(watts))},
         'opening_night': bool(opening_night),
         'zones': {'file': zones_file, 'pool_height_m': _r(pool_height_m), 'light': light},

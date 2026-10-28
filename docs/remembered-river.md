@@ -121,7 +121,7 @@ TD writes `River\remembered\status.json` twice a second (read by the full check 
  "palette": ["#0b3d5c", "#1f8fb3", "#bfefff"],
  "ropes_follow": "sound", "heard": 0.62, "river_motion": 0.41, "river_source": "live",
  "room": {"presence": 3.2, "usual": 2.1, "relative": 1.5, "lingerers": [{"x": 0.4, "y": 0.8, "still_s": 12, "ropes": [7, 8]}]},
- "panels": {"lit_pct": [12, 8, 22, 4], "cap": 0.55},
+ "panels": {"lit_pct": [12, 8, 22, 4], "cap": 0.55, "field": "fine"},
  "ropes": {"watts": 410},
  "opening_night": false,
  "zones": {"file": "zones-2026-10-27.json", "pool_height_m": 0.6, "light": "off"}}
@@ -158,7 +158,7 @@ Done: **1** (screens like the simulator, kept as `screens.mode: water`) and **2b
 
 Next, in order:
 - **M1 The filling glass (now):** a separate show file, `river-filling.toe`. All ropes and all screens are one canvas, painted by where every LED really is (the calibration's frame, as the gallery camera sees the piece, screens at their measured tilts): water rises from the floor to the top like a glass filling, turbulent, sloshing and crashing, blues and blacks, a river filling a pool; then it drains all the way out to the floor, and again. A first sample that hits those notes, to judge on the piece.
-- **M2 Finer particles:** the particle field finer-grained and more fluid: closer to smoke or sloshing water than rope-sized drops, swirling, falling in from the top of each screen (their measured tilts) and sloshing between the screens and across the ropes, reacting at the screen edges.
+- **M2 Finer particles:** the particle field finer-grained and more fluid: closer to smoke or sloshing water than rope-sized drops, swirling, falling in from the top of each screen (their measured tilts) and sloshing between the screens and across the ropes, reacting at the screen edges. **Done 28 Oct:** `flow.py` (smoky streaks through a divergence-free swirl, ledges at each screen's tilted lower edge that collect and spill), then, on Gavin's reference ("too sparse and dark"), `ribbons.py`: silk ribbons of glitter, the default (`screens.field`, docs/files/river-remembered.md).
 - **M3** the pool (ripples, sloshing waterline, soft edge), **M4** dynamics (continuous intensity, random and room-triggered surges), **M5** surge easing 1 s–1 min and black dots, **M6** the filling glass as the remembered river's surge on flood days and every fourth loop, **M7** debug page sliders, the simulator restored, the frame rate back to 60.
 
 
