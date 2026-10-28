@@ -7,7 +7,7 @@
 #
 #   /project1/inputs      the template's: river cam (recorded clip when stale) -> inputs/river. Unchanged.
 #   /project1/remembered  THE SHOW. The brains are plain Python files in td/remembered/ (clock, palette, zones, ropes,
-#                         panels, status, show), imported from the repo (sys.path), reloaded by this build:
+#                         panels, water, particles, flow, ribbons, status, show), imported from the repo (sys.path), reloaded by this build:
 #                           remembered_exec (Execute DAT, every frame) -> show.frame(): reads River\gallery_state\
 #                             state.json + reflex.json, River\presence.json, River\remembered\control.json and
 #                             data\remembered\ (fallback days); runs the loop; renders; writes River\remembered\status.json
@@ -54,7 +54,7 @@ if missing:
 # package td/remembered ("remembered"), imported with <repo>/td on sys.path.
 if TD_DIR not in sys.path:
     sys.path.insert(0, TD_DIR)
-for _m in ('palette', 'zones', 'clock', 'ropes', 'panels', 'water', 'particles', 'status', 'show'):
+for _m in ('palette', 'zones', 'clock', 'ropes', 'panels', 'water', 'particles', 'flow', 'ribbons', 'status', 'show'):
     if 'remembered.' + _m in sys.modules:
         importlib.reload(sys.modules['remembered.' + _m])
 from remembered import show as remembered_show                         # noqa: E402
