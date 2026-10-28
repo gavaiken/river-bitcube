@@ -143,6 +143,7 @@ def frame(comp):
     from remembered import show as rshow
     from filling import fill as ffill
     h = _holder()
+    t_start = time.perf_counter()
     try:
         now = time.time()
         dt = 0.0 if h.last is None or now < h.last else min(0.25, now - h.last)
@@ -186,14 +187,27 @@ def frame(comp):
             fl.t, fl.last = 0.0, None
         if now - h.wrote_at > 0.5:
             h.wrote_at = now
-            _write(RIVER / 'looks' / 'status.json', L.status(now))
+            st = L.status(now)
+            st['perf'] = {'python_ms': round(getattr(h, 'ms', 0.0), 2), 'cook_ms': round(getattr(h, 'cook_ms', 0.0), 2),
+                          'frame_ms': round(getattr(h, 'frame_ms', 0.0), 2)}
+            _write(RIVER / 'looks' / 'status.json', st)
         h.error = None
     except Exception as e:                                        # noqa: BLE001 - never stop the show
         h.error = repr(e)
+    t_cook = time.perf_counter()
     for n in ('rope_render', 'panel_render'):
         o = comp.op(n)
         if o is not None:
             o.cook(force=True)
+    t_end = time.perf_counter()
+    # how long this costs, smoothed (status.json perf): our Python, drawing the two images, and the whole frame
+    a = 0.05
+    h.ms = getattr(h, 'ms', 0.0) * (1 - a) + (t_cook - t_start) * 1000 * a
+    h.cook_ms = getattr(h, 'cook_ms', 0.0) * (1 - a) + (t_end - t_cook) * 1000 * a
+    prev = getattr(h, 'prev_start', None)
+    if prev is not None and 0 < t_start - prev < 1:
+        h.frame_ms = getattr(h, 'frame_ms', 0.0) * (1 - a) + (t_start - prev) * 1000 * a
+    h.prev_start = t_start
 
 
 def cook(scriptOp):
