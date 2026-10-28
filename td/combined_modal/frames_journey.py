@@ -125,6 +125,7 @@ class Element:
     def __init__(self, name):
         self.name = name
         self.journey = None              # None until a target has arrived
+        self.ref = None                  # '<frame_id>/<element>' of the target picture
         self.now = None                  # float32 (h, w, 3), the colour shown now (before the river ripple)
         self.river_from = dict(RIVER_DEFAULT)
         self.river_to = dict(RIVER_DEFAULT)
@@ -244,6 +245,7 @@ class Frames:
             ref = f"{m['frame_id']}/{name}" if spec and 'image' in spec else (targets.get(name) if first else None)
             if ref:
                 el.set_target(load_rgb(self.folder, ref), now, seconds, easing, via, jump=first)
+                el.ref = ref
                 self.versions[name] += 1
             if spec and 'river' in spec:
                 el.set_river(spec['river'], now, 0.0 if first else seconds, easing)

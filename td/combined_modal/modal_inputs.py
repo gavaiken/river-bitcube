@@ -345,7 +345,8 @@ def status(comp):
             v = {'amount': round(r['amount'], 3), 'contrast': round(r['contrast'], 3), 'speed': round(r['speed'], 3),
                  'journey': el.progress(now)}
             params.append({'name': name, 'value': v, 'mix': round(element_mix(name), 3),
-                           'drives': f'{LABEL[name]} target picture × river ripple'})
+                           'image': f'/frames/{el.ref}.png' if el.ref else None,
+                           'drives': f'{LABEL[name]} target picture x river ripple'})
     elif eff == 'canvas':
         info = st['scene_info']
         params = [{'name': 'canvas', 'value': f"{info.get('animation') or '?'} / {info.get('palette_name') or '?'}",

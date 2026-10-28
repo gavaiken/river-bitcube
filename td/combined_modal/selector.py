@@ -24,10 +24,10 @@ import modal_scene  # noqa: E402  (pure helpers: scene_values, reflex_offsets, G
 
 KNOBS = modal_scene.KNOBS
 DRIVES = {'palette': 'river recolour (gradient map by brightness)',
-          'speed': 'summer effect speed ×0.6–1.6 (live video stays at camera speed)',
-          'density': 'summer effects amount ×0.4–1.6',
-          'brightness': 'river gain ×0.5–1.25',
-          'turbulence': 'torrent / roughness ×0.4–1.6'}
+          'speed': 'summer effect speed x0.6-1.6 (live video stays at camera speed)',
+          'density': 'summer effects amount x0.4-1.6',
+          'brightness': 'river gain x0.5-1.25',
+          'turbulence': 'torrent / roughness x0.4-1.6'}
 
 
 def checked(source, strength):

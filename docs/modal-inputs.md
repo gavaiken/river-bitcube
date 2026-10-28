@@ -30,7 +30,7 @@ Present only while this show is open (otherwise absent/`null`). Numbers are what
             "scene":{"ok":true,"age_s":42,"set_at":"2026-10-27T16:36:33-07:00","palette_name":"froth-deepening","journal":"one sentence"},
             "frames":{"ok":true,"age_s":95,"frame_id":"2026-10-27T23-52-00Z-5eb8","note":"…"}},
  "params":[{"name":"palette","value":["#dce7f5","#8faac4"],"drives":"river recolour (gradient map by brightness)"},
-           {"name":"speed","value":0.19,"effective":0.19,"drives":"summer effect speed ×0.6–1.6"},
+           {"name":"speed","value":0.19,"effective":0.19,"drives":"summer effect speed x0.6-1.6 (live video stays at camera speed)"},
            {"name":"density","value":0.41,"drives":"summer effects amount"},
            {"name":"brightness","value":0.56,"drives":"river gain"},
            {"name":"turbulence","value":0.2,"drives":"torrent / roughness"}]}
@@ -54,7 +54,7 @@ Present only while this show is open (otherwise absent/`null`). Numbers are what
 
 - **scene:** `palette` (value = the colours now, gliding; `raw` = the scene's colours), `speed`, `density`, `brightness`, `turbulence` (value 0–1 = the gliding scene value, `effective` = with reflex offsets, `factor` = applied multiplier).
 - **frames:** one per element, `screen-1` … `screen-4` then `ropes`:
-  `{"name":"screen-1","value":{"amount":0.55,"contrast":0.44,"speed":0.66,"journey":0.4},"drives":"screen 1 target picture × river ripple"}`; `journey` is 0–1 (1 = arrived), `ropes` drives "rope target picture × river ripple".
+  `{"name":"screen-1","value":{"amount":0.55,"contrast":0.44,"speed":0.66,"journey":0.4},"drives":"screen 1 target picture x river ripple"}`; `journey` is 0–1 (1 = arrived); each also has `mix` (applied mix now) and `image` (`/frames/<frame_id>/<element>.png`, the target picture it is journeying to, or `null`); `ropes` drives "rope target picture x river ripple".
 - **canvas:** `[{"name":"canvas","value":"drift / deepening-pool","drives":"additive overlay"}]` (animation / palette).
 - **off:** `[]`.
 

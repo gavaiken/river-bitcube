@@ -234,6 +234,7 @@ def test_frames_load_targets_then_journey(tmp_path):
     assert fr.elements['ropes'].river(0)['amount'] == 0.6               # river settings of older frames are not kept
     assert fr.elements['screen-1'].river(0)['amount'] == 0.3
     assert fr.arrived == 1001
+    assert fr.elements['ropes'].ref == 'a/ropes' and fr.elements['screen-1'].ref == 'b/screen-1'
     _write_frame(tmp_path, 'c', ['ropes'], (0, 255, 0), mtime=1010)
     assert fr.poll(5.0, 1010) is True
     fr.step(6.0)
