@@ -30,6 +30,11 @@ Every half second, a line in `C:\Users\user\River\presence.json`: `{"t": <unix t
 - **Also writes** `River\presence-status.json` (detector, frame time, raw and near counts); `run --debug` writes a local tuning frame `River\presence-debug.jpg` with the boxes.
 - **Live 15:40:** the seasons file went to dynamic mode by itself; empty room → target winter.
 
+## Lingerers (28 Oct, for the remembered river)
+- `presence.json` also carries `people` (foot point in the show view, box height, seconds still) and `lingerers` (still ≥ 8 s, box ≥ 40 % of the frame tall, with their two nearest ropes from the zones file); `t` and `count` are unchanged. Contract and details: [remembered-river.md §4](remembered-river.md).
+- This needs a light tracker after all (box overlap, else nearest foot point, at 2 fps), only to time how long someone stands still; nobody is identified and nothing about a person is kept 2 s after they're out of sight. "No tracking" above was true until then.
+- Rope feet come from `tools/pixelmap/zones-<date>.json` (`tools/remembered/zones.py`): `--zones=<path>`, else a show's `calibration.zones` pin, else the newest.
+
 ## Steps when we build it
 1. Install `onnxruntime` and `opencv-python` into bitcube's `.venv`; download the detector model.
 2. `tools/presence/counter.py`: RTSP (sub-stream, from `secrets.local.json`) → frames at 2 fps → count → `presence.json`; motion fallback.

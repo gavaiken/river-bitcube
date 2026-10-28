@@ -61,9 +61,51 @@ From a multi-view pixel map (`sphere.py`: every LED a 3D direction from the came
 - **Rope feet in the show view:** `[{rope, x, y}]` (0–1, top-left), for mapping lingerers to ropes.
 - **Screens:** each screen's centre height (for the order the surge front lights them) and tilt (degrees, to cancel).
 
+**As built** (`tools/remembered/zones.py`, tests `tools/tests/test_zones.py`; pure repo work, nothing touches the camera or the lights):
+
+```
+python tools/remembered/zones.py build --map tools/pixelmap/pixelmap-<date>.json [--screens tools/pixelmap/screens-<date>.json]
+       [--logs tools/remembered/logs-<date>.json] [--cam-height-m 2.0] [--pool-above-coil-m 0.25 | --pool-height-m X]
+       [--led-pitch-m X] [--rope-distance-m X] [--pitch-deg X] [--out tools/pixelmap/zones-<date>.json]
+python tools/remembered/zones.py still --map M --zones Z --logs L --image <show-view still> --out marked.png
+python tools/remembered/zones.py light pool|eddies|off|leds [ROPE:FROM-TO ...] [--zones Z] [--pool-height-m X] [--write]
+```
+
+File (`zones-<date>.json`; rope numbers 0-based as in the pixel map, LED 0 = the plug end):
+
+```json
+{"meta": {"map": "pixelmap-2026-10-28.json", "screens": "...", "logs": "...", "cam_height_m": 2.0, "coil_top_m": 0.28,
+          "pool_above_coil_m": 0.25, "pool_height_m": 0.53, "led_pitch_m": 0.0167, "down": [-0.026, 0.978, 0.208],
+          "camera_pitch_deg": 12.1, "camera_roll_deg": 1.4, "down_from": "...", "lens": "...", ...},
+ "pool_height_m": 0.53,
+ "ropes":   [{"rope": 0, "method": "floor", "distance_m": 3.6, "decoded": 204, "heights": [400 × metres, cm],
+              "extrapolated": [[0, 40], [390, 399]], "pool_from": 229, "coil_from": 254, "coil_top_m": 0.27}],
+ "feet":    [{"rope": 0, "x": 0.31, "y": 0.93}],
+ "eddies":  [{"rope": 4, "from": 250, "to": 266, "log": "big log", "decoded": 9}],
+ "screens": [{"screen": 2, "height_m": 3.1, "tilt_deg": -4.5, "distance_m": 3.4, "size_m": [0.5, 1.0], "estimated": true}]}
+```
+
+- **Down** (which way is vertical, in the map's camera coordinates): every rope is straight with evenly spaced LEDs, so its 3D direction follows from how the spacing shrinks with distance (perspective); down is the robust mean over the ropes. No camera pitch is needed (`--pitch-deg` overrides). The ropes' shared plane line would also give it, but they span too narrow a fan of directions (10° off on the 23 Oct map).
+- **Distance per rope** (`method`): `floor` = its lowest decoded LED is the floor (at least 8° below the horizon and not at the picture's bottom edge); `pitch` = from the LED pitch (median over the floor ropes, or `--led-pitch-m`) and how fast its elevation changes, used when the floor disagrees by > 25 % (the lowest LED was hidden); `given` = `--rope-distance-m`; `neighbours` = median of its two nearest ropes by direction; `borrowed` = the map missed it: its nearest rope's heights and foot (x shifted 0.02), as `fill_unmapped` does for positions.
+- **Heights:** `cam_height_m + D tan(elevation)` at decoded LEDs (median-smoothed), interpolated along the LED index, continued past the ends along the rope's own slope (up towards the rig; down to the floor, held once in the coil, never below 0) and listed in `extrapolated`. Synthetic room: every LED within 0.35 m, decoded ones within ~8 %. Everything scales with `cam_height_m`: measure it.
+- **Pool:** `coil_top_m` is where a rope leaves its straight drop for its coil (median over ropes where it is seen; 0 when none); `pool_height_m = coil_top_m + pool_above_coil_m`. `pool_from` = the first LED from the plug end at or below the pool line (400 = none); TD can recompute it live from `heights` when the line is moved.
+- **Feet:** the floor point under each rope, projected into the show view (the gallery cam's home view, as the people counter sees it).
+- **Screens** (screens file in the same frame as the map: pin them together): each hangs at the distance of the two ropes nearest it (or `--screen-distance-m`); `height_m` of its centre as for an LED; `tilt_deg` = how far its top leans from vertical as seen from the camera, + = to the right (rotate by −tilt to cancel); `size_m` is a sanity check.
+- **Logs** (`tools/remembered/logs-<date>.json`, made by marking `zones.py still`'s picture, which has a 0.1 grid, every LED, rope numbers at the feet and a tick where each pool begins): `[{"name": "big log", "polygon": [[x, y], ...]}]` in the show view (0–1, top left), or `{"frame": "map", "logs": [...]}` for the map's own frame. Eddies = runs of a rope's LEDs inside an outline (gaps ≤ 2 bridged, runs < 3 dropped).
+- **Old single-view maps** work too (each pixel through an 87° pinhole guess), but the 23 Oct map's view never reaches the floor, so it needs `--rope-distance-m` or `--led-pitch-m`.
+- **Lighting checks:** `light` prints the LED ranges and with `--write` writes `River\remembered\control.json`: `{"t": unix, "zones": {"file": "zones-….json", "light": "pool|eddies|leds|off", "leds": [{"rope", "from", "to"}], "pool_height_m"?}}` for the remembered show to light (mission control's `remembered-zones` sends the same shape).
+
 ## 4. Lingerers (people counter)
 
 `presence.json` gains `people: [{x, y, h, still_s}]` (show view, 0–1 from top left, foot point; `h` box height; `still_s` seconds without moving more than a few % of the frame) and `lingerers: [{x, y, still_s, ropes: [i, ...]}]`: people still ≥ 8 s and close (box height ≥ 40% of the frame), with their nearest ropes from the zones file.
+
+**As built** (`tools/presence/counter.py`, tests in `tools/tests/test_presence.py`): `{"t", "count", "people", "lingerers"}`; `t` and `count` unchanged, so the river's year reads it as before.
+- **Foot point** = the box's bottom centre / frame size; `h` = box height / frame height; rounded to 3 decimals, `still_s` to 0.1 s.
+- **Tracking** (2 fps): a box joins the person whose last box it overlaps (IoU ≥ 0.3), else the one whose foot is within 0.12 frame heights; best matches first. A person unseen for 1 s leaves `people`; for 2 s they're forgotten (a missed detection or two doesn't reset their clock).
+- **Still:** the clock restarts when the foot moves more than 0.04 frame heights from where it last started (box jitter doesn't reset it).
+- **Lingerer:** `still_s ≥ 8` and `h ≥ 0.40`; `ropes` = up to 2 ropes (0-based) whose feet are within 0.35 frame heights (x scaled by the frame's aspect), nearest first; `[]` when none is near or no zones file is found.
+- **Zones file:** `counter.py run --zones=<path>`, else the one a show pins as `calibration.zones` in `shows.json`, else the newest `tools/pixelmap/zones-<date>.json`; re-read when it changes. With the motion fallback (no detector), `people` and `lingerers` are `[]`.
+- All thresholds are constants at the top of `counter.py` (`LINGER_STILL_S`, `LINGER_MIN_H`, `STILL_MOVE`, `TRACK_*`, `ROPE_RADIUS`, `NEAREST_ROPES`).
 
 ## 5. TouchDesigner status (bitcube → mission control)
 
@@ -85,4 +127,4 @@ TD writes `River\remembered\status.json` twice a second (read by the full check 
  "zones": {"file": "zones-2026-10-27.json", "pool_height_m": 0.6, "light": "off"}}
 ```
 
-Mission control controls (all through `probe.ps1`, refused while another show runs): `remembered-zones {pool_height_m?, light: off|pool|eddies}`, `remembered-opening {on}`.
+Mission control controls (all through `probe.ps1`, refused while another show runs): `remembered-zones {pool_height_m?, light: off|pool|eddies}`, `remembered-opening {on}`. Both end up in `River\remembered\control.json` (shape in §3, "Lighting checks"; `zones.py light … --write` writes it too, with `light: leds` for individual LEDs).
