@@ -31,6 +31,16 @@ FRONT_EDGE_PX, FRONT_WHITE_PX, FRONT_TAIL_PX = 2.5, 20.0, 60.0
 SWELL_AT, SWELL_GAIN, SWELL_S = 0.6, 0.15, 2.0
 TOP_GLOW_M = 1.0
 DARK_SPEED = 90.0                          # px/s: the settling darkness running down a rope
+# Round 2 (the artists on site, 27 Oct): M3 the pool, M4 more dynamic, M5 easing and black dots
+POOL_BAND_M = 0.35                         # the waterline is a soft band this deep (~14 LEDs), never a hard edge
+POOL_RISE_M = (0.25, 0.45)                 # how far the waterline rises with the river's flow, and in a surge
+SLOSH_M = (0.08, 0.16)                     # the slow wave across the ropes: calm, and at full turbulence
+RIPPLE_SLOTS = 24
+RIPPLE_SPEED = 0.18                        # across the piece (0..1 of its width) per second
+RIPPLE_LIFE = 1.8                          # s
+EASE_RANGE = (1.0, 60.0)                   # s: each surge eases in and out over a duration in this range (log-uniform)
+DOT_SLOTS = 40                             # black dots in the surge body: as many as the foam
+MINI_BODY, MINI_SETTLE, MINI_GAIN = 10.0, 14.0, 0.55   # a small surge (M4: random when the room is empty, or the room's)
 
 
 def front_vmax(flow_pct):
@@ -160,6 +170,27 @@ class Ropes:
         self.base_level = 0.0
         self.overlay = None              # extra light to add (N_ROPES x N_PX x 3), set by the show each frame
         self.state = {}
+        self.rng = rng
+        feet = getattr(zones, 'feet', None)
+        rx = feet[:, 0] if feet is not None and len(feet) == R else (np.arange(R) + 0.5) / R
+        span = max(1e-3, float(rx.max() - rx.min()))
+        self.rx = ((rx - rx.min()) / span).astype(np.float32)          # each rope across the piece, 0..1 (real order)
+        self.rip_x = np.zeros(RIPPLE_SLOTS, np.float32)
+        self.rip_t0 = np.full(RIPPLE_SLOTS, -99.0, np.float32)
+        self.rip_a = np.zeros(RIPPLE_SLOTS, np.float32)
+        self.rip_i = 0
+        self.landed = np.zeros(R, bool)                                  # the surge front has reached this rope's pool
+        self.mini_landed = np.zeros(R, bool)
+        self.ease = (2.0, 8.0)                                           # this surge's ease in / out (M5)
+        self.last_tau = None
+        self.dot_x0 = rng.uniform(0, N_PX, (R, DOT_SLOTS))
+        self.dot_j = rng.uniform(-0.15, 0.15, (R, DOT_SLOTS))
+        self.dot_life = rng.uniform(0.6, 1.8, (R, DOT_SLOTS))
+        self.dot_t0 = rng.uniform(0, 1, (R, DOT_SLOTS))
+        self.dot_size = rng.integers(2, 5, (R, DOT_SLOTS))
+        self.dot_rank = rng.uniform(0, 1, (R, DOT_SLOTS))
+        self.pw = np.zeros((R, N_PX), np.float32)
+        self.hw = np.zeros(R, np.float32)
 
     # ---- envelopes ---------------------------------------------------------------------------------------------------
 
@@ -187,6 +218,37 @@ class Ropes:
             e['glow'] = 0.0
         return e
 
+    # ---- M3: the pool's waterline and ripples -------------------------------------------------------------------------
+
+    def ripple(self, rope, strength):
+        """A ring spreading from where water lands in a rope's pool, to its neighbours by real distance."""
+        i = self.rip_i % RIPPLE_SLOTS
+        self.rip_x[i], self.rip_t0[i], self.rip_a[i] = self.rx[rope], self.time, strength
+        self.rip_i += 1
+
+    def _pool_weight(self, c, fl, surge_fill, turb):
+        """0..1 per LED: how much it is in the pool. The waterline rises with the river and in a surge, sloshes as a
+        slow wave across the ropes in their real order, and is a soft band, never a hard edge."""
+        T = self.time
+        base = c.get('pool_height_m')
+        base = float(self.z.pool_height_m if base is None else base)
+        rise = POOL_RISE_M[0] * fl + POOL_RISE_M[1] * surge_fill
+        amp = SLOSH_M[0] + (SLOSH_M[1] - SLOSH_M[0]) * turb
+        slosh = amp * (np.sin(2 * np.pi * (self.rx / 0.7) - 0.55 * T) + 0.45 * np.sin(2 * np.pi * (self.rx / 0.23) + 1.2 * T))
+        self.hw = (base + rise + slosh).astype(np.float32)                # the waterline, per rope (m)
+        return smooth((self.hw[:, None] - self.z.height) / POOL_BAND_M + 0.5).astype(np.float32)
+
+    def _ripples(self):
+        """Brightness added along the ropes by the rings travelling out from where water landed."""
+        age = self.time - self.rip_t0
+        live = (age >= 0) & (age < RIPPLE_LIFE) & (self.rip_a > 0)
+        if not live.any():
+            return np.zeros(N_ROPES, np.float32)
+        d = np.abs(self.rx[:, None] - self.rip_x[None, live])
+        ring = np.exp(-((d - RIPPLE_SPEED * age[None, live]) / 0.05) ** 2)
+        fade = (1 - age[live] / RIPPLE_LIFE) ** 2 * self.rip_a[live]
+        return np.clip((ring * fade[None, :]).sum(1), 0, 1.2).astype(np.float32)
+
     # ---- one frame ------------------------------------------------------------------------------------------------
 
     def step(self, dt, c):
@@ -198,12 +260,12 @@ class Ropes:
         turb, spd, dens, bri = (float(k.get(n, 0.5)) for n in ('turbulence', 'speed', 'density', 'brightness'))
         fl = 0.5 if c.get('flow_level') is None else float(c['flow_level'])
         linger = np.asarray(c.get('linger', np.zeros(R)), np.float32)
-        pool = self.z.pool_mask(c.get('pool_height_m'))
+        pool_hard = self.z.pool_mask(c.get('pool_height_m'))
         x = self.x
         pal = c['pal']
         if c.get('light') in ('pool', 'eddies', 'leds'):                # calibration check: white, dim, safe
             if c['light'] == 'pool':
-                m = pool
+                m = pool_hard
             elif c['light'] == 'eddies':
                 m = self.z.eddy_mask
             else:
@@ -217,6 +279,19 @@ class Ropes:
         dry = bool(c.get('dry'))
         settling = tau_s is not None
         rr = (tau_s / ls) if settling else 0.0
+        # M5: a new surge picks how it eases in and out (1 s to 1 min, log-uniform: mostly a few seconds)
+        if tau is not None and (self.last_tau is None or tau < self.last_tau):
+            lo, hi = math.log(EASE_RANGE[0]), math.log(EASE_RANGE[1])
+            win = max(2.0, (c['times']['settle'] - c['times']['surge']) * 0.75) if c.get('times') else 30.0
+            self.ease = (min(math.exp(self.rng.uniform(lo, hi)), win), math.exp(self.rng.uniform(lo, hi)))
+            self.landed[:] = False
+        self.last_tau = tau
+        # M3: the pool's soft, moving waterline (a surge fills it, then it drains back)
+        surge_fill = 0.0
+        if tau is not None:
+            surge_fill = float(smooth(tau / 6.0)) * ((1 - float(smooth(rr / 0.8))) if settling else 1.0)
+        pool = self._pool_weight(c, fl, max(surge_fill, float(c.get('mini_fill', 0.0))), turb)
+        self.pw = pool
 
         # speeds (px/s): drips in calm/building, the body in the surge, easing back while settling
         nz = 0.5 * (np.sin(2 * np.pi * self.noise_f[:, 0] * T + self.noise_p[:, 0])
@@ -246,10 +321,19 @@ class Ropes:
         drip = np.where(d < tail, np.exp(-3.0 * d / tail), 0.0) + 0.10 * join
         level = c['calm_level'] + (0.55 - c['calm_level']) * b
         i_calm = act * drip * level
-        i_calm = np.where(pool, 0.0, i_calm)
+        # drips landing in the pool send ripples to the neighbouring ropes (M3)
+        rate = act[:, 0] * v_drip * mul / self.spacing[:, 0] * dt * 0.6
+        for r in np.nonzero(self.rng.random(R) < rate)[0]:
+            self.ripple(int(r), 0.35 + 0.3 * b)
+        i_calm = i_calm * (1 - pool)
         breathe = (0.12 + 0.05 * math.sin(2 * math.pi * T / 9.0)) * (c['calm_level'] / 0.35)
         pool_tex = 0.8 + 0.2 * np.sin(2 * np.pi * (self.pool_phase - x) / 37.0 + self.tex_p[:, :1])
-        i_pool = np.where(pool, breathe * pool_tex, 0.0)
+        # soft bubbles rising in the pool: round, slow, never single-LED flicker
+        bub = np.sin(2 * np.pi * (self.z.height * 2.5 - 0.35 * T) + self.tex_p[:, :1]) * np.sin(2 * np.pi * (T * 0.21 + self.rx[:, None] * 3.1))
+        bubbles = 0.35 * smooth((bub - 0.55) / 0.45)
+        near_line = np.exp(-np.maximum(self.hw[:, None] - self.z.height, 0) / 0.35)
+        rip = self._ripples()[:, None] * near_line
+        i_pool = pool * (breathe * pool_tex + 0.25 * bubbles + 0.45 * rip)
         sat_calm = 0.55 * (1 - b)
         mid = norm(pal_mod.desaturate(pal['mid'], sat_calm))
         light = norm(pal_mod.desaturate(pal['light'], sat_calm))
@@ -262,7 +346,16 @@ class Ropes:
 
         frame = calm
         if tau is not None:
-            frame = frame + self._surge(c, tau, tau_s, ls, rr, ph, pool, dt, turb, dens, bri, dry)
+            frame = frame + self._surge(c, tau, tau_s, ls, rr, ph, pool, dt, turb, dens, bri, dry, self.ease, self.landed)
+        # M4: a smaller surge of its own (random when the room is empty, or brought on by the room), between main ones
+        mt = c.get('mini_tau')
+        if mt is not None and tau is None:
+            if mt < 0.05:
+                self.mini_landed[:] = False
+            ms = mt - MINI_BODY if mt > MINI_BODY else None
+            mrr = (ms / MINI_SETTLE) if ms is not None else 0.0
+            frame = frame + MINI_GAIN * self._surge(c, mt, ms, MINI_SETTLE, mrr, ph, pool, dt, turb, dens, bri, dry,
+                                                    c.get('mini_ease', (2.0, 6.0)), self.mini_landed)
 
         # ---- the decision wave: one slow wave of light down every rope
         if c.get('wave') is not None:
@@ -279,7 +372,7 @@ class Ropes:
         self.state = {'b': b, 'tau': tau, 'tau_s': tau_s}
         return self._finish(frame, dt)
 
-    def _surge(self, c, tau, tau_s, ls, rr, ph, pool, dt, turb, dens, bri, dry):
+    def _surge(self, c, tau, tau_s, ls, rr, ph, pool, dt, turb, dens, bri, dry, ease=(2.0, 8.0), landed=None):
         R = N_ROPES
         x = self.x
         pal = c['pal']
@@ -350,9 +443,27 @@ class Ropes:
                 foam += 0.5 * benv[:, j:j + 1] * prof
         foam = np.clip(foam, 0, 1) * behind
         foam_col = norm(pal['foam'])
+        # M5: black dots in the body, moving with the flow, about as dense as the foam: contrast in the torrent
+        dots = np.zeros((R, N_PX), np.float32)
+        dot_d = (0.3 + 0.7 * c['rain']) * (0.5 + dens) * (1 - rr)
+        if dot_d > 0:
+            age = np.mod(T / self.dot_life + self.dot_t0, 1.0)
+            env = np.sin(np.pi * age) * (self.dot_rank < dot_d)
+            pos = np.mod(self.dot_x0 + self.phase[:, None] * (1 + self.dot_j), np.maximum(self.floor, 2.0))
+            rows = np.repeat(np.arange(R)[:, None], DOT_SLOTS, 1)
+            for k in range(4):
+                on = self.dot_size > k
+                idx = np.clip(pos.astype(int) + k, 0, N_PX - 1)
+                np.add.at(dots, (rows[on], idx[on]), env[on])
+            dots = np.clip(dots, 0, 1) * behind
 
         # the pool: dark until the front lands, then churns white, flowing at 0.3x; fades last
         t_floor = front_time(self.floor, self.floor, vmax)
+        if landed is not None:                                          # the front reaching a rope's pool: a big ripple
+            now_in = (tau_r[:, 0] >= t_floor[:, 0]) & ~landed
+            for r in np.nonzero(now_in)[0]:
+                self.ripple(int(r), 1.0)
+            landed |= now_in
         pool_on = smooth((tau_r - t_floor) / 1.0)
         build = np.clip((tau_r - t_floor) / 10.0, 0, 1)
         churn = 0.5 + 0.5 * np.sin(2 * np.pi * (self.pool_phase - x) / 29.0 + 3 * np.sin(T * 0.7 + self.tex_p[:, :1]))
@@ -372,9 +483,14 @@ class Ropes:
             y = (tau_s - d_r) * DARK_SPEED
             keep = keep * np.clip((x - y) / 30.0, 0.0, 1.0)
         front_rgb = (white * (1 - (tau_s is not None)))[..., None] * norm(pal_mod.FRONT)
+        body = body * (1 - 0.92 * dots[..., None])
         rope = (body * (1 - white[..., None]) + front_rgb + foam[..., None] * foam_col) * keep[..., None]
-        rope = np.where(pool[..., None], 0.0, rope)
-        return rope + np.where(pool[..., None], pool_rgb, 0.0)
+        # M5: the torrent eases in (and out while settling) over this surge's own duration
+        g_in = float(smooth(tau / max(ease[0], 1e-3)))
+        g_out = 1.0 if tau_s is None else 1.0 - float(smooth(tau_s / max(ease[1], 1e-3)))
+        rope = rope * (g_in * max(g_out, 0.0))
+        pw = pool[..., None]
+        return rope * (1 - pw) + pool_rgb * pw
 
     def _finish(self, frame, dt):
         self.base_level = float(np.clip(frame, 0.0, 1.0).max(axis=-1).mean())   # the ropes' own light, before the overlay

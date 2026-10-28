@@ -51,6 +51,11 @@ CONTROL_DEFAULT = {'pool_height_m': None, 'light': 'off', 'leds': [], 'opening_n
                    'screen_intensity': None, 'screen_threshold': None,                          # None: water.SETTINGS
                    'screen_mode': 'particles',       # particles (one field, the screens as windows) | water (video)
                    'screen_video': 0.25}             # M9: how strongly the river video shows under the particles (0..1)
+# M4 (the artists, 27 Oct: "more dynamic"): small surges between the main ones
+MINI_EMPTY_S = (60.0, 240.0)        # an empty room: a random small surge every 1-4 minutes
+MINI_ROOM_GAP_S = 60.0              # a busy room or a lingerer: at most one a minute
+MINI_LEN_S = 24.0                   # a small surge's body and settling (ropes.MINI_BODY + MINI_SETTLE)
+MINI_CLEAR_S = 45.0                 # never within this of the main surge
 SCREEN_CALM = 0.4                   # the screens in calm, as a share of their intensity (artists, 27 Oct: follow the loop)
 DARK_LUMA = 0.08                    # the live cam darker than this (night) -> the screens use the clips
 LIGHTS = ('off', 'pool', 'eddies', 'leds')
@@ -262,6 +267,12 @@ class Show:
         self.water = water_mod.Water()
         self.field = particles_mod.Field(particles_mod.Geometry(pixelmap, screens), seed)
         self.rope_level = 0.0                 # the ropes' brightness, smoothed: how busy the particle field is
+        self.mini_t0 = None                   # M4: the small surge playing now (when it started), and why
+        self.mini_kind = None
+        self.mini_last = -1e9
+        self.mini_next_empty = None
+        self.mini_ease = (2.0, 6.0)
+        self.drift_p = np.random.default_rng(seed + 3).uniform(0, 2 * math.pi, 2)
         self.field_dt = 0.0
         self.crops = [None] * 4
         self.wins = self.water.windows(0.0)
@@ -286,6 +297,47 @@ class Show:
         self.error = None
         self.ticks = 0
         self.panel_dt = 0.0
+
+    def _calm_level(self, opening, preset, day, hour, room, now):
+        """M4: calm is a continuous curve, not one fixed level: the remembered day's hours (its rain and flow), the
+        room (busier than usual: higher) and a slow drift, around the usual calm level."""
+        base = clock.OPENING_CALM_LEVEL if opening else (clock.PRESET_LEVEL if preset else clock.CALM_LEVEL)
+        if preset:
+            return base
+        energy = clock.day_energy(day, hour)
+        rel = room.get('relative') if room.get('available') else None
+        r = 0.0 if rel is None else max(-1.0, min(1.0, rel - 1.0))
+        drift = 0.5 * (math.sin(now / 97.0 + self.drift_p[0]) + math.sin(now / 41.0 + self.drift_p[1]))
+        return float(min(0.6, max(0.18, base * (0.75 + 0.55 * energy) * (1 + 0.2 * r) * (1 + 0.15 * drift))))
+
+    def _mini(self, now, snap, room):
+        """M4: a small surge between the main ones: at random every 1-4 minutes while the room is empty, or brought on
+        by a busy room or someone lingering (at most one a minute). Never near the main surge."""
+        tm = snap.get('times') or {}
+        t = snap.get('t_s', 0.0)
+        near_main = tm and (tm.get('drawback', 1e9) - MINI_CLEAR_S < t < tm.get('calm', -1e9))
+        if self.mini_t0 is not None and (now - self.mini_t0 > MINI_LEN_S or near_main):
+            self.mini_t0 = None
+        if self.mini_t0 is None and not near_main and snap.get('phase') in ('calm', 'building'):
+            empty = room.get('available') and (room.get('presence') or 0) < 0.5
+            busy = room.get('available') and ((room.get('relative') or 0) > 1.5 or room.get('lingerers'))
+            if self.mini_next_empty is None:
+                self.mini_next_empty = now + float(np.random.uniform(*MINI_EMPTY_S))
+            kind = None
+            if busy and now - self.mini_last >= MINI_ROOM_GAP_S:
+                kind = 'room'
+            elif (empty or not room.get('available')) and now >= self.mini_next_empty:
+                kind = 'random'
+            if kind:
+                self.mini_t0, self.mini_kind, self.mini_last = now, kind, now
+                self.mini_next_empty = now + float(np.random.uniform(*MINI_EMPTY_S))
+                lo, hi = math.log(1.0), math.log(8.0)
+                self.mini_ease = (math.exp(np.random.uniform(lo, hi)), math.exp(np.random.uniform(lo, hi)))
+        if self.mini_t0 is None:
+            return {'mini_tau': None, 'mini_fill': 0.0}
+        mt = now - self.mini_t0
+        fill = 0.5 * min(1.0, mt / 4.0) * (1.0 - min(1.0, max(0.0, mt - 10.0) / 14.0))
+        return {'mini_tau': mt, 'mini_ease': self.mini_ease, 'mini_fill': fill}
 
     def wants_video(self):
         """Whether the river video is drawn (the water look, or faintly under the particles: M9)."""
@@ -372,8 +424,8 @@ class Show:
             t=snap['t_s'], times=snap['times'], phase=snap['phase'], energy=clock.day_energy(day, hour), pal=pal,
             flow_pct=float(st.get('flow_pct') or 50), rain=min(1.0, float(st.get('rain_mm') or 0) / 40.0), cold=cold,
             dry=clock.is_dry(day), flow_level=flow_level, knobs=knobs, linger=self.linger, night=self.night,
-            calm_level=clock.OPENING_CALM_LEVEL if opening else (clock.PRESET_LEVEL if preset else clock.CALM_LEVEL),
-            wave=snap['wave'], light=self.control['light'], leds=self.control['leds'], pool_height_m=self.control['pool_height_m'], day=day)
+            calm_level=self._calm_level(opening, preset, day, hour, room, now),
+            wave=snap['wave'], light=self.control['light'], **self._mini(now, snap, room), leds=self.control['leds'], pool_height_m=self.control['pool_height_m'], day=day)
         if self.control['screen_mode'] == 'particles' and self.control['light'] == 'off':
             self.field_dt += dt
             if self.ticks % PANEL_EVERY == 0 or self.ropes.overlay is None:   # the field at 30 Hz, like the screens

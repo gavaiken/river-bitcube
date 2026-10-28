@@ -57,6 +57,7 @@ def loop():
         for k, at in want.items():
             if k not in keep and t >= at:
                 keep[k] = f.copy()
+                keep[k + '_pw'] = r.pw.copy()                    # where the (moving, soft) pool was then
         if t >= times['surge'] and floor_hit is None:
             floor_hit = np.full(20, np.nan)
         if floor_hit is not None and t < times['surge'] + 8:
@@ -131,7 +132,7 @@ def test_power_stays_under_the_cap_at_full_surge(loop):
 
 def test_calm_is_dim_sparse_and_desaturated(loop):
     f = loop['keep']['calm']
-    pool = loop['z'].pool_mask()
+    pool = loop['z'].pool_mask() | (loop['keep']['calm_pw'] > 0.05)   # the pool rises and sloshes (M3)
     assert f.max() <= 0.42
     lit = (f.max(axis=2) > 0.05) & ~pool
     ropes_lit = int((lit.sum(axis=1) > 0).sum())

@@ -72,3 +72,35 @@ def test_show_runs_with_the_particle_field(tmp_path):
     for i in range(120):
         ropes_frame, panels_frame = s.tick(1_800_000_000 + i / 60, 1 / 60)
     assert panels_frame.shape == (256, 512, 3) and s.control['screen_mode'] == 'particles'
+
+
+def test_m4_small_surges_random_when_empty_and_room_at_most_one_a_minute(tmp_path):
+    s = show.Show(river_dir=tmp_path)
+    snap = {'times': {'drawback': 1e6, 'calm': 2e6}, 't_s': 10.0, 'phase': 'calm'}
+    empty = {'available': True, 'presence': 0.0, 'relative': 0.0, 'lingerers': []}
+    starts, now = [], 1000.0
+    for i in range(int(900 / 0.5)):                       # 15 minutes of an empty room
+        now += 0.5
+        before = s.mini_t0
+        s._mini(now, snap, empty)
+        if s.mini_t0 is not None and s.mini_t0 != before:
+            starts.append(now)
+    gaps = np.diff(starts)
+    assert len(starts) >= 3 and gaps.min() >= show.MINI_EMPTY_S[0] and gaps.max() <= show.MINI_EMPTY_S[1] + show.MINI_LEN_S
+    s2 = show.Show(river_dir=tmp_path)
+    busy = {'available': True, 'presence': 6.0, 'relative': 2.5, 'lingerers': [{'ropes': [3]}]}
+    starts, now = [], 1000.0
+    for i in range(int(300 / 0.5)):
+        now += 0.5
+        before = s2.mini_t0
+        s2._mini(now, snap, busy)
+        if s2.mini_t0 is not None and s2.mini_t0 != before:
+            starts.append(now)
+    assert len(starts) >= 3 and np.diff(starts).min() >= show.MINI_ROOM_GAP_S and s2.mini_kind == 'room'
+
+
+def test_m4_no_small_surge_near_the_main_one(tmp_path):
+    s = show.Show(river_dir=tmp_path)
+    snap = {'times': {'drawback': 150.0, 'calm': 280.0}, 't_s': 140.0, 'phase': 'building'}
+    busy = {'available': True, 'presence': 6.0, 'relative': 2.5, 'lingerers': [{'ropes': [3]}]}
+    assert s._mini(1000.0, snap, busy)['mini_tau'] is None
