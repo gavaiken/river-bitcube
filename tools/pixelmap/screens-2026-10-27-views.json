@@ -1,6 +1,6 @@
 {
  "meta": {
-  "capture": "screens-20261027-204159",
+  "capture": "screens-20261027-204159 (2, 4), screens-20261027-203733 (3)",
   "camera": "gallery",
   "frame_size": [
    1440,
@@ -13,89 +13,91 @@
    "home",
    "mid",
    "up"
-  ]
+  ],
+  "note": "Views corrected by image shift against the calibration frames. 2 and 4 agree within 2 px over three runs, 3 over two. Screen 1 is nearly edge-on and was never detected: placed by hand from Gavin's marks on the stitched panorama (27 Oct)."
  },
  "screens": {
   "1": {
    "tl": [
-    0.52736,
-    0.69312
+    0.46389,
+    0.70396
    ],
    "tr": [
-    0.53657,
-    0.69895
+    0.47014,
+    0.70396
    ],
    "br": [
-    0.53706,
-    0.62857
+    0.46944,
+    0.6198
    ],
    "bl": [
-    0.52831,
-    0.62541
+    0.46319,
+    0.6198
    ],
    "estimated": true,
-   "from": 2
+   "from": "hand: Gavin, panorama 27 Oct"
   },
   "2": {
    "tl": [
-    0.52845,
-    0.61525
+    0.52988,
+    0.68356
    ],
    "tr": [
-    0.53766,
-    0.62107
+    0.53942,
+    0.68992
    ],
    "br": [
-    0.53814,
-    0.5507
+    0.53963,
+    0.61578
    ],
    "bl": [
-    0.52939,
-    0.54753
+    0.53071,
+    0.61233
    ],
-   "px": 4321,
+   "px": 4319,
    "balance": 0.63,
    "view": "mid"
   },
   "3": {
    "tl": [
-    0.49328,
-    0.42024
+    0.4505,
+    0.46594
    ],
    "tr": [
-    0.51023,
-    0.43808
+    0.47241,
+    0.45178
    ],
    "br": [
-    0.52753,
-    0.36983
+    0.45725,
+    0.37745
    ],
    "bl": [
-    0.5097,
-    0.3533
+    0.43333,
+    0.38953
    ],
-   "estimated": true,
-   "from": 4
+   "px": 17358,
+   "balance": 0.8,
+   "view": "home"
   },
   "4": {
    "tl": [
-    0.47949,
-    0.50259
+    0.48024,
+    0.56538
    ],
    "tr": [
-    0.49643,
-    0.52042
+    0.49726,
+    0.58381
    ],
    "br": [
-    0.51374,
-    0.45217
+    0.51487,
+    0.515
    ],
    "bl": [
-    0.4959,
-    0.43564
+    0.49712,
+    0.49829
    ],
-   "px": 9687,
-   "balance": 0.74,
+   "px": 9684,
+   "balance": 0.73,
    "view": "mid"
   }
  }
