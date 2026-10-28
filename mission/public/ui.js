@@ -62,6 +62,8 @@ const LINKS = {
 };
 /** The footer's links, in order: [label, href]. */
 export const DOC_LINKS = [LINKS.map, LINKS.files, LINKS.install, LINKS.plan];
+// which part of the Help page each page's ? opens
+const HELP_SECTION = { status: 'status', lights: 'lights', looks: 'looks', chat: 'chat', remembered: 'remembered', hub75: 'hub75', map: 'status', help: 'toc' };
 const TABS = [
   ['status', 'Status', '/status', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>'],
   ['lights', 'Lights', '/lights', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.6 1 1.3 1 2.5h6c0-1.2.3-1.9 1-2.5A6 6 0 0 0 12 3z"/></svg>'],
@@ -1196,6 +1198,7 @@ export function mountShell({ page = 'status', title = '' } = {}) {
   const header = el(`<header class="top">
     <div class="brand"><span class="wordmark">Mission control</span><${titleTag} class="title">${esc(title || TABS.find((t) => t[0] === page)?.[1] || '')}</${titleTag}></div>
     <div class="fresh" id="mc-fresh">Connecting…</div>
+    <a class="help-btn" href="/help#${esc(HELP_SECTION[page] ?? 'toc')}" aria-label="Help" title="Help: how to play with the piece and get ready for the show">?</a>
     <button class="menu-btn" type="button" aria-label="Menu" aria-haspopup="dialog" title="Menu">⋯</button></header>`);
   const main = $('main');
   if (main) main.before(header); else document.body.prepend(header);

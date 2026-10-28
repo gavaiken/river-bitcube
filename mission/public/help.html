@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e141a" media="(prefers-color-scheme: dark)">
+<title>Help · Mission control</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" href="/v2.css">
+<style>
+  .help { max-width: 760px; margin: 0 auto; }
+  .help .card h2 { margin-top: 0; }
+  .help h3 { margin: 1.1em 0 .3em; font-size: 1.02em; }
+  .help p, .help li { line-height: 1.45; }
+  .help ol.steps li { margin: .35em 0; }
+  .help .toc a { display: inline-block; margin: .15em .5em .15em 0; }
+  .help dt { font-weight: 600; margin-top: .6em; }
+  .help dd { margin: .15em 0 0 0; }
+  .help .q { font-weight: 600; }
+  .help code { font-size: .92em; }
+</style>
+<script>try { const t = localStorage.getItem('mc-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
+</head>
+<body>
+<main class="help">
+  <section class="card" id="toc" aria-label="On this page">
+    <h2>Help</h2>
+    <p>How to play with the piece from here, and how to get it ready for the show. Every page has a <b>?</b> at the top right that opens the part of this page about it.</p>
+    <p class="toc"><a href="#big-picture">The big picture</a> · <a href="#status">Status</a> · <a href="#looks">Looks</a> · <a href="#remembered">Remembered river</a> · <a href="#lights">Lights</a> · <a href="#hub75">HUB75 simulator</a> · <a href="#chat">Studio chat</a> · <a href="#show">Getting ready for the show</a> · <a href="#trouble">If something looks wrong</a> · <a href="#rollback">Going back</a></p>
+  </section>
+
+  <section class="card" id="big-picture">
+    <h2>The big picture</h2>
+    <p><b>bitcube</b> is the Windows PC in the gallery that drives the piece: the twenty LED ropes and the four screens. It runs one <b>show file</b> at a time in TouchDesigner. Mission control is this site: it watches bitcube and lets you change what it does, from a phone.</p>
+    <h3>Two kinds of show file</h3>
+    <dl>
+      <dt>Composite files <span class="kind composite">composite: several looks inside</span></dt>
+      <dd><b>The river: all looks (playlist)</b> is the default and the one to use. It holds several <b>looks</b> (the remembered river, Fill my cup, the river's year) and plays them in a <b>playlist</b>: so many loops of one, then the next, round and round. Changing which look plays, or the order, takes effect in a two-second fade with <b>no restart</b>. <i>The river: two looks (28 Oct copy)</i> is a frozen older copy, kept in case we need to go back.</dd>
+      <dt>Single files <span class="kind">one visualization</span></dt>
+      <dd>One look on its own ("…, on its own"). They are the same looks as inside the playlist file, kept for testing one thing by itself.</dd>
+    </dl>
+    <h3>Switching files restarts TouchDesigner</h3>
+    <p>Changing the <b>file</b> (Status → What's showing → Change) restarts TouchDesigner: the piece goes <b>dark for about a minute</b>. Changing the <b>look inside</b> the playlist file (Looks tab) does not. During the show, change looks, not files.</p>
+    <h3>Default</h3>
+    <p>The default is what opens when bitcube restarts (a power cut, a reboot). Switching never changes it; <b>Set as default</b> on a show's card does, on purpose. Today the default is the playlist file.</p>
+  </section>
+
+  <section class="card" id="status">
+    <h2>Status</h2>
+    <p>The first thing to look at. The headline is the verdict (everything up, attention, down) with a reason in words. Under it:</p>
+    <ul>
+      <li><b>What's showing:</b> the file TouchDesigner has open, its kind, whether it is the default. <b>Change</b> lists the offered files with a card each (what it does, its inputs, who made it); <b>Back to default</b> returns to the default file. Both restart TouchDesigner.</li>
+      <li><b>Looks:</b> what the playlist file is playing now ("Playing: the remembered river · 1 of 2 in the playlist · loop 2 of 4"), <b>Auto</b> (the playlist) or <b>Manual</b> (pin one look). To edit the playlist or a look's settings, go to the Looks tab.</li>
+      <li><b>Fill my cup dials:</b> colours, brightness, intensity and speed of the configurable fill, while it shows.</li>
+      <li><b>Lights, cameras, Modal, the counter:</b> each with a chip; amber means stale or doubtful, red means down, with who to call.</li>
+      <li><b>Recent:</b> what was changed, by whom, when.</li>
+    </ul>
+    <p>A change you make shows "Applying…" until bitcube confirms it, then "Done" with the time. If bitcube doesn't answer, the line says so; nothing is assumed.</p>
+  </section>
+
+  <section class="card" id="looks">
+    <h2>Looks</h2>
+    <p>The page for the playlist file. It only does things while that file runs.</p>
+    <h3>The playlist</h3>
+    <ol class="steps">
+      <li>Each row is one look and how long it plays: <b>loops</b> for the remembered river (one loop is five minutes: calm, building, the surge, settling), <b>cycles</b> for Fill my cup (one cycle fills the glass to the top and drains it), <b>minutes</b> for the river's year.</li>
+      <li>Use − / + to change the count, ↑ ↓ to reorder, Remove to drop a row, <b>Add a look</b> to add one (its description appears when you pick it).</li>
+      <li>Nothing changes until you press <b>Apply</b>. The playlist then plays from the look showing now, in the new order, round and round.</li>
+      <li><b>Pin this look</b> fades to that look and stays on it (Manual). <b>Back to the playlist</b> resumes.</li>
+    </ol>
+    <p>A <b>flood day</b> (the remembered river is reliving one of the river's biggest days) brings the fill on right after that loop, whatever the count says: the glass is the flood.</p>
+    <h3>Each look's card</h3>
+    <p>Its description (the same words as on its own file), its inputs, and <b>See and configure</b>: where its live state and settings are. The remembered river has its own page; Fill my cup (configurable) has dials on Status; the river's year has its own control page on bitcube.</p>
+    <h3>Inputs now</h3>
+    <p>What is reaching bitcube: Dave's agent on Modal (the remembered day it chose and why, the surge hour, its palette and knobs, whether it hears the room), the river camera (live or the recorded clip, how much the water moves), the room (people, the usual number, anyone lingering by a rope). Amber means old. Under it, <b>what the look did with them</b>: the day it is reliving, what it heard, which knobs it used.</p>
+  </section>
+
+  <section class="card" id="remembered">
+    <h2>Remembered river</h2>
+    <p>The remembered river's own page: it is one look inside the playlist file (the Looks tab says which look is playing). Here you see and set what only it has.</p>
+    <ul>
+      <li><b>Top:</b> the phase (Calm, Building, Surge, Settling), the loop bar, which remembered day it is reliving and who chose it.</li>
+      <li><b>Dave's agent:</b> his day and reason, palette, knobs, how long ago. Past five minutes bitcube plays a notable day of its own.</li>
+      <li><b>Decision:</b> the day's 24 hours as a strip (rain, flow, night), the surge marker, and <b>Why</b> in plain words.</li>
+      <li><b>Outputs:</b> the ropes and screens as TouchDesigner sends them, each screen's lit share, the ropes' watts.</li>
+      <li><b>Controls:</b> the <b>pool line</b> (where the pool's surface sits, 0–1.5 m) with Light the pool / Light the eddies (to check the calibration by eye; Off returns to the show); <b>opening night</b> (brighter calm, a surge at least every five minutes); <b>Screens</b>: intensity (how bright), threshold (how much the river must move to show in its video), river video (how strongly the river clips show behind the ribbons). "Now on bitcube" under each is TouchDesigner's own report.</li>
+    </ul>
+    <p>The screens show <b>silk ribbons</b> of glitter in the palette's blues and greens over the river's moving water, drawn on bitcube's GPU; in a surge all four ribbons come up full. If the GPU ever fails, the screens fall back to a simpler version of the same ribbons by themselves.</p>
+  </section>
+
+  <section class="card" id="lights">
+    <h2>Lights</h2>
+    <p>The ropes and the four screens as TouchDesigner sends them, a few times a minute, and the Art-Net sender's state. Use it to confirm the piece is doing what the pages say, without walking over. The footer links to the HUB75 simulator and the Remembered river page.</p>
+  </section>
+
+  <section class="card" id="hub75">
+    <h2>HUB75 simulator</h2>
+    <p>An experiment page that shows what the screens would do with the river footage through the artists' settings (motion threshold, black floor, contrast, colour, intensity, four windows that drift gently). It runs in your browser, not on bitcube. <b>Copy settings</b> gives the numbers to carry into the show; the remembered river's screens already run these.</p>
+  </section>
+
+  <section class="card" id="chat">
+    <h2>Studio chat</h2>
+    <p>Talk to the studio agent: it can read everything here and make the same changes you can, and it writes what it did into Recent. Ask it in plain words ("pin the river's year for ten minutes, then back to the playlist").</p>
+  </section>
+
+  <section class="card" id="show">
+    <h2>Getting ready for the show</h2>
+    <ol class="steps">
+      <li><b>Status is green.</b> If not, read the reason; the chip says who to call.</li>
+      <li><b>What's showing is the playlist file</b> ("The river: all looks (playlist)") and it is marked <b>Default</b>. If another file is showing, press Back to default (a minute dark) well before doors.</li>
+      <li><b>Looks:</b> Auto, with the playlist you want. The usual one: the remembered river for four loops (twenty minutes), then Fill my cup (simple) once, round and round. Add the river's year for a few minutes if you want it in the rotation.</li>
+      <li><b>Remembered river page:</b> opening night <b>on</b> for a crowded room; the pool line where the pool really sits; the screens' intensity and river video where you like them. Check "Now on bitcube" says what you set.</li>
+      <li><b>Inputs now</b> on the Looks tab: Dave's agent fresh (under five minutes), the river camera live or on the clip, the room counting people.</li>
+      <li><b>Lights:</b> the ropes and screens look like the pages say.</li>
+      <li>Leave it. Don't switch files during the show; change looks instead.</li>
+    </ol>
+  </section>
+
+  <section class="card" id="trouble">
+    <h2>If something looks wrong</h2>
+    <dl>
+      <dt>The piece is dark</dt>
+      <dd>Someone may have switched files (a minute). Status says "restarting" while it does. If it stays dark, Status names the cause and who to call.</dd>
+      <dt>The ropes play a colourful pattern of their own</dt>
+      <dd>The Art-Net sender has stopped: the boxes play their own program when nothing is sent. Status's lights chip says so; a restart of the show file usually fixes it.</dd>
+      <dt>The screens are black while the ropes run</dt>
+      <dd>Check the Remembered river page's Screens settings (intensity 0 or river video 0 would do it) and that the look showing is the remembered river. If the GPU failed, the page's field reads "ribbons" instead of "ribbons-gpu" and the simpler ribbons show.</dd>
+      <dt>"The remembered river isn't the look showing"</dt>
+      <dd>Its controls only work while it shows. Pin it on the Looks tab, or wait for its turn.</dd>
+      <dt>Dave's agent is old (amber)</dt>
+      <dd>Bitcube plays a notable day of its own after five minutes; the piece keeps going. The Modal chip on Status says more.</dd>
+      <dt>A change says "no answer"</dt>
+      <dd>Mission control couldn't reach bitcube in time. The line under the control says what bitcube has; try again, don't press twice.</dd>
+    </dl>
+  </section>
+
+  <section class="card" id="rollback">
+    <h2>Going back</h2>
+    <p>If the playlist file misbehaves: Status → What's showing → Change → <b>The river: two looks (28 Oct copy)</b>: the file exactly as it ran the morning of 28 Oct (the remembered river and Fill my cup alternating). Set as default if it should stay that way. Everything else is in the repo's <code>HANDOFF.md</code> and <code>docs/checkpoints.md</code> for whoever has the keyboard.</p>
+    <p id="foot"></p>
+  </section>
+</main>
+<script type="module">
+  import { mountShell } from '/ui.js';
+  mountShell({ page: 'help', title: 'Help' });
+  // the ? on each page opens its own section
+  const id = location.hash.slice(1);
+  if (id && document.getElementById(id)) document.getElementById(id).scrollIntoView();
+</script>
+</body>
+</html>

@@ -5,6 +5,25 @@
 - **Updated:** 2026-10-28 11:12 PT
 - **Next holder:** Will. The playlist file is the default and the one to iterate on (Gavin, 11:20); rollback: switch to `river-two-looks.toe` (the 28 Oct morning file) with mission control's Change, and Set as default if needed.
 
+## Will: your first hour (28 Oct, from ~11:45)
+1. `git pull`; read this file top to bottom (the two 28 Oct sections), then `docs/files/river-all-looks.md` and
+   `docs/files/river-remembered.md`. Mission control's **Help** page (`/help`, the **?** on every page) is the artists' view
+   of the same things: read it once so your words match it.
+2. Take the baton: set Holder/Where/Updated at the top, commit, push.
+3. What's running: `river-all-looks.toe` (the playlist file), the default, on auto. Check `River\looks\status.json`
+   (`look`, `playlist`, `position`, `progress`, `inputs`, `used`, `perf`: python_ms ~5-6, frame_ms ~17) and
+   `River\remembered\status.json` (`fps` ~60, `panels.field` `ribbons-gpu`).
+4. Visual tuning lives in: `td/remembered/ribbons_gpu.py` (the screens: constants at the top, the GLSL below; `Reference`
+   renders it offline), `td/remembered/ribbons.py` (the sheets' shapes, the ropes' light), `td/remembered/ropes.py`
+   (the ropes' pool, surge, easing), `td/remembered/water.py` (the river video's grade). After a change: push, pull on
+   bitcube, `td.ps1 -File td\build\build_all_looks.py`, look at `td.ps1 -Screenshot /project1/remembered/screens_src`,
+   then `td_save.ps1`, `frames\toe_scan.py river-all-looks.toe` (0 hits), commit the .toe with its shows.json entry.
+   **Save before building a new shader** (a bad one can hang the GPU driver).
+5. Rollback at any time: mission control → Change → "The river: two looks (28 Oct copy)". Tags `before-all-looks`,
+   `all-looks-v1`, `river-looks-gpu-ribbons-v1`.
+6. Jobs in order of value (each written up below): the palette Justine can set; Combined with Modal folded into the
+   playlist file; a real adversarial UX pass on the Looks tab and Help page with the artists.
+
 ## Late morning of 28 Oct (session A): `river-all-looks.toe`, every look in one file with a playlist. **Will: read this and the next section**
 Gavin asked (10:00) for all the TD visuals in one file, a config for which looks play in what order and for how long, a
 settings panel per look with its description, and the live inputs (Dave's Modal agent etc.) and how they shape the look;
