@@ -160,7 +160,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-28",
-      "last_change": "GPU ribbons keep their cyan and green in a surge (light pushed more saturated, white capped); river clips tinted 65 % toward the palette"
+      "last_change": "River clips behind the GPU ribbons: the HUB75 simulator's grade (blacks, contrast), 1.6x brighter, video 0.7, following the loop's level (calm 0.45, the torrent full); sheets more see-through; tint 0.4"
     },
     {
       "file": "river-filling.toe",
@@ -233,7 +233,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-28",
-      "last_change": "river-looks.toe saved with the palette GPU ribbons and the GPU river (river_mask, river_gpu, screens_mix); secret scan 0 hits; 31 fps on the piece"
+      "last_change": "River clips behind the GPU ribbons: the HUB75 simulator's grade (blacks, contrast), 1.6x brighter, video 0.7, following the loop's level (calm 0.45, the torrent full); sheets more see-through; tint 0.4"
     }
   ]
 }

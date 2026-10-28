@@ -30,14 +30,14 @@ PW, PH = 6, 1 + N_RIB + NQ          # params texture: row 0 globals, then one ro
 WRAP = 4096.0                       # the glitter's streaming offset wraps here (float32 precision on the GPU)
 CELLS = 3.2                         # glitter cells per field px along the sheet (about one per 1.7 LEDs)
 SPARKLE = 0.42                      # share of the sheet's cells that hold a sparkle
-SHEEN = 0.05                        # the translucent sheet itself, before the fold boost
+SHEEN = 0.03                        # the translucent sheet itself, before the fold boost
 FOLD_MAX = 5.0
 WIDTH = 1.35                        # the GPU sheets a little wider than the numpy ones (Gavin, 28 Oct: more LEDs on)
 GAIN = 1.15                         # and brighter
 FOOTAGE_FLOW_DEG = 25.0             # which way the river runs in the river cam's picture: down and 25 deg toward the right
                                     # (measured 28 Oct on river-cascade.mp4, Lucas-Kanade over the moving water); the screens'
                                     # windows turn so that this runs along the ropes' "down" by each screen
-RIVER_TINT = 0.65                   # how far the river video is tinted toward the palette's blues
+RIVER_TINT = 0.4                    # how far the river video is tinted toward the palette's blues
 VIDEO_SCREEN_M = 0.64               # a window's height in the footage covers the screen's height
 DUST = 0.035                        # share of screen LEDs holding loose glitter
 

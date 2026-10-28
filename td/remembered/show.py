@@ -53,9 +53,10 @@ NEUTRAL = {k: 0.5 for k in KNOBS}
 CONTROL_DEFAULT = {'pool_height_m': None, 'light': 'off', 'leds': [], 'opening_night': True,   # opening night ON unless told
                    'screen_intensity': None, 'screen_threshold': None,                          # None: water.SETTINGS
                    'screen_mode': 'particles',       # particles (one field, the screens as windows) | water (video)
-                   'screen_video': 0.35,             # M9: how strongly the river video shows under the particles (0..1)
+                   'screen_video': 0.7,              # M9: how strongly the river video shows under the particles (0..1)
                                                      # (28 Oct: 0.25, 0.15 for the numpy haze, then 0.35 on the GPU: Gavin
-                                                     # wants the river clips playing behind the ribbons)
+                                                     # wants the river clips playing behind the ribbons; 0.7: "see the
+                                                     # water video more")
                    'screen_field': 'ribbons',        # what the particle windows look onto (FIELDS)
                    'screen_gpu': True}               # ribbons drawn on the GPU when its shaders are healthy (ribbons_gpu.py)
 # the particle fields: ribbons (silk of glitter, Gavin's reference, 28 Oct, the default) | fine (M2's smoky streaks with
@@ -596,6 +597,8 @@ def frame(comp):
             o.cook(force=True)
 
 
+VIDEO_CALM = 0.45                   # the river video behind the GPU ribbons in calm, as a share of a surge's
+VIDEO_BOOST = 1.6                   # and brighter than the simulator's intensity (it shares the screens with the ribbons)
 GPU_OPS = ('ribbons_draw', 'ribbons_trail', 'ribbons_out', 'river_gpu')
 
 
@@ -623,7 +626,11 @@ def params_image(show, fade=1.0, on=True):
     live = on and show.gpu_active()
     gain = show.gpu_gain * fade if live else 0.0
     s = show.water.s
-    vgain = (show.control['screen_video'] * (s['intensity'] * max(0.0, min(1.0, show.screen_level))) ** (1 / 2.2) * fade
+    # the river behind the ribbons (Gavin, 28 Oct: "see the water video more… higher brightness / contrast, there should
+    # still be blacks… like that hub75 simulator… more visible during the torrent"): the simulator's grade (its black floor and
+    # contrast), VIDEO_BOOST brighter, and following the loop's level straight (calm 0.4 of a surge, floored at VIDEO_CALM)
+    lvl = max(VIDEO_CALM, min(1.0, show.screen_level))
+    vgain = (show.control['screen_video'] * s['intensity'] ** (1 / 2.2) * VIDEO_BOOST * lvl * fade
              if live and show.control['screen_mode'] == 'particles' else 0.0)
     video = {'windows': show.wins or [], 'gain': vgain, 'floor': s['floor'], 'contrast': s['contrast'], 'sat': s['sat']}
     return np.ascontiguousarray(ribbons_gpu.params(show.field, show.pal_now, gain, video))

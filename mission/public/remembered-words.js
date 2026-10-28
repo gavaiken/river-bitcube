@@ -4,7 +4,7 @@
 import { dur, FILES, LOOKS_FILE, LOOK_IN_LINE } from './model.js';
 
 /** The river video's strength under the particle windows (M9) until someone sets it, 0..1. */
-export const REMEMBERED_VIDEO_DEFAULT = 0.35;
+export const REMEMBERED_VIDEO_DEFAULT = 0.7;
 /** The screens' intensity and motion threshold until someone sets them (td/remembered/water.py SETTINGS), 0..1. */
 export const REMEMBERED_SCREENS_DEFAULT = { intensity: 0.82, threshold: 0.35 };
 

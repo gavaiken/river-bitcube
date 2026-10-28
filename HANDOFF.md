@@ -32,7 +32,7 @@ direction as the rope lights"). 31 fps (was 26).
 **Knobs for visual tuning** (all repo code; after a change: push, `git pull` on bitcube, `td.ps1 -File td\build\build_looks.py`,
 check `River\remembered\status.json` and `td.ps1 -Screenshot /project1/remembered/screens_src`):
 - Live, no code: mission control's **Remembered river page → Screens**: Intensity (default 82 %), Threshold (the river's motion
-  threshold, 35 %), River video (35 %). They write `River\remembered\control.json` `screens`. Also `screens.field`
+  threshold, 35 %), River video (70 %). They write `River\remembered\control.json` `screens`. Also `screens.field`
   (`ribbons` | `fine` | `streaks`) and `screens.gpu: false` (numpy only), by hand in that file.
 - Look: top of `ribbons_gpu.py`: `SPARKLE` (glitter density), `SHEEN`, `WIDTH`, `GAIN`, `DUST`, `CELLS` (glitter size),
   `TRAIL`, `RIVER_TINT`, `FOOTAGE_FLOW_DEG`; in `OUT_GLSL` the colour ramp and the green tint `gtint`. The ribbons' shapes:
