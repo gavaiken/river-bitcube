@@ -110,11 +110,11 @@ class Water:
             out.append((cx - ww / 2, cy - hh / 2, ww, hh))
         return out
 
-    def _mask_in(self, win):
+    def _mask_in(self, win, qw=QW, qh=QH):
         """The mask under a window at 128 x 256, interpolated (bilinear, as the simulator's texture): soft edges, no steps."""
         x, y, w, h = win
-        fx = np.clip((x + (np.arange(QW) + 0.5) / QW * w) * MW - 0.5, 0, MW - 1.001)
-        fy = np.clip((y + (np.arange(QH) + 0.5) / QH * h) * MH - 0.5, 0, MH - 1.001)
+        fx = np.clip((x + (np.arange(qw) + 0.5) / qw * w) * MW - 0.5, 0, MW - 1.001)
+        fy = np.clip((y + (np.arange(qh) + 0.5) / qh * h) * MH - 0.5, 0, MH - 1.001)
         x0, y0 = fx.astype(int), fy.astype(int)
         ax, ay = (fx - x0)[None, :], (fy - y0)[:, None]
         m = self.mask
@@ -123,7 +123,7 @@ class Water:
         return (a * (1 - ax) + b * ax) * (1 - ay) + (c * (1 - ax) + d * ax) * ay
 
     # ---- the screens ---------------------------------------------------------------------------------------------------
-    def step(self, crops, wins, level=1.0, intensity=None, sens=None):
+    def step(self, crops, wins, level=1.0, intensity=None, sens=None, half=False):
         """crops: four QH x QW x 3 images (float 0..1, row 0 at the top), each window's footage; wins: the windows they
         came from. Returns QH x (QW*4) x 3, float 0..1 (the signal)."""
         if sens is not None and sens != self.s['sens']:
@@ -131,6 +131,11 @@ class Water:
         inten = (self.s['intensity'] if intensity is None else float(intensity)) * max(0.0, min(1.0, level))
         s = self.s
         out = np.zeros((QH, QW * NQ, 3), np.float32)
+        # (M7, speed) all in float32, no round trip through linear light: intensity in linear light then back to the
+        # signal is v * inten ** (1 / 2.2), exactly; and luma after the colour step equals luma before it.
+        gain = np.float32(max(inten, 0.0) ** (1 / 2.2))
+        floor, contrast, sat = np.float32(s['floor']), np.float32(s['contrast']), np.float32(s['sat'])
+        w = np.array([0.2126, 0.7152, 0.0722], np.float32)
         light = 0.0
         for k in range(NQ):
             c = crops[k] if k < len(crops) and crops[k] is not None else None
@@ -142,17 +147,23 @@ class Water:
                 ys = (np.arange(QH) * c.shape[0] / QH).astype(int)
                 xs = (np.arange(QW) * c.shape[1] / QW).astype(int)
                 c = c[ys][:, xs]
-            m = self._mask_in(wins[k])[..., None]
-            v = c * m
-            lv = luma(v)
-            v = lv[..., None] + (v - lv[..., None]) * s['sat']
-            lv = luma(v)
-            kf = np.where(lv > 0, np.maximum(lv - s['floor'], 0) / (1 - s['floor']) / np.maximum(lv, 1e-6), 0.0)
-            v = np.clip(v * kf[..., None], 0.0, 1.0) ** s['contrast']
-            lin = v ** 2.2 * inten
-            v = np.round(lin ** (1 / 2.2) * 255) / 255
-            out[:, k * QW:(k + 1) * QW] = v
-            self.lit_pct[k] = int(round(100 * float((v.max(axis=-1) > 0).mean())))
-            light += float(lin.mean())
+            if half:                                              # the faint layer under the particles (M9): half resolution
+                c = c[::2, ::2]
+                m = self._mask_in(wins[k], QW // 2, QH // 2).astype(np.float32)
+            else:
+                m = self._mask_in(wins[k]).astype(np.float32)
+            v = c * m[..., None]
+            lv = v @ w
+            v = lv[..., None] + (v - lv[..., None]) * sat
+            kf = np.maximum(lv - floor, 0) / ((1 - floor) * np.maximum(lv, 1e-6))
+            v = np.clip(v * kf[..., None], 0.0, 1.0)
+            if contrast != 1:
+                v = v ** contrast
+            if half:
+                v = v.repeat(2, 0).repeat(2, 1)
+                kf = kf.repeat(2, 0).repeat(2, 1)
+            out[:, k * QW:(k + 1) * QW] = v * gain
+            self.lit_pct[k] = int(round(100 * float((kf > 0).mean())))
+            light += float((v[::4, ::4] ** 2.2).mean()) * inten
         self.brightness = light / NQ
         return out

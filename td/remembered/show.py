@@ -347,7 +347,7 @@ class Show:
 
     def feed_river(self, img, source, now):
         """A new river frame (row 0 at the top; live cam or the recorded clip)."""
-        self.panels.feed(img)
+        self.panels.feed(img)                                     # the river cam's motion level (the ropes' flow without sound)
         if self.wants_video():
             self.water.feed(img)
         self.river_source = source
@@ -451,7 +451,7 @@ class Show:
                 frame = self.field.render_screens(pal['light']) * inten
                 if self.control['screen_video'] > 0:              # M9: the river video, faint, under the particles
                     video = self.water.step(self.crops, self.wins, level=self.screen_level, intensity=None,
-                                            sens=self.control['screen_threshold'])
+                                            sens=self.control['screen_threshold'], half=True)
                     frame = frame + video * self.control['screen_video']
                 self.panel_frame = np.clip(frame, 0.0, 1.0)
             else:
