@@ -38,6 +38,13 @@ from filling import fill as filling_fill                                 # noqa:
 filling_fill.reset()
 
 
+def page(comp, name):
+    for pg in comp.customPages:
+        if pg.name == name:
+            return pg
+    return comp.appendCustomPage(name)
+
+
 def res(o, w, h):
     o.par.outputresolution = 'custom'
     o.par.resolutionw, o.par.resolutionh = w, h
@@ -54,7 +61,7 @@ def maker(parent):
 fc = proj.op('filling') or proj.create(baseCOMP, 'filling')
 fc.nodeX, fc.nodeY = 250, -250
 fc.color = (0.1, 0.3, 0.6)
-pg = next((p for p in fc.customPages if p.name == 'Filling'), None) or fc.appendCustomPage('Filling')
+pg = page(fc, 'Filling')
 for _n, _f, _l in (('Mapfile', PIXELMAP, 'LED map (every rope LED in the room)'),
                    ('Screensfile', SCREENS, 'Screens (where each screen hangs)')):
     if not hasattr(fc.par, _n):
