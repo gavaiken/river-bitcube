@@ -1,9 +1,16 @@
 # Handoff: where things stand
 
-- **Holder:** Gavin (coordinator on the Mac mini + two helper agents): building "Combined with Modal Input Selector"
-- **Where:** bitcube + repo (new show cloned from Combined v0; Combined v0 itself untouched)
-- **Updated:** 2026-10-27 16:48 PT
+- **Holder:** nobody (free)
+- **Where:** bitcube running Combined v0 (Will's settings); the default is still the river's year
+- **Updated:** 2026-10-27 17:55 PT
 - **Next holder:** Will (Codex), for visual tuning.
+
+## Combined with Modal Input Selector (27 Oct, Gavin): `river-combined-modal-inputs.toe`
+- New show cloned from Combined v0 (Combined v0's file and settings untouched; SHA-checked). Mission control, while it runs: **Modal input** Off / Canvas / Scene / Frames + strength (fades, no restart), and **What Dave's agent is sending** (each value, what it drives, its age; Dave's journal line or frame note and thumbnails). Default on first open: Canvas 18 % (today's look). Interface: [`docs/modal-inputs.md`](docs/modal-inputs.md); contract for frames: [`modal-frames/`](modal-frames/README.md).
+- Sources: Canvas = Dave's JS canvas overlay; Scene = `state.json`/`reflex.json` mirror (palette recolour + speed/density/brightness/turbulence); Frames = `tools/modal/frames_sync.py` (new child of `modal_link.py`, lock port 8773) → `gallery_state/frames/`, OKLCH journeys × river ripple. A stale source fades back to the river by itself.
+- Verified on bitcube 27 Oct: all four sources at 60 fps / 0 errors, switches fade in the same TD process, orientation top = top on screens and ropes, rope power ~110 W/box at full frames, stale fallback and recovery, toe secret scan 0 hits; `tools/check` green; mission control on 0164724.
+- Known: Modal sometimes 404s a PNG its manifest already names (handled with retries; Dave to fix, SPEC §3). probe.ps1's `$CAL_BLOCKED` doesn't list `modalinput` (mission control refuses it during a calibration anyway). Scene recolours the ropes and the screens' Current look; Will's screen cycle still shows the Gavin-style looks on their turns. Speed > 1 is treated as 1 for live video.
+- bitcube had been on the river's year since 13:24 before this work; it was left on Combined v0 (the HANDOFF's "running now"). Switch to whichever show the team wants for tonight.
 
 ## Running now
 - `river-combined-v0.toe`: **Auto**, currently detecting Channel and using **Channel: three windows**, live river, fixed summer intensity 0.85, Dave overlay 18%. Four screens cycle Current → Gavin style (live) → Gavin style (recorded) → Current, with 30-second holds and 8-second fades per screen (114-second cycle), spread evenly across the full cycle (28.5-second spacing; phases 0/28.5/57/85.5). Will requested this be left showing.
