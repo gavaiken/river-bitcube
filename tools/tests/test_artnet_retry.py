@@ -118,3 +118,17 @@ def test_non_network_error_still_stops_sender(ao, monkeypatch):
     run(ao, comp, 0.2)
     assert comp.par.Active.eval() is False                 # a real bug still stops it
     assert 'bad frame' in comp.storage['error']
+
+
+
+def test_combined_limit_scales_both_boxes_together(ao):
+    """27 Oct: both boxes share one circuit, so full white is scaled to TOTAL_WATTS across the two boxes together."""
+    import numpy as np
+    config = {'pixels_per_universe': 170, 'universes_per_rope': 4, 'color_order': 'RGB', 'reverse_ropes': [],
+              'boxes': [{'ip': '2.0.0.10', 'first_universe': 0, 'ropes': 10},
+                        {'ip': '2.0.0.11', 'first_universe': 40, 'ropes': 10}]}
+    frame = np.ones((20, 400, 3), np.float32)
+    _, watts = ao.to_bytes(frame, config, 1.0, ao.BOX_WATTS, ao.TOTAL_WATTS)
+    assert abs(sum(watts) - ao.TOTAL_WATTS) <= 2 and abs(watts[0] - watts[1]) <= 1
+    _, low = ao.to_bytes(frame * 0.1, config, 1.0, ao.BOX_WATTS, ao.TOTAL_WATTS)   # 300 W in all: untouched
+    assert abs(sum(low) - 300) <= 2

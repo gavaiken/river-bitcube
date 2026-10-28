@@ -21,6 +21,11 @@ CONFIG_PATH = r'C:\Users\user\RopeLights\config.local.json'
 PORT = 6454
 RETRY_SECONDS = 2.0                 # after a network error, wait this long before reopening and resending
 WATTS_PER_CHANNEL = 150 / 400 / 3   # 150 W per rope at full white, 400 px, 3 channels
+# Both rope boxes share one wall circuit at Gray Area (Gavin, 27 Oct): one limit for the two together, sized for a
+# 15 A circuit (1,440 W continuous) with headroom. Each box (PSAC10, rated 1,750 W, own breaker) gets at most BOX_WATTS.
+TOTAL_WATTS = 1400.0
+BOX_WATTS = 1500.0                  # a full-white box: per-box limiting no longer applies below this
+SHOW_BRIGHTNESS = 1.0               # show brightness for the ropes (was 0.4 until 27 Oct)
 
 
 def load_config(path=CONFIG_PATH):
@@ -139,8 +144,9 @@ def gray_frame(ropes, pixels, bit, invert=False):
 
 # ---- output -----------------------------------------------------------------------------------
 
-def to_bytes(frame, config, brightness, box_watts):
-    """Scale, power-limit per box, reverse/reorder, quantise. Returns (uint8 [rope][pixel][3], watts per box)."""
+def to_bytes(frame, config, brightness, box_watts, total_watts=0):
+    """Scale, power-limit per box and then both boxes together (total_watts; 0 = none), reverse/reorder, quantise.
+    Returns (uint8 [rope][pixel][3], watts per box)."""
     rgb = np.clip(frame, 0, 1) * brightness
     targets = rope_targets(config)
     boxes = [[i for i, t in enumerate(targets) if t[0] == b] for b in range(len(config['boxes']))]
@@ -150,7 +156,12 @@ def to_bytes(frame, config, brightness, box_watts):
         if box_watts > 0 and w > box_watts:
             rgb[idx] *= box_watts / w
             w = box_watts
-        watts.append(round(w))
+        watts.append(w)
+    total = sum(watts)
+    if total_watts > 0 and total > total_watts:
+        rgb *= total_watts / total
+        watts = [w * total_watts / total for w in watts]
+    watts = [round(w) for w in watts]
     data = (rgb * 255 + 0.5).astype(np.uint8)
     for r in config.get('reverse_ropes', []):
         data[r] = data[r][::-1]
@@ -254,11 +265,17 @@ def tick(comp):
             frame = test_frame(ropes, pixels, now)
         else:
             frame = np.zeros((ropes, pixels, 3), np.float32)
+        # 27 Oct (Gavin): max brightness 1.0, show brightness 1.0 and one combined power limit. Show files saved before
+        # carry the old 0.4 / 0.4 / 600 W per box; raise them as they run so nothing needs re-saving. Only the show's own
+        # picture (Source canvas) at exactly the old 0.4 is raised: test and calibration brightnesses are left alone.
         if p.Maxbrightness.eval() < 1.0:
-            # Max brightness is 1.0 (Gavin, 27 Oct): show files saved with the old 0.4 cap are raised when they run.
             p.Maxbrightness = 1.0
+        if p.Boxwatts.eval() < BOX_WATTS:
+            p.Boxwatts = BOX_WATTS
+        if source == 'canvas' and abs(p.Brightness.eval() - 0.4) < 1e-6:
+            p.Brightness = SHOW_BRIGHTNESS
         brightness = min(p.Brightness.eval(), p.Maxbrightness.eval())
-        data, watts = to_bytes(frame, config, brightness, p.Boxwatts.eval())
+        data, watts = to_bytes(frame, config, brightness, p.Boxwatts.eval(), TOTAL_WATTS)
         seq = s.get('seq', 0) % 255 + 1
         n = 0
         try:

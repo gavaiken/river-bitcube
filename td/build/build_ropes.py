@@ -27,7 +27,7 @@ if not hasattr(ropes.par, 'Active'):
     p = pg.appendFloat('Maxbrightness', label='Max Brightness (cap)')[0]
     p.normMin, p.normMax, p.default = 0, 1, 1.0
     p = pg.appendFloat('Boxwatts', label='Power Limit per Box (W)')[0]
-    p.normMin, p.normMax, p.default = 0, 1500, 600
+    p.normMin, p.normMax, p.default = 0, 1500, 1500
     p = pg.appendInt('Fps')[0]
     p.normMin, p.normMax, p.default = 1, 60, 40
     pg.appendTOP('Canvas')[0].default = '/project1/null5'
