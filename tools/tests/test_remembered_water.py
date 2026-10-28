@@ -47,3 +47,28 @@ def test_control_sets_screen_intensity_and_threshold():
     c = show.parse_control({'screens': {'intensity': 0.6, 'threshold': 0.5}})
     assert c['screen_intensity'] == 0.6 and c['screen_threshold'] == 0.5
     assert show.parse_control({})['screen_intensity'] is None
+
+
+def test_particle_field_windows_follow_the_room():
+    from remembered import particles
+    repo = Path(__file__).resolve().parents[2]
+    g = particles.Geometry(repo / 'tools/pixelmap/pixelmap-2026-10-27.json', repo / 'tools/pixelmap/screens-2026-10-27.json')
+    angles = [round(np.degrees(a)) for _, a, _, _ in g.screens]
+    assert angles[0] == 15 and abs(angles[2] + 21) <= 2 and abs(angles[3] - 24) <= 2
+    calm, surge = particles.Field(g), particles.Field(g)
+    for _ in range(300):
+        calm.step(1 / 60, 0.1, 40)
+        surge.step(1 / 60, 0.9, 120)
+    sc, ss = calm.render_screens((1, 1, 1)), surge.render_screens((1, 1, 1))
+    assert ss.mean() > sc.mean() > 0                       # the field follows the ropes' intensity
+    r = surge.render_ropes((1, 1, 1))
+    assert r.shape == (20, 400, 3) and 0 < r.max() <= 1
+
+
+def test_show_runs_with_the_particle_field(tmp_path):
+    repo = Path(__file__).resolve().parents[2]
+    s = show.Show(river_dir=tmp_path, pixelmap=repo / 'tools/pixelmap/pixelmap-2026-10-27.json',
+                  screens=repo / 'tools/pixelmap/screens-2026-10-27.json')
+    for i in range(120):
+        ropes_frame, panels_frame = s.tick(1_800_000_000 + i / 60, 1 / 60)
+    assert panels_frame.shape == (256, 512, 3) and s.control['screen_mode'] == 'particles'

@@ -48,7 +48,7 @@ if missing:
 # package td/remembered ("remembered"), imported with <repo>/td on sys.path.
 if TD_DIR not in sys.path:
     sys.path.insert(0, TD_DIR)
-for _m in ('palette', 'zones', 'clock', 'ropes', 'panels', 'water', 'status', 'show'):
+for _m in ('palette', 'zones', 'clock', 'ropes', 'panels', 'water', 'particles', 'status', 'show'):
     if 'remembered.' + _m in sys.modules:
         importlib.reload(sys.modules['remembered.' + _m])
 from remembered import show as remembered_show                         # noqa: E402
@@ -94,6 +94,11 @@ if not hasattr(rem.par, 'Seed'):
 if not hasattr(rem.par, 'Zonesfile'):
     pg.appendStr('Zonesfile', label='Calibration zones (from shows.json; empty = built-in defaults)')
 rem.par.Zonesfile = ZONES or ''
+for _n, _f, _l in (('Mapfile', PIXELMAP, 'LED map (the particle field: every rope LED in the room)'),
+                   ('Screensfile', SCREENS, 'Screens (the particle field: where each screen hangs, its rotation)')):
+    if not hasattr(rem.par, _n):
+        pg.appendStr(_n, label=_l)
+    getattr(rem.par, _n).val = (REPO + '/' + _f) if _f else ''
 note(rem, "THE REMEMBERED RIVER (built by td/build/build_remembered.py; docs/files/river-remembered.md)\n"
           "The logic is in the repo, td/remembered/*.py (not in this file): edit there, git pull, rebuild.\n"
           "remembered_exec -> show.frame(): inputs (state.json, reflex.json, presence.json, control.json, data/remembered),\n"

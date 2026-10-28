@@ -30,6 +30,7 @@ from . import panels as panels_mod
 from . import ropes as ropes_mod
 from . import status as status_mod
 from . import water as water_mod
+from . import particles as particles_mod
 from . import zones as zones_mod
 
 RIVER = Path(r'C:\Users\user\River')
@@ -47,7 +48,8 @@ PANEL_EVERY = 2                     # screens step every 2nd frame
 KNOBS = ('speed', 'density', 'brightness', 'turbulence')
 NEUTRAL = {k: 0.5 for k in KNOBS}
 CONTROL_DEFAULT = {'pool_height_m': None, 'light': 'off', 'leds': [], 'opening_night': True,   # opening night ON unless told
-                   'screen_intensity': None, 'screen_threshold': None}                          # None: water.SETTINGS
+                   'screen_intensity': None, 'screen_threshold': None,                          # None: water.SETTINGS
+                   'screen_mode': 'particles'}       # particles (one field, the screens as windows) | water (video)
 SCREEN_CALM = 0.4                   # the screens in calm, as a share of their intensity (artists, 27 Oct: follow the loop)
 DARK_LUMA = 0.08                    # the live cam darker than this (night) -> the screens use the clips
 LIGHTS = ('off', 'pool', 'eddies', 'leds')
@@ -76,6 +78,8 @@ def parse_control(c):
         on = c['opening'].get('on', on)
     ctl['opening_night'] = bool(on)
     sc = c.get('screens') if isinstance(c.get('screens'), dict) else {}
+    if sc.get('mode', c.get('screen_mode')) in ('particles', 'water'):
+        ctl['screen_mode'] = sc.get('mode', c.get('screen_mode'))
     for key, name in (('screen_intensity', 'intensity'), ('screen_threshold', 'threshold')):
         v = sc.get(name, c.get(key))
         if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 1:
@@ -243,7 +247,7 @@ class PaletteGlide:
 
 
 class Show:
-    def __init__(self, zones=None, river_dir=RIVER, data_dir=None, seed=0, show=SHOW):
+    def __init__(self, zones=None, river_dir=RIVER, data_dir=None, seed=0, show=SHOW, pixelmap=None, screens=None):
         self.z = zones or zones_mod.Zones()
         self.river = Path(river_dir)
         self.data = Path(data_dir) if data_dir else REPO / 'data' / 'remembered'
@@ -252,6 +256,8 @@ class Show:
         self.ropes = ropes_mod.Ropes(self.z, seed)
         self.panels = panels_mod.Panels(self.z, seed)
         self.water = water_mod.Water()
+        self.field = particles_mod.Field(particles_mod.Geometry(pixelmap, screens), seed)
+        self.rope_level = 0.0                 # the ropes' brightness, smoothed: how busy the particle field is
         self.crops = [None] * 4
         self.wins = self.water.windows(0.0)
         self.screen_level = SCREEN_CALM
@@ -358,6 +364,14 @@ class Show:
             dry=clock.is_dry(day), flow_level=flow_level, knobs=knobs, linger=self.linger, night=self.night,
             calm_level=clock.OPENING_CALM_LEVEL if opening else (clock.PRESET_LEVEL if preset else clock.CALM_LEVEL),
             wave=snap['wave'], light=self.control['light'], leds=self.control['leds'], pool_height_m=self.control['pool_height_m'], day=day)
+        if self.control['screen_mode'] == 'particles' and self.control['light'] == 'off':
+            lvl = float(self.rope_frame.max(axis=-1).mean()) / 0.3           # how lit the ropes are, ~0..1
+            self.rope_level += (min(1.0, lvl) - self.rope_level) * (1 - math.exp(-dt / 0.8))
+            self.field.step(dt, max(self.rope_level, 0.6 if snap['phase'] == 'surge' else 0.0),
+                            max(self.ropes.v_now, 30.0), knobs.get('turbulence', 0.5))
+            self.ropes.overlay = self.field.render_ropes(pal['light']) * 0.8
+        else:
+            self.ropes.overlay = None
         self.rope_frame = self.ropes.step(dt, ctx)
         ctx['rope_speed'] = self.ropes.v_now
         self.ticks += 1
@@ -367,9 +381,13 @@ class Show:
         self.screen_level += (target - self.screen_level) * (1 - math.exp(-dt / 0.6))   # never a jump
         if self.ticks % PANEL_EVERY == 0:                 # the screens at 30 fps: half the work, still smooth
             # the artists' simulator look (water.py): the moving water through four drifting windows, everything else off
-            self.panel_frame = self.water.step(self.crops, self.wins, level=self.screen_level,
-                                               intensity=self.control['screen_intensity'],
-                                               sens=self.control['screen_threshold'])
+            if self.control['screen_mode'] == 'particles':
+                inten = self.control['screen_intensity'] or 0.82
+                self.panel_frame = np.clip(self.field.render_screens(pal['light']) * inten, 0.0, 1.0)
+            else:
+                self.panel_frame = self.water.step(self.crops, self.wins, level=self.screen_level,
+                                                   intensity=self.control['screen_intensity'],
+                                                   sens=self.control['screen_threshold'])
             self.panel_dt = 0.0
         if now >= self.next['status']:
             self.next['status'] = now + status_mod.WRITE_EVERY
@@ -377,7 +395,7 @@ class Show:
                 now=now, show=self.show, fps=self.fps, loop=snap, day=day, plan=snap['plan'], knobs=knobs,
                 reflex=self.knobs.reflex, palette=palette.as_hex(pal), heard=heard,
                 river_motion=motion, river_source=self.river_source if river_live else 'none', room=room,
-                lit_pct=self.water.lit_pct, cap=round(self.screen_level, 2), watts=self.ropes.watts, opening_night=opening,
+                lit_pct=self.field.lit_pct if self.control['screen_mode'] == 'particles' else self.water.lit_pct, cap=round(self.screen_level, 2), watts=self.ropes.watts, opening_night=opening,
                 zones_file=self.z.file,
                 pool_height_m=self.control['pool_height_m'] if self.control['pool_height_m'] is not None
                 else self.z.pool_height_m, light=self.control['light'])
@@ -413,7 +431,10 @@ def get(comp):
     h = _holder()
     if h.show is None:
         zf = comp.par.Zonesfile.eval() if hasattr(comp.par, 'Zonesfile') else ''
-        h.show = Show(zones_mod.load(zf or None), seed=int(comp.par.Seed.eval()) if hasattr(comp.par, 'Seed') else 0)
+        mf = comp.par.Mapfile.eval() if hasattr(comp.par, 'Mapfile') else ''
+        sf = comp.par.Screensfile.eval() if hasattr(comp.par, 'Screensfile') else ''
+        h.show = Show(zones_mod.load(zf or None), seed=int(comp.par.Seed.eval()) if hasattr(comp.par, 'Seed') else 0,
+                      pixelmap=mf or None, screens=sf or None)
     return h.show
 
 

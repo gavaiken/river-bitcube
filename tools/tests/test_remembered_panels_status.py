@@ -206,7 +206,7 @@ def test_control_json_shapes():
     c = show.parse_control({'t': 1, 'zones': {'file': 'zones-x.json', 'light': 'leds', 'pool_height_m': 0.6,
                                               'leds': [{'rope': 1, 'from': 2, 'to': 3}]}})
     assert c == {'pool_height_m': 0.6, 'light': 'leds', 'leds': [{'rope': 1, 'from': 2, 'to': 3}], 'opening_night': True,
-                 'screen_intensity': None, 'screen_threshold': None}
+                 'screen_intensity': None, 'screen_threshold': None, 'screen_mode': 'particles'}
     assert show.CONTROL_DEFAULT['opening_night'] is True                   # opening night is on unless told otherwise
     assert show.parse_control({'light': 'pool', 'opening_night': False})['opening_night'] is False
     assert show.parse_control({'opening': {'on': False}})['opening_night'] is False
