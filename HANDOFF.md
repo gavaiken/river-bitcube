@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** Will (Codex), setting up temporary full-playlist performance capture; current 30 fps trial preserved
+- **Holder:** Will (Codex), preparing temporary full-playlist profiling; current approved 30 fps trial preserved
 - **Where:** bitcube running **`river-all-looks.toe`** ("The river: all looks (playlist)", auto, ~58–60 fps), **the boot default since 11:20** (Gavin); `river-looks.toe` (three looks) retired as `old-river-looks.toe`, its frozen copy `river-two-looks.toe` stays offered
-- **Updated:** 2026-10-28 13:03 PT
+- **Updated:** 2026-10-28 13:06 PT
 - **Next holder:** Will. All-looks stays default / Auto, softer ribbons retained. Temporary interpolated video trial is active in memory only; rollback command below. Reload returns original footage.
 
 ## Temporary 30 fps recorded-video trial (28 Oct, Will / Codex)
