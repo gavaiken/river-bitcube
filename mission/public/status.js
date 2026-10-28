@@ -1018,6 +1018,7 @@ function showfileCtlHTML(m, onlyKind = null, where = onlyKind ? 'year' : 'td', {
   const btns = files.map((f) => `<button type="button" id="${host}-${esc(fileId(f))}" class="btn ${f === running ? '' : 'primary'}" data-act="switch" data-file="${esc(f)}" ${o ? 'disabled' : ''}>${f === running ? `Restart on ${esc(fileLabel(f))}` : `Switch to ${esc(fileLabel(f))}`}</button>`).join('');
   return `<div class="ctl ${whyOf('switch') && !busy('switch') ? 'off' : ''}" id="${host}" data-ctl="switch"${busy('switch') ? ' aria-busy="true"' : ''}><div class="ctl-h">Show file</div>${noWait ? '' : whyLine('switch', host)}
     <div class="readout">${readoutWords(s, td)}</div>
+    ${s.file?.name === M.REMEMBERED_FILE ? '<div class="links"><a href="/remembered">What it is doing and why → Remembered river</a></div>' : ''}
     <div class="row-btns">${btns}</div>
     <div class="effect">Switching restarts TouchDesigner on that file: the lights go dark for about a minute and unsaved changes in TouchDesigner are lost. The default doesn't change. It asks first, with the show's card.</div>
     ${statusLine(host, ['switch'])}</div>`;

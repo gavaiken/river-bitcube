@@ -493,6 +493,18 @@ dialog.sheet .menu-row .btn .chev { margin-left: auto; }
   .band h1 { font-size: 30px; }
 }
 
+/* ---- the artists' 30 % rule: one bar per screen with the rule's line (frames-view.js litMeterHTML; Remembered river, HUB75) */
+.litmeter { display: grid; gap: 6px; }
+.litrow { display: grid; grid-template-columns: 5.5em minmax(0, 1fr) 5.5em; gap: 10px; align-items: center; font-size: 14px; }
+.litrow .litname { color: var(--muted); font-weight: 650; }
+.litrow .litbar { position: relative; height: 12px; border-radius: 999px; background: var(--unk-soft); overflow: hidden; }
+.litrow .litbar .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 999px; }
+.litrow .litbar .rule { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--text); }
+.litrow .litnum { font-weight: 750; font-variant-numeric: tabular-nums; text-align: right; }
+.litrow.over .litbar .fill { background: var(--warn); }
+.litrow.over .litnum { color: var(--warn-text); }
+.litkey { font-size: 14px; color: var(--muted); }
+
 /* ---- print: the words, nothing fancy ------------------------------------------------------------------------- */
 @media print {
   .art, nav.tabs, .menu-btn, dialog, .fresh { display: none !important; }

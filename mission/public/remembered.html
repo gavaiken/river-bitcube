@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e141a" media="(prefers-color-scheme: dark)">
+<title>Remembered river · Mission control</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" href="/v2.css">
+<link rel="stylesheet" href="/remembered.css">
+<script>try { const t = localStorage.getItem('mc-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
+</head>
+<body>
+<main class="rem">
+  <section class="card rem-now" id="now" aria-label="What the remembered river is doing">
+    <div class="now-main">
+      <p class="phase" id="now-phase">Connecting…</p>
+      <div class="loopbar" id="now-loopbar" aria-hidden="true"><span class="fill"></span><span class="surge"></span></div>
+      <p class="now-line" id="now-line"></p>
+    </div>
+    <p class="notrunning" id="now-notrunning" hidden></p>
+    <p class="from muted" id="now-from"></p>
+    <ul class="problems" id="now-problems" hidden></ul>
+  </section>
+
+  <div class="rem-col" id="col-in">
+    <h2 class="col-h">Inputs</h2>
+    <section class="card" id="dave" aria-labelledby="dave-h">
+      <h3 class="card-h" id="dave-h">Dave's agent</h3>
+      <div id="dave-body"><p class="muted">Waiting for bitcube…</p></div>
+    </section>
+    <section class="card" id="river" aria-labelledby="river-h">
+      <h3 class="card-h" id="river-h">River camera</h3>
+      <div class="still river-still"><img id="river-img" alt="The river camera's latest still" hidden><p class="nostill muted" id="river-none">No picture yet</p></div>
+      <div id="river-body"></div>
+    </section>
+    <section class="card" id="room" aria-labelledby="room-h">
+      <h3 class="card-h" id="room-h">The room</h3>
+      <div class="still room-still" id="room-still"><img id="room-img" alt="The gallery camera's latest still, the show view" hidden><p class="nostill muted" id="room-none">No picture yet</p><div class="dots" id="room-dots" aria-hidden="true"></div></div>
+      <div id="room-body"></div>
+    </section>
+  </div>
+
+  <div class="rem-col" id="col-dec">
+    <h2 class="col-h">Decision</h2>
+    <section class="card" id="decision" aria-labelledby="decision-h">
+      <h3 class="card-h" id="decision-h">The remembered day</h3>
+      <div id="day-head"></div>
+      <div id="day-strip" class="strip"></div>
+      <div class="strip-key muted" aria-hidden="true"><span class="k-rain">rain</span><span class="k-flow">flow</span><span class="k-night">night</span><span class="k-now">now</span><span class="k-surge">surge</span></div>
+      <h4 class="sub-h">Why</h4>
+      <ul class="why" id="why"></ul>
+    </section>
+  </div>
+
+  <div class="rem-col" id="col-out">
+    <h2 class="col-h">Outputs</h2>
+    <section class="card strips" id="out" aria-labelledby="out-h">
+      <h3 class="card-h" id="out-h">What the lights are sent</h3>
+      <div class="striplabels muted"><span>Ropes 1–10</span><span>11–20 · plug end at the top</span></div>
+      <canvas id="strips-canvas" role="img" aria-label="The 20 ropes as TouchDesigner is sending them, plug end at the top"></canvas>
+      <canvas id="quads-canvas" role="img" aria-label="The four screens as TouchDesigner is sending them, each upright as seen"></canvas>
+      <div class="stripnums quads" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span></div>
+      <p class="muted secondary" id="out-note"></p>
+      <h4 class="sub-h">Screens lit</h4>
+      <div id="lit"></div>
+      <dl class="facts" id="facts"></dl>
+    </section>
+    <section class="card" id="controls" aria-labelledby="controls-h">
+      <h3 class="card-h" id="controls-h">Controls</h3>
+      <div class="ctl" id="zones-ctl">
+        <div class="ctl-h">The pool and the eddies</div>
+        <div class="poolrow">
+          <label for="pool">Pool line <output id="pool-out">–</output></label>
+          <div class="stepper"><button type="button" class="btn step" id="pool-less" aria-label="Lower the pool line 5 cm">−</button>
+            <input type="range" id="pool" min="0" max="1.5" step="0.05" value="0.6" aria-describedby="pool-hint">
+            <button type="button" class="btn step" id="pool-more" aria-label="Raise the pool line 5 cm">+</button></div>
+          <p class="hint muted" id="pool-hint">Metres above the floor: LEDs below the line are the pool. Now on bitcube: <b id="pool-now">–</b></p>
+        </div>
+        <div class="zone-btns">
+          <div id="z-pool"></div>
+          <div id="z-eddies"></div>
+          <div id="z-off"></div>
+        </div>
+      </div>
+      <div class="ctl" id="opening-ctl">
+        <div class="ctl-h">Opening night</div>
+        <p class="readout" id="opening-now">–</p>
+        <div id="z-opening"></div>
+      </div>
+    </section>
+    <footer class="foot" id="foot"></footer>
+  </div>
+</main>
+<script type="module" src="/remembered.js"></script>
+</body>
+</html>

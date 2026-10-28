@@ -1199,8 +1199,8 @@ export function mountShell({ page = 'status', title = '' } = {}) {
   const main = $('main');
   if (main) main.before(header); else document.body.prepend(header);
   // the System map has no tab of its own: it is reached from Status, so Status is marked as where you are (its parent); the
-  // HUB75 simulator likewise sits under Lights
-  const tabOf = page === 'map' ? 'status' : page === 'hub75' ? 'lights' : page;
+  // HUB75 simulator and the Remembered river page likewise sit under Lights
+  const tabOf = page === 'map' ? 'status' : page === 'hub75' || page === 'remembered' ? 'lights' : page;
   if (!$('nav.tabs')) document.body.append(el(`<nav class="tabs" aria-label="Pages">${TABS.map(([k, l, h, svg]) =>
     `<a href="${h}" class="${k === tabOf ? 'on' : ''}" ${k === tabOf ? `aria-current="${k === page ? 'page' : 'true'}"` : ''}>${svg}${esc(l)}</a>`).join('')}</nav>`));
   // the focus order follows where the tabs are drawn: last on a phone (the bar at the bottom), right after the header from

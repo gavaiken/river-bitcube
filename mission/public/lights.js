@@ -8,7 +8,7 @@ import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, mark
   WARN_MS, LOST_MS, POLL_TIMEOUT_MS, serverNow, serverClock } from '/ui.js';
 import { fetchTimed } from '/app.js';
 import { derive, changeLabel, dur, FILES, CAL_STAGE_S, CAL_TOTAL_S, CAL_STAGE_WORDS, CAL_STAGES, EXPECT_S, ownEntries, endedOnce, START_USUAL, calDryRun, calStep, ownMemory } from '/model.js';
-import { uprightsFromAtlas } from '/screens.js';
+import { decodeLights, fitCanvas, paintStrips, paintScreens, paintEmpty } from '/frames-view.js';
 import { calChecklist, ROOM_CHECK, startWhy, dryWhy, calView, rebuiltFor, runNote, nextLine, captureWhen, driftWords, resultWords,
   mapMissing, placeLabels, DRIFT_FINE_PX, NO_CONTACT, calRead, calLeft, changeSince, stateLevel, applyingNow, stateParts, CAL_COPY, runFine,
   resultHead, CAL_CTL, calNewer, stateWords } from '/lights-words.js';
@@ -230,15 +230,6 @@ function screenQuads() {
 const missing = () => mapMissing({ loaded: S.map.loaded, map: S.map.map, error: S.map.error, waitS: (performance.now() - S.map.askedAt) / 1000 });
 
 // ---- what TouchDesigner is sending: GET /api/lights every 10 s while this page is visible -------------------------------
-function decodeRGB(b64, w, h) {
-  try {
-    const bin = atob(b64), n = w * h * 3;
-    if (bin.length < n) return null;
-    const out = new Uint8Array(n);
-    for (let i = 0; i < n; i++) out[i] = bin.charCodeAt(i);
-    return out;
-  } catch { return null; }
-}
 async function pollLights() {
   if (document.hidden || S.lights.fetching) return;
   S.lights.fetching = true;
@@ -250,11 +241,9 @@ async function pollLights() {
       S.lights.error = lightsError(j?.error || f?.ropes?.error || f?.panels?.error, r.status);
       S.lights.failedAt ??= performance.now();
     } else {
-      const bytes = decodeRGB(f.ropes.rgb, f.ropes.w, f.ropes.h), panelBytes = decodeRGB(f.panels.rgb, f.panels.w, f.panels.h);
-      if (!bytes || !panelBytes) throw new Error('the frame was cut short');
-      const dark = [];   // per rope: every LED black (max channel under 8)
-      for (let c = 0; c < f.ropes.w; c++) { let lit = false; for (let y = 0; y < f.ropes.h && !lit; y++) { const i = (y * f.ropes.w + c) * 3; if (bytes[i] > 8 || bytes[i + 1] > 8 || bytes[i + 2] > 8) lit = true; } dark.push(!lit); }
-      S.lights = { frames: f, at: performance.now(), wall: Date.now(), age_s: typeof j.age_s === 'number' ? j.age_s : 0, error: null, failedAt: null, bytes, panelBytes, dark, scr: screensOf(f, panelBytes), fetching: true };
+      // decoded, and each rope's darkness (every LED black: max channel under 8), by the shared frames-view.js
+      const { bytes, panelBytes, dark, scr } = decodeLights(f);
+      S.lights = { frames: f, at: performance.now(), wall: Date.now(), age_s: typeof j.age_s === 'number' ? j.age_s : 0, error: null, failedAt: null, bytes, panelBytes, dark, scr, fetching: true };
     }
   } catch (e) { S.lights.error = lightsError(e); S.lights.failedAt ??= performance.now(); }
   finally { S.lights.fetching = false; }
@@ -268,26 +257,6 @@ function lightsError(e, status) {
   if (/rgb holds|bytes, expected|bad frame|missing|cut short/i.test(m)) return 'a frame from bitcube arrived incomplete';
   if (/not cooked|has not cooked/i.test(m)) return 'TouchDesigner has not drawn a frame yet';
   return plainError(typeof e === 'object' && e ? e : m);
-}
-/** The four screens to draw, each upright as seen: { img, cw, ch } with cell k-1 = screen k at (cw·(k-1), 0, cw, ch).
- *  frames.screens when bitcube sends it; else the Gray Area atlas undone (public/screens.js); else (an atlas of four quads
- *  in a row, before Gray Area) the atlas cut into four as it is. */
-function screensOf(f, panelBytes) {
-  const s = f.screens;
-  if (s?.rgb && Number.isInteger(s.w) && Number.isInteger(s.h) && s.w % 4 === 0) {
-    const b = decodeRGB(s.rgb, s.w, s.h);
-    if (b) return { img: panelImage(b, s.w, s.h), cw: s.w / 4, ch: s.h, upright: true };
-  }
-  const up = uprightsFromAtlas(panelBytes, f.panels.w, f.panels.h);
-  if (up) return { img: panelImage(up.bytes, up.w, up.h), cw: up.w / 4, ch: up.h, upright: true };
-  return { img: panelImage(panelBytes, f.panels.w, f.panels.h), cw: f.panels.w / 4, ch: f.panels.h, upright: false };
-}
-function panelImage(bytes, w, h) {
-  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-  const img = new ImageData(w, h), d = img.data;
-  for (let i = 0; i < w * h; i++) { d[i * 4] = bytes[i * 3]; d[i * 4 + 1] = bytes[i * 3 + 1]; d[i * 4 + 2] = bytes[i * 3 + 2]; d[i * 4 + 3] = 255; }
-  cv.getContext('2d').putImageData(img, 0, 0);
-  return cv;
 }
 const frameAgeS = () => (S.lights.frames ? S.lights.age_s + since(S.lights.at, S.lights.wall) : null);
 const frameOld = () => { const a = frameAgeS(); return a != null && a > FRAME_OLD_S; };
@@ -351,16 +320,6 @@ function stillUrl(still) {
   if (still.url) return still.url;
   if (still.jpeg || still.base64) return `data:${still.type || 'image/jpeg'};base64,${still.jpeg || still.base64}`;
   return null;
-}
-/** Fit a canvas to its CSS box at the device's pixel ratio (capped at 2); returns the context scaled to CSS px, or null. */
-function fitCanvas(cv) {
-  const w = cv.clientWidth, h = cv.clientHeight;
-  if (!w || !h) return null;
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
-  const ctx = cv.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return { ctx, w, h };
 }
 /** Draws `img` (a canvas) onto the triangle d0-d1-d2 of the context, with the image's triangle s0-s1-s2 mapped onto it. */
 function drawTri(ctx, img, [x0, y0], [x1, y1], [x2, y2], [u0, v0], [u1, v1], [u2, v2]) {
@@ -630,40 +589,12 @@ function renderStrips() {
   drawStrips();
 }
 function drawStrips() {
-  const rc = $('#strips-canvas'), qc = $('#quads-canvas');
-  const fr = fitCanvas(rc), fq = fitCanvas(qc);
+  const fr = fitCanvas($('#strips-canvas')), fq = fitCanvas($('#quads-canvas'));
   if (!fr || !fq) return;
   const l = S.lights;
-  fr.ctx.clearRect(0, 0, fr.w, fr.h); fq.ctx.clearRect(0, 0, fq.w, fq.h);
-  const gap = 6, n = N_ROPES, sw = (fr.w - gap * (n - 1)) / n;
-  if (!l.frames) {   // empty outlines: the strips stay readable as 20 places, not a blank box
-    fr.ctx.strokeStyle = 'rgba(140, 150, 160, 0.3)'; fr.ctx.lineWidth = 1;
-    for (let r = 0; r < n; r++) fr.ctx.strokeRect(r * (sw + gap) + 0.5, 0.5, sw - 1, fr.h - 1);
-    const qw = (fq.w - gap * 3) / 4;
-    for (let i = 0; i < 4; i++) fq.ctx.strokeRect(i * (qw + gap) + 0.5, 0.5, qw - 1, fq.h - 1);
-    return;
-  }
-  const f = l.frames, dark = f.source === 'black' || f.ropes?.source === 'black';
-  // one column of the frame per strip, LED 0 (the plug end) at the top
-  const col = document.createElement('canvas'); col.width = f.ropes.w; col.height = f.ropes.h;
-  const img = new ImageData(f.ropes.w, f.ropes.h), d = img.data, b = l.bytes;
-  for (let i = 0; i < f.ropes.w * f.ropes.h; i++) { d[i * 4] = b[i * 3]; d[i * 4 + 1] = b[i * 3 + 1]; d[i * 4 + 2] = b[i * 3 + 2]; d[i * 4 + 3] = 255; }
-  col.getContext('2d').putImageData(img, 0, 0);
-  fr.ctx.imageSmoothingEnabled = true;
-  for (let r = 0; r < n; r++) {
-    const x = Math.round(r * (sw + gap));
-    fr.ctx.globalAlpha = S.hi == null || S.hi === r ? 1 : 0.3;
-    fr.ctx.drawImage(col, r, 0, 1, f.ropes.h, x, 0, Math.round(sw), fr.h);
-    if (dark || l.dark?.[r]) { fr.ctx.strokeStyle = 'rgba(140, 150, 160, 0.5)'; fr.ctx.lineWidth = 1.5; fr.ctx.strokeRect(x + 0.75, 0.75, Math.round(sw) - 1.5, fr.h - 1.5); }
-    if (S.hi === r) { fr.ctx.strokeStyle = '#7cc3e8'; fr.ctx.lineWidth = 2; fr.ctx.strokeRect(x + 1, 1, Math.round(sw) - 2, fr.h - 2); }
-  }
-  fr.ctx.globalAlpha = 1;
-  // the four screens, each upright as seen (cell n-1 = screen n), its own shape kept, centred over its number
-  const sc = l.scr, gw = (fq.w - gap * 3) / 4;
-  let dw = gw, dh = fq.h;
-  if (sc.upright) { dh = fq.h; dw = dh * sc.cw / sc.ch; if (dw > gw) { dw = gw; dh = gw * sc.ch / sc.cw; } }
-  fq.ctx.imageSmoothingEnabled = false;
-  for (let i = 0; i < 4; i++) fq.ctx.drawImage(sc.img, i * sc.cw, 0, sc.cw, sc.ch, Math.round(i * (gw + gap) + (gw - dw) / 2), Math.round((fq.h - dh) / 2), Math.round(dw), Math.round(dh));
+  if (!l.frames) { paintEmpty(fr, fq, N_ROPES); return; }   // empty outlines: the strips stay readable as 20 places, not a blank box
+  paintStrips(fr, l, { hi: S.hi });
+  paintScreens(fq, l.scr);
 }
 
 // ---- provenance: "Map made 23 Oct 12:24 at Gray Area · 20 of 20 ropes · the camera moved 10 px (fine)" -------------------
@@ -1053,7 +984,7 @@ $('#cal-body').addEventListener('click', (e) => {
 
 // ---- footer -------------------------------------------------------------------------------------------------------
 function renderFooter() {
-  put('foot', `<div class="links">${[['HUB75 simulator (experiment)', '/hub75'], ...DOC_LINKS].map(([l, h]) => `<a href="${h}" ${h.startsWith('/') ? '' : 'target="_blank" rel="noopener"'}>${esc(l)}</a>`).join('')}</div>`);
+  put('foot', `<div class="links">${[['Remembered river (debug view)', '/remembered'], ['HUB75 simulator (experiment)', '/hub75'], ...DOC_LINKS].map(([l, h]) => `<a href="${h}" ${h.startsWith('/') ? '' : 'target="_blank" rel="noopener"'}>${esc(l)}</a>`).join('')}</div>`);
 }
 
 // ---- go ----------------------------------------------------------------------------------------------------------

@@ -1,0 +1,109 @@
+/* Mission control: the Remembered river page (/remembered; docs/mission-ui.md "Remembered river page"). Page styles only: the tokens,
+   cards, controls and the shell are v2.css. One column on a phone (inputs, decision, outputs), three side by side from 1100 px. The
+   canvases and the stills are dark on purpose: they show LEDs and a dark gallery. */
+main.rem { max-width: 720px; }
+.rem .col-h { font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 800; margin: 6px 4px -2px; }
+.rem .card-h { font-size: 17px; font-weight: 750; margin: 0 0 8px; }
+.rem .sub-h { font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 700; margin: 14px 0 6px; }
+.rem-col { display: grid; gap: var(--gap); align-content: start; grid-template-columns: minmax(0, 1fr); }
+.rem .dim { opacity: 0.6; }
+.rem p + p { margin-top: 6px; }
+.rem .old { color: var(--warn-text); font-weight: 700; }
+
+/* ---- the top line: the phase as a big word, the loop, the day ------------------------------------------------------------- */
+.rem-now .phase { font-size: 34px; font-weight: 850; letter-spacing: -0.015em; line-height: 1.1; }
+.rem-now .phase.ph-surge { color: var(--accent); }
+.rem-now .phase.ph-off { color: var(--muted); font-size: 26px; }
+.rem-now .now-line { font-size: 17px; font-weight: 600; margin-top: 6px; }
+.rem-now .notrunning { font-size: 16px; font-weight: 600; margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: var(--unk-soft); color: var(--unk-text); }
+.rem-now .notrunning[hidden], .rem-now .problems[hidden], .loopbar[hidden], .loopbar .surge[hidden] { display: none; }
+.rem-now .from { font-size: 14px; margin-top: 8px; }
+.rem-now .problems { margin: 8px 0 0; padding-left: 20px; color: var(--warn-text); font-size: 15px; font-weight: 600; }
+.loopbar { position: relative; height: 10px; border-radius: 999px; background: var(--unk-soft); margin-top: 10px; overflow: visible; }
+.loopbar .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--accent); }
+.loopbar .surge { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: var(--text); }
+
+/* ---- Dave's agent ---------------------------------------------------------------------------------------------------------- */
+.dday { font-size: 17px; }
+.reason { font-size: 15px; font-style: italic; line-height: 1.4; }
+.swatches { display: flex; gap: 4px; margin: 10px 0; }
+.swatches span { flex: 1 1 0; height: 26px; border-radius: 6px; border: 1px solid var(--line); }
+.knobs { display: grid; gap: 6px; margin: 6px 0 10px; }
+.knob, .meter { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) 7.5em; gap: 10px; align-items: center; font-size: 14px; }
+.knob .kname, .meter .mname { color: var(--muted); font-weight: 650; }
+.kbar, .mbar { position: relative; height: 10px; border-radius: 999px; background: var(--unk-soft); }
+.kbar .fill, .mbar .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--accent); }
+.kbar .eff { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1.5px; background: var(--text); border-radius: 2px; }
+.kval, .mval { font-weight: 750; font-variant-numeric: tabular-nums; text-align: right; }
+.kval .nudge { display: block; font-weight: 600; color: var(--muted); font-size: 13px; }
+
+/* ---- the stills: river camera, the room with its lingerers ----------------------------------------------------------------- */
+.still { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #0b0f14; border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+.still img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.still img[hidden] { display: none; }
+.still .nostill { position: absolute; inset: 0; display: grid; place-items: center; color: #a9b4bf; font-size: 15px; text-align: center; padding: 12px; }
+.still .nostill[hidden] { display: none; }
+.dots { position: absolute; inset: 0; pointer-events: none; }
+.dot { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: #ffd25e; border: 2px solid #0b0f14; box-shadow: 0 0 0 2px #ffd25e66; }
+.dot .lab { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); white-space: nowrap; background: rgba(10, 14, 18, 0.85); color: #ffe7a3; font-size: 13px; font-weight: 700; padding: 2px 7px; border-radius: 6px; }
+.ling { margin: 6px 0 0; padding-left: 20px; font-size: 15px; }
+.tag { display: inline-block; font-size: 13px; font-weight: 800; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); }
+.tag.live { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.tag.recorded { background: var(--unk-soft); color: var(--unk-text); }
+
+/* ---- the decision: the remembered day's 24 hours, why ------------------------------------------------------------------- */
+.strip { margin-top: 10px; }
+.daystrip { display: block; width: 100%; height: auto; }
+.daystrip .ds-bg { fill: var(--unk-soft); }
+.daystrip .ds-night { fill: var(--text); opacity: 0.09; }
+.daystrip .ds-rain { fill: #4aa3df; opacity: 0.75; }
+.daystrip .ds-flow { fill: none; stroke: var(--text); stroke-width: 2.2; stroke-linejoin: round; }
+.daystrip .ds-tick { fill: var(--muted); font-size: 11px; font-weight: 600; }
+.daystrip .ds-surge line { stroke: #e9b94a; stroke-width: 2.5; stroke-dasharray: 4 3; }
+.daystrip .ds-surge text { fill: #b9821a; font-size: 11px; font-weight: 800; }
+.daystrip .ds-now line { stroke: var(--accent); stroke-width: 3; }
+.daystrip .ds-now circle { fill: var(--accent); }
+.strip-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; margin-top: 4px; }
+.strip-key span::before { content: ''; display: inline-block; width: 12px; height: 10px; margin-right: 5px; border-radius: 2px; vertical-align: -1px; }
+.strip-key .k-rain::before { background: #4aa3df; }
+.strip-key .k-flow::before { height: 2px; vertical-align: 3px; background: var(--text); }
+.strip-key .k-night::before { background: var(--text); opacity: 0.18; }
+.strip-key .k-now::before { width: 3px; background: var(--accent); }
+.strip-key .k-surge::before { width: 3px; background: #e9b94a; }
+.why { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 15px; line-height: 1.4; }
+
+/* ---- outputs ------------------------------------------------------------------------------------------------------------- */
+.strips canvas { display: block; width: 100%; border-radius: 10px; background: #0b0f14; }
+#strips-canvas { height: 180px; margin-top: 6px; }
+#quads-canvas { height: 130px; margin-top: 8px; }
+.striplabels { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.stripnums.quads { display: grid; grid-template-columns: repeat(4, 1fr); font-size: 14px; font-weight: 650; color: var(--muted); text-align: center; padding-top: 4px; }
+#out-note { margin-top: 6px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px 16px; margin: 12px 0 0; }
+.facts dt { font-size: 14px; color: var(--muted); }
+.facts dd { margin: 0; font-weight: 750; font-variant-numeric: tabular-nums; }
+
+/* ---- controls -------------------------------------------------------------------------------------------------------------- */
+#controls { display: grid; gap: var(--gap); }
+#controls .card-h { margin: 0; }
+.poolrow { display: grid; gap: 6px; }
+.poolrow label { font-weight: 700; display: flex; justify-content: space-between; gap: 12px; }
+.poolrow output { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent); }
+.poolrow .stepper { flex-wrap: nowrap; }
+.poolrow input[type="range"] { flex: 1 1 auto; min-width: 0; min-height: 44px; accent-color: var(--accent); }
+.poolrow .hint { font-size: 14px; }
+.zone-btns { display: grid; gap: 10px; }
+.zone-btns .btn { width: 100%; }
+
+/* ---- wider: three columns from 1100 px ------------------------------------------------------------------------------------- */
+@media (min-width: 1100px) {
+  main.rem { max-width: 1560px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 1fr); gap: 20px; padding-top: 20px; }
+  .rem-now { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px 24px; align-items: start; }
+  .rem-now .now-main { grid-column: 1; }
+  .rem-now .notrunning, .rem-now .from, .rem-now .problems { grid-column: 2; }
+  .rem-now .from { margin-top: 0; text-align: right; }
+}
+
+/* the three zone buttons share one reason: said once, above the first */
+#z-eddies .ctl-why, #z-off .ctl-why { display: none; }
+.dot.below .lab { bottom: auto; top: 22px; }   /* every other label under its dot, so two lingerers side by side stay readable */
