@@ -1,9 +1,18 @@
 # Handoff: where things stand
 
-- **Holder:** Will (Codex), deploying Will-approved softer ribbon shader to all-looks only
+- **Holder:** Will (Codex), softer ribbon deployment complete; no active live edit
 - **Where:** bitcube running **`river-all-looks.toe`** ("The river: all looks (playlist)", auto, ~58–60 fps), **the boot default since 11:20** (Gavin); `river-looks.toe` (three looks) retired as `old-river-looks.toe`, its frozen copy `river-two-looks.toe` stays offered
-- **Updated:** 2026-10-28 12:30 PT
-- **Next holder:** Will. Active scope: checkpoint, apply and verify the locally approved softer-fold screen shader; preserve playlist/clock/default/calibration/rope engine.  The playlist file is the default and the one to iterate on (Gavin, 11:20); rollback: switch to `river-two-looks.toe` (the 28 Oct morning file) with mission control's Change, and Set as default if needed.
+- **Updated:** 2026-10-28 12:39 PT
+- **Next holder:** Will. Current default remains all-looks, Auto. Softer screen ribbons deployed; original/frozen shows and current controls preserved. See rollback below.
+
+## Softer ribbon folds deployed (28 Oct, Will / Codex)
+- Will approved the local softer-fold shader and requested deployment. Source `8e6d325`; applied only `td/build/update_all_looks_ribbons.py` to the running `river-all-looks.toe`. No full rebuild/restart or clock reset: original live field/day/playlist retained. Finite projected width, feathered silhouette, gentler rim, and 3×3 Gaussian glow clamped to each screen. Production soft DRAW matches the approved local shader apart from a comment.
+- The targeted updater and full all-looks builder opt in; standalone/frozen shows retain the original DRAW/glow. River-video processing, rope engine, calibration pins and 1,400 W total limiter unchanged. Existing numpy fallback remains; the soft glow is included in GPU health checks on load and immediately for the already-running module.
+- Verified live: all five shaders error-free, `soft_ribbon_folds=True`, trail input1 `remembered/ribbons_glow_soft`, GPU switch1, panel window open, Auto / remembered, 59 fps, Python6.09ms / frame17.54ms, playlist remembered ×4 then fill-simple ×1. Actual `screens_src` capture reviewed. Physical display confirmation still belongs to Will; this does not establish a fix for the previously reported shared HDMI colour flashes or all possible lag.
+- Saved only with `td_save.ps1` before shader cooking and after verification. Final artifact SHA256 `41732bc6acb5160ae8348092f84f35d1f351fa8a7b9821977e8281aeda1ff9ef`; fresh expanded scan708 parts /0 secret hits. Boot file remains `river-all-looks.toe`; no default switch or control-file writes.
+- Checkpoint: `C:\Users\user\River\checkpoints\before-soft-ribbons-20261028-will\`: `disk-before.toe` is the pre-save disk file, `live-before.toe` is the saved live baseline (SHA2563eb496ad89fb6e4feb2b768e76a037c939c22aca5b76c7f8cae40dc0355ab0a7), plus looks/remembered controls and boot file. Do not overwrite it.
+- Immediate rollback without a restart: through `td.ps1`, execute `exec(open('C:/Users/user/River/river-bitcube/td/build/update_all_looks_ribbons.py').read(), dict(globals(), SOFT_RIBBONS=False))`; verify then save with `td_save.ps1` if keeping it. This restores original DRAW and Blur TOP; boot default/playlist stay put. Full builder opts back into soft. Mission control’s frozen two-looks show is also untouched.
+- Follow-up:61fps, no project errors, soft/GPU still active. Playlist control, remembered control and boot file hashes exactly match the checkpoint. Final tools/check:512 Python passed/3 skipped;503 mission passed. No camera/PTZ, Modal deployment or worker/service changes. Pre-existing river_masks moves and untracked26Oct map preserved. Gavin’s new UX plan `docs/ux-review-28-oct.md` was pulled and left unapplied.
 
 ## Version reconciliation (28 Oct, Will / Codex)
 - Gavin's 28 Oct handoff supersedes the historical 26 Oct "Running now", defaults, calibration and power notes below. Use this header, the latest registry and live status; do not restore an old Combined checkpoint or reapply staging stashes.

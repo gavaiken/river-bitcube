@@ -91,3 +91,12 @@
 - Validation: tools/check passed (509 Python passed, 3 skipped; 503 mission control passed). Documentation-only takeover; no visualization changes.
 - Sync completed: bitcube main55dd400, Dave bitcube checkout322e92b. Dave’s HTTPS credential store failed under SSH; transferred a verified incremental Git bundle from the freshly pulled local clone and fast-forwarded the clean checkout, then deleted the transfer file. No credential/config changes, helper restart or cloud deployment. Final runtime62fps/Auto/remembered/ribbons-gpu, fresh status, same saved show hash. Documentation-only completion follows.
 - Confirmed Dave’s GitHub deploy workflow completed successfully for latest main322e92b; no Modal redeploy performed.
+
+
+## SESSION SUMMARY — 2026-10-28: deploy approved softer ribbon folds
+
+- Pulled Gavin’s latest e7f4695, including docs/ux-review-28-oct.md; left that plan unapplied. Baton03200fa; source8e6d325. Will approved the local shader study and asked to deploy.
+- Checkpointed disk and saved live all-looks plus controls/boot file under River/checkpoints/before-soft-ribbons-20261028-will. Applied targeted shader updater, without full builder/restart/clock reset. All-looks alone opts in to finite-width soft folds, feathered edges, gentler rims and screen-local Gaussian glow. Other shows keep original shaders; source includes optional numpy mirror and continuity/isolation/GPU-fallback tests.
+- Verified zero errors on project and five shaders, correct soft glow routing, GPU path, open window, Auto / remembered,59fps, Python6.09ms/frame17.54ms. Actual output captured/reviewed. Rope engine, video grade, playlist, calibration, power/default unchanged. No camera or service changes.
+- Saved through td_save.ps1 only, before and after shader. Fresh expansion708 parts/0 hits; SHA25641732bc6acb5160ae8348092f84f35d1f351fa8a7b9821977e8281aeda1ff9ef. Retrieved verified artifact for version control. Rollback to original shader is documented in HANDOFF and show page; checkpoint/frozen two-looks preserved. Physical assessment remains with Will. Pre-existing bitcube dirty files preserved.
+- Follow-up61fps/zero errors/soft GPU; verified playlist, remembered controls and boot file hashes unchanged. Final tools/check:512 Python passed/3 skipped and503 mission passed.
