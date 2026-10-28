@@ -153,7 +153,8 @@ def scene_info(state, now_wall):
     scene = state.get('scene') or {}
     stamp = state.get('set_at_epoch')
     age = max(0, round(now_wall - stamp)) if isinstance(stamp, (int, float)) else None
-    info = {'set_at': state.get('set_at'), 'palette_name': scene.get('palette_name'), 'animation': scene.get('animation')}
+    info = {'set_at': state.get('set_at'), 'palette_name': scene.get('palette_name'), 'animation': scene.get('animation'),
+            'transition_s': scene.get('transition_seconds')}
     if not scene or scene.get('placeholder'):
         return False, age, "Dave's agent has no scene yet (placeholder)", info
     if age is None:
