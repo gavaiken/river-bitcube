@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e141a" media="(prefers-color-scheme: dark)">
+<title>Looks · Mission control</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" href="/v2.css">
+<link rel="stylesheet" href="/looks.css">
+<script>try { const t = localStorage.getItem('mc-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
+</head>
+<body>
+<main class="lks">
+  <section class="card lks-now" id="now" aria-label="The look showing now">
+    <p class="lks-title" id="now-title">Connecting…</p>
+    <p class="lks-line" id="now-line"></p>
+    <p class="lks-why" id="now-why" hidden></p>
+    <ul class="problems" id="now-problems" hidden></ul>
+  </section>
+
+  <section class="card" id="playlist" aria-labelledby="pl-h">
+    <h2 class="card-h" id="pl-h">Playlist</h2>
+    <p class="muted" id="pl-note"></p>
+    <ol class="pl-rows" id="pl-rows"></ol>
+    <div class="pl-add">
+      <label for="pl-pick">Add a look</label>
+      <div class="pl-addrow"><select id="pl-pick"></select><button type="button" class="btn" id="pl-add">Add</button></div>
+      <p class="muted" id="pl-pick-desc"></p>
+    </div>
+    <div class="ctl" id="pl-ctl">
+      <div class="ctl-h">Send it</div>
+      <div id="pl-apply"></div>
+      <button type="button" class="btn" id="pl-reset" hidden>Drop my draft</button>
+      <div id="pl-back"></div>
+    </div>
+  </section>
+
+  <section class="card" id="inputs" aria-labelledby="in-h">
+    <h2 class="card-h" id="in-h">Inputs now</h2>
+    <div id="in-body"><p class="muted">Waiting for bitcube…</p></div>
+  </section>
+
+  <h2 class="col-h">Each look</h2>
+  <div id="sections"></div>
+  <footer class="foot" id="foot"></footer>
+</main>
+<script type="module" src="/looks-page.js"></script>
+</body>
+</html>

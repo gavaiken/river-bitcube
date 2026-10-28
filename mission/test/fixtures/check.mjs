@@ -20,7 +20,7 @@ const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
 const SEASONS_FILE = 'river-local-oct-22-seasons.toe', ONLINE_FILE = 'river-online-oct-23.toe';
 // probe.ps1 offers only the first two; a bitcube that hasn't pulled the old-… rename (execution plan D27), like the
 // 23 Oct recording behind lights-not-connected, still lists the 20 Oct file under its earlier name.
-const SHOW_FILES = [SEASONS_FILE, ONLINE_FILE, 'river-online-oct-20.toe', 'river-baseline-template.toe', 'river-fixture-fireflies.toe', 'river-combined-modal-inputs.toe', 'river-remembered.toe', 'river-filling.toe', 'river-looks.toe'];   // + viz-running's template and test viz (_shows.json)
+const SHOW_FILES = [SEASONS_FILE, ONLINE_FILE, 'river-online-oct-20.toe', 'river-baseline-template.toe', 'river-fixture-fireflies.toe', 'river-combined-modal-inputs.toe', 'river-remembered.toe', 'river-filling.toe', 'river-looks.toe', 'river-all-looks.toe'];   // + viz-running's template and test viz (_shows.json)
 const DEVICES = ['internet', 'router', 'gallery_cam', 'river_cam', 'psac10_1', 'psac10_2', 'seasons_page'];
 const SENDER_KEYS = ['error', 'sent', 'dropped', 'packets', 'watts', 'seq', 'active', 'open', 'source', 'retrying'];
 const RELAY_KEYS = ['relay', 'frames', 'last_frame_age_s', 'fresh', 'error', 'colourfulness', 'night', 'nightness'];

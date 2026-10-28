@@ -20,7 +20,7 @@
 //                           removed on exit. The agent gets its path in its environment (lib/agent.mjs).
 //
 // Routes (all JSON unless said; everything but /login, /healthz, /version, /shows.json and the assets sits behind the login cookie):
-//   GET  /status /lights /chat /map /hub75 /remembered /login   the v2 pages (public/*.html, docs/mission-ui.md); /, /mission and /status.html
+//   GET  /status /lights /looks /chat /map /hub75 /remembered /login   the v2 pages (public/*.html, docs/mission-ui.md); /, /mission and /status.html
 //                                              (the v1 addresses) redirect to /status; /map/ is the engineers' diagram with live dots
 //   GET  /api/status                           lib/mission.mjs snapshot + studio + now (the server's clock) + since + last_action;
 //                                              applying: every control in flight (lib/applying.mjs; docs/mission-ui.md "Applying
@@ -278,7 +278,7 @@ function withWords(ev) { return ev ? { ...ev, words: describeEvent(ev), ago_s: M
 
 // ---- helpers ---------------------------------------------------------------------------------------------
 // The v2 pages (docs/mission-ui.md). A page file that is not built yet answers 404 { error: 'not built yet' } rather than 500.
-const PAGES = { '/status': 'status.html', '/lights': 'lights.html', '/chat': 'chat.html', '/map': 'map.html', '/hub75': 'hub75.html', '/remembered': 'remembered.html', '/login': 'login.html' };
+const PAGES = { '/status': 'status.html', '/lights': 'lights.html', '/chat': 'chat.html', '/map': 'map.html', '/hub75': 'hub75.html', '/remembered': 'remembered.html', '/looks': 'looks.html', '/login': 'login.html' };
 const REDIRECTS = { '/': '/status', '/mission': '/status', '/status.html': '/status' };     // the v1 addresses
 // Assets under public/ (styles, scripts, icons, the manifest) are served to anyone, like the login page itself: they hold no data.
 // HTML is only served through PAGES (behind the login); the design prototypes (public/proto/) are in git history.

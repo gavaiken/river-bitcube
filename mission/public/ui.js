@@ -65,6 +65,7 @@ export const DOC_LINKS = [LINKS.map, LINKS.files, LINKS.install, LINKS.plan];
 const TABS = [
   ['status', 'Status', '/status', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>'],
   ['lights', 'Lights', '/lights', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.6 1 1.3 1 2.5h6c0-1.2.3-1.9 1-2.5A6 6 0 0 0 12 3z"/></svg>'],
+  ['looks', 'Looks', '/looks', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9"/><path d="M17 16l3 2-3 2z"/></svg>'],
   ['chat', 'Studio chat', '/chat', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>'],
 ];
 // Seven long bezier paths (viewBox 0 0 2400 1000), the flow lines; alternate paths take the second line colour.

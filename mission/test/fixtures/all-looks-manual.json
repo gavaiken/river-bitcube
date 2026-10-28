@@ -1,0 +1,301 @@
+{
+  "_scenario": {
+    "now": 1792749540000,
+    "title": "The river (all looks, playlist) on Manual: the river's year pinned",
+    "description": "TouchDesigner runs river-all-looks.toe on Manual, staying on the river's year (pinned 6 min ago); the playlist is kept for when it goes back to it. The river camera's last frame is 14 s old.",
+    "expect": {
+      "headline": "Everything is up: the river (playlist) is showing; lights and cameras fine",
+      "severity": "ok",
+      "items": {
+        "mission control": "ok: serving the page",
+        "bitcube": "ok: online over Tailscale, up 3.1 h, 676 GB free",
+        "touchdesigner": "ok: the river (playlist) at 60 fps",
+        "seasons": "ok: not used (this show has no year)",
+        "ropes": "ok: showing the show, sender open",
+        "rope box 1": "ok: answers",
+        "rope box 2": "ok: answers",
+        "hub75 panels": "ok: LED display present, brightness 1",
+        "gallery camera": "ok: reachable, clips posting, still 25 s old",
+        "river camera": "ok: reachable, clips posting (the seasons file does not use it)",
+        "router": "ok: answers",
+        "internet": "ok: bitcube reaches the internet",
+        "modal agent": "ok: ticked a minute ago, next tick in the future",
+        "modal link": "ok: 8 processes, gallery and river clips seconds old",
+        "recorder": "ok: 14 clips, last run finished"
+      },
+      "action": "Nothing to do. The Looks page edits the playlist."
+    }
+  },
+  "status": {
+    "bitcube": {
+      "at": 1792749536000,
+      "value": {
+        "online": true
+      },
+      "age_s": 4
+    },
+    "seasons": {
+      "at": 1792749536000,
+      "error": "fetch failed",
+      "age_s": 4
+    },
+    "modal": {
+      "at": 1792749531000,
+      "value": {
+        "tick": 4229,
+        "mood": "attentive",
+        "ok": true,
+        "finished_at": "2026-10-23T09:57:48+00:00",
+        "next_tick_epoch": 1792749600,
+        "scene": {
+          "animation": "blooms",
+          "palette": "sandstone-dusk",
+          "colors": [
+            "#c49b6e",
+            "#dbb88a",
+            "#8c7355",
+            "#3a3028",
+            "#ccaa77"
+          ],
+          "speed": 0.28,
+          "turbulence": 0.62
+        },
+        "set_at": "2026-10-23T02:57:47-07:00"
+      },
+      "age_s": 9
+    },
+    "probe": {
+      "at": 1792749520000,
+      "value": {
+        "ok": true,
+        "time": "2026-10-23T02:58:32",
+        "show_files": [
+          "river-local-oct-22-seasons.toe",
+          "river-online-oct-23.toe",
+          "river-baseline-template.toe",
+          "river-all-looks.toe"
+        ],
+        "lights_route": "direct",
+        "td": {
+          "ok": true,
+          "action": "status",
+          "file": "river-all-looks.toe",
+          "fps": 60,
+          "cook_rate": 60,
+          "ropes": {
+            "active": true,
+            "source": "canvas",
+            "box_watts_cap": 600,
+            "status": {
+              "error": null,
+              "sent": 4441370,
+              "dropped": null,
+              "packets": 80,
+              "watts": [
+                240,
+                230
+              ],
+              "seq": 92,
+              "active": true,
+              "open": true,
+              "source": "canvas",
+              "retrying": false
+            }
+          },
+          "hub75": {
+            "brightness": 1,
+            "output": true
+          },
+          "seasons": null,
+          "river_cam": {
+            "relay": true,
+            "frames": 111634,
+            "last_frame_age_s": 0.1,
+            "fresh": true,
+            "error": null,
+            "colourfulness": 0.0011,
+            "night": true,
+            "nightness": 1
+          },
+          "errors": 0
+        },
+        "boot_file": "river-local-oct-22-seasons.toe",
+        "modal_link": {
+          "processes": 8,
+          "gallery": {
+            "log_age_s": 1,
+            "last": "02:58:31 INFO    gallery/video -> media/gallery/video/2026-10-23T09-58-32-197Z.mp4 (50 KB)"
+          },
+          "river": {
+            "log_age_s": 4,
+            "last": "02:58:28 INFO    river/video -> media/river/video/2026-10-23T09-58-29-197Z.mp4 (63 KB)"
+          },
+          "sync": {
+            "log_age_s": 57,
+            "last": "02:57:35 INFO    sync: updated status.json (611 bytes)"
+          }
+        },
+        "recorder": {
+          "clips": 14,
+          "last": "2026-10-23 02:05:41 done"
+        },
+        "devices": {
+          "internet": true,
+          "router": true,
+          "gallery_cam": true,
+          "river_cam": true,
+          "psac10_1": true,
+          "psac10_2": true,
+          "seasons_page": false
+        },
+        "addresses": [
+          {
+            "nic": "Ethernet 2",
+            "ip": "192.168.9.79"
+          },
+          {
+            "nic": "Ethernet",
+            "ip": "2.0.0.8"
+          },
+          {
+            "nic": "Wi-Fi",
+            "ip": "192.168.9.80"
+          },
+          {
+            "nic": "Tailscale",
+            "ip": "100.73.68.60"
+          }
+        ],
+        "displays": [
+          "LED 1920X1080"
+        ],
+        "disk_free_gb": 676,
+        "uptime_h": 3.1,
+        "looks": {
+          "control": {
+            "age_s": 360,
+            "json": {
+              "mode": "manual",
+              "look": "seasons",
+              "at": "2026-10-23T09:53:00Z",
+              "playlist": [
+                {
+                  "look": "remembered",
+                  "for": {
+                    "loops": 4
+                  }
+                },
+                {
+                  "look": "fill-simple",
+                  "for": {
+                    "cycles": 1
+                  }
+                },
+                {
+                  "look": "seasons",
+                  "for": {
+                    "minutes": 10
+                  }
+                }
+              ]
+            }
+          },
+          "status": {
+            "age_s": 0.3,
+            "json": {
+              "t": 1792749539.7,
+              "show": "river-all-looks.toe",
+              "mode": "manual",
+              "look": "seasons",
+              "target": "seasons",
+              "fading": null,
+              "fade": 1,
+              "looks": [
+                "remembered",
+                "fill-simple",
+                "fill-configurable",
+                "seasons",
+                "modal"
+              ],
+              "playlist": [
+                {
+                  "look": "remembered",
+                  "for": {
+                    "loops": 4
+                  }
+                },
+                {
+                  "look": "fill-simple",
+                  "for": {
+                    "cycles": 1
+                  }
+                },
+                {
+                  "look": "seasons",
+                  "for": {
+                    "minutes": 10
+                  }
+                }
+              ],
+              "position": null,
+              "progress": null,
+              "inputs": {
+                "dave": {
+                  "age_s": 240,
+                  "memory_date": "2017-02-07",
+                  "surge_at": 13.5,
+                  "scene": "drift",
+                  "palette": [
+                    "#0b3d5c",
+                    "#1f8fb3",
+                    "#7fd3e6",
+                    "#e3f6ff"
+                  ],
+                  "knobs": {
+                    "speed": 0.5,
+                    "density": 0.6,
+                    "brightness": 0.7,
+                    "turbulence": 0.4
+                  },
+                  "heard": 0.62,
+                  "heard_age_s": 4
+                },
+                "river": {
+                  "source": "live",
+                  "motion": 0.41,
+                  "age_s": 14
+                },
+                "room": {
+                  "people": 3,
+                  "usual": 2.1,
+                  "lingerers": [
+                    {
+                      "ropes": [
+                        7,
+                        8
+                      ],
+                      "seconds": 12
+                    }
+                  ]
+                }
+              },
+              "used": {
+                "steering": "the room: 3 people, more than usual",
+                "speed": 1.2
+              }
+            }
+          }
+        }
+      },
+      "age_s": 20
+    }
+  },
+  "cameras": {
+    "gallery": true,
+    "river": true
+  },
+  "camera_age_s": {
+    "gallery": 25,
+    "river": 40
+  }
+}

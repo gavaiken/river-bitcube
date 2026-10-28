@@ -34,7 +34,7 @@
 //   503 { ok: false, error } in plain words when bitcube couldn't be read at all.
 import { scrubCreds } from './scrub.mjs';
 import { sshProbe } from './mission.mjs';
-import { REMEMBERED_FILE, LOOKS_FILE, LOOKS } from '../public/model.js';
+import { REMEMBERED_FILE, LOOKS_FILE, LOOKS_FILES, LOOKS } from '../public/model.js';
 
 export const REMEMBERED_CACHE_MS = 1500;
 export const STATUS_FRESH_S = 10;
@@ -69,10 +69,10 @@ export function shapeRemembered(raw, { tdFile = null, readAt = Date.now(), now =
   for (const k of PARTS) { const p = obj(r[k]); if (p?.error) problems.push(`${WHAT[k]} couldn't be read: ${String(p.error).slice(0, 160)}`); }
   const st = part('status'), sv = st ? st.json : null, stAge = st ? num(st.age_s) : null;
   // river-looks.toe's report: which look shows (fresh, or nothing: an old report says nothing about now)
-  const lp = part('looks'), lj = lp && lp.json.show === LOOKS_FILE && num(lp.age_s) != null && lp.age_s < STATUS_FRESH_S ? lp.json : null;
+  const lp = part('looks'), lj = lp && LOOKS_FILES.includes(lp.json.show) && num(lp.age_s) != null && lp.age_s < STATUS_FRESH_S ? lp.json : null;
   const look = lj ? { look: LOOKS.includes(lj.look) ? lj.look : null, target: LOOKS.includes(lj.target) ? lj.target : null,
                       fading: lj.fading === 'out' || lj.fading === 'in' ? lj.fading : null } : null;
-  const fresh = !!sv && stAge != null && stAge < STATUS_FRESH_S;
+  const fresh = !!sv && stAge != null && stAge < STATUS_FRESH_S, lookFile = lj ? lj.show : LOOKS_FILE;
   // while river-looks.toe reports, only its look counts (the remembered look may write its status as river-remembered.toe's own)
   const running = fresh && (look ? look.look === 'remembered' : sv.show === REMEMBERED_FILE);
   const dp = part('state'), d = dp ? dp.json : null;
@@ -83,7 +83,7 @@ export function shapeRemembered(raw, { tdFile = null, readAt = Date.now(), now =
   if (!profile && dave?.memory && (!playing || dave.memory.date === playing)) { profile = profileOf(dave.memory.profile); profileDate = profile ? dave.memory.date ?? null : null; }
   if (dave?.memory && 'profile' in dave.memory) { const { profile: _served, ...rest } = dave.memory; dave.memory = rest; }   // served once, as `profile`
   return scrubCreds({
-    ok: true, running, show: running ? (look ? LOOKS_FILE : REMEMBERED_FILE) : look ? LOOKS_FILE : typeof tdFile === 'string' ? tdFile : (typeof sv?.show === 'string' ? sv.show : null), look,
+    ok: true, running, show: running ? (look ? lookFile : REMEMBERED_FILE) : look ? lookFile : typeof tdFile === 'string' ? tdFile : (typeof sv?.show === 'string' ? sv.show : null), look,
     read_at: readAt, age_s: Math.max(0, Math.round((now - readAt) / 1000)),
     status: sv, status_age_s: stAge,
     dave, dave_age_s: dp ? num(dp.age_s) : null,

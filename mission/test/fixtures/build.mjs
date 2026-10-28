@@ -71,6 +71,24 @@ export const LOOKS_ENTRY = {
   inputs: ["Dave's agent (remembered day, palette, knobs, heard)", 'river camera (recorded clip as fallback)', 'gallery camera (people counter)', 'the LED map and screens (calibration, measured tilts)'],
   created_by: 'gavin', created: '2026-10-28', updated_by: 'gavin', updated: '2026-10-28', last_change: 'Fixture entry until the show is in shows.json',
 };
+// The river (all looks, playlist) (docs/mission-ui.md "Looks page"): five looks and a playlist. Its entry here carries the looks'
+// words (shows.json "looks"), as the real entry will.
+export const ALL_LOOKS_FILE = 'river-all-looks.toe';
+export const ALL_LOOKS = ['remembered', 'fill-simple', 'fill-configurable', 'seasons', 'modal'];
+export const ALL_LOOKS_ENTRY = {
+  file: ALL_LOOKS_FILE, title: 'The river (all looks, playlist)', label: 'the river (playlist)', kind: 'show', offered: true, build: 'td/build/build_all_looks.py',
+  calibration: { pixelmap: 'tools/pixelmap/pixelmap-2026-10-28.json', screens: 'tools/pixelmap/screens-2026-10-28.json', zones: null },
+  description: 'Every look in one show file, played as a playlist (each look for so many loops, cycles or minutes, looping) or one look pinned, faded through black between them.',
+  inputs: ["Dave's agent", 'river camera (recorded clip as fallback)', 'people counter', 'River\\looks\\control.json (the playlist)'],
+  looks: {
+    remembered: { title: 'The remembered river', description: "Relives one real day of Dry Creek's past every five minutes, chosen by Dave's agent, with one surge at its heaviest rain.", inputs: ["Dave's agent", 'river camera', 'people counter'] },
+    'fill-simple': { title: 'Fill my cup (simple)', description: 'Water rises from the floor to the top of every rope and screen, then drains and fills again.', inputs: [] },
+    'fill-configurable': { title: 'Fill my cup (configurable)', description: 'The same glass filling, with its colours, brightness, intensity and speed set from mission control.', inputs: [] },
+    seasons: { title: "The river's year", description: "The live river through the year's seasons, steered by the room.", inputs: ['river camera', 'people counter'] },
+    modal: { title: 'Combined with Modal Input Selector', description: "One of Dave's Modal inputs at a time drives the river.", inputs: ["Dave's Modal canvas, scene and frames", 'river camera'] },
+  },
+  created_by: 'gavin', created: '2026-10-28', updated_by: 'gavin', updated: '2026-10-28', last_change: "Fixture entry with the looks' words until shows.json has them",
+};
 const RULES = recorded.seasons.value.rules;            // the defaults, as served by the control page
 const ADDRESSES = recorded.probe.value.addresses;      // bitcube's addresses at Gray Area
 const SCENE_COLORS = recorded.modal.value.scene.colors;
@@ -491,6 +509,23 @@ const SCENARIOS = {
       { remembered: rememberedRaw({ show: LOOKS_FILE, looks: looksRaw({ mode: 'manual', look: 'remembered', target: 'fill-simple', fading: 'out', fade: 0.4 }).status }) }),
   },
 
+  // ---- the river (all looks, playlist): the Looks page (/looks; public/looks-words.js) -------------------------------------------
+  'all-looks-auto': {
+    title: 'The river (all looks, playlist) on its playlist: the remembered river, entry 1 of 3, loop 3 of 4',
+    description: `TouchDesigner runs ${ALL_LOOKS_FILE} on Auto with a playlist of three (set 25 min ago): four loops of the remembered river, one cycle of Fill my cup (simple), ten minutes of the river's year. It is in the remembered river's third loop. Dave's agent answered 4 min ago, the river camera is live, three people are in the room and one lingers by ropes 7 and 8.`,
+    expect: { headline: 'Everything is up: the river (playlist) is showing; lights and cameras fine', severity: 'ok', items: allLooksItems(),
+      action: 'Nothing to do. The Looks page edits the playlist.' },
+    build: () => { const l = allLooksRaw({}); return looksShow(l, { file: ALL_LOOKS_FILE, remembered: rememberedRaw({ show: ALL_LOOKS_FILE, looks: l.status }) }); },
+  },
+  'all-looks-manual': {
+    title: "The river (all looks, playlist) on Manual: the river's year pinned",
+    description: `TouchDesigner runs ${ALL_LOOKS_FILE} on Manual, staying on the river's year (pinned 6 min ago); the playlist is kept for when it goes back to it. The river camera's last frame is 14 s old.`,
+    expect: { headline: 'Everything is up: the river (playlist) is showing; lights and cameras fine', severity: 'ok', items: allLooksItems(),
+      action: 'Nothing to do. The Looks page edits the playlist.' },
+    build: () => looksShow(allLooksRaw({ mode: 'manual', look: 'seasons', controlAge: 360, position: null, progress: null, riverAge: 14,
+      used: { steering: 'the room: 3 people, more than usual', speed: 1.2 } }), { file: ALL_LOOKS_FILE }),
+  },
+
   'no-internet': {
     title: 'No internet at Gray Area',
     description: 'bitcube can\'t open connections to the internet (1.1.1.1:443 fails) while the install router answers: the router\'s uplink (the venue\'s staff Wi-Fi) has dropped. bitcube\'s existing Tailscale tunnel to the mini still carries traffic, so the mini can still probe it. Dave\'s agent is fine as seen from the mini, but the Modal link on bitcube can\'t upload: its last successful clips (the last INFO lines) are from 02:38, 20 minutes ago, and every clip since has failed with an ERROR line, so the log files are still fresh; the sync has logged nothing since its last update. The river camera (via Starlink and Will\'s tailnet) is unreachable, and the recorder\'s current run can\'t connect. The show is unaffected: the seasons file needs no network.',
@@ -595,18 +630,32 @@ function looksRaw({ statusAge = 0.3, controlAge = 1500, mode = 'auto', look = 'r
            status: { age_s: statusAge, json: { t: Math.round((NOW - statusAge * S) / 10) / 100, show: LOOKS_FILE, mode, look, target: target ?? look, fading, fade,
                                                auto: { remembered_loops: loops, next }, looks: ['remembered', 'fill-simple', 'fill-configurable'] } } };
 }
+/** river-all-looks.toe's probe.looks: control.json with a playlist, status.json with the playlist, position, progress, inputs, used. */
+const ALL_LOOKS_PLAYLIST = [{ look: 'remembered', for: { loops: 4 } }, { look: 'fill-simple', for: { cycles: 1 } }, { look: 'seasons', for: { minutes: 10 } }];
+function allLooksRaw({ mode = 'auto', look = 'remembered', controlAge = 1500, position = 0, progress = { done: 2, of: 4, unit: 'loops' }, riverAge = 0.1,
+                       used = { day: '7 Feb 2017', why: 'Cold steady rain at the creek today, like 7 Feb 2017.', heard: 0.62, knobs: { speed: 0.55, turbulence: 0.36 }, room: 'a lingerer slows ropes 7 and 8' } } = {}) {
+  const l = looksRaw({ mode, look, controlAge, next: null });
+  l.control.json = { ...l.control.json, playlist: ALL_LOOKS_PLAYLIST };
+  Object.assign(l.status.json, { show: ALL_LOOKS_FILE, looks: ALL_LOOKS, playlist: ALL_LOOKS_PLAYLIST, position, progress,
+    inputs: { dave: { age_s: 240, memory_date: MEMORY_WET.date, surge_at: 13.5, scene: 'drift', palette: PALETTE_WINTER, knobs: { speed: 0.5, density: 0.6, brightness: 0.7, turbulence: 0.4 }, heard: 0.62, heard_age_s: 4 },
+              river: { source: 'live', motion: 0.41, age_s: riverAge }, room: { people: 3, usual: 2.1, lingerers: [{ ropes: [7, 8], seconds: 12 }] } },
+    used });
+  delete l.status.json.auto;
+  return l;
+}
 /** The river (all looks) running (like viz-running), with its files as given (and the filling glass's, for a fill look). */
-function looksShow(looks, { filling = null, remembered = null } = {}) {
+function looksShow(looks, { filling = null, remembered = null, file = LOOKS_FILE } = {}) {
   const st = base();
   st.seasons = err(SEASONS_AT, 'fetch failed');
-  st.probe.value.show_files = [...SHOW_FILES, TEMPLATE_FILE, LOOKS_FILE];
-  st.probe.value.td = td({ file: LOOKS_FILE, fps: 60.0, ropes: { active: true, source: 'canvas', box_watts_cap: 600, status: sender({ watts: [240, 230], seq: 92 }) },
+  st.probe.value.show_files = [...SHOW_FILES, TEMPLATE_FILE, file];
+  st.probe.value.td = td({ file, fps: 60.0, ropes: { active: true, source: 'canvas', box_watts_cap: 600, status: sender({ watts: [240, 230], seq: 92 }) },
                            seasons: null, river_cam: relay() });
   st.probe.value.devices.seasons_page = false;
   st.probe.value.looks = looks;
   if (filling) st.probe.value.filling = filling;
   return { status: st, ...CAMS_GOOD, ...(remembered ? { remembered } : {}) };
 }
+function allLooksItems() { return items({ touchdesigner: 'ok: the river (playlist) at 60 fps', seasons: 'ok: not used (this show has no year)', ropes: 'ok: showing the show, sender open' }); }
 function looksItems() { return items({ touchdesigner: 'ok: the river (all looks) at 60 fps', seasons: 'ok: not used (this show has no year)', ropes: 'ok: showing the show, sender open' }); }
 
 /** The Modal input show running (like viz-running), with td.modal_input as given. */
@@ -634,6 +683,6 @@ export function buildAll() {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const all = buildAll();
   for (const [name, fixture] of Object.entries(all)) writeFileSync(join(DIR, `${name}.json`), JSON.stringify(fixture, null, 2) + '\n');
-  writeFileSync(join(DIR, '_shows.extra.json'), JSON.stringify({ shows: [VIZ_ENTRY, MODAL_ENTRY, REMEMBERED_ENTRY, FILLING_ENTRY, LOOKS_ENTRY] }, null, 2) + '\n');
+  writeFileSync(join(DIR, '_shows.extra.json'), JSON.stringify({ shows: [VIZ_ENTRY, MODAL_ENTRY, REMEMBERED_ENTRY, FILLING_ENTRY, LOOKS_ENTRY, ALL_LOOKS_ENTRY] }, null, 2) + '\n');
   console.log(`wrote ${Object.keys(all).length} fixtures to ${DIR}`);
 }

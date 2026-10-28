@@ -28,7 +28,12 @@
 //     looks '{"mode":"auto"}'   looks '{"mode":"manual","look":"fill-simple"}'   (only while the river (all looks) runs; auto:
 //                                                       four loops of the remembered river, then one cycle of Fill my cup
 //                                                       (simple), again; manual: fade to remembered, fill-simple or
-//                                                       fill-configurable and stay; status shows it under `looks`)
+//                                                       fill-configurable, seasons or modal and stay; status shows it
+//                                                       under `looks`)
+//     looks '{"mode":"auto","playlist":[{"look":"remembered","for":{"loops":4}},{"look":"seasons","for":{"minutes":10}}]}'
+//                                                       (river-all-looks.toe: the playlist auto plays, 1-12 entries; loops
+//                                                       only for remembered, cycles only for the fills, minutes 1-120 for
+//                                                       any look, n 1-20; kept when a look is pinned)
 //
 // Prints mission control's JSON answer, with the request_id it sent (its own id for this request: status names the entry by it
 // too, so a change whose answer was lost can still be found). A change that waits for bitcube's reading (a switch, a rebuild, a
