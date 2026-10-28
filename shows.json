@@ -146,7 +146,7 @@
       "calibration": {
         "pixelmap": "tools/pixelmap/pixelmap-2026-10-23.json",
         "screens": "tools/pixelmap/screens-2026-10-23.json",
-        "zones": null
+        "zones": "tools/pixelmap/zones-2026-10-27.json"
       },
       "description": "Dry Creek relives one remembered day from its past every five minutes: calm drips, a building flow, then the surge, a white front falling down every rope into a churning pool, then settling. Dave's agent picks the day (bitcube picks a notable one when he is late); a new day arrives with one slow wave down the ropes. The screens show only the river's moving highlights, mostly black. People standing still slow the light and draw it to their ropes.",
       "inputs": [
