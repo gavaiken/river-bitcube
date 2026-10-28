@@ -159,9 +159,8 @@ class Water:
             v = np.clip(v * kf[..., None], 0.0, 1.0)
             if contrast != 1:
                 v = v ** contrast
-            if half:
+            if half:                                              # (the lit share below needs no upsampled mask)
                 v = v.repeat(2, 0).repeat(2, 1)
-                kf = kf.repeat(2, 0).repeat(2, 1)
             out[:, k * QW:(k + 1) * QW] = v * gain
             self.lit_pct[k] = int(round(100 * float((kf > 0).mean())))
             light += float((v[::4, ::4] ** 2.2).mean()) * inten
