@@ -105,6 +105,16 @@ const sourceOf = (s) => (/studio|chat|agent/i.test(String(s ?? '')) ? 'studio ch
 /** Whether an action's entry waits for the server's verdict before it is done (status.confirmed / status.expired): a switch, a
  *  rebuild, a boot-file or lighting port change, a calibration's start, or any change bitcube didn't answer in time (maybe).
  *  Until the verdict, Recent says it was asked for, never that it happened (R8 #19, #28). */
+/** The remembered river's screens change in words: "the river video under the particles to 40 %", or for the M7 sliders
+ *  "the screens to intensity 82 %, threshold 35 %" (any of the three). */
+export function screensWords(b) {
+  const pct = (x) => (x != null && Number.isFinite(Number(x)) ? `${Math.round(Number(x) * 100)} %` : null);
+  const parts = [['intensity', 'intensity'], ['threshold', 'threshold'], ['video', 'river video']].filter(([k]) => pct(b?.[k]) != null);
+  if (parts.length === 1 && parts[0][0] === 'video') return `the river video under the particles to ${pct(b.video)}`;
+  if (!parts.length) return 'the river video under the particles to a new strength';
+  return `the screens to ${parts.map(([k, w]) => `${w} ${pct(b[k])}`).join(', ')}`;
+}
+
 export function awaitsVerdict(ev) {
   return !!ev && ev.kind === 'action' && typeof ev.applying_id === 'string' && (ev.ok !== false || ev.maybe === true)
     && (ev.maybe === true || awaited(ev.action, obj(ev.body)));     // model.js AWAITED: one table (CR8 #12)
@@ -626,7 +636,7 @@ export function actionPhrase(ev) {
     }
     case 'filling': return ['Set', 'set', `the filling glass to ${fillingWords(b) ?? 'new settings'}`];
     case 'remembered-opening': return ['Switched', 'switch', `opening night ${b.on === true ? 'on' : 'off'}`];
-    case 'remembered-screens': return ['Set', 'set', `the river video under the particles to ${Number.isFinite(Number(b.video)) && b.video != null ? Math.round(Number(b.video) * 100) + ' %' : 'a new strength'}`];
+    case 'remembered-screens': return ['Set', 'set', screensWords(b)];
     case 'looks': return ['Set', 'set', `the looks to ${looksWords(b) ?? 'a new choice'}`];
     case 'test': return b.on === true ? ['Started', 'start', 'the test pattern on the ropes and panels'] : ['Stopped', 'stop', 'the test pattern'];
     // a switch to the file TouchDesigner was running is the button's "Restart on …" (its label says so, model.js changeLabel)

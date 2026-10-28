@@ -4,7 +4,9 @@
 import { dur, FILES, LOOKS_FILE, LOOK_IN_LINE } from './model.js';
 
 /** The river video's strength under the particle windows (M9) until someone sets it, 0..1. */
-export const REMEMBERED_VIDEO_DEFAULT = 0.25;
+export const REMEMBERED_VIDEO_DEFAULT = 0.15;
+/** The screens' intensity and motion threshold until someone sets them (td/remembered/water.py SETTINGS), 0..1. */
+export const REMEMBERED_SCREENS_DEFAULT = { intensity: 0.82, threshold: 0.35 };
 
 export const PHASES = ['calm', 'building', 'surge', 'settling'];
 export const PHASE_WORDS = {
@@ -114,6 +116,9 @@ export function rememberedView(p, { now = Date.now(), sinceS = 0 } = {}) {
   // the river video under the particle windows (M9): what TouchDesigner reports, else what was asked last (control.json), 0..1
   const vid = (x) => { const n = num(x); return n != null && n >= 0 && n <= 1 ? n : null; };
   out.video = { now: vid(obj(st?.screens)?.video), asked: vid(obj(out.control?.screens)?.video), default: REMEMBERED_VIDEO_DEFAULT };
+  // the screens' intensity and motion threshold (M7 sliders): the same three sources
+  for (const k of ['intensity', 'threshold']) out[k] = { now: vid(obj(st?.screens)?.[k]), asked: vid(obj(out.control?.screens)?.[k]), default: REMEMBERED_SCREENS_DEFAULT[k] };
+  out.field = typeof obj(st?.screens)?.field === 'string' ? st.screens.field : null;
   return out;
 }
 

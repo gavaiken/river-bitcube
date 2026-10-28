@@ -22,8 +22,9 @@
 //     remembered-zones '{"light":"pool","pool_height_m":0.6}'   remembered-opening '{"on":true}'   (only while the remembered
 //                                                       river runs, or is the look showing in the river (all looks); light off,
 //                                                       pool or eddies; the pool line 0 to 1.5 m)
-//     remembered-screens '{"video":0.25}'              (the same: how strongly the river video shows under the particle
-//                                                       windows, 0 to 1)
+//     remembered-screens '{"intensity":0.82,"threshold":0.35,"video":0.15}'   (the same, any of the three, each 0 to 1:
+//                                                       the screens' intensity, their motion threshold, and how strongly
+//                                                       the river video shows under the particle windows)
 //     looks '{"mode":"auto"}'   looks '{"mode":"manual","look":"fill-simple"}'   (only while the river (all looks) runs; auto:
 //                                                       four loops of the remembered river, then one cycle of Fill my cup
 //                                                       (simple), again; manual: fade to remembered, fill-simple or

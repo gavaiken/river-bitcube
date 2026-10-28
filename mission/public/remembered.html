@@ -88,11 +88,21 @@
         </div>
       </div>
       <div class="ctl" id="video-ctl">
-        <div class="ctl-h">River video under the particles</div>
+        <div class="ctl-h">Screens</div>
         <div class="poolrow">
-          <label for="video">Strength <output id="video-out">25 %</output></label>
-          <input type="range" id="video" min="0" max="100" step="5" value="25" aria-describedby="video-hint">
-          <p class="hint muted" id="video-hint">How strongly the river video shows under the particle windows on the four screens: 0 % is the particles alone. Now on bitcube: <b id="video-now">–</b></p>
+          <label for="intensity">Intensity <output id="intensity-out">82 %</output></label>
+          <input type="range" id="intensity" min="0" max="100" step="5" value="80" aria-describedby="intensity-hint">
+          <p class="hint muted" id="intensity-hint">How bright the four screens are, ribbons and video alike. Now on bitcube: <b id="intensity-now">–</b></p>
+        </div>
+        <div class="poolrow">
+          <label for="threshold">Threshold <output id="threshold-out">35 %</output></label>
+          <input type="range" id="threshold" min="0" max="100" step="5" value="35" aria-describedby="threshold-hint">
+          <p class="hint muted" id="threshold-hint">How much the river has to move to show in its video: higher keeps only the most active water. Now on bitcube: <b id="threshold-now">–</b></p>
+        </div>
+        <div class="poolrow">
+          <label for="video">River video <output id="video-out">15 %</output></label>
+          <input type="range" id="video" min="0" max="100" step="5" value="15" aria-describedby="video-hint">
+          <p class="hint muted" id="video-hint">How strongly the river video shows under the particle windows: 0 % is the particles alone. Now on bitcube: <b id="video-now">–</b></p>
         </div>
         <div id="z-video"></div>
       </div>

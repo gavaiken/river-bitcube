@@ -121,7 +121,8 @@ TD writes `River\remembered\status.json` twice a second (read by the full check 
  "palette": ["#0b3d5c", "#1f8fb3", "#bfefff"],
  "ropes_follow": "sound", "heard": 0.62, "river_motion": 0.41, "river_source": "live",
  "room": {"presence": 3.2, "usual": 2.1, "relative": 1.5, "lingerers": [{"x": 0.4, "y": 0.8, "still_s": 12, "ropes": [7, 8]}]},
- "panels": {"lit_pct": [12, 8, 22, 4], "cap": 0.55, "field": "fine"},
+ "panels": {"lit_pct": [12, 8, 22, 4], "cap": 0.55, "field": "ribbons"},
+ "screens": {"mode": "particles", "field": "ribbons", "video": 0.15, "intensity": 0.82, "threshold": 0.35},
  "ropes": {"watts": 410},
  "opening_night": false,
  "zones": {"file": "zones-2026-10-27.json", "pool_height_m": 0.6, "light": "off"}}
@@ -139,7 +140,7 @@ Optional, additive: `day.profile` (`{flow, rain, temp, snow, is_day}`, 24 values
 
 - `pool_height_m`: the pool line in metres above the floor (0–1.5; `null` until someone sets it: keep the zones file's own). `light`: `off` (the show), `pool` (light the LEDs at or below the pool line, to check it) or `eddies` (light the eddy LEDs). `opening_night`: the opening-night switch. `screens.video` (M9): how strongly the river video shows under the particle windows, 0–1 (`remembered-screens {video}`, `probe.ps1 -Action remembered-screens -Video 0.25`; absent until someone sets it: 25 %); TouchDesigner reports what it uses as `screens.video` in its status. `at`: when it was written (UTC). TouchDesigner reports what it took in its status (`zones`, `opening_night`).
 - Each control changes only its own fields; the others keep what the file held. The file is written whole to `control.json.tmp` and swapped in (`[IO.File]::Replace`), so a reader never sees half of it: read it when its write time changes.
-- `probe.ps1 -Action remembered-zones -Light off|pool|eddies [-PoolHeight 0.60]` and `-Action remembered-opening [-On]` (and `-Action remembered-screens -Video <0..1>`) write it, only while `status.json` is under 10 s old and names `river-remembered.toe`, or `River\looks\status.json` is under 10 s old and says `river-looks.toe` shows the remembered look (else `{ok: false, error: "the remembered river isn't running (…)", refused}`); mission control also refuses them (409) while the full check sees another show, and `remembered-zones` during a calibration or the test pattern. `probe.ps1 -Action remembered` reads `status.json`, Dave's `gallery_state\state.json` (only `memory`, `surge_at`, `scene`, `set_at`) and `reflex.json`, `presence.json` and `control.json`, each as `{age_s, json}`, `{missing}` or `{error}`, for `GET /api/remembered` (`mission/lib/remembered.mjs`; the page: `docs/mission-ui.md` "Remembered river page").
+- `probe.ps1 -Action remembered-zones -Light off|pool|eddies [-PoolHeight 0.60]` and `-Action remembered-opening [-On]` (and `-Action remembered-screens [-Video] [-Intensity] [-Threshold] <0..1>`) write it, only while `status.json` is under 10 s old and names `river-remembered.toe`, or `River\looks\status.json` is under 10 s old and says `river-looks.toe` shows the remembered look (else `{ok: false, error: "the remembered river isn't running (…)", refused}`); mission control also refuses them (409) while the full check sees another show, and `remembered-zones` during a calibration or the test pattern. `probe.ps1 -Action remembered` reads `status.json`, Dave's `gallery_state\state.json` (only `memory`, `surge_at`, `scene`, `set_at`) and `reflex.json`, `presence.json` and `control.json`, each as `{age_s, json}`, `{missing}` or `{error}`, for `GET /api/remembered` (`mission/lib/remembered.mjs`; the page: `docs/mission-ui.md` "Remembered river page").
 
 ## Round 2: the artists on site (27 Oct, night)
 

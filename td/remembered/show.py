@@ -310,6 +310,13 @@ class Show:
         self.ticks = 0
         self.panel_dt = 0.0
 
+    def screens_now(self):
+        """What the screens run on now (status.json screens; the Remembered river page's "Now on bitcube")."""
+        c = self.control
+        return {'mode': c['screen_mode'], 'field': self.field_kind, 'video': round(c['screen_video'], 2),
+                'intensity': round(c['screen_intensity'] if c['screen_intensity'] is not None else water_mod.SETTINGS['intensity'], 2),
+                'threshold': round(self.water.s['sens'] if c['screen_threshold'] is None else c['screen_threshold'], 2)}
+
     def use_field(self, kind):
         """Switch the particle windows to another field (built once, kept); round 2b's streaks if one can't be built."""
         if kind == self.field_kind:
@@ -491,7 +498,7 @@ class Show:
                 now=now, show=self.show, fps=self.fps, loop=snap, day=day, plan=snap['plan'], knobs=knobs,
                 reflex=self.knobs.reflex, palette=palette.as_hex(pal), heard=heard,
                 river_motion=motion, river_source=self.river_source if river_live else 'none', room=room,
-                field=self.field_kind, lit_pct=self.field.lit_pct if self.control['screen_mode'] == 'particles' else self.water.lit_pct, cap=round(self.screen_level, 2), watts=self.ropes.watts, opening_night=opening,
+                field=self.field_kind, screens=self.screens_now(), lit_pct=self.field.lit_pct if self.control['screen_mode'] == 'particles' else self.water.lit_pct, cap=round(self.screen_level, 2), watts=self.ropes.watts, opening_night=opening,
                 zones_file=self.z.file,
                 pool_height_m=self.control['pool_height_m'] if self.control['pool_height_m'] is not None
                 else self.z.pool_height_m, light=self.control['light'])

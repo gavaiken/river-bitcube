@@ -197,3 +197,18 @@ test('server: POST /api/control/looks behind the login, refused while another sh
   assert.deepEqual([refused.status, (await refused.json()).error], [409, LOOKS_ONLY]);
   assert.equal((await post('/api/control/looks', { mode: 'manual' }, on('looks-auto'))).status, 400);
 });
+
+test('remembered-screens: the M7 sliders (intensity, threshold) with or without the video, each 0 to 1', async () => {
+  assert.deepEqual(planControl('remembered-screens', { intensity: 0.8, threshold: 0.4, video: 0.15 }),
+    { kind: 'remembered', args: '-Action remembered-screens -Video 0.15 -Intensity 0.80 -Threshold 0.40' });
+  assert.equal(planControl('remembered-screens', { threshold: 0.5 }).args, '-Action remembered-screens -Threshold 0.50');
+  assert.throws(() => planControl('remembered-screens', { intensity: 1.2 }), /intensity is 0 to 1/);
+  assert.throws(() => planControl('remembered-screens', { threshold: '0.5; whoami' }), /threshold is 0 to 1/);
+  assert.throws(() => planControl('remembered-screens', {}), /video is 0 to 1/);
+  assert.deepEqual(checkedControl('remembered-screens', { intensity: 0.666, threshold: 0.3, light: 'pool' }), { intensity: 0.67, threshold: 0.3 });
+  assert.equal(changeLabel('remembered-screens', { intensity: 0.8, threshold: 0.35, video: 0.15 }), 'the change of the screens to intensity 80 %, threshold 35 %, river video 15 %');
+  assert.deepEqual(actionPhrase({ action: 'remembered-screens', body: { intensity: 0.6 } }), ['Set', 'set', 'the screens to intensity 60 %']);
+  const fm = fixtureMission();
+  const w = (await fm.control('remembered-screens', { intensity: 0.7, threshold: 0.45 }, 'looks-auto')).written;
+  assert.deepEqual([w.screens.intensity, w.screens.threshold], [0.7, 0.45]);
+});

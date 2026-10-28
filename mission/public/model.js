@@ -241,7 +241,14 @@ export function changeLabel(action, body = {}, { running = null } = {}) {
       return b.light === 'pool' ? `the lighting of the pool${at}` : b.light === 'eddies' ? `the lighting of the eddies${at}` : b.light === 'off' ? `the pool and eddies back to the show${at}` : 'the change of the pool and eddies';
     }
     case 'remembered-opening': return b.on === true ? 'the opening-night switch on' : b.on === false ? 'the opening-night switch off' : 'the change of opening night';
-    case 'remembered-screens': { const v = num(typeof b.video === 'string' ? Number(b.video) : b.video); return v != null ? `the change of the river video under the particles to ${Math.round(Math.min(1, Math.max(0, v)) * 100)} %` : 'the change of the river video under the particles'; }
+    case 'remembered-screens': {
+      // the video alone (M9) keeps its words; the M7 sliders (intensity, threshold) name every part asked for
+      const pct = (x) => { const v = num(typeof x === 'string' ? Number(x) : x); return v != null ? `${Math.round(Math.min(1, Math.max(0, v)) * 100)} %` : null; };
+      const parts = [['intensity', 'intensity'], ['threshold', 'threshold'], ['video', 'river video']].filter(([k]) => pct(b[k]) != null);
+      if (!parts.length) return 'the change of the river video under the particles';
+      if (parts.length === 1 && parts[0][0] === 'video') return `the change of the river video under the particles to ${pct(b.video)}`;
+      return `the change of the screens to ${parts.map(([k, w]) => `${w} ${pct(b[k])}`).join(', ')}`;
+    }
     case 'looks': { const w = looksWords(b); return w ? `the change of the looks to ${w}` : 'the change of the looks'; }
     case 'hub75': return x != null ? `the change of the panels to ${Math.round(Math.min(1, Math.max(0, x)) * 100)} %` : 'the change of the panels';
     case 'mode': return typeof b.mode === 'string' && b.mode ? `the change of the mode to ${cap(b.mode)}` : 'the change of the mode';

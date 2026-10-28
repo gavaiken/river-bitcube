@@ -362,7 +362,7 @@ export class FixtureMission {
         // as probe.ps1: control.json merged and written; TouchDesigner (in this world) takes it at once
         const c = { ...(w.remembered ?? {}), at: new Date(this.clock(scenario)).toISOString() };
         if (action === 'remembered-zones') { c.light = checked.light; if (checked.pool_height_m !== undefined) c.pool_height_m = checked.pool_height_m; }
-        else if (action === 'remembered-screens') c.screens = { ...(c.screens ?? {}), video: checked.video };
+        else if (action === 'remembered-screens') c.screens = { ...(c.screens ?? {}), ...checked };
         else c.opening_night = checked.on;
         w.remembered = c;
         return { ok: true, fixture: true, action, body: checked, written: c, note: 'fixture mode: nothing was changed' };
@@ -451,7 +451,7 @@ export class FixtureMission {
       if (sj && typeof sj === 'object') {
         if (c.light !== undefined || c.pool_height_m !== undefined) sj.zones = { ...(sj.zones ?? {}), ...(c.light !== undefined ? { light: c.light } : {}), ...(c.pool_height_m !== undefined ? { pool_height_m: c.pool_height_m } : {}) };
         if (c.opening_night !== undefined) sj.opening_night = c.opening_night;
-        if (c.screens?.video !== undefined) sj.screens = { ...(sj.screens ?? {}), video: c.screens.video };
+        if (c.screens) sj.screens = { ...(sj.screens ?? {}), ...c.screens };
       }
     }
     return raw;

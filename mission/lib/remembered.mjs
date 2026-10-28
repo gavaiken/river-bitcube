@@ -16,7 +16,7 @@
 //     looks:    looks\status.json                 (river-looks.toe's own report: which look shows; docs/mission-ui.md "Looks") }
 //   each file part is { age_s, json } (age from the file's write time), { missing: true } or { error }.
 // probe.ps1 -Action remembered-zones -Light off|pool|eddies [-PoolHeight 0.60] / -Action remembered-opening [-On] /
-//   -Action remembered-screens -Video 0.25 (the river video under the particle windows, M9: screens.video)
+//   -Action remembered-screens [-Video 0.15] [-Intensity 0.82] [-Threshold 0.35] (the screens, M7/M9: screens.video, .intensity, .threshold)
 //   -> the same answer after writing control.json (merged with what was there, written atomically), plus written: { ...control }, or
 //   { ok: false, error, refused } when the remembered river isn't running (TouchDesigner's status.json older than 10 s or another show;
 //   in river-looks.toe: its looks\status.json under 10 s old with look 'remembered').

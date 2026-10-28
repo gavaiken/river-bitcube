@@ -26,8 +26,10 @@
 #                                                                (off|pool|eddies) and the pool line (0..1.5 m); writes
 #                                                                River\remembered\control.json for TouchDesigner, then as above
 #   [-Action remembered-opening -On]                             the remembered river only: the opening-night switch (without -On: off)
-#   [-Action remembered-screens -Video 0.25]                     the remembered river only: how strongly the river video shows under
-#                                                                the particle windows (0..1, M9): screens.video in control.json
+#   [-Action remembered-screens -Video 0.15 -Intensity 0.82 -Threshold 0.35]   the remembered river only, any of the three: how strongly
+#                                                                the river video shows under the particle windows (M9), the screens'
+#                                                                intensity and their motion threshold (M7), each 0..1: screens.video,
+#                                                                .intensity, .threshold in control.json
 #                                                                The remembered river's three controls also work while river-looks.toe
 #                                                                shows it (its looks\status.json, under 10 s old, says look remembered)
 #   [-Action looks -Mode auto|manual [-Look remembered|fill-simple|fill-configurable]]
@@ -48,7 +50,7 @@
 #   ropes, hub75, test, switch, rebuild, lightsroute, overlay, filling and looks are refused while a calibration runs ({ ok: false, error: "a calibration is
 #   running. Stop it on the Lights page first", refused: <action> } with the status), whoever runs this script; a dry run (or a
 #   decode of earlier photos) touches no lights and refuses nothing.
-param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25, [ValidateSet('auto','original','channel','channel-multi','pool','pool-multi')][string]$Framing, [ValidateSet('current','gavin','recorded','manual','cycle')][string]$Screenmode, [ValidateRange(0,1)][double]$Screenblend=0, [ValidateSet(15,30,60,120)][int]$Screenhold=30, [ValidateRange(0,1)][Nullable[double]]$Screenrecorded, [ValidateRange(0,120)][Nullable[double]]$Screenoffset, [ValidateSet('off','canvas','scene','frames')][string]$Source, [ValidateRange(0,1)][Nullable[double]]$Strength, [ValidateSet('off','pool','eddies')][string]$Light, [ValidateRange(0,1.5)][Nullable[double]]$PoolHeight, [ValidateSet('river','glacier','midnight','teal')][string]$Palette, [ValidateRange(0,1)][Nullable[double]]$Intensity, [ValidateRange(0.25,3)][Nullable[double]]$Speed, [ValidateSet('auto','manual')][string]$Mode, [ValidateSet('remembered','fill-simple','fill-configurable')][string]$Look, [ValidateRange(0,1)][Nullable[double]]$Video)
+param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25, [ValidateSet('auto','original','channel','channel-multi','pool','pool-multi')][string]$Framing, [ValidateSet('current','gavin','recorded','manual','cycle')][string]$Screenmode, [ValidateRange(0,1)][double]$Screenblend=0, [ValidateSet(15,30,60,120)][int]$Screenhold=30, [ValidateRange(0,1)][Nullable[double]]$Screenrecorded, [ValidateRange(0,120)][Nullable[double]]$Screenoffset, [ValidateSet('off','canvas','scene','frames')][string]$Source, [ValidateRange(0,1)][Nullable[double]]$Strength, [ValidateSet('off','pool','eddies')][string]$Light, [ValidateRange(0,1.5)][Nullable[double]]$PoolHeight, [ValidateSet('river','glacier','midnight','teal')][string]$Palette, [ValidateRange(0,1)][Nullable[double]]$Intensity, [ValidateRange(0.25,3)][Nullable[double]]$Speed, [ValidateSet('auto','manual')][string]$Mode, [ValidateSet('remembered','fill-simple','fill-configurable')][string]$Look, [ValidateRange(0,1)][Nullable[double]]$Video, [ValidateRange(0,1)][Nullable[double]]$Threshold)
 $ErrorActionPreference = 'Continue'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $river = Split-Path $repo -Parent
@@ -168,7 +170,7 @@ if ($Action -in 'remembered', 'remembered-zones', 'remembered-opening', 'remembe
             $out.error = $(if ($lookNow) { "the remembered river isn't the look showing now (pick it under Looks on Status first)" } else { "the remembered river isn't running (its controls work only while it runs)" })
         }
         elseif ($Action -eq 'remembered-zones' -and -not $Light) { $out.ok = $false; $out.error = 'remembered-zones needs -Light off|pool|eddies'; $out.refused = $Action }
-        elseif ($Action -eq 'remembered-screens' -and $null -eq $Video) { $out.ok = $false; $out.error = 'remembered-screens needs -Video 0..1'; $out.refused = $Action }
+        elseif ($Action -eq 'remembered-screens' -and $null -eq $Video -and $null -eq $Intensity -and $null -eq $Threshold) { $out.ok = $false; $out.error = 'remembered-screens needs -Video, -Intensity or -Threshold 0..1'; $out.refused = $Action }
         else {
             # merged with what was there: every field kept (screens too), only the one asked for changed
             $ctl = [ordered]@{ pool_height_m = $null; light = 'off'; opening_night = $false; at = $null }
@@ -178,7 +180,9 @@ if ($Action -in 'remembered', 'remembered-zones', 'remembered-opening', 'remembe
             elseif ($Action -eq 'remembered-screens') {
                 $sc = [ordered]@{}
                 if ($ctl.Contains('screens') -and $ctl.screens) { foreach ($pp in $ctl.screens.PSObject.Properties) { $sc[$pp.Name] = $pp.Value } }
-                $sc.video = [math]::Round([double]$Video, 2)
+                if ($null -ne $Video) { $sc.video = [math]::Round([double]$Video, 2) }
+                if ($null -ne $Intensity) { $sc.intensity = [math]::Round([double]$Intensity, 2) }
+                if ($null -ne $Threshold) { $sc.threshold = [math]::Round([double]$Threshold, 2) }
                 $ctl.screens = $sc
             }
             else { $ctl.opening_night = [bool]$On }

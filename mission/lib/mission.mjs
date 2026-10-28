@@ -531,10 +531,17 @@ export function planControl(action, body = {}) {
       return { kind: 'remembered', args: `-Action remembered-opening${body.on ? ' -On' : ''}` };
     }
     case 'remembered-screens': {
-      // the river video under the particle windows (docs/remembered-river.md M9): 0..1, merged into control.json as screens.video
-      const v = num(body.video);
-      if (!(v >= 0 && v <= 1)) throw bad('video is 0 to 1');
-      return { kind: 'remembered', args: `-Action remembered-screens -Video ${v.toFixed(2)}` };
+      // the remembered river's screens, any of: the river video under the particle windows (M9), their intensity and their motion
+      // threshold (M7), each 0..1, merged into control.json as screens.video / .intensity / .threshold
+      const parts = [];
+      for (const [key, flag] of [['video', 'Video'], ['intensity', 'Intensity'], ['threshold', 'Threshold']]) {
+        if (body[key] === undefined) continue;
+        const v = num(body[key]);
+        if (!(v >= 0 && v <= 1)) throw bad(`${key} is 0 to 1`);
+        parts.push(`-${flag} ${v.toFixed(2)}`);
+      }
+      if (!parts.length) throw bad('video is 0 to 1');
+      return { kind: 'remembered', args: `-Action remembered-screens ${parts.join(' ')}` };
     }
     case 'looks': {
       // the river (all looks) (docs/mission-ui.md "Looks"): auto (four loops of the remembered river, then one cycle of Fill my cup
@@ -596,7 +603,7 @@ export function checkedControl(action, body = {}) {
     case 'filling': return { palette: body.palette, brightness: Number(num(body.brightness).toFixed(2)), intensity: Number(num(body.intensity).toFixed(2)), speed: Number(num(body.speed).toFixed(2)) };
     case 'remembered-zones': return { light: body.light, ...(body.pool_height_m !== undefined ? { pool_height_m: Number(num(body.pool_height_m).toFixed(2)) } : {}) };
     case 'remembered-opening': return { on: body.on === true };
-    case 'remembered-screens': return { video: Number(num(body.video).toFixed(2)) };
+    case 'remembered-screens': return Object.fromEntries(['video', 'intensity', 'threshold'].filter((k) => body[k] !== undefined).map((k) => [k, Number(num(body[k]).toFixed(2))]));
     case 'looks': return { mode: body.mode, ...(body.look !== undefined ? { look: body.look } : {}) };
     case 'bootfile': case 'switch': case 'rebuild': return { file: body.file };
     case 'lightsroute': return { route: body.route };
