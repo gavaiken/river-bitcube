@@ -141,7 +141,7 @@
       "title": "The remembered river",
       "label": "the remembered river",
       "kind": "show",
-      "offered": false,
+      "offered": true,
       "build": "td/build/build_remembered.py",
       "calibration": {
         "pixelmap": "tools/pixelmap/pixelmap-2026-10-27.json",
@@ -160,7 +160,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-27",
-      "last_change": "Pinned the 27 Oct multi-view map and screens (the final camera and lights); built on bitcube 27 Oct; screens and preview ropes through Select TOPs"
+      "last_change": "Built and running on bitcube 27 Oct 21:15; offered in mission control; the boot default (Gavin)"
     }
   ]
 }
