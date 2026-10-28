@@ -371,7 +371,7 @@ if ($Action -eq 'looks') {
             $null = New-Item -ItemType Directory -Force -Path $ldir -ErrorAction Stop
             $tmp = "$ctlFile.tmp"
             [IO.File]::WriteAllText($tmp, (ConvertTo-Json -InputObject $ctl -Compress -Depth 6), (New-Object Text.UTF8Encoding $false))
-            if (Test-Path -LiteralPath $ctlFile) { [IO.File]::Replace($tmp, $ctlFile, $null) } else { [IO.File]::Move($tmp, $ctlFile) }
+            Move-Item -LiteralPath $tmp -Destination $ctlFile -Force   # (not IO.File::Replace: its $null backup arg fails under -EncodedCommand)
             $out.written = $ctl
         } catch { $out.ok = $false; $out.error = "couldn't write the looks control file: $($_.Exception.Message)" }
     }
