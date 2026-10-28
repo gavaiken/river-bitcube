@@ -23,7 +23,7 @@ CLIP = 'C:/Users/user/River/recordings/river/seasons/river-normal.mp4'
 N_ROPES, N_PX = 20, 400
 FIELD_W, FIELD_H = 1280, 720
 # Rope power cap, the same as the show files (artnet_out uses min(Brightness, Maxbrightness); Boxwatts limits each box).
-ROPE_BRIGHTNESS, ROPE_MAXBRIGHTNESS, ROPE_BOXWATTS = 0.4, 0.4, 600
+ROPE_BRIGHTNESS, ROPE_MAXBRIGHTNESS, ROPE_BOXWATTS = 0.4, 1.0, 600
 
 # Calibration is PINNED, never "newest file wins": a re-map must not silently change a show file. The pin, and which file
 # this script builds, come from the show registry (shows.json, docs/shows.md; td/build/registry.py).
@@ -185,7 +185,7 @@ note(viz, "VIZ: YOUR VISUAL GOES HERE.\n"
           "Out: viz_out, any size; it is stretched to the 1280x720 field (16:9), which is laid\n"
           "     over the GALLERY cam's view: a pixel lands on the rope/screen that hangs there.\n"
           "The template wires river_in straight to viz_out. Replace what is between them.\n"
-          "Brightness is capped downstream (ropes 0.4, 600 W/box), so you can't overload the power.")
+          "Brightness is limited downstream (ropes: Brightness, max 1.0; 600 W/box), so you can't overload the power.")
 rin = get(selectTOP, 'river_in', 0, 0)
 rin.par.top = '/project1/inputs/river'
 gin = get(selectTOP, 'gallery_in', 0, -150)

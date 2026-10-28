@@ -254,6 +254,9 @@ def tick(comp):
             frame = test_frame(ropes, pixels, now)
         else:
             frame = np.zeros((ropes, pixels, 3), np.float32)
+        if p.Maxbrightness.eval() < 1.0:
+            # Max brightness is 1.0 (Gavin, 27 Oct): show files saved with the old 0.4 cap are raised when they run.
+            p.Maxbrightness = 1.0
         brightness = min(p.Brightness.eval(), p.Maxbrightness.eval())
         data, watts = to_bytes(frame, config, brightness, p.Boxwatts.eval())
         seq = s.get('seq', 0) % 255 + 1

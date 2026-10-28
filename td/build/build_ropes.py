@@ -25,7 +25,7 @@ if not hasattr(ropes.par, 'Active'):
     p = pg.appendFloat('Brightness')[0]
     p.normMin, p.normMax, p.default = 0, 1, 0.15
     p = pg.appendFloat('Maxbrightness', label='Max Brightness (cap)')[0]
-    p.normMin, p.normMax, p.default = 0, 1, 0.4
+    p.normMin, p.normMax, p.default = 0, 1, 1.0
     p = pg.appendFloat('Boxwatts', label='Power Limit per Box (W)')[0]
     p.normMin, p.normMax, p.default = 0, 1500, 600
     p = pg.appendInt('Fps')[0]
