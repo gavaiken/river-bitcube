@@ -94,6 +94,9 @@ const fileLabel = (f) => FILES[f]?.label ?? f;
 const fileId = (f) => (FILES[f]?.kind === 'year' || FILES[f]?.kind === 'live' ? FILES[f].kind : String(f).replace(/\.toe$/i, '').replace(/[^a-z0-9-]/gi, '-'));
 /** A show's title (its preview card's), for the What's showing card and the show list. */
 const showTitle = (f) => M.showCard(f)?.title ?? cap(fileLabel(f));
+/** The kind under a show's title: composites (several looks inside, changed without a restart) say so in their own colour. */
+const kindSpan = (card) => card?.composite ? '<span class="kind composite">composite: several looks inside, changed without a restart</span>'
+  : `<span class="kind">${esc(kindWords(card?.kind))}${card ? ' · one visualization' : ''}</span>`;
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const item = (m, id) => m.items.find((x) => x.id === id);
 /** Contact with mission control is lost (the model's 'page' problem, whatever else outranks it in the headline). */
@@ -692,7 +695,7 @@ function fineHTML(m) {
 function showingHTML(m) {
   const s = m.show, boot = s.boot_file?.name ?? null, running = s.file?.name ?? null, td = item(m, 'touchdesigner');
   const card = running ? M.showCard(running) : null;
-  const head = s.file ? `<b>${esc(showTitle(running))}</b>${card ? `<span class="kind">${esc(kindWords(card.kind))}</span>` : ''}${running === boot ? '<span class="tag def">Default</span>' : ''}`
+  const head = s.file ? `<b>${esc(showTitle(running))}</b>${card ? kindSpan(card) : ''}${running === boot ? '<span class="tag def">Default</span>' : ''}`
     : s.restart ? `Restarting on <b>${esc(s.restart.on)}</b>` : s.held ? `Maybe restarting on <b>${esc(s.held.on)}</b>` : '<b>Not known</b>';
   const stale = td?.stale && s.file ? ` <span class="muted">· last seen ${ageSpan(td.age_s)}</span>` : '';
   const line = card?.description ? firstSentence(card.description) : s.file ? '' : (td?.summary ?? '');
@@ -704,6 +707,7 @@ function showingHTML(m) {
     ${line ? `<p class="showing-desc">${esc(line)}</p>` : ''}
     <div class="row-btns"><button type="button" class="btn primary" id="ctl-showing-change" data-act="show-list" ${s.show_files.length ? '' : 'disabled'}>Change</button>${back}</div>
     <div class="effect">Default: <b>${esc(bootWords(s.boot_file))}</b>, what opens when bitcube restarts. Switching never changes it.</div>
+    <div class="effect showing-how">Changing the file restarts TouchDesigner: about a minute dark. The river files are composites: the look playing inside them (the remembered river, Fill my cup, the river's year) changes with no restart, from the Looks card below and the Looks tab.</div>
     ${statusLine('ctl-showing', ['switch', 'bootfile'])}</div>${combinedHTML(m)}${modalInputHTML(m)}${looksHTML(m)}${fillingHTML(m)}`;
 }
 /** Change: every offered show (shows.json), its kind, and which is showing and which is the default; a tap opens its card. */
@@ -873,6 +877,13 @@ function lkChanged(v) {
   return d.mode !== a.mode || (d.mode === 'manual' && d.look !== a.look);
 }
 const lkBody = (d) => (d.mode === 'manual' ? { mode: 'manual', look: d.look } : { mode: 'auto' });
+/** "Playing: the remembered river · 2 of 2 in the playlist · loop 3 of 4." from the show's report (its playlist, position, progress). */
+function lkPlaying(n) {
+  const pl = n.playlist, pos = Number.isInteger(n.position) ? n.position : null, pr = n.progress;
+  const where = pl?.length && pos != null ? ` · ${pos + 1} of ${pl.length} in the playlist` : '';
+  const prog = pr && Number.isFinite(pr.of) ? ` · ${pr.unit === 'minutes' ? 'minute' : pr.unit.replace(/s$/, '')} ${Math.min(pr.done + 1, pr.of)} of ${pr.of}` : '';
+  return `Playing: ${LOOK_WORDS[n.look] ?? n.look ?? 'not known'}${where}${prog}.`;
+}
 function looksHTML(m) {
   if (!m.show.looks) { lkDraft = null; return ''; }
   const v = lkView(m), o = off('looks'), d = lkNow(v), W = LOOK_MODE_WORDS;
@@ -895,7 +906,7 @@ function looksHTML(m) {
     <div class="row-btns"><button type="button" class="btn primary" id="ctl-lk-set" data-act="lk-set" ${o || !v || !lkChanged(v) ? 'disabled' : ''}>Apply</button></div>
     ${statusLine('ctl-looks', ['looks'])}
     ${now}
-    ${settings}${n?.playlist ? '<p class="effect"><a href="/looks" id="lk-page">Looks page: the playlist, each look\'s settings, the inputs</a></p>' : ''}</div>`;
+    ${settings}${n?.playlist ? `<p class="effect lk-where" id="lk-where">${esc(lkPlaying(n))} <a href="/looks" id="lk-page">Looks tab: change the playlist, each look's settings, the live inputs.</a></p>` : ''}</div>`;
 }
 /** "What Modal is sending" for the chosen source, its stale warning, and the other sources' freshness on one line. */
 function sendingHTML(v) {
@@ -975,7 +986,7 @@ function openShowList() {
   const s = model?.show;
   if (!s) return;
   const boot = s.boot_file?.name, running = s.file?.name;
-  const rows = s.show_files.map((f) => `<button type="button" class="show-row" id="show-row-${esc(fileId(f))}" data-act="show-card" data-file="${esc(f)}"><span class="t">${esc(showTitle(f))}</span><span class="kind">${esc(kindWords(M.showCard(f)?.kind))}</span>${f === running ? '<span class="tag on">Showing</span>' : ''}${f === boot ? '<span class="tag def">Default</span>' : ''}<span class="chev" aria-hidden="true">›</span></button>`).join('');
+  const rows = s.show_files.map((f) => `<button type="button" class="show-row" id="show-row-${esc(fileId(f))}" data-act="show-card" data-file="${esc(f)}"><span class="t">${esc(showTitle(f))}</span>${kindSpan(M.showCard(f))}${f === running ? '<span class="tag on">Showing</span>' : ''}${f === boot ? '<span class="tag def">Default</span>' : ''}<span class="chev" aria-hidden="true">›</span></button>`).join('');
   sheet({ title: "Change what's showing", body: `<p>Pick a show to see what it does before switching to it.</p><div class="show-list">${rows || '<p>No shows offered.</p>'}</div>` });
 }
 /** A show's preview card, before anything is sent: Switch to it (the card is the question: the lights go dark for about a

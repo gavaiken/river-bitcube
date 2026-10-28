@@ -1,9 +1,9 @@
 # Handoff: where things stand
 
 - **Holder:** Gavin (Mac mini session A) **until 11:15 28 Oct**; then **Will** (Codex), visual tuning
-- **Where:** bitcube running **`river-looks.toe`** (auto, 60 fps), the **boot default**; `river-all-looks.toe` (the playlist file) built and committed, not the default
+- **Where:** bitcube running **`river-all-looks.toe`** ("The river: all looks (playlist)", auto, 61 fps), **the boot default since 11:20** (Gavin); `river-looks.toe` (three looks) retired as `old-river-looks.toe`, its frozen copy `river-two-looks.toe` stays offered
 - **Updated:** 2026-10-28 11:12 PT
-- **Next holder:** Will. Freeze on the default file: fixes only, with Gavin's OK. The playlist file is open for iteration (never the default until Gavin presses Set as default).
+- **Next holder:** Will. The playlist file is the default and the one to iterate on (Gavin, 11:20); rollback: switch to `river-two-looks.toe` (the 28 Oct morning file) with mission control's Change, and Set as default if needed.
 
 ## Late morning of 28 Oct (session A): `river-all-looks.toe`, every look in one file with a playlist. **Will: read this and the next section**
 Gavin asked (10:00) for all the TD visuals in one file, a config for which looks play in what order and for how long, a
@@ -54,6 +54,15 @@ file, offered (so bitcube can switch to it) but **not the default**; page `docs/
   with seasons idle for long.
 - Fades for operator looks are the Level TOP's brightness (linear), the numpy looks' fades are theirs; both 2 s. Not compared
   side by side on the piece.
+
+**Next for Will (Gavin, 11:05): a palette Justine can set and apply to any look it suits.** Today the remembered river's
+palette comes from Dave's agent per remembered day, cooled into the artists' hue range (`td/remembered/palette.py`
+`palette()`; the GPU ribbons read `pal` every frame through `show.pal_now` -> `ribbons_gpu.params`), and the fills pick one
+of four named palettes (`td/filling/fill.py` PALETTES, the `palette` dial). The clean way: `River\remembered\control.json`
+`palette: {deep, mid, light}` (hex) as an override (null = Dave's), read in `show.parse_control`, applied in `tick()` where
+`target_pal` is set (keep the night/cold handling), reported in `status.json` `palette` as now; the same three keys as a
+fifth, "custom" fill palette; a Palette card on the Looks tab (three colour pickers + Apply, `remembered-palette` control
+through probe.ps1 like `remembered-screens`). About an hour plus a look at the piece. Not started.
 
 **Rollback:** `river-looks.toe` is the default and untouched. If all-looks misbehaves while it shows: mission control's
 Back to default (or `probe.ps1 -Action switch -BootFile river-looks.toe`). Repo: tag `before-all-looks`; the all-looks file

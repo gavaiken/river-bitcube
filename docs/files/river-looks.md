@@ -1,3 +1,5 @@
+**Retired 28 Oct 11:20 (now `old-river-looks.toe`, out of shows.json):** its frozen copy is [river-two-looks.toe](river-two-looks.md); the playlist file [river-all-looks.toe](river-all-looks.md) is the default.
+
 ---
 title: "The river, all looks (river-looks.toe)"
 ---

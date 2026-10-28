@@ -68,7 +68,7 @@ test('manual and the old file: pinned words, the default playlist, Apply greyed 
 });
 
 test('each look\'s settings: where they are; built-in titles when the registry has no words', () => {
-  assert.deepEqual(settingsWords('remembered').link, ['Pool line, opening night, screens: Remembered river page', '/remembered']);
+  assert.deepEqual(settingsWords('remembered').link, ['See and configure: Remembered river page', '/remembered']);
   assert.equal(settingsWords('seasons').link[1], SEASONS_PAGE);
   assert.equal(settingsWords('fill-configurable').link[1], '/status#ctl-filling');
   assert.deepEqual(lookInfo('river-looks.toe', 'modal'), { look: 'modal', title: 'Combined with Modal Input Selector', description: '', inputs: [] });

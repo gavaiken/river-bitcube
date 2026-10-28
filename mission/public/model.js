@@ -87,7 +87,7 @@ export function showCard(file) {
   const f = FILES[file], sh = f?.show;
   if (!sh) return null;
   const str = (x) => (typeof x === 'string' && x.trim() ? x.trim() : null);
-  return { file, label: f.label, title: str(sh.title) ?? f.label, kind: str(sh.kind), description: str(sh.description),
+  return { file, label: f.label, title: str(sh.title) ?? f.label, kind: str(sh.kind), composite: sh.composite === true, description: str(sh.description),
            inputs: Array.isArray(sh.inputs) ? sh.inputs.filter((x) => typeof x === 'string' && x.trim()) : [],
            created_by: str(sh.created_by), created: str(sh.created), updated_by: str(sh.updated_by), updated: str(sh.updated),
            last_change: str(sh.last_change) };

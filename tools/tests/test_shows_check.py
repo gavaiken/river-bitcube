@@ -71,7 +71,7 @@ def test_freshness_a_changed_toe_or_build_needs_new_metadata():
     # the .toe changed too: still one problem for the entry
     assert len(shows_check.check_freshness(now, base, {e['build'], e['file']})) == 1
     # updated with it: fine
-    now['shows'][1].update(last_change='Rain is heavier', updated='2026-10-27', updated_by='will')
+    now['shows'][1].update(last_change='Rain is heavier', updated=e['updated'], updated_by='will')   # the same day: not backwards
     assert shows_check.check_freshness(now, base, {e['build'], e['file']}) == []
     # a date going backwards is refused
     now['shows'][1]['updated'] = '2026-01-01'
@@ -104,7 +104,9 @@ def test_the_all_looks_file_carries_each_looks_standalone_description():
     assert set(looks) == {'remembered', 'fill-simple', 'fill-configurable', 'seasons', 'modal'}
     for name, lk in looks.items():
         own = reg[lk['file']]
-        assert (lk['title'], lk['description'], lk['inputs']) == (own['title'], own['description'], own['inputs']), name
+        # the description and inputs word for word; the title is the look's name (the standalone file's says "on its own")
+        assert (lk['description'], lk['inputs']) == (own['description'], own['inputs']), name
+        assert isinstance(lk['title'], str) and lk['title'].strip(), name
     assert {n: lk['for'] for n, lk in looks.items()} == {
         'remembered': 'loops', 'fill-simple': 'cycles', 'fill-configurable': 'cycles', 'seasons': 'minutes', 'modal': 'minutes'}
 

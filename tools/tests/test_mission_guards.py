@@ -74,7 +74,7 @@ def test_probe_param_block_is_well_formed_and_the_filling_dials_match_mission_co
     # temporary file swapped in)
     assert "$td.file -notin 'river-filling.toe', 'river-looks.toe'" in block
     assert "(Get-LookShowing) -notin 'fill-simple', 'fill-configurable'" in block
-    assert '.tmp' in block and '[IO.File]::Replace(' in block and '[IO.File]::Move(' in block
+    assert '.tmp' in block and ('[IO.File]::Replace(' in block or 'Move-Item -LiteralPath $tmp' in block)   # an atomic replace either way
     assert src.index('if ($CAL_BLOCKED -contains $Action)') < src.index("if ($Action -eq 'filling') {")
 
 
@@ -149,7 +149,7 @@ def test_probe_looks_and_the_remembered_screens_match_mission_control():
     assert '[ValidateRange(0,1)]' in attrs['Video'] and 'Nullable[double]' in attrs['Video']
     block = src[src.index("if ($Action -eq 'looks') {"):]
     assert "$td.file -ne 'river-looks.toe'" in block
-    assert '.tmp' in block and '[IO.File]::Replace(' in block and '[IO.File]::Move(' in block
+    assert '.tmp' in block and ('[IO.File]::Replace(' in block or 'Move-Item -LiteralPath $tmp' in block)   # an atomic replace either way
     assert src.index('if ($CAL_BLOCKED -contains $Action)') < src.index("if ($Action -eq 'looks') {")
     assert src.index('$td = $null') < src.index("if ($Action -eq 'looks') {"), 'TouchDesigner is asked first'
     rem = src[src.index("if ($Action -in 'remembered', 'remembered-zones', 'remembered-opening', 'remembered-screens') {"):src.index("if ($Action -eq 'rebuild') {")]

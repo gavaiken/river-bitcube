@@ -107,17 +107,25 @@ export function pageView(m, draft = null) {
     file, allLooks, running: !!raw, why, applyWhy, now, listed, showing,
     playlist: { rows: list.map((e) => rowWords(file, e)), source, note: NOTE[source], changed: !!draft && JSON.stringify(draft) !== JSON.stringify(base), body,
                 full: list.length >= PLAYLIST_MAX, addable: listed },
-    sections: listed.map((l) => ({ ...lookInfo(file, l), showing: l === showing, pinned: n?.mode === 'manual' && n.look === l })),
+    sections: listed.map((l) => ({ ...lookInfo(file, l), showing: l === showing, pinned: n?.mode === 'manual' && n.look === l,
+                                   state: l === showing ? showingWords(n?.progress) : null })),
     inputs: n ? inputsWords(n.inputs, n.used, n.look) : null,
     problems: v?.problems ?? [],
     pinBody: (look) => ({ mode: 'manual', look }), backBody: { mode: 'auto' },
     manual: n?.mode === 'manual',
   };
 }
+/** "Showing now · loop 3 of 4" for the look's card (its progress through its playlist entry), or "Showing now". */
+export function showingWords(progress) {
+  const pr = obj(progress);
+  if (!pr || !Number.isFinite(pr.of) || !Number.isFinite(pr.done)) return 'Showing now';
+  const unit = pr.unit === 'minutes' ? 'minute' : String(pr.unit ?? '').replace(/s$/, '');
+  return `Showing now · ${unit} ${Math.min(pr.done + 1, pr.of)} of ${pr.of}`;
+}
 /** What each look's section says about its settings, and where they are: { line, link: [label, href] | null }. */
 export function settingsWords(look) {
   switch (look) {
-    case 'remembered': return { line: 'Its settings are on its own page.', link: ['Pool line, opening night, screens: Remembered river page', '/remembered'] };
+    case 'remembered': return { line: 'Its live state (the day, the phase, the loop, what Dave sent) and its settings are on its own page.', link: ['See and configure: Remembered river page', '/remembered'] };
     case 'fill-simple': return { line: 'It has no settings: the glass fills and drains in the river blues.', link: null };
     case 'fill-configurable': return { line: "Its dials (colours, brightness, intensity, speed) are on Status, under What's showing, while it shows: bitcube takes them only then.", link: ['Fill my cup dials: Status', '/status#ctl-filling'] };
     case 'seasons': return { line: "Its control page is TouchDesigner's own, on bitcube (needs Tailscale). Settings made ahead take effect when it shows.", link: ["The river's year page", SEASONS_PAGE] };

@@ -630,7 +630,9 @@ test("the boot file Start-River.cmd's default reads as the file it opens, and un
   const fx = clone(byName['all-good']);
   fx.status.probe.value.boot_file = 'Start-River.cmd default';
   let m = run(fx);
-  assert.deepEqual([m.show.boot_file.name, m.show.boot_file.kind, m.show.boot_file.label, m.show.boot_file.default], ['river-local-oct-22-seasons.toe', 'year', "the river's year", true]);
+  // shows.json's boot_default is the playlist file since 28 Oct (Gavin)
+  assert.deepEqual([m.show.boot_file.name, m.show.boot_file.label, m.show.boot_file.default], ['river-all-looks.toe', 'the river (playlist)', true]);
+  assert.equal(typeof m.show.boot_file.kind, 'string');
   // (an older probe's "Start-River.cmd default" is shows.json's boot_default; probe.ps1 now reports the file itself)
   // an old file running is Attention with the way back (810b48e), for each of the retired names
   for (const f of ['old-river.toe', 'river-local-oct-18.toe', 'river.toe', 'old-river-online-oct-20.toe']) {

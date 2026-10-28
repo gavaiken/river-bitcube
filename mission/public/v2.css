@@ -512,3 +512,6 @@ dialog.sheet .menu-row .btn .chev { margin-left: auto; }
   .card, .band, .banner { box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; background: #fff; }
   details { display: block; }
 }
+
+/* a composite show file (several looks inside, changed without a restart): its kind line in the accent colour */
+.kind.composite { color: var(--accent); font-weight: 600; }

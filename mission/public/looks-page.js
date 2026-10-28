@@ -128,10 +128,10 @@ function renderSections(v) {
   }
   for (const s of v?.running ? v.sections : []) {
     const w = settingsWords(s.look);
-    put(`look-${s.look}-h`, `${esc(s.title)}${s.showing ? '<span class="lk-tag">showing</span>' : ''}${s.pinned ? '<span class="lk-tag">pinned</span>' : ''}`);
+    put(`look-${s.look}-h`, `${esc(s.title)}${s.showing ? `<span class="lk-tag">${esc(s.state ?? 'showing')}</span>` : ''}${s.pinned ? '<span class="lk-tag">pinned</span>' : ''}`);
     put(`look-${s.look}-desc`, esc(s.description));
     put(`look-${s.look}-in`, s.inputs.length ? `<p class="muted">Its inputs:</p><ul>${s.inputs.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
-    put(`look-${s.look}-set`, `${esc(w.line)}${w.link ? ` <a href="${esc(w.link[1])}" ${w.link[1].startsWith('/') ? '' : 'target="_blank" rel="noopener"'}>${esc(w.link[0])}</a>` : ''}`);
+    put(`look-${s.look}-set`, `<b>See and configure:</b> ${esc(w.line)}${w.link ? ` <a href="${esc(w.link[1])}" ${w.link[1].startsWith('/') ? '' : 'target="_blank" rel="noopener"'}>${esc(w.link[0])}</a>` : ''}`);
     S.pins[s.look]?.update({ why: whyOf() ?? (s.pinned ? 'it is pinned already' : null), whyBy: by() });
   }
 }
