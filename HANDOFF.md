@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** Will (Codex), taking over from Gavin; current task is version reconciliation only
+- **Holder:** Will (Codex), taking over from Gavin; version reconciliation complete; no active live edit
 - **Where:** bitcube running **`river-all-looks.toe`** ("The river: all looks (playlist)", auto, ~58–60 fps), **the boot default since 11:20** (Gavin); `river-looks.toe` (three looks) retired as `old-river-looks.toe`, its frozen copy `river-two-looks.toe` stays offered
-- **Updated:** 2026-10-28 11:55 PT
+- **Updated:** 2026-10-28 11:58 PT
 - **Next holder:** Will. The playlist file is the default and the one to iterate on (Gavin, 11:20); rollback: switch to `river-two-looks.toe` (the 28 Oct morning file) with mission control's Change, and Set as default if needed.
 
 ## Version reconciliation (28 Oct, Will / Codex)
@@ -11,6 +11,9 @@
 - Read-only bitcube verification: boot file and live status both `river-all-looks.toe`, Auto; remembered ×4 loops then fill-simple ×1 cycle. Four built looks: remembered, fill-simple, fill-configurable, seasons. Combined/Modal is still not folded in. At inspection: 58 fps, `ribbons-gpu`, Python 5.97 ms / frame 17.95 ms. River input was the recorded fallback; Dave's scene age was 723 s. These are observations, not input repairs.
 - Saved `river-all-looks.toe` SHA256 matches this checkout: `1607e6758a61531c577cd3a55693e247db34cf7efd19169ff8d058e2cff1af6d`. Its registry pins the **28 Oct** map/screens/zones. Keep Gavin's current 1,400 W total software limit; the 26 Oct caps are history.
 - bitcube's repo initially at `26f0db9` (only later docs/mission UI commits absent); Dave's bitcube checkout initially at `d25b52f`, distinct from the cloud deployment. No show rebuild/save/switch, control writes, camera moves, helper restarts or Modal deployment in this reconciliation. Pre-existing river_masks moves and untracked 26 Oct map preserved.
+- Sync completed: bitcube main fast-forwarded to takeover commit `55dd400`; Dave’s clean bitcube checkout fast-forwarded to `322e92b` via a verified incremental Git bundle because its Windows HTTPS credential store was unavailable over SSH. Bundle removed; credentials/config unchanged. Existing capture workers were not restarted, so the checkout version does not imply their already-loaded code changed. Final live status: Auto / remembered, 62 fps, `ribbons-gpu`, status age 0 s; saved show hash unchanged. Further changes here are documentation only.
+- Dave’s GitHub deploy workflow for `322e92b` is completed/successful (read-only check); no redeploy needed.
+- Validation: `tools/check` passed (509 Python passed / 3 skipped; 503 mission tests passed). Bundled modern Node available at `/Users/will/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin` (old `/tmp` runtime was gone).
 - Corrected stale "not yet built/offered" text on the two show pages. Palette override, folding Combined, and the artists' UX review remain future work; no dedicated new review-plan file found at `229f8a5`.
 
 ## Will: your first hour (28 Oct, from ~11:45)
