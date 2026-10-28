@@ -4,12 +4,12 @@
     "title": "The river (all looks, playlist) on its playlist: the remembered river, entry 1 of 3, loop 3 of 4",
     "description": "TouchDesigner runs river-all-looks.toe on Auto with a playlist of three (set 25 min ago): four loops of the remembered river, one cycle of Fill my cup (simple), ten minutes of the river's year. It is in the remembered river's third loop. Dave's agent answered 4 min ago, the river camera is live, three people are in the room and one lingers by ropes 7 and 8.",
     "expect": {
-      "headline": "Everything is up: the river (all looks, playlist) is showing; lights and cameras fine",
+      "headline": "Everything is up: the river (playlist) is showing; lights and cameras fine",
       "severity": "ok",
       "items": {
         "mission control": "ok: serving the page",
         "bitcube": "ok: online over Tailscale, up 3.1 h, 676 GB free",
-        "touchdesigner": "ok: the river (all looks, playlist) at 60 fps",
+        "touchdesigner": "ok: the river (playlist) at 60 fps",
         "seasons": "ok: not used (this show has no year)",
         "ropes": "ok: showing the show, sender open",
         "rope box 1": "ok: answers",

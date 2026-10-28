@@ -76,7 +76,7 @@ export const LOOKS_ENTRY = {
 export const ALL_LOOKS_FILE = 'river-all-looks.toe';
 export const ALL_LOOKS = ['remembered', 'fill-simple', 'fill-configurable', 'seasons', 'modal'];
 export const ALL_LOOKS_ENTRY = {
-  file: ALL_LOOKS_FILE, title: 'The river (all looks, playlist)', label: 'the river (all looks, playlist)', kind: 'show', offered: true, build: 'td/build/build_all_looks.py',
+  file: ALL_LOOKS_FILE, title: 'The river (all looks, playlist)', label: 'the river (playlist)', kind: 'show', offered: true, build: 'td/build/build_all_looks.py',
   calibration: { pixelmap: 'tools/pixelmap/pixelmap-2026-10-28.json', screens: 'tools/pixelmap/screens-2026-10-28.json', zones: null },
   description: 'Every look in one show file, played as a playlist (each look for so many loops, cycles or minutes, looping) or one look pinned, faded through black between them.',
   inputs: ["Dave's agent", 'river camera (recorded clip as fallback)', 'people counter', 'River\\looks\\control.json (the playlist)'],
@@ -513,14 +513,14 @@ const SCENARIOS = {
   'all-looks-auto': {
     title: 'The river (all looks, playlist) on its playlist: the remembered river, entry 1 of 3, loop 3 of 4',
     description: `TouchDesigner runs ${ALL_LOOKS_FILE} on Auto with a playlist of three (set 25 min ago): four loops of the remembered river, one cycle of Fill my cup (simple), ten minutes of the river's year. It is in the remembered river's third loop. Dave's agent answered 4 min ago, the river camera is live, three people are in the room and one lingers by ropes 7 and 8.`,
-    expect: { headline: 'Everything is up: the river (all looks, playlist) is showing; lights and cameras fine', severity: 'ok', items: allLooksItems(),
+    expect: { headline: 'Everything is up: the river (playlist) is showing; lights and cameras fine', severity: 'ok', items: allLooksItems(),
       action: 'Nothing to do. The Looks page edits the playlist.' },
     build: () => { const l = allLooksRaw({}); return looksShow(l, { file: ALL_LOOKS_FILE, remembered: rememberedRaw({ show: ALL_LOOKS_FILE, looks: l.status }) }); },
   },
   'all-looks-manual': {
     title: "The river (all looks, playlist) on Manual: the river's year pinned",
     description: `TouchDesigner runs ${ALL_LOOKS_FILE} on Manual, staying on the river's year (pinned 6 min ago); the playlist is kept for when it goes back to it. The river camera's last frame is 14 s old.`,
-    expect: { headline: 'Everything is up: the river (all looks, playlist) is showing; lights and cameras fine', severity: 'ok', items: allLooksItems(),
+    expect: { headline: 'Everything is up: the river (playlist) is showing; lights and cameras fine', severity: 'ok', items: allLooksItems(),
       action: 'Nothing to do. The Looks page edits the playlist.' },
     build: () => looksShow(allLooksRaw({ mode: 'manual', look: 'seasons', controlAge: 360, position: null, progress: null, riverAge: 14,
       used: { steering: 'the room: 3 people, more than usual', speed: 1.2 } }), { file: ALL_LOOKS_FILE }),
@@ -655,7 +655,7 @@ function looksShow(looks, { filling = null, remembered = null, file = LOOKS_FILE
   if (filling) st.probe.value.filling = filling;
   return { status: st, ...CAMS_GOOD, ...(remembered ? { remembered } : {}) };
 }
-function allLooksItems() { return items({ touchdesigner: 'ok: the river (all looks, playlist) at 60 fps', seasons: 'ok: not used (this show has no year)', ropes: 'ok: showing the show, sender open' }); }
+function allLooksItems() { return items({ touchdesigner: 'ok: the river (playlist) at 60 fps', seasons: 'ok: not used (this show has no year)', ropes: 'ok: showing the show, sender open' }); }
 function looksItems() { return items({ touchdesigner: 'ok: the river (all looks) at 60 fps', seasons: 'ok: not used (this show has no year)', ropes: 'ok: showing the show, sender open' }); }
 
 /** The Modal input show running (like viz-running), with td.modal_input as given. */

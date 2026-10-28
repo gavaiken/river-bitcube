@@ -4,12 +4,12 @@
     "title": "The river (all looks, playlist) on Manual: the river's year pinned",
     "description": "TouchDesigner runs river-all-looks.toe on Manual, staying on the river's year (pinned 6 min ago); the playlist is kept for when it goes back to it. The river camera's last frame is 14 s old.",
     "expect": {
-      "headline": "Everything is up: the river (all looks, playlist) is showing; lights and cameras fine",
+      "headline": "Everything is up: the river (playlist) is showing; lights and cameras fine",
       "severity": "ok",
       "items": {
         "mission control": "ok: serving the page",
         "bitcube": "ok: online over Tailscale, up 3.1 h, 676 GB free",
-        "touchdesigner": "ok: the river (all looks, playlist) at 60 fps",
+        "touchdesigner": "ok: the river (playlist) at 60 fps",
         "seasons": "ok: not used (this show has no year)",
         "ropes": "ok: showing the show, sender open",
         "rope box 1": "ok: answers",

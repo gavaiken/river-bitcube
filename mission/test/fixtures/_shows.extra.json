@@ -116,7 +116,7 @@
     {
       "file": "river-all-looks.toe",
       "title": "The river (all looks, playlist)",
-      "label": "the river (all looks, playlist)",
+      "label": "the river (playlist)",
       "kind": "show",
       "offered": true,
       "build": "td/build/build_all_looks.py",
