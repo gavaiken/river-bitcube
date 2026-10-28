@@ -162,9 +162,9 @@
               {
                 "name": "screen-1",
                 "value": {
-                  "amount": 0.6,
-                  "contrast": 0.5,
-                  "speed": 1,
+                  "amount": 0.53,
+                  "contrast": 0.4,
+                  "speed": 0.54,
                   "journey": 1
                 },
                 "mix": 0.6,
@@ -173,9 +173,9 @@
               {
                 "name": "screen-2",
                 "value": {
-                  "amount": 0.5,
-                  "contrast": 0.5,
-                  "speed": 0.8,
+                  "amount": 0.53,
+                  "contrast": 0.4,
+                  "speed": 0.54,
                   "journey": 1
                 },
                 "mix": 0.6,
@@ -184,10 +184,10 @@
               {
                 "name": "screen-3",
                 "value": {
-                  "amount": 0.7,
-                  "contrast": 0.5,
-                  "speed": 1.2,
-                  "journey": 0.4
+                  "amount": 0.53,
+                  "contrast": 0.4,
+                  "speed": 0.54,
+                  "journey": 1
                 },
                 "mix": 0.6,
                 "drives": "screen 3 target picture × river ripple"
@@ -195,9 +195,9 @@
               {
                 "name": "screen-4",
                 "value": {
-                  "amount": 0.4,
-                  "contrast": 0.5,
-                  "speed": 1,
+                  "amount": 0.53,
+                  "contrast": 0.4,
+                  "speed": 0.54,
                   "journey": 1
                 },
                 "mix": 0.6,
@@ -206,15 +206,30 @@
               {
                 "name": "ropes",
                 "value": {
-                  "amount": 0.8,
-                  "contrast": 0.5,
-                  "speed": 0.6,
+                  "amount": 0.7,
+                  "contrast": 0.4,
+                  "speed": 0.8,
                   "journey": 1
                 },
                 "mix": 0.6,
                 "drives": "rope target picture × river ripple"
               }
-            ]
+            ],
+            "seen": {
+              "frames": [
+                "2026-10-23T09-47-31Z-1c20",
+                "2026-10-23T09-49-20Z-88d1",
+                "2026-10-23T09-51-40Z-30ab",
+                "2026-10-23T09-53-25Z-c4e9",
+                "2026-10-23T09-55-30Z-0f17",
+                "2026-10-23T09-57-25Z-7f3a"
+              ],
+              "scene": [
+                "2026-10-23T02:46:02-07:00",
+                "2026-10-23T02:52:11-07:00",
+                "2026-10-23T02:58:18-07:00"
+              ]
+            }
           }
         },
         "boot_file": "river-local-oct-22-seasons.toe",

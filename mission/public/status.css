@@ -162,14 +162,32 @@ footer.foot .fine-print { margin-top: 4px; }
 .mi-bar { display: inline-block; width: 72px; height: 8px; border-radius: 4px; background: var(--line); vertical-align: middle; overflow: hidden; }
 .mi-bar.sm { width: 40px; height: 6px; }
 .mi-bar i { display: block; height: 100%; background: var(--accent); }
-.mi-fields { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 14px; }
-.mi-field { white-space: nowrap; }
+.mi-fields { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.mi-field { display: grid; grid-template-columns: 40px minmax(6.5em, 1fr) 3.6em auto 32px; align-items: center; gap: 2px 6px; }
+.mi-field .mi-from { justify-self: start; }
+/* who a value comes from: Dave (accent), bitcube (plain), your setting (outlined); never a status colour */
+.mi-from { display: inline-block; vertical-align: middle; font-size: 11px; font-weight: 700; line-height: 1; padding: 3px 6px; border-radius: 999px; white-space: nowrap; color: var(--muted); border: 1px solid var(--line); }
+.mi-from.dave { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+.mi-from.you { color: var(--text); border-color: var(--text); }
+/* ⓘ: 32 px target, a tap opens the explanation under the value */
+.mi-i { appearance: none; border: 0; background: none; color: var(--accent); font: inherit; font-size: 17px; line-height: 1; min-width: 32px; min-height: 32px; margin: -6px -4px; padding: 0; cursor: pointer; border-radius: 8px; }
+.mi-i[aria-expanded="true"] { background: var(--accent-soft); }
+.mi-i:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mi-x { flex-basis: 100%; grid-column: 1 / -1; display: block; color: var(--text); font-size: 14px; line-height: 1.4; background: var(--accent-soft); border-radius: 8px; padding: 6px 8px; white-space: normal; }
+.mi-x[hidden] { display: none; }
+.mi-intro { margin: 0; font-size: 15px; line-height: 1.4; }
+.mi-latest { margin: 0; font-size: 16px; line-height: 1.4; padding: 8px 10px; border-radius: 10px; background: var(--accent-soft); color: var(--text); }
+.mi-cap { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-height: 1.35; }
+.mi-big-wrap { display: flex; justify-content: center; }
+.mi-big { width: min(256px, 70vw); aspect-ratio: 1 / 2; image-rendering: pixelated; border-radius: 6px; background: var(--line); }
+.mi-big.ropes { width: min(240px, 70vw); aspect-ratio: auto; height: 55vh; object-fit: fill; }
 .mi-note { margin: 0; font-size: 15px; line-height: 1.35; }
 .mi-note .lbl { color: var(--muted); font-weight: 600; }
 .mi-fresh { margin: 0; color: var(--muted); font-size: 14px; font-weight: 600; }
 .mi-raw { margin: 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .mi-stale { display: flex; gap: 8px; align-items: flex-start; font-weight: 700; color: var(--lv-text); background: var(--lv-soft); border-radius: 10px; padding: 8px 10px; }
 .mi-thumbs { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
-.mi-thumb { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; color: var(--muted); text-decoration: none; }
+.mi-thumb { appearance: none; border: 0; background: none; font: inherit; padding: 2px; border-radius: 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; color: var(--muted); text-decoration: none; }
+.mi-thumb:focus-visible { outline: 2px solid var(--accent); }
 .mi-thumb img { width: 48px; height: 96px; object-fit: fill; border-radius: 4px; background: var(--line); color: transparent; overflow: hidden; }
 .mi-thumb.ropes img { width: 30px; image-rendering: pixelated; }

@@ -7,8 +7,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { planControl, checkedControl, calBlocked, testBlocked, actionResult, Mission } from '../lib/mission.mjs';
 import { APPLY_BLOCKS, EXPECT_S, changeLabel, derive, MODAL_INPUT_FILE } from '../public/model.js';
-import { modalInputView, MODAL_BASE } from '../public/modal-input.js';
-import { FixtureMission, fixtureModalInput } from '../lib/fixtures.mjs';
+import { modalInputView, MODAL_BASE, frameIssuedMs, cadenceS, sourceIntro, FRAME_FIELD_FROM, FRAME_FIELD_INFO, PARAM_INFO } from '../public/modal-input.js';
+import { FixtureMission, fixtureModalInput, rebase } from '../lib/fixtures.mjs';
+import { ModalSeen, withSeen } from '../lib/modal-seen.mjs';
 import { ACTIONS } from '../bin/mc.mjs';
 
 const DIR = new URL('./fixtures/', import.meta.url).pathname;
@@ -149,4 +150,133 @@ test('the control is greyed with a reason on any other show, and while the show 
   const e = run(f);
   assert.equal(e.show.modal_input, null);
   assert.equal(e.controls.modalinput.possible, false);
+});
+
+// ---- 28 Oct (Gavin: "none of it is explained … looks like no update for 7 minutes"): what arrives, when Dave sent it, how
+// often, every value explained and marked by who sets it, screens 1–4 as one row while they read the same ----------------------
+const viewAt = (f) => { const d = run(f); return modalInputView(d.show.modal_input, d.show.fresh.probe_age_s ?? 0, f._scenario.now); };
+
+test('a frame id carries its UTC issue time; the page says it on the Pacific clock with its age', () => {
+  assert.equal(frameIssuedMs('2026-10-28T01-16-01Z-9672'), Date.UTC(2026, 9, 28, 1, 16, 1));
+  for (const bad of [null, 'latest', '2026-10-28T01:16:01Z', '../x', 42]) assert.equal(frameIssuedMs(bad), null, String(bad));
+  const v = viewAt(fx('modal-input-frames'));
+  assert.equal(v.latest.what, 'new pictures');
+  assert.equal(v.latest.clock, '02:57', 'issued 09:57:25 UTC = 02:57 PDT');
+  assert.equal(v.latest.age_s, 95, 'from the frame id, on the server clock at the answer');
+  assert.equal(v.frames.issued_clock, '02:57');
+  // no server clock: no issue age, the arrival age stays
+  const w = view(run(fx('modal-input-frames')));
+  assert.equal(w.latest.age_s, null);
+  assert.equal(w.latest.arrived_age_s, 115);
+});
+
+test('how often: the median gap between the frames and scenes mission control has seen, overnight gaps ignored', () => {
+  assert.equal(cadenceS([]), null);
+  assert.equal(cadenceS([1000]), null, 'one is not a rhythm');
+  assert.equal(cadenceS([0, 120_000, 240_000, 420_000]), 120);
+  assert.equal(cadenceS([0, 60_000, 60_000, 3 * 3600_000, 3 * 3600_000 + 120_000]), 90, 'duplicates and the 3 h rest left out');
+  const v = viewAt(fx('modal-input-frames'));
+  assert.ok(v.latest.every_s >= 100 && v.latest.every_s <= 140, `about every 2 min (${v.latest.every_s} s)`);
+  const s = viewAt(fx('modal-input-scene'));
+  assert.equal(s.latest.what, 'a new scene');
+  assert.equal(s.latest.clock, '02:58');
+  assert.ok(s.latest.every_s >= 340 && s.latest.every_s <= 400, `about every 6 min (${s.latest.every_s} s)`);
+  const st = viewAt(fx('modal-input-frames-stale'));
+  assert.equal(st.latest.every_s, null, 'one frame seen: nothing said about how often');
+  assert.equal(st.latest.age_s, 1260, 'the stale frame was sent 21 min ago');
+  assert.equal(st.stale, true, 'and the stale warning stays');
+});
+
+test('one intro line per source says what arrives; the journey time when bitcube reports it', () => {
+  assert.match(sourceIntro('frames'), /new set of pictures every few minutes: one for each screen and one for all 20 ropes/);
+  assert.match(sourceIntro('frames'), /over a few seconds\.$/);
+  assert.match(sourceIntro('frames', 20), /travels to each new set over 20 s\.$/);
+  assert.match(sourceIntro('scene', 8), /four settings for how the river moves.*over 8 s\.$/);
+  assert.match(sourceIntro('canvas'), /moving picture/);
+  assert.equal(sourceIntro('off'), null);
+  const f = fx('modal-input-frames');
+  f.status.probe.value.td.modal_input.sources.frames.transition_ms = 20000;
+  assert.match(viewAt(f).intro, /over 20 s\./);
+  assert.match(viewAt(fx('modal-input-canvas')).intro, /web page/);
+  assert.equal(viewAt(fx('modal-input-canvas')).latest.live, true);
+});
+
+test('every frame value is explained and marked: ripple, strength, speed from Dave; arrived bitcube\'s; mixed in your setting', () => {
+  assert.deepEqual(FRAME_FIELD_FROM, { amount: 'dave', contrast: 'dave', speed: 'dave', journey: 'bitcube', mix: 'you' });
+  for (const k of Object.keys(FRAME_FIELD_FROM)) assert.ok(FRAME_FIELD_INFO[k]?.length > 20, k);
+  assert.match(FRAME_FIELD_INFO.speed, /can't go faster than 1×/);
+  assert.match(FRAME_FIELD_INFO.mix, /Strength/);
+  for (const k of ['palette', 'speed', 'density', 'brightness', 'turbulence', 'canvas']) assert.ok(PARAM_INFO[k], k);
+  const v = viewAt(fx('modal-input-frames'));
+  const ropes = v.rows.find((r) => r.name === 'ropes');
+  assert.deepEqual(ropes.fields.map((x) => x.from), ['dave', 'dave', 'dave', 'bitcube', 'you']);
+  assert.ok(ropes.fields.every((x) => x.info));
+  const s = viewAt(fx('modal-input-scene'));
+  assert.equal(s.params.find((p) => p.name === 'palette').label, "Dave's colours");
+  assert.ok(s.params.every((p) => p.info), 'each knob has its explanation');
+  assert.ok(!s.params.some((p) => p.own_age), 'no knob has its own age: the Latest line says when');
+});
+
+test('screens 1–4 are one row while they read the same, one row each once they differ', () => {
+  const v = viewAt(fx('modal-input-frames'));
+  assert.deepEqual(v.rows.map((r) => r.label), ['Screens 1–4', 'Ropes']);
+  assert.deepEqual(v.rows[0].names, ['screen-1', 'screen-2', 'screen-3', 'screen-4']);
+  assert.equal(v.params.length, 5, 'the elements themselves stay');
+  const f = fx('modal-input-frames');
+  f.status.probe.value.td.modal_input.params[2].value.amount = 0.531;     // reads 0.53 like the rest: still one row
+  assert.equal(viewAt(f).rows.length, 2);
+  f.status.probe.value.td.modal_input.params[2].value.amount = 0.7;
+  assert.deepEqual(viewAt(f).rows.map((r) => r.label), ['Screen 1', 'Screen 2', 'Screen 3', 'Screen 4', 'Ropes']);
+  f.status.probe.value.td.modal_input.params.splice(1, 1);                 // a screen missing: no "1–4" claim
+  assert.equal(viewAt(f).rows.some((r) => r.name === 'screens'), false);
+});
+
+test('mission control keeps the last 10 distinct frames and scenes it saw, in memory, and serves them beside the reading', () => {
+  const s = new ModalSeen();
+  for (let k = 0; k < 14; k++) s.observe({ sources: { frames: { frame_id: `2026-10-28T01-${String(k).padStart(2, '0')}-00Z-ab` }, scene: { set_at: '2026-10-27T18:00:00-07:00' } } });
+  s.observe({ sources: { frames: { frame_id: '2026-10-28T01-13-00Z-ab' } } });     // the same again: kept once
+  s.observe({ sources: { frames: { frame_id: '"><script>' }, scene: { set_at: 'soon' } } });
+  s.observe(null); s.observe('x');
+  const l = s.list();
+  assert.equal(l.frames.length, 10);
+  assert.equal(l.frames[0], '2026-10-28T01-04-00Z-ab');
+  assert.equal(l.frames.at(-1), '2026-10-28T01-13-00Z-ab');
+  assert.deepEqual(l.scene, ['2026-10-27T18:00:00-07:00']);
+  assert.deepEqual(withSeen({ seen: { frames: ['x'] } }, s).seen, { frames: ['x'] }, 'a reading with its own (a fixture) keeps it');
+  assert.equal(withSeen(null, s), null);
+});
+
+test('the live snapshot adds what was seen across successive full checks', () => {
+  let t = 1_800_000_000_000;
+  const m = new Mission({ now: () => t, probe: async () => ({}) });
+  const reading = (id, set) => ({ td: { ok: true, file: MODAL_INPUT_FILE, modal_input: { source: 'frames', strength: 0.5, sources: { frames: { ok: true, age_s: 5, frame_id: id }, scene: { ok: true, set_at: set } }, params: [] } } });
+  for (const [k, id] of ['2026-10-28T01-10-00Z-a', '2026-10-28T01-12-00Z-b', '2026-10-28T01-14-10Z-c'].entries()) {
+    m.data.probe = { at: t, value: reading(id, '2026-10-27T18:00:00-07:00') };
+    m.snapshot(); m.snapshot();
+    t += 60_000 * (k + 1);
+  }
+  const mi = m.snapshot().probe.value.td.modal_input;
+  assert.deepEqual(mi.seen.frames, ['2026-10-28T01-10-00Z-a', '2026-10-28T01-12-00Z-b', '2026-10-28T01-14-10Z-c']);
+  assert.equal(modalInputView(mi, 0, Date.UTC(2026, 9, 28, 1, 15, 10)).latest.every_s, 125);
+  assert.equal(m.data.probe.value.td.modal_input.seen, undefined, 'the kept reading itself is untouched');
+});
+
+test('fixture mode moves a frame id with the fixture clock, as every other time', () => {
+  const r = rebase({ value: { td: { modal_input: { sources: { frames: { frame_id: '2026-10-23T09-57-25Z-7f3a' } }, seen: { frames: ['2026-10-23T23-59-30Z-x'] } } } } }, 86_400_000);
+  assert.equal(r.value.td.modal_input.sources.frames.frame_id, '2026-10-24T09-57-25Z-7f3a');
+  assert.equal(r.value.td.modal_input.seen.frames[0], '2026-10-24T23-59-30Z-x');
+});
+
+test('the page: ⓘ buttons toggle on tap with aria-expanded and a title, pictures open larger, the Apply line says when you chose', () => {
+  const js = readFileSync(new URL('../public/status.js', import.meta.url), 'utf8'), css = readFileSync(new URL('../public/status.css', import.meta.url), 'utf8');
+  assert.match(js, /class="mi-i" id="mi-i-\$\{k\}" data-act="mi-info" data-info="\$\{k\}" aria-expanded="\$\{open\}" aria-controls="mi-x-\$\{k\}" title="\$\{esc\(text\)\}"/);
+  assert.match(js, /case 'mi-info': \{ const k = b\.dataset\.info; if \(miInfoOpen\.has\(k\)\) miInfoOpen\.delete\(k\); else miInfoOpen\.add\(k\); render\(\);/);
+  assert.match(js, /case 'mi-pic': if \(MI_PIC\.test/);
+  assert.match(js, /Each column is one rope, top = top\./);
+  assert.match(js, /Dave's latest pictures \(before the river ripples them\)/);
+  assert.match(js, /<b>Latest from Dave:<\/b>/);
+  assert.match(js, /You chose \$\{W\.label\} at \$\{nb\(pct \+ ' %'\)\} at \$\{t\}/);
+  assert.doesNotMatch(js, /`Now \$\{W\.label\} at/, 'never "Now Frames at 50 % … 18:09", read as the data\'s age');
+  assert.match(css, /\.mi-i \{[^}]*min-width: 32px; min-height: 32px/);
+  assert.match(css, /\.mi-big\.ropes/);
 });

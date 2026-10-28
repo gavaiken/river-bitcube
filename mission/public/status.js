@@ -15,7 +15,7 @@ import { rulesForm, targetForm, modeEffect, switchWords, defaultWords, showCardH
 const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, changeLabel, bandParts,
   newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS, endedOnce, ownMemory, byMinute, confirmChanged, UNKNOWN_ANSWERS, NOT_RECEIVED, neverGotWords } = M;
 import { apiTimeout } from '/app.js';
-import { modalInputView } from '/modal-input.js';
+import { modalInputView, FROM_WORDS, FACTOR_INFO } from '/modal-input.js';
 const $ = (sel, root = document) => root.querySelector(sel);
 const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
 // One name per thing (the copy rules); descriptors live on the card, never in the name.
@@ -758,15 +758,47 @@ function miChanged(v) {
   return !!v && (src !== v.source || (src !== 'off' && str !== Math.round((v.strength ?? -1) * 100)));
 }
 const fix = (x, d = 2) => (Math.abs(x) >= 10 ? String(Math.round(x)) : x.toFixed(d).replace(/0+$/, '').replace(/\.$/, ''));
+// ⓘ: a small button beside a value that opens (tap, Enter) a short explanation under it; title for a desktop's hover. Which are
+// open is kept across re-renders (key: the row and the value).
+const miInfoOpen = new Set();
+const miKey = (k) => String(k).replace(/[^a-z0-9-]/gi, '-');
+function miInfoBtn(key, what, text) {
+  const k = miKey(key), open = miInfoOpen.has(k);
+  return `<button type="button" class="mi-i" id="mi-i-${k}" data-act="mi-info" data-info="${k}" aria-expanded="${open}" aria-controls="mi-x-${k}" title="${esc(text)}" aria-label="What is ${esc(what)}?">ⓘ</button>`;
+}
+const miInfoText = (key, text) => { const k = miKey(key); return `<span class="mi-x" id="mi-x-${k}"${miInfoOpen.has(k) ? '' : ' hidden'}>${esc(text)}</span>`; };
+const miFrom = (who) => `<span class="mi-from ${who}">${esc(FROM_WORDS[who])}</span>`;
 function miValueHTML(p) {
-  if (p.kind === 'palette') return `<span class="mi-swatches" role="img" aria-label="${p.colors.length} colours: ${esc(p.colors.join(', '))}">${p.colors.map((c) => `<i style="background:${esc(c)}"></i>`).join('')}</span>`;
-  if (p.kind === 'number') return `<span class="mi-bar" aria-hidden="true"><i style="width:${Math.round(p.frac * 100)}%"></i></span> <b>${esc(fix(p.value))}</b>${p.effective != null ? ` <span class="muted">(using ${esc(fix(p.effective))} now)</span>` : ''}${p.factor != null ? ` <span class="muted">· ×${esc(fix(p.factor))} of the usual</span>` : ''}`;
-  if (p.kind === 'frame') return p.fields.length ? `<span class="mi-fields">${p.fields.map((f) => `<span class="mi-field"><span class="mi-bar sm" aria-hidden="true"><i style="width:${Math.round(f.frac * 100)}%"></i></span> ${esc(f.words)} <b>${esc(f.key === 'journey' || f.key === 'mix' ? Math.round(f.value * 100) + ' %' : f.key === 'speed' ? fix(f.value) + '×' : fix(f.value))}</b></span>`).join('')}</span>` : '<span class="muted">not known</span>';
-  return `<b>${esc(p.text)}</b>`;
+  if (p.kind === 'palette') return `<span class="mi-swatches" role="img" aria-label="${p.colors.length} colours: ${esc(p.colors.join(', '))}">${p.colors.map((c) => `<i style="background:${esc(c)}"></i>`).join('')}</span> ${miFrom('dave')}`;
+  if (p.kind === 'number') return `<span class="mi-bar" aria-hidden="true"><i style="width:${Math.round(p.frac * 100)}%"></i></span> <b>${esc(fix(p.value))}</b> ${miFrom('dave')}${p.effective != null ? ` <span class="muted">(using ${esc(fix(p.effective))} now)</span>` : ''}${p.factor != null ? ` <span class="muted">· ×${esc(fix(p.factor))} of the usual</span>` : ''}`;
+  if (p.kind === 'frame') return p.fields.length ? `<span class="mi-fields">${p.fields.map((f) => `<span class="mi-field"><span class="mi-bar sm" aria-hidden="true"><i style="width:${Math.round(f.frac * 100)}%"></i></span> <span class="mi-fw">${esc(f.words)}</span> <b>${esc(f.key === 'journey' || f.key === 'mix' ? Math.round(f.value * 100) + ' %' : f.key === 'speed' ? fix(f.value) + '×' : fix(f.value))}</b> ${miFrom(f.from)} ${miInfoBtn(`${p.name}-${f.key}`, f.words, f.info)}${miInfoText(`${p.name}-${f.key}`, f.info)}</span>`).join('')}</span>` : '<span class="muted">not known</span>';
+  return `<b>${esc(p.text)}</b> ${miFrom('dave')}`;
+}
+/** A parameter's own ⓘ (a scene knob, the palette, the canvas), with the ×factor explained when it has one. */
+const miParamInfo = (p) => (p.kind === 'frame' || !p.info ? null : p.factor != null ? `${p.info} ×${fix(p.factor)} of the usual: ${FACTOR_INFO}` : p.info);
+/** "Latest from Dave: new pictures at 02:57 (2 min ago) · about every 2 min lately" (his own time; else when it arrived). */
+function miLatestHTML(v) {
+  const l = v.latest;
+  if (!l) return '';
+  if (v.source === 'canvas') return `<p class="mi-latest"><b>Latest from Dave:</b> ${l.live ? 'playing live now' : l.arrived_age_s != null ? `last update reached bitcube ${ageSpan(l.arrived_age_s)}` : 'not known yet'}.</p>`;
+  const when = l.clock ? `${esc(l.what)} at <b>${esc(l.clock)}</b>${l.age_s != null ? ` (${ageSpan(l.age_s)})` : ''}`
+    : l.arrived_age_s != null ? `${esc(l.what)}, reached bitcube ${ageSpan(l.arrived_age_s)}` : `${esc(l.what)}: not known yet`;
+  const every = l.every_s != null ? ` · about every ${esc(nb(M.dur(l.every_s)))} lately` : '';
+  return `<p class="mi-latest"><b>Latest from Dave:</b> ${when}${every}.</p>`;
+}
+/** Only Dave's own frame pictures open in the sheet (modal-input.js builds these addresses). */
+const MI_PIC = /^https:\/\/to-be-a-river--river\.modal\.run\/frames\/[A-Za-z0-9._-]{1,80}\/(?:screen-[1-4]|ropes)\.png$/;
+/** A frame picture, larger, in a sheet: the ropes' 20 columns pixelated, with which way is which. */
+function openPicture(el, url) {
+  const v = model ? modalInputView(model.show.modal_input, model.show.fresh.probe_age_s ?? 0, p.last?.now ?? null) : null;
+  const what = el === 'ropes' ? 'the 20 ropes' : `screen ${el.slice(-1)}`;
+  const when = v?.frames?.issued_clock ? ` Sent at ${v.frames.issued_clock}.` : '';
+  sheet({ title: `Dave's latest picture for ${what}`, body: `<p>The colours bitcube aims for on ${what}, before the river ripples them.${esc(when)}${el === 'ropes' ? ' Each column is one rope, top = top.' : ''}</p>
+    <div class="mi-big-wrap"><img class="mi-big ${el === 'ropes' ? 'ropes' : ''}" src="${esc(url)}" alt="Dave's picture for ${esc(what)}"></div>` });
 }
 function modalInputHTML(m) {
   if (m.show.file?.name !== M.MODAL_INPUT_FILE) { miSourceDraft = null; miStrengthDraft = null; return ''; }
-  const v = modalInputView(m.show.modal_input, m.show.fresh.probe_age_s ?? 0), W = M.MODAL_SOURCE_WORDS, o = off('modalinput') || !v;
+  const v = modalInputView(m.show.modal_input, m.show.fresh.probe_age_s ?? 0, p.last?.now ?? null), W = M.MODAL_SOURCE_WORDS, o = off('modalinput') || !v;
   const src = miSourceDraft ?? v?.source ?? 'off';
   const cur = v?.strength == null ? null : Math.round(v.strength * 100), str = miStrengthDraft ?? cur ?? 60;
   const btn = (id) => `<button type="button" id="ctl-mi-${id}" data-act="mi-source" data-source="${id}" class="${src === id ? 'lit' : ''}" aria-pressed="${src === id}" ${o ? 'disabled' : ''}>${W[id].label}</button>`;
@@ -792,16 +824,22 @@ function sendingHTML(v) {
     : x.id === 'canvas' && x.age_s != null && x.age_s <= 120 ? `${x.label} live` : `${x.label} ${ageSpan(x.age_s)}`).join(' · ');
   const warn = v.stale ? `<div class="mi-stale lv-warning" role="status">${mark('warning')}<span>${esc(v.stale_words)}.</span></div>` : '';
   if (v.source === 'off' || !v.source) return `<div class="mi-sending"><div class="ctl-h">What Dave's agent is sending</div>
-    <p class="effect">Off: the river runs on its own; nothing from Dave's agent is used.</p>${fresh ? `<p class="mi-fresh">${fresh}</p>` : ''}</div>`;
-  const rows = v.params.map((p) => `<div class="mi-row${p.kind === 'frame' ? ' wide' : ''}" role="listitem"><div class="mi-name">${esc(p.label)}</div><div class="mi-val">${miValueHTML(p)}</div>
-      <div class="mi-age">${p.age_s != null ? `set ${ageSpan(p.age_s)}` : ''}</div><div class="mi-drives">${p.drives ? esc(p.drives) : ''}</div></div>`).join('');
-  const sc = v.source === 'scene' && v.scene ? `${v.scene.palette_name ? `<p class="mi-note"><span class="lbl">Palette name:</span> ${esc(v.scene.palette_name)}</p>` : ''}${v.scene.animation ? `<p class="mi-note"><span class="lbl">Movement:</span> ${esc(v.scene.animation)}</p>` : ''}${v.scene.journal ? `<p class="mi-note"><span class="lbl">Journal:</span> ${esc(v.scene.journal)}</p>` : ''}` : '';
-  const fr = v.source === 'frames' && v.frames ? `${v.frames.note ? `<p class="mi-note"><span class="lbl">Note:</span> ${esc(v.frames.note)}</p>` : ''}
-    ${v.frames.images.length ? `<div class="mi-thumbs">${v.frames.images.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener" class="mi-thumb ${x.element === 'ropes' ? 'ropes' : ''}"><img src="${esc(x.url)}" alt="Dave's picture for ${esc(x.element === 'ropes' ? 'the ropes' : x.element.replace('-', ' '))}" loading="lazy"><span>${esc(x.element === 'ropes' ? 'Ropes' : 'Screen ' + x.element.slice(-1))}</span></a>`).join('')}</div>` : ''}` : '';
-  return `<div class="mi-sending"><div class="ctl-h">What Dave's agent is sending: ${esc(W[v.source].label)}</div>${warn}
+    <p class="effect">Off: the river runs on its own; nothing from Dave's agent is used.</p>${fresh ? `<p class="mi-fresh">Every input of Dave's, as it last reached bitcube: ${fresh}</p>` : ''}</div>`;
+  // one row per thing (screens 1–4 as one row while they read the same: v.rows); its own "set … ago" only when it has its own age
+  // (the Latest line says when the rest came)
+  const rows = v.rows.map((p) => { const info = miParamInfo(p);
+    return `<div class="mi-row wide" role="listitem"><div class="mi-name">${esc(p.label)}${info ? ` ${miInfoBtn(p.name, p.label, info)}` : ''}</div><div class="mi-val">${miValueHTML(p)}</div>
+      <div class="mi-age">${p.own_age && p.age_s != null ? `set ${ageSpan(p.age_s)}` : ''}</div>${info ? miInfoText(p.name, info) : ''}<div class="mi-drives">${p.drives ? esc(p.drives) : ''}</div></div>`; }).join('');
+  const sc = v.source === 'scene' && v.scene ? `${v.scene.palette_name ? `<p class="mi-note"><span class="lbl">Dave's name for these colours:</span> ${esc(v.scene.palette_name)}</p>` : ''}${v.scene.animation ? `<p class="mi-note"><span class="lbl">Dave's movement:</span> ${esc(v.scene.animation)}</p>` : ''}${v.scene.journal ? `<p class="mi-note"><span class="lbl">Dave's journal:</span> ${esc(v.scene.journal)}</p>` : ''}` : '';
+  const f = v.frames, fr = v.source === 'frames' && f ? `${f.note ? `<p class="mi-note"><span class="lbl">Dave's note:</span> ${esc(f.note)}</p>` : ''}
+    ${f.images.length ? `<p class="mi-cap">Dave's latest pictures (before the river ripples them)${f.issued_clock ? `, sent at ${esc(f.issued_clock)}` : ''}. Tap one to see it larger.</p>
+    <div class="mi-thumbs">${f.images.map((x) => { const what = x.element === 'ropes' ? 'the ropes' : x.element.replace('-', ' ');
+      return `<button type="button" id="mi-pic-${esc(x.element)}" data-act="mi-pic" data-pic="${esc(x.element)}" data-url="${esc(x.url)}" class="mi-thumb ${x.element === 'ropes' ? 'ropes' : ''}" aria-label="See Dave's picture for ${esc(what)} larger"><img src="${esc(x.url)}" alt="" loading="lazy"><span>${esc(x.element === 'ropes' ? 'Ropes' : 'Screen ' + x.element.slice(-1))}</span></button>`; }).join('')}</div>` : ''}` : '';
+  return `<div class="mi-sending"><div class="ctl-h">What Dave's agent is sending: ${esc(W[v.source].label)}</div>
+    ${v.intro ? `<p class="mi-intro">${esc(v.intro)}</p>` : ''}${warn}${miLatestHTML(v)}
     ${rows ? `<div class="mi-params" role="list">${rows}</div>` : '<p class="effect">Nothing has arrived for it yet.</p>'}
     ${sc}${fr}
-    ${fresh ? `<p class="mi-fresh">${fresh}</p>` : ''}
+    ${fresh ? `<p class="mi-fresh">Every input of Dave's, as it last reached bitcube: ${fresh}</p>` : ''}
     ${v.stale_raw ? `<p class="mi-raw">For Will: <code>${esc(v.stale_raw)}</code></p>` : ''}</div>`;
 }
 function openShowList() {
@@ -1115,7 +1153,7 @@ function unconfirm(name) {
 function finish(name) {
   const c = ctl[name], r = c.result;
   const d = typeof c.o.done === 'function' ? c.o.done(r) : c.o.done;
-  c.text = `${d} · ${sclock()}${r?.fixture ? ' (fixture mode: nothing really changed)' : ''}`;
+  c.text = `${typeof c.o.doneAt === 'function' ? c.o.doneAt(sclock()) : `${d} · ${sclock()}`}${r?.fixture ? ' (fixture mode: nothing really changed)' : ''}`;
   announce(c.text);
   try { c.o.onDone?.(r); } catch (e) { console.warn('onDone', e); }
 }
@@ -1381,12 +1419,15 @@ document.addEventListener('click', async (e) => {
       break;
     }
     case 'mi-source': miSourceDraft = b.dataset.source; render(); break;
+    case 'mi-info': { const k = b.dataset.info; if (miInfoOpen.has(k)) miInfoOpen.delete(k); else miInfoOpen.add(k); render(); break; }
+    case 'mi-pic': if (MI_PIC.test(b.dataset.url ?? '')) openPicture(b.dataset.pic, b.dataset.url); break;
     case 'mi-set': {
       const v = m?.show.modal_input, source = miSourceDraft ?? v?.source ?? 'off';
       const pct = miStrengthDraft ?? (v?.strength == null ? 60 : Math.round(v.strength * 100)), body = { source, strength: pct / 100 };
       const W = M.MODAL_SOURCE_WORDS[source];
       runControl('modalinput', '/api/control/modalinput', body, { btn: b, what: changeLabel('modalinput', body),
-        done: source === 'off' ? 'Now Off: the river runs on its own' : `Now ${W.label} at ${nb(pct + ' %')}: ${W.line}`,
+        // when you chose it, never how old Dave's data is (that is the Latest line below): "You chose Frames at 50 % at 18:09: …"
+        doneAt: (t) => source === 'off' ? `You chose Off at ${t}: the river runs on its own` : `You chose ${W.label} at ${nb(pct + ' %')} at ${t}: ${W.line}`,
         fail: 'The Modal input is unchanged', kept: 'Your choice is kept.',
         holds: (mm) => mm.show.modal_input?.source === source && (source === 'off' || Math.round((mm.show.modal_input?.strength ?? -1) * 100) === pct),
         onDone: () => { if (miSourceDraft === source) miSourceDraft = null; if (miStrengthDraft === pct) miStrengthDraft = null; } });

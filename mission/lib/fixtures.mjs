@@ -55,7 +55,11 @@ import { FRAME_ELEMENTS } from '../public/modal-input.js';
 // td.modal_input as probe.ps1 reports it while river-combined-modal-inputs.toe runs: the fixtures (test/fixtures/build.mjs) and a
 // world switched to that show both use it; a Modal input change in a world sets its source and strength and the params that
 // source sends. ages: each source's age_s.
-const FRAME_ID = '2026-10-23T09-57-25Z-7f3a';
+const FRAME_ID = '2026-10-23T09-57-25Z-7f3a';    // issued 95 s before the fixtures' moment (02:59:00 PDT), as it arrived
+const FIXTURE_NOW = 1792749540000;
+/** The id of a frame that arrived age_s before the fixtures' moment (Modal names a frame by its UTC issue time). */
+const frameIdAged = (age_s) => new Date(FIXTURE_NOW - age_s * 1000).toISOString().slice(0, 19).replace(/:/g, '-') + 'Z-7f3a';
+const SEEN_FRAMES = ['2026-10-23T09-47-31Z-1c20', '2026-10-23T09-49-20Z-88d1', '2026-10-23T09-51-40Z-30ab', '2026-10-23T09-53-25Z-c4e9', '2026-10-23T09-55-30Z-0f17'];
 const MI_PARAMS = {
   off: [],
   canvas: [{ name: 'canvas', value: 'drift / deepening-pool', drives: 'additive overlay' }],
@@ -66,17 +70,22 @@ const MI_PARAMS = {
     { name: 'brightness', value: 0.56, factor: 1.02, drives: 'river gain' },
     { name: 'turbulence', value: 0.62, effective: 0.55, factor: 1.1, drives: 'torrent / roughness' },
   ],
-  frames: FRAME_ELEMENTS.map((el, k) => ({ name: el, value: { amount: [0.6, 0.5, 0.7, 0.4, 0.8][k], contrast: 0.5, speed: [1, 0.8, 1.2, 1, 0.6][k], journey: [1, 1, 0.4, 1, 1][k] },
+  // as Dave's agent sends them today (28 Oct): the four screens with the same settings (the page shows them as one row), the ropes their own
+  frames: FRAME_ELEMENTS.map((el, k) => ({ name: el, value: { amount: [0.53, 0.53, 0.53, 0.53, 0.7][k], contrast: 0.4, speed: [0.54, 0.54, 0.54, 0.54, 0.8][k], journey: 1 },
     mix: 0.6, drives: el === 'ropes' ? 'rope target picture × river ripple' : `screen ${k + 1} target picture × river ripple` })),
 };
 export function fixtureModalInput(source = 'scene', { strength = 0.6, ages = { canvas: 3, scene: 42, frames: 95 }, stale = false } = {}) {
+  const frameId = ages.frames === 95 ? FRAME_ID : frameIdAged(ages.frames);
   return { source, strength, effective_source: stale ? 'off' : source, fading: false, stale,
     stale_reason: stale ? (source === 'frames' ? 'frames quiet: newest frame is 120 s past its ttl' : `newest ${source} is older than 900 s`) : null,
     data_age_s: source === 'off' ? null : ages[source], mix: { canvas: source === 'canvas' && !stale ? strength : 0, scene: source === 'scene' && !stale ? strength : 0, frames: source === 'frames' && !stale ? strength : 0 },
     sources: { canvas: { ok: true, age_s: ages.canvas },
       scene: { ok: true, age_s: ages.scene, set_at: '2026-10-23T02:58:18-07:00', palette_name: 'froth-deepening', animation: 'drift', journal: 'The room has gone quiet, so the river slows and cools toward deep water.' },
-      frames: { ok: !stale || source !== 'frames', age_s: ages.frames, frame_id: FRAME_ID, note: 'dusk: cooling toward deep blue', quiet: stale && source === 'frames', rejected: null, sync: { ok: true, age_s: 4, error: null } } },
-    params: structuredClone(MI_PARAMS[source] ?? []) };
+      frames: { ok: !stale || source !== 'frames', age_s: ages.frames, frame_id: frameId, note: 'dusk: cooling toward deep blue', quiet: stale && source === 'frames', rejected: null, sync: { ok: true, age_s: 4, error: null } } },
+    params: structuredClone(MI_PARAMS[source] ?? []),
+    // what mission control saw lately (lib/modal-seen.mjs adds it live; a fixture carries its own): a frame about every 2 min, a
+    // scene about every 6 min
+    seen: { frames: frameId === FRAME_ID ? [...SEEN_FRAMES, FRAME_ID] : [frameId], scene: ['2026-10-23T02:46:02-07:00', '2026-10-23T02:52:11-07:00', '2026-10-23T02:58:18-07:00'] } };
 }
 /** A Modal input change in a world, as the next full check reports it: the chosen source and strength (and its params). */
 function withModalInput(mi, set) {
@@ -461,6 +470,12 @@ function svgStill(cam) {
 
 const ISO = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/;
 const EPOCH_S = /^(next_tick_epoch|t)$/;             // Modal's next tick, a seasons history point (seconds)
+const FRAME_AT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})Z/;   // a Modal frame id starts with its UTC issue time
+/** A frame id's issue time moved by delta ms ("2026-10-23T09-57-25Z-7f3a"), the rest of the id kept. */
+function shiftFrameId(s, delta) {
+  const m = FRAME_AT.exec(s), t = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) + delta;
+  return new Date(t).toISOString().slice(0, 19).replace(/:/g, '-') + 'Z' + s.slice(m[0].length);
+}
 
 /** Move every timestamp in a fixture source forward by delta ms: `at` (ms), epoch seconds, ISO strings (keeping their zone). */
 export function rebase(v, delta) {
@@ -475,6 +490,7 @@ export function rebase(v, delta) {
     }
     if (typeof x === 'string' && key === 'last') return shiftLogLine(x, delta);
     if (typeof x === 'string' && ISO.test(x)) return shiftIso(x, delta);
+    if (typeof x === 'string' && FRAME_AT.test(x)) return shiftFrameId(x, delta);
     return x;
   };
   return walk(v, '');

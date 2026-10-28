@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { scrubCreds } from './scrub.mjs';
 import { Applying } from './applying.mjs';
 import { checkedCalibrate, noAnswer } from './lights.mjs';
+import { ModalSeen, withSeen } from './modal-seen.mjs';
 import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights, TEST_ON, testShowing, FILES, MODAL_INPUT_FILE, MODAL_SOURCES } from '../public/model.js';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
@@ -124,6 +125,7 @@ export class Mission {
     this.askedAt = {};       // source -> when the reading kept in data was asked (a full check: an older one never replaces it)
     this.timers = [];
     this.applying = new Applying({ now });     // every control in flight (status.applying; the 409 "wait: ...")
+    this.modalSeen = new ModalSeen();   // the last few frame ids and scene times the Modal input show reported (lib/modal-seen.mjs)
     this.calNote = null;     // { at, value }: the newest progress file Lights answered with (start, cancel, a progress read)
     this.lastRebuild = this.#readRebuilt();
   }
@@ -195,6 +197,12 @@ export class Mission {
     // not from the full check's age (up to a minute older): the Lights card, the tiles and the band agree (R6 #33)
     const served = cal && cal === this.calNote?.value ? { ...cal, read_age_s: Math.max(0, Math.round((this.now() - this.calNote.at) / 1000)) } : cal;
     if (obj(out.probe?.value) && served !== (out.probe.value.calibration ?? null)) out.probe = { ...out.probe, value: { ...out.probe.value, calibration: served } };
+    // the Modal input show's reading, with the frames and scenes seen lately beside it (how often Dave sends: lib/modal-seen.mjs)
+    const mi = obj(out.probe?.value?.td) ? obj(out.probe.value.td.modal_input) : null;
+    if (mi) {
+      this.modalSeen.observe(mi);
+      out.probe = { ...out.probe, value: { ...out.probe.value, td: { ...out.probe.value.td, modal_input: withSeen(mi, this.modalSeen) } } };
+    }
     out.applying = this.applying.list();
     // the server's verdict on every change it confirmed or gave up on in the last 10 min: a page confirms its own switch,
     // restart, rebuild or boot-file change only by its entry's id here, never from a file name (R7 #6, #25)
