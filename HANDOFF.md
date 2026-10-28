@@ -33,7 +33,8 @@
 5. Rollback at any time: mission control → Change → "The river: two looks (28 Oct copy)". Tags `before-all-looks`,
    `all-looks-v1`, `river-looks-gpu-ribbons-v1`.
 6. Jobs in order of value (each written up below): the palette Justine can set; Combined with Modal folded into the
-   playlist file; a real adversarial UX pass on the Looks tab and Help page with the artists.
+   playlist file; the UX fixes in `docs/ux-review-28-oct.md` (three ranked batches from an adversarial review of the
+   28 Oct pages; Batch A's mission-control items are safe for the show, its three TD-side items need a rebuild).
 
 ## Late morning of 28 Oct (session A): `river-all-looks.toe`, every look in one file with a playlist. **Will: read this and the next section**
 Gavin asked (10:00) for all the TD visuals in one file, a config for which looks play in what order and for how long, a
