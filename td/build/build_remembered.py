@@ -282,6 +282,37 @@ for k, c in enumerate(crops, start=1):
     if sw.inputConnectors[0].connections[:1] != [sel.outputConnectors[0]]:
         sw.inputConnectors[0].connect(sel)
     assert sw.inputs and sw.inputs[0] == sel, f'outputs/screen{k}_src input 0 is not screen{k}_remembered'
+if DRIVER == 'looks':
+    # The playlist file (river-all-looks.toe): the looks that are TouchDesigner networks (/project1/seasons, /project1/modal,
+    # folded in by their own builders) reach the ropes and screens through one Switch + Level per output, which the looks
+    # mixer sets (mixer._route): input 0 the numpy images, 1 seasons, 2 modal. Built here even before those COMPs exist.
+    from looks import mixer as _mixer
+    def _look_switch(name, first, srcs, x, y):
+        sw = out_c.op(name) or out_c.create(switchTOP, name)
+        sw.nodeX, sw.nodeY = x, y
+        ins = [first]
+        for i, lk in enumerate(_mixer.OPERATOR, start=1):
+            c = proj.op(lk)
+            sel = out_c.op(f'{name}_{lk}') or out_c.create(selectTOP, f'{name}_{lk}')
+            sel.nodeX, sel.nodeY = x - 150, y - 60 * i
+            sel.par.top = f'/project1/{lk}/{srcs}' if c is not None and c.op(srcs) is not None else first.path
+            ins.append(sel)
+        for i, o in enumerate(ins):
+            if i < len(sw.inputConnectors) and sw.inputConnectors[i].connections[:1] != [o.outputConnectors[0]]:
+                sw.inputConnectors[i].connect(o)
+        sw.par.index = 0
+        lv = out_c.op(name.replace('look_src', 'look_fade')) or out_c.create(levelTOP, name.replace('look_src', 'look_fade'))
+        lv.nodeX, lv.nodeY = x + 150, y
+        lv.inputConnectors[0].connect(sw)
+        lv.par.clamp = True
+        return lv
+    _lr = _look_switch('look_src_ropes', rope_sel, 'rope_canvas', 400, 300)
+    _panels = proj.op('panels')
+    for k in range(1, 5):
+        so = out_c.op(f'screen{k}_out')
+        if so is not None:
+            lv = _look_switch(f'look_src_screen{k}', so, f'quad{k}_out', 2400, -100 * k)
+            setattr(_panels.par, f'Quad{k}', lv.path)
 out_c.par.Panelgain, out_c.par.Panelgamma = 1.0, 1.0               # the show caps its own screens at 55 %
 note(out_c, "OUTPUTS (river-remembered.toe, built by td/build/build_remembered.py).\n"
             "ROPES: remembered/rope_canvas (20x400, straight from td/remembered/ropes.py) -> /project1/ropes.\n"
@@ -298,7 +329,7 @@ if _win is not None and hasattr(_win.par, 'vsyncmode') and 'disabled' in _win.pa
 
 # ==== ropes ===========================================================================================================
 ropes = proj.op('ropes')
-ropes.par.Canvas = rc.path
+ropes.par.Canvas = _lr.path if DRIVER == 'looks' else rc.path
 ropes.par.Cropleft = ropes.par.Cropbottom = 0
 ropes.par.Cropright = ropes.par.Croptop = 1
 ropes.par.Brightness, ropes.par.Maxbrightness, ropes.par.Boxwatts = ROPE_BRIGHTNESS, ROPE_MAXBRIGHTNESS, ROPE_BOXWATTS
