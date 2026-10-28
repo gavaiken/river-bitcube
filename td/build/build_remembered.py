@@ -156,8 +156,13 @@ exec(open(REPO + '/td/build/screens.py', encoding='utf-8').read(), _g)
 for k, c in enumerate(crops, start=1):
     sw = out_c.op(f'screen{k}_src')
     assert sw is not None, f'outputs/screen{k}_src missing after screens.py'
-    if sw.inputConnectors[0].connections[:1] != [c.outputConnectors[0]]:
-        sw.inputConnectors[0].connect(c)
+    # a wire can't cross COMPs (remembered -> outputs): a Select TOP inside outputs brings each screen in
+    sel = out_c.op(f'screen{k}_remembered') or out_c.create(selectTOP, f'screen{k}_remembered')
+    sel.par.top = c.path
+    sel.nodeX, sel.nodeY = sw.nodeX - 150, sw.nodeY + 40
+    if sw.inputConnectors[0].connections[:1] != [sel.outputConnectors[0]]:
+        sw.inputConnectors[0].connect(sel)
+    assert sw.inputs and sw.inputs[0] == sel, f'outputs/screen{k}_src input 0 is not screen{k}_remembered'
 out_c.par.Panelgain, out_c.par.Panelgamma = 1.0, 1.0               # the show caps its own screens at 55 %
 note(out_c, "OUTPUTS (river-remembered.toe, built by td/build/build_remembered.py).\n"
             "ROPES: remembered/rope_canvas (20x400, straight from td/remembered/ropes.py) -> /project1/ropes.\n"
