@@ -258,6 +258,7 @@ class Show:
         self.water = water_mod.Water()
         self.field = particles_mod.Field(particles_mod.Geometry(pixelmap, screens), seed)
         self.rope_level = 0.0                 # the ropes' brightness, smoothed: how busy the particle field is
+        self.field_dt = 0.0
         self.crops = [None] * 4
         self.wins = self.water.windows(0.0)
         self.screen_level = SCREEN_CALM
@@ -287,7 +288,8 @@ class Show:
     def feed_river(self, img, source, now):
         """A new river frame (row 0 at the top; live cam or the recorded clip)."""
         self.panels.feed(img)
-        self.water.feed(img)
+        if self.control['screen_mode'] == 'water':
+            self.water.feed(img)
         self.river_source = source
         self.river_t = now
 
@@ -365,11 +367,14 @@ class Show:
             calm_level=clock.OPENING_CALM_LEVEL if opening else (clock.PRESET_LEVEL if preset else clock.CALM_LEVEL),
             wave=snap['wave'], light=self.control['light'], leds=self.control['leds'], pool_height_m=self.control['pool_height_m'], day=day)
         if self.control['screen_mode'] == 'particles' and self.control['light'] == 'off':
-            lvl = float(self.rope_frame.max(axis=-1).mean()) / 0.3           # how lit the ropes are, ~0..1
-            self.rope_level += (min(1.0, lvl) - self.rope_level) * (1 - math.exp(-dt / 0.8))
-            self.field.step(dt, max(self.rope_level, 0.6 if snap['phase'] == 'surge' else 0.0),
-                            max(self.ropes.v_now, 30.0), knobs.get('turbulence', 0.5))
-            self.ropes.overlay = self.field.render_ropes(pal['light']) * 0.8
+            self.field_dt += dt
+            if self.ticks % PANEL_EVERY == 0 or self.ropes.overlay is None:   # the field at 30 Hz, like the screens
+                lvl = float(self.rope_frame.max(axis=-1).mean()) / 0.3       # how lit the ropes are, ~0..1
+                self.rope_level += (min(1.0, lvl) - self.rope_level) * (1 - math.exp(-self.field_dt / 0.8))
+                self.field.step(self.field_dt, max(self.rope_level, 0.6 if snap['phase'] == 'surge' else 0.0),
+                                max(self.ropes.v_now, 30.0), knobs.get('turbulence', 0.5))
+                self.field_dt = 0.0
+                self.ropes.overlay = self.field.render_ropes(pal['light']) * 0.8
         else:
             self.ropes.overlay = None
         self.rope_frame = self.ropes.step(dt, ctx)
@@ -473,7 +478,7 @@ def frame(comp):
             a = small.numpyArray(delayed=True) if small is not None else None
             if a is not None:
                 show.feed_river(np.ascontiguousarray(a[::-1, :, :3]), 'live' if getattr(h, 'live', False) else 'clip', now)
-        if h.frame % 2 == 0:                                     # each screen's window of the footage (crop + fit TOPs)
+        if h.frame % 2 == 0 and show.control['screen_mode'] == 'water':   # each screen's window of the footage
             for k in range(4):
                 w = comp.op(f'win{k + 1}_fit')
                 a = w.numpyArray(delayed=True) if w is not None else None
