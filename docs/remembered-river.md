@@ -161,3 +161,13 @@ Next, in order:
 - **M2 Finer particles:** the particle field finer-grained and more fluid: closer to smoke or sloshing water than rope-sized drops, swirling, falling in from the top of each screen (their measured tilts) and sloshing between the screens and across the ropes, reacting at the screen edges.
 - **M3** the pool (ripples, sloshing waterline, soft edge), **M4** dynamics (continuous intensity, random and room-triggered surges), **M5** surge easing 1 s–1 min and black dots, **M6** the filling glass as the remembered river's surge on flood days and every fourth loop, **M7** debug page sliders, the simulator restored, the frame rate back to 60.
 
+
+### Planned (27 Oct, 23:00, Gavin; not started)
+
+- **M8 One show file, many looks (the "jumbo" file).** Switching show files restarts TouchDesigner (about a minute dark). Instead, one show file holds several looks and moves between them smoothly: fade to black (about 2 s), then fade the next look in, with no restart.
+  - **Looks at first:** the remembered river and Fill my cup (simple); then Fill my cup (configurable). Older show files (the river's year, Combined) are whole TouchDesigner networks, so add them only if wanted: much more to merge.
+  - **Auto** (the default): four loops of the remembered river, then one full cycle of Fill my cup (simple), then again.
+  - **Manual:** pick a target look; it fades over and then stays, looping that look. The chosen look's settings show with it (the fill's dials; the remembered river's pool line and opening night).
+  - **Mission control:** "What's showing" keeps working: picking a look inside the jumbo file is a quick fade, not a restart; picking another show file still switches files. Auto / Manual and the look's settings sit on that card.
+  - **How:** each look renders into the same rope canvas and screen image; a selector crossfades them. Only the visible look runs (both only during a fade), so it costs no more than one show. The remembered river's loop clock pauses while it's hidden and picks up where it left off (or starts a fresh loop: decide). Ropes keep their power limit and safety ramps through the fades.
+- **M9 A subtle river under the remembered river's screens:** the artists' simulator look (round 2 step 1: the moving water through four drifting windows) as a faint layer under the particle windows, with its own strength setting.
