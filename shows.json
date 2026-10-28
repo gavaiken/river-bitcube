@@ -287,6 +287,61 @@
         "the river library (the river's year)",
         "Dave's Modal canvas, mirrored scene, reflexes and frames (Combined with Modal)"
       ],
+      "looks": {
+        "remembered": {
+          "title": "The remembered river",
+          "description": "Dry Creek relives one remembered day from its past every five minutes: calm drips, a building flow, then the surge, a white front falling down every rope into a churning pool, then settling. Dave's agent picks the day (bitcube picks a notable one when he is late); a new day arrives with one slow wave down the ropes. The screens are windows onto twisting silk ribbons of glitter falling through the room, the river's moving water faint beneath. People standing still slow the light and draw it to their ropes.",
+          "inputs": [
+            "Dave's agent (memory, surge hour, palette and knobs in gallery_state)",
+            "remembered days (data/remembered)",
+            "river camera (recorded clip as fallback)",
+            "people counter (River\\presence.json, lingerers)",
+            "River\\remembered\\control.json (pool line, light checks, opening night)"
+          ],
+          "file": "river-remembered.toe",
+          "for": "loops"
+        },
+        "fill-simple": {
+          "title": "Fill my cup (simple)",
+          "description": "The first filling-cup look the artists liked best: every rope and screen one canvas, by real height; smooth churning blue and black water rises from the floor to the top with a slosh and a crest, soft spray and drips, holds, then drains all the way out, and again (about 84 s a cycle).",
+          "inputs": [
+            "the LED map, screens and zones (calibration, measured screen heights and tilts)"
+          ],
+          "file": "river-fill-simple.toe",
+          "for": "cycles"
+        },
+        "fill-configurable": {
+          "title": "Fill my cup (configurable)",
+          "description": "Every rope and every screen is one canvas, by each LED's real height above the floor. Water rises from the floor to the top like a cup filling, turbulent and sloshing, a crashing white crest, soft spray, bubbles and drips, deep colour broken by churning black; it holds at the top, then drains all the way out, and fills again (about 84 s a cycle). Dials in mission control: palette, brightness, intensity, speed.",
+          "inputs": [
+            "the LED map, screens and zones (calibration, measured screen heights and tilts)",
+            "River\\filling\\control.json (the dials)"
+          ],
+          "file": "river-filling.toe",
+          "for": "cycles"
+        },
+        "seasons": {
+          "title": "The river's year",
+          "description": "Plays the recorded river through a year that only turns forward: still white winter, green spring rain, a golden summer torrent, a rust-and-mud autumn. Automatic mode turns one season a minute; dynamic mode lets the people counter warm it toward summer as the room fills; manual picks a target season and intensity. Runs on bitcube alone, with no internet. Control page on port 9981.",
+          "inputs": [
+            "river library (recorded clip at three speeds, on bitcube's disk)",
+            "people counter (River\\presence.json)"
+          ],
+          "file": "river-local-oct-22-seasons.toe",
+          "for": "minutes"
+        },
+        "modal": {
+          "title": "Combined with Modal Input Selector",
+          "description": "Will's Combined v0 (live river, summer look, framing, screen-look cycle) with one Modal input chosen in mission control: off; Dave's canvas added on top (today's look); Dave's scene recolouring the river with its palette and steering speed, density, brightness and turbulence; or Modal Frames, Dave's own pictures for each screen and the ropes, journeyed to in OKLCH and rippled by the live river. One strength slider; switching fades over 4 s without a restart. Stale Modal data fades back to plain Combined.",
+          "inputs": [
+            "river camera (recorded river-normal.mp4 as fallback)",
+            "Dave's Modal canvas, mirrored scene and reflexes",
+            "Modal Frames (gallery_state/frames, mirrored by tools/modal/frames_sync.py)"
+          ],
+          "file": "river-combined-modal-inputs.toe",
+          "for": "minutes"
+        }
+      },
       "created_by": "Gavin (session A)",
       "created": "2026-10-28",
       "updated_by": "Gavin (session A)",
