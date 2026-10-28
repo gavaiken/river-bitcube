@@ -233,7 +233,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (session A)",
       "updated": "2026-10-28",
-      "last_change": "Silk ribbons drawn on the GPU (td/remembered/ribbons_gpu.py: GLSL TOPs ribbons_draw/trail/out, every LED every frame, denser glitter, curls); numpy ribbons as the automatic fallback (screens_src); control.json screens.gpu"
+      "last_change": "river-looks.toe saved with the GPU ribbons built in (ribbon_params, ribbons_draw/glow/fb/trail/out, screens_src); secret scan 0 hits"
     }
   ]
 }
