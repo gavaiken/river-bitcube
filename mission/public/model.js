@@ -104,77 +104,16 @@ export const MODAL_SOURCE_WORDS = {
   scene: { label: 'Scene', line: "Dave's colours and pace recolour the river" },
   frames: { label: 'Frames', line: "Dave's own pictures for each screen and the ropes, moved by the river" },
 };
-/** Dave's river app (public): the frames' PNGs are at /frames/<frame_id>/<element>.png (modal-frames/SPEC.md §3). */
-export const MODAL_BASE = 'https://to-be-a-river--river.modal.run';
-export const FRAME_ELEMENTS = ['screen-1', 'screen-2', 'screen-3', 'screen-4', 'ropes'];
-const FRAME_ID = /^[A-Za-z0-9._-]{1,80}$/;
-const FRAME_PATH = /^\/frames\/[A-Za-z0-9._-]{1,80}\/(?:screen-[1-4]|ropes)\.png$/;
-const HEX = /^#[0-9a-f]{6}$/i;
-/** A frame element's river settings, in plain words (modal-frames/SPEC.md §4): amount, contrast, speed, journey. */
-export const FRAME_FIELD_WORDS = { amount: 'ripple', contrast: 'ripple strength', speed: 'river speed', journey: 'on its way' };
-const FRAME_FIELD_MAX = { amount: 1, contrast: 1, speed: 2, journey: 1 };
-const paramLabel = (n) => { const s = String(n).replace(/[-_]+/g, ' ').trim(); return s ? s[0].toUpperCase() + s.slice(1) : '?'; };
 /** The minutes after which a source counts as old (TouchDesigner's stale_after_s when it says, else 15). */
 const staleMin = (mi) => { const s = num(mi?.stale_after_s); return s != null && s > 0 ? Math.max(1, Math.round(s / 60)) : 15; };
 /** Why the stale source is missing, in the band's words: "Dave's frames are more than 15 minutes old: showing the river without them". */
 export function modalStaleWords(source, mi) {
   const n = staleMin(mi);
-  if (source === 'frames') return `Dave's frames are more than ${n} minutes old: showing the river without them`;
+  // frames go quiet by Modal Frames' own rule (SPEC §6.5: 120 s past the frame's ttl, or polls failing), not by 15 minutes
+  if (source === 'frames') { const a = num(mi?.data_age_s); return a != null && a >= 60 ? `Dave's frames are ${dur(a)} old: showing the river without them` : "Dave's frames have stopped arriving: showing the river without them"; }
   if (source === 'scene') return `Dave's scene is more than ${n} minutes old: showing the river without it`;
   if (source === 'canvas') return "Dave's moving picture isn't arriving: showing the river without it";
   return null;
-}
-/** td.modal_input -> what the page shows (show.modal_input), or null when it isn't an object. later_s: how old the full check is
- *  (pb.age_s), added to every age so they read on the server's clock (principle 2). Everything is checked: a colour must be
- *  #rrggbb, a number finite, a frame id or image path Modal's own shape, so nothing odd reaches a page or a URL. */
-export function modalInputView(mi, later_s = 0) {
-  const o = obj(mi);
-  if (!o) return null;
-  const add = (a) => (num(a) == null ? null : Math.max(0, Math.round(a + (num(later_s) ?? 0))));
-  const source = MODAL_SOURCES.includes(o.source) ? o.source : null;
-  const effective = MODAL_SOURCES.includes(o.effective_source) ? o.effective_source : source;
-  const strength = num(o.strength) != null ? Math.min(1, Math.max(0, o.strength)) : null;
-  const srcs = obj(o.sources) ?? {};
-  const sources = ['canvas', 'scene', 'frames'].map((id) => {
-    const s = obj(srcs[id]);
-    return { id, label: MODAL_SOURCE_WORDS[id].label, ok: s ? s.ok !== false : null, age_s: s ? add(s.age_s) : null, known: !!s };
-  });
-  const fr = obj(srcs.frames), sc = obj(srcs.scene);
-  const activeAge = sources.find((x) => x.id === effective)?.age_s ?? null;   // a parameter with no age of its own: its source's
-  const frameId = typeof fr?.frame_id === 'string' && FRAME_ID.test(fr.frame_id) ? fr.frame_id : null;
-  const params = (Array.isArray(o.params) ? o.params : []).map(obj).filter((p) => p && typeof p.name === 'string' && p.name).slice(0, 24).map((p) => {
-    const v = p.value, base = { name: p.name, label: paramLabel(p.name), drives: typeof p.drives === 'string' ? p.drives.slice(0, 200) : null, age_s: add(p.age_s) ?? activeAge };
-    if (Array.isArray(v) && v.length && v.every((c) => typeof c === 'string' && HEX.test(c))) return { ...base, kind: 'palette', colors: v.slice(0, 12) };
-    if (num(v) != null) {
-      const min = num(p.min) ?? 0, max = num(p.max) ?? Math.max(1, v), eff = num(p.effective);
-      return { ...base, kind: 'number', value: v, effective: eff != null && Math.abs(eff - v) > 1e-6 ? eff : null, min, max,
-               frac: max > min ? Math.min(1, Math.max(0, (v - min) / (max - min))) : 0 };
-    }
-    if (obj(v)) {
-      const fields = Object.keys(FRAME_FIELD_WORDS).filter((k) => num(v[k]) != null)
-        .map((k) => ({ key: k, words: FRAME_FIELD_WORDS[k], value: v[k], frac: Math.min(1, Math.max(0, v[k] / FRAME_FIELD_MAX[k])) }));
-      const image = typeof p.image === 'string' && FRAME_PATH.test(p.image) ? MODAL_BASE + p.image
-        : FRAME_ELEMENTS.includes(p.name) && frameId ? `${MODAL_BASE}/frames/${frameId}/${p.name}.png` : null;
-      return { ...base, kind: 'frame', fields, image };
-    }
-    if (typeof v === 'string' || typeof v === 'boolean') return { ...base, kind: 'text', text: String(v).slice(0, 120) };
-    return { ...base, kind: 'text', text: 'not known' };
-  });
-  const images = frameId ? FRAME_ELEMENTS.map((el) => params.find((p) => p.name === el && p.image)?.image ?? `${MODAL_BASE}/frames/${frameId}/${el}.png`)
-    .map((url, k) => ({ element: FRAME_ELEMENTS[k], url })) : [];
-  const stale = o.stale === true && source != null && source !== 'off';   // Off has nothing to go old
-  const fresh = sources.filter((s) => s.known).map((s) => s.ok === false ? `${s.label} not arriving`
-    : s.id === 'canvas' ? (s.age_s != null && s.age_s > 120 ? `${s.label} ${dur(s.age_s)} ago` : `${s.label} live`) : s.age_s == null ? `${s.label} age not known` : `${s.label} ${dur(s.age_s)} ago`);
-  return {
-    source, effective_source: effective, strength, fading: o.fading === true, stale,
-    stale_words: stale ? modalStaleWords(source, o) : null,
-    stale_raw: stale && typeof o.stale_reason === 'string' ? o.stale_reason.slice(0, 200) : null,
-    age_s: add(o.data_age_s),
-    sources, fresh_words: fresh.join(' · '),
-    params,
-    scene: sc ? { palette_name: typeof sc.palette_name === 'string' ? sc.palette_name.slice(0, 80) : null, journal: typeof sc.journal === 'string' ? sc.journal.slice(0, 400) : null } : null,
-    frames: fr ? { frame_id: frameId, note: typeof fr.note === 'string' ? fr.note.slice(0, 280) : null, images } : null,
-  };
 }
 export const CAL_STAGE_S = { 'ropes-capture': 170, 'ropes-decode': 40, 'hub75-capture': 35, 'hub75-locate': 10 };   // calibrate.py EXPECTED_S
 export const CAL_TOTAL_S = Object.values(CAL_STAGE_S).reduce((a, b) => a + b, 0);
@@ -564,7 +503,10 @@ export function derive(status, nowMs) {
   const kind = file?.kind ?? null, label = file?.label ?? null;
   // a show the registry offers that is neither the year nor the live river (a new visualization, the template): not a fault
   const listedShow = kind === 'other' && file?.offered === true;
-  const modalInput = tdOk && td.file === MODAL_INPUT_FILE ? modalInputView(td.modal_input, pb.age_s ?? 0) : null;
+  // the Modal input show's reading (docs/modal-inputs.md): the panel's view is modal-input.js modalInputView; here only its verdict
+  const miRaw = tdOk && td.file === MODAL_INPUT_FILE ? obj(td.modal_input) : null;
+  const modalInput = miRaw && miRaw.stale === true && MODAL_SOURCES.includes(miRaw.source) && miRaw.source !== 'off'
+    ? { stale: true, source: miRaw.source, age_s: num(miRaw.data_age_s) != null ? Math.round(miRaw.data_age_s + (pb.age_s ?? 0)) : null, stale_words: modalStaleWords(miRaw.source, miRaw) } : null;
   // One name for the button the advice points at: the show-file control says "Restart on the river's year" when it already
   // runs, and "Switch to the river's year" when another file (or nothing known) runs. status.js labels its jump the same way.
   const YEAR_PRESS = yearPress(kind);
@@ -833,7 +775,7 @@ export function derive(status, nowMs) {
   // the Modal input show with its chosen source gone old: Dave's agent answers, but what the show uses from it doesn't arrive
   { const x = items.find((v) => v.id === 'modal agent');
     if (modalInput?.stale && x?.level === 'ok') Object.assign(x, { level: 'warning',
-      summary: modalInput.source === 'frames' ? `Its frames are over ${staleMin(td.modal_input)} min old for the show` : modalInput.source === 'scene' ? `Its scene is over ${staleMin(td.modal_input)} min old for the show` : "Its moving picture isn't arriving for the show",
+      summary: modalInput.source === 'frames' ? (modalInput.age_s != null ? `Its frames for the show are ${dur(modalInput.age_s)} old` : 'Its frames for the show have stopped arriving') : modalInput.source === 'scene' ? `Its scene is over ${staleMin(td.modal_input)} min old for the show` : "Its moving picture isn't arriving for the show",
       detail: `${modalInput.stale_words}. ${x.detail}`, action: "Tell Dave if it lasts, or pick another Modal input under What's showing." }); }
 
   const sinceWords = (c) => (c.since ? `since ${c.since}` : 'for a while');
@@ -1084,8 +1026,9 @@ export function derive(status, nowMs) {
   const show = {
     file: tdOk ? { name: td.file, kind, label, words: `TouchDesigner is showing ${label}` } : null,
     combined: tdOk && td.file === 'river-combined-v0.toe' ? obj(td.combined) : null,
-    // the Modal input show's choice, its sources' freshness and what Dave's agent is sending (modalInputView), only while it runs
-    modal_input: modalInput,
+    // the Modal input show's reading as TouchDesigner gave it, only while it runs: pages show it through modal-input.js modalInputView
+    // (with fresh.probe_age_s, so its ages read on the server's clock)
+    modal_input: miRaw,
     boot_file: bootNow,
     // the files a switch or "Set as default" offers (shows.json offered, and on bitcube)
     show_files: showFiles,

@@ -6,13 +6,16 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { planControl, checkedControl, calBlocked, testBlocked, actionResult, Mission } from '../lib/mission.mjs';
-import { APPLY_BLOCKS, EXPECT_S, changeLabel, derive, modalInputView, MODAL_INPUT_FILE, MODAL_BASE } from '../public/model.js';
+import { APPLY_BLOCKS, EXPECT_S, changeLabel, derive, MODAL_INPUT_FILE } from '../public/model.js';
+import { modalInputView, MODAL_BASE } from '../public/modal-input.js';
 import { FixtureMission, fixtureModalInput } from '../lib/fixtures.mjs';
 import { ACTIONS } from '../bin/mc.mjs';
 
 const DIR = new URL('./fixtures/', import.meta.url).pathname;
 const fx = (name) => JSON.parse(readFileSync(join(DIR, `${name}.json`), 'utf8'));
 const run = (f) => derive({ ...f.status, now: f._scenario.now }, f._scenario.now + 2000);
+/** The panel's view of a derived model, as status.js makes it. */
+const view = (d) => modalInputView(d.show.modal_input, d.show.fresh.probe_age_s ?? 0);
 
 test('modalinput: a listed source and a strength 0..1, nothing else reaches the probe', () => {
   assert.deepEqual(planControl('modalinput', { source: 'scene', strength: 0.6 }), { kind: 'probe', args: '-Action modalinput -Source scene -Strength 0.60' });
@@ -65,7 +68,7 @@ test('fixture mode: a world switched to the show reports it, a change holds ther
   assert.equal(mi.strength, 0.8);
   assert.equal(mi.params.length, 5, 'the five elements');
   const d = derive(s, s.now);
-  assert.equal(d.show.modal_input.source, 'frames');
+  assert.equal(view(d).source, 'frames');
   assert.equal(d.controls.modalinput.possible, true);
   // a stale source chosen in a world reads stale
   const st = new FixtureMission({ dir: DIR, stateDir: mkdtempSync(join(tmpdir(), 'mi-')), now: () => f._scenario.now, applyS: 0 });
@@ -74,7 +77,7 @@ test('fixture mode: a world switched to the show reports it, a change holds ther
 });
 
 test('the view: palette swatches, numbers as bars, per-element frame values, images from Modal, sources aged on the server clock', () => {
-  const v = run(fx('modal-input-scene')).show.modal_input;
+  const v = view(run(fx('modal-input-scene')));
   assert.equal(v.source, 'scene');
   assert.equal(v.strength, 0.6);
   assert.equal(v.stale, false);
@@ -85,6 +88,9 @@ test('the view: palette swatches, numbers as bars, per-element frame values, ima
   assert.equal(sp.kind, 'number');
   assert.equal(sp.frac, 0.19);
   assert.equal(v.params.find((p) => p.name === 'turbulence').effective, 0.55, 'what TouchDesigner uses, when it differs');
+  assert.equal(v.params.find((p) => p.name === 'speed').factor, 0.85);
+  assert.equal(sp.drives, 'how fast the summer effects move', 'plain words, not TouchDesigner\'s');
+  assert.equal(sp.drives_raw, 'summer effect speed ×0.6–1.6');
   assert.equal(v.scene.palette_name, 'froth-deepening');
   assert.ok(v.scene.journal);
   // the full check is 20 s old in every fixture: its ages are 20 s older now
@@ -92,10 +98,10 @@ test('the view: palette swatches, numbers as bars, per-element frame values, ima
   assert.equal(v.fresh_words, 'Canvas live · Scene 1 min ago · Frames 2 min ago');
   assert.ok(sp.age_s != null, 'a parameter without its own age takes its source\'s');
 
-  const fr = run(fx('modal-input-frames')).show.modal_input;
+  const fr = view(run(fx('modal-input-frames')));
   const el = fr.params.find((p) => p.name === 'ropes');
   assert.equal(el.kind, 'frame');
-  assert.deepEqual(el.fields.map((x) => x.key), ['amount', 'contrast', 'speed', 'journey']);
+  assert.deepEqual(el.fields.map((x) => x.key), ['amount', 'contrast', 'speed', 'journey', 'mix']);
   assert.equal(fr.frames.images.length, 5);
   assert.equal(fr.frames.images[4].url, `${MODAL_BASE}/frames/2026-10-23T09-57-25Z-7f3a/ropes.png`);
   assert.equal(fr.frames.note, 'dusk: cooling toward deep blue');
@@ -121,16 +127,16 @@ test('every Modal input fixture is OK; old frames are a warning on Dave\'s agent
     const d = run(fx(n));
     assert.equal(d.overall.level, 'ok', n);
     assert.equal(d.controls.modalinput.possible, true, n);
-    assert.equal(d.show.modal_input.stale, false, n);
+    assert.equal(view(d).stale, false, n);
   }
   const d = run(fx('modal-input-frames-stale'));
   assert.equal(d.overall.level, 'warning');
   assert.equal(d.overall.cause, 'modal-input-stale');
-  assert.equal(d.overall.headline, "Dave's frames are more than 15 minutes old: showing the river without them");
+  assert.equal(d.overall.headline, "Dave's frames are 21 min old: showing the river without them");
   assert.match(d.overall.action, /Tell Dave|rests overnight/);
   assert.equal(d.items.find((x) => x.id === 'modal agent').level, 'warning');
   assert.ok(!d.problems.some((p) => p.level === 'down'));
-  assert.equal(d.show.modal_input.effective_source, 'off');
+  assert.equal(view(d).effective_source, 'off');
   assert.equal(d.controls.modalinput.possible, true, 'another source can still be chosen');
 });
 

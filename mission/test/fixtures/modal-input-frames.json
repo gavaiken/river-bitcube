@@ -125,8 +125,12 @@
             "fading": false,
             "stale": false,
             "stale_reason": null,
-            "stale_after_s": 900,
             "data_age_s": 95,
+            "mix": {
+              "canvas": 0,
+              "scene": 0,
+              "frames": 0.6
+            },
             "sources": {
               "canvas": {
                 "ok": true,
@@ -137,13 +141,21 @@
                 "age_s": 42,
                 "set_at": "2026-10-23T02:58:18-07:00",
                 "palette_name": "froth-deepening",
+                "animation": "drift",
                 "journal": "The room has gone quiet, so the river slows and cools toward deep water."
               },
               "frames": {
                 "ok": true,
                 "age_s": 95,
                 "frame_id": "2026-10-23T09-57-25Z-7f3a",
-                "note": "dusk: cooling toward deep blue"
+                "note": "dusk: cooling toward deep blue",
+                "quiet": false,
+                "rejected": null,
+                "sync": {
+                  "ok": true,
+                  "age_s": 4,
+                  "error": null
+                }
               }
             },
             "params": [
@@ -155,7 +167,8 @@
                   "speed": 1,
                   "journey": 1
                 },
-                "drives": "screen 1: his picture, rippled by the river"
+                "mix": 0.6,
+                "drives": "screen 1 target picture × river ripple"
               },
               {
                 "name": "screen-2",
@@ -165,7 +178,8 @@
                   "speed": 0.8,
                   "journey": 1
                 },
-                "drives": "screen 2: his picture, rippled by the river"
+                "mix": 0.6,
+                "drives": "screen 2 target picture × river ripple"
               },
               {
                 "name": "screen-3",
@@ -173,9 +187,10 @@
                   "amount": 0.7,
                   "contrast": 0.5,
                   "speed": 1.2,
-                  "journey": 1
+                  "journey": 0.4
                 },
-                "drives": "screen 3: his picture, rippled by the river"
+                "mix": 0.6,
+                "drives": "screen 3 target picture × river ripple"
               },
               {
                 "name": "screen-4",
@@ -185,7 +200,8 @@
                   "speed": 1,
                   "journey": 1
                 },
-                "drives": "screen 4: his picture, rippled by the river"
+                "mix": 0.6,
+                "drives": "screen 4 target picture × river ripple"
               },
               {
                 "name": "ropes",
@@ -195,7 +211,8 @@
                   "speed": 0.6,
                   "journey": 1
                 },
-                "drives": "all 20 ropes: his picture, rippled by the river"
+                "mix": 0.6,
+                "drives": "rope target picture × river ripple"
               }
             ]
           }

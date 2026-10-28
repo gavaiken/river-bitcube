@@ -77,6 +77,7 @@ import { SelfUpdate } from './lib/update.mjs';
 import { Zipper } from './lib/zip.mjs';
 import { scrubCreds } from './lib/scrub.mjs';
 import { CONTACTS, derive, calDryRun, REGISTRY } from './public/model.js';
+import { modalInputView } from './public/modal-input.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const env = process.env;
@@ -254,7 +255,7 @@ function localStatus(scenario) {
     calibration: cal ? { running: cal.running === true && cal.stale !== true, stage: cal.stage ?? null, mode: cal.mode ?? null, stale: cal.stale === true, ok: cal.ok ?? null } : null,
     show_file: m.show.file ? { file: m.show.file.name, label: m.show.file.label } : null,
     // the Modal input show: which of Dave's inputs drives the river and what his agent is sending (model.js modalInputView)
-    ...(m.show.modal_input ? { modal_input: m.show.modal_input } : {}),
+    ...(m.show.modal_input ? { modal_input: modalInputView(m.show.modal_input, m.show.fresh.probe_age_s ?? 0) } : {}),
     boot_file: typeof pv?.boot_file === 'string' ? pv.boot_file : null,
     blocked: Object.fromEntries(Object.entries(m.controls).filter(([, c]) => !c.possible).map(([k, c]) => [k, c.why])),
   };

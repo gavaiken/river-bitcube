@@ -31,8 +31,8 @@ export const VIZ_ENTRY = {
   inputs: ['river camera (recorded clip as fallback)', 'gallery camera'],
   created_by: 'will', created: '2026-10-26', updated_by: 'will', updated: '2026-10-26', last_change: 'Slower drift; fewer lights at once',
 };
-// The Modal input show (docs/modal-inputs.md): until it is in the real shows.json, _shows.extra.json adds it for the tests and
-// fixture mode, as it adds the test viz. Its status (td.modal_input) comes from lib/fixtures.mjs fixtureModalInput, the same data a
+// The Modal input show (docs/modal-inputs.md): _shows.extra.json adds it on top of the real entry (later entries win in model.js FILES)
+// as offered, with a short label, so the fixtures read it as a listed show (the real entry was still offered: false on 27 Oct). Its status (td.modal_input) comes from lib/fixtures.mjs fixtureModalInput, the same data a
 // world switched to it in fixture mode reports.
 export const MODAL_FILE = 'river-combined-modal-inputs.toe';
 export const MODAL_ENTRY = {
@@ -42,7 +42,6 @@ export const MODAL_ENTRY = {
   inputs: ['river camera (recorded clip as fallback)', "Dave's Modal canvas, scene and frames"],
   created_by: 'gavin', created: '2026-10-27', updated_by: 'gavin', updated: '2026-10-27', last_change: 'Fixture entry until the show is in shows.json',
 };
-const REAL_SHOWS = JSON.parse(readFileSync(join(DIR, '..', '..', '..', 'shows.json'), 'utf8')).shows.map((x) => x.file);
 const RULES = recorded.seasons.value.rules;            // the defaults, as served by the control page
 const ADDRESSES = recorded.probe.value.addresses;      // bitcube's addresses at Gray Area
 const SCENE_COLORS = recorded.modal.value.scene.colors;
@@ -384,8 +383,8 @@ const SCENARIOS = {
 
   'modal-input-frames-stale': {
     title: "Modal input show: Dave's frames are old",
-    description: `TouchDesigner runs ${MODAL_FILE} with the Modal input on frames at 60 %, but Dave's newest frame is 21 minutes old (TouchDesigner calls a source stale after 15 minutes): it has gone back to the river on its own. The canvas and the scene are fresh. The rest of the show is fine.`,
-    expect: { headline: "Dave's frames are more than 15 minutes old: showing the river without them", severity: 'warning',
+    description: `TouchDesigner runs ${MODAL_FILE} with the Modal input on frames at 60 %, but Dave's newest frame is 21 minutes old and Modal Frames has gone quiet (SPEC §6.5): the show has faded back to plain Combined (effective_source off). The canvas and the scene are fresh. The rest of the show is fine.`,
+    expect: { headline: "Dave's frames are 21 min old: showing the river without them", severity: 'warning',
       items: items({ 'modal agent': 'warning: answers, but its frames for the show are 21 min old', touchdesigner: 'ok: the Modal input show at 60 fps', seasons: 'ok: not used (this show has no year)', ropes: 'ok: showing the show, sender open, 140 + 150 W' }),
       action: "Nothing is broken: tell Dave if it lasts, or pick another Modal input under What's showing." },
     build: () => modalShow(fixtureModalInput('frames', { ages: { canvas: 3, scene: 42, frames: 1260 }, stale: true })),
@@ -433,6 +432,6 @@ export function buildAll() {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const all = buildAll();
   for (const [name, fixture] of Object.entries(all)) writeFileSync(join(DIR, `${name}.json`), JSON.stringify(fixture, null, 2) + '\n');
-  writeFileSync(join(DIR, '_shows.extra.json'), JSON.stringify({ shows: [VIZ_ENTRY, ...(REAL_SHOWS.includes(MODAL_FILE) ? [] : [MODAL_ENTRY])] }, null, 2) + '\n');
+  writeFileSync(join(DIR, '_shows.extra.json'), JSON.stringify({ shows: [VIZ_ENTRY, MODAL_ENTRY] }, null, 2) + '\n');
   console.log(`wrote ${Object.keys(all).length} fixtures to ${DIR}`);
 }

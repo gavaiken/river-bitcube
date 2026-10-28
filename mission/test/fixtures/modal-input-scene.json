@@ -125,8 +125,12 @@
             "fading": false,
             "stale": false,
             "stale_reason": null,
-            "stale_after_s": 900,
             "data_age_s": 42,
+            "mix": {
+              "canvas": 0,
+              "scene": 0.6,
+              "frames": 0
+            },
             "sources": {
               "canvas": {
                 "ok": true,
@@ -137,13 +141,21 @@
                 "age_s": 42,
                 "set_at": "2026-10-23T02:58:18-07:00",
                 "palette_name": "froth-deepening",
+                "animation": "drift",
                 "journal": "The room has gone quiet, so the river slows and cools toward deep water."
               },
               "frames": {
                 "ok": true,
                 "age_s": 95,
                 "frame_id": "2026-10-23T09-57-25Z-7f3a",
-                "note": "dusk: cooling toward deep blue"
+                "note": "dusk: cooling toward deep blue",
+                "quiet": false,
+                "rejected": null,
+                "sync": {
+                  "ok": true,
+                  "age_s": 4,
+                  "error": null
+                }
               }
             },
             "params": [
@@ -155,24 +167,32 @@
                   "#4d6a8a",
                   "#1f2f45"
                 ],
-                "drives": "the river's colours: its dark parts take the last colour, its bright parts the first"
+                "drives": "river recolour (gradient map by brightness)"
               },
               {
                 "name": "speed",
                 "value": 0.19,
-                "effective": 0.19,
-                "drives": "how fast the river and its effects move (slow to quick)"
+                "factor": 0.85,
+                "drives": "summer effect speed ×0.6–1.6"
+              },
+              {
+                "name": "density",
+                "value": 0.41,
+                "factor": 0.93,
+                "drives": "summer effects amount"
+              },
+              {
+                "name": "brightness",
+                "value": 0.56,
+                "factor": 1.02,
+                "drives": "river gain"
               },
               {
                 "name": "turbulence",
                 "value": 0.62,
                 "effective": 0.55,
-                "drives": "how much the river ripples and breaks up"
-              },
-              {
-                "name": "animation",
-                "value": "froth",
-                "drives": "the kind of movement laid over the river"
+                "factor": 1.1,
+                "drives": "torrent / roughness"
               }
             ]
           }

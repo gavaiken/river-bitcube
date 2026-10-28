@@ -48,7 +48,8 @@ import { CAMERAS, calBlocked, checkedControl, awaitsReading, startingBlocked, te
 import { Applying } from './applying.mjs';
 import { readLocalPixelmap, summarizePixelmap, checkedCalibrate } from './lights.mjs';
 import { atlasFromUprights } from '../public/screens.js';
-import { changeLabel, FILES, MODAL_INPUT_FILE, FRAME_ELEMENTS } from '../public/model.js';
+import { changeLabel, FILES, MODAL_INPUT_FILE } from '../public/model.js';
+import { FRAME_ELEMENTS } from '../public/modal-input.js';
 
 // ---- the Modal input show (docs/modal-inputs.md) in fixture mode -------------------------------------------------------------
 // td.modal_input as probe.ps1 reports it while river-combined-modal-inputs.toe runs: the fixtures (test/fixtures/build.mjs) and a
@@ -57,22 +58,24 @@ import { changeLabel, FILES, MODAL_INPUT_FILE, FRAME_ELEMENTS } from '../public/
 const FRAME_ID = '2026-10-23T09-57-25Z-7f3a';
 const MI_PARAMS = {
   off: [],
-  canvas: [{ name: 'canvas', value: 'live', drives: "Dave's moving picture, added over the river" }],
+  canvas: [{ name: 'canvas', value: 'drift / deepening-pool', drives: 'additive overlay' }],
   scene: [
-    { name: 'palette', value: ['#dce7f5', '#8faac4', '#4d6a8a', '#1f2f45'], drives: "the river's colours: its dark parts take the last colour, its bright parts the first" },
-    { name: 'speed', value: 0.19, effective: 0.19, drives: 'how fast the river and its effects move (slow to quick)' },
-    { name: 'turbulence', value: 0.62, effective: 0.55, drives: 'how much the river ripples and breaks up' },
-    { name: 'animation', value: 'froth', drives: 'the kind of movement laid over the river' },
+    { name: 'palette', value: ['#dce7f5', '#8faac4', '#4d6a8a', '#1f2f45'], drives: 'river recolour (gradient map by brightness)' },
+    { name: 'speed', value: 0.19, factor: 0.85, drives: 'summer effect speed ×0.6–1.6' },
+    { name: 'density', value: 0.41, factor: 0.93, drives: 'summer effects amount' },
+    { name: 'brightness', value: 0.56, factor: 1.02, drives: 'river gain' },
+    { name: 'turbulence', value: 0.62, effective: 0.55, factor: 1.1, drives: 'torrent / roughness' },
   ],
-  frames: FRAME_ELEMENTS.map((el, k) => ({ name: el, value: { amount: [0.6, 0.5, 0.7, 0.4, 0.8][k], contrast: 0.5, speed: [1, 0.8, 1.2, 1, 0.6][k], journey: 1 },
-    drives: el === 'ropes' ? 'all 20 ropes: his picture, rippled by the river' : `screen ${k + 1}: his picture, rippled by the river` })),
+  frames: FRAME_ELEMENTS.map((el, k) => ({ name: el, value: { amount: [0.6, 0.5, 0.7, 0.4, 0.8][k], contrast: 0.5, speed: [1, 0.8, 1.2, 1, 0.6][k], journey: [1, 1, 0.4, 1, 1][k] },
+    mix: 0.6, drives: el === 'ropes' ? 'rope target picture × river ripple' : `screen ${k + 1} target picture × river ripple` })),
 };
 export function fixtureModalInput(source = 'scene', { strength = 0.6, ages = { canvas: 3, scene: 42, frames: 95 }, stale = false } = {}) {
   return { source, strength, effective_source: stale ? 'off' : source, fading: false, stale,
-    stale_reason: stale ? `newest ${source === 'frames' ? 'frame' : source} is older than 900 s` : null, stale_after_s: 900, data_age_s: source === 'off' ? null : ages[source],
+    stale_reason: stale ? (source === 'frames' ? 'frames quiet: newest frame is 120 s past its ttl' : `newest ${source} is older than 900 s`) : null,
+    data_age_s: source === 'off' ? null : ages[source], mix: { canvas: source === 'canvas' && !stale ? strength : 0, scene: source === 'scene' && !stale ? strength : 0, frames: source === 'frames' && !stale ? strength : 0 },
     sources: { canvas: { ok: true, age_s: ages.canvas },
-      scene: { ok: true, age_s: ages.scene, set_at: '2026-10-23T02:58:18-07:00', palette_name: 'froth-deepening', journal: 'The room has gone quiet, so the river slows and cools toward deep water.' },
-      frames: { ok: true, age_s: ages.frames, frame_id: FRAME_ID, note: 'dusk: cooling toward deep blue' } },
+      scene: { ok: true, age_s: ages.scene, set_at: '2026-10-23T02:58:18-07:00', palette_name: 'froth-deepening', animation: 'drift', journal: 'The room has gone quiet, so the river slows and cools toward deep water.' },
+      frames: { ok: !stale || source !== 'frames', age_s: ages.frames, frame_id: FRAME_ID, note: 'dusk: cooling toward deep blue', quiet: stale && source === 'frames', rejected: null, sync: { ok: true, age_s: 4, error: null } } },
     params: structuredClone(MI_PARAMS[source] ?? []) };
 }
 /** A Modal input change in a world, as the next full check reports it: the chosen source and strength (and its params). */

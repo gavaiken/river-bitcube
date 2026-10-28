@@ -15,6 +15,7 @@ import { rulesForm, targetForm, modeEffect, switchWords, defaultWords, showCardH
 const { derive, dur, POLL_S, PAGE_STALE_S, FILES, contactFor, CONTACTS, ctlInit, ctlStep, ctlView, EXPECT_S, BOOT_USUAL, CONFIRMING_SAID, unconfirmedWords, changeLabel, bandParts,
   newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS, endedOnce, ownMemory, byMinute, confirmChanged, UNKNOWN_ANSWERS, NOT_RECEIVED, neverGotWords } = M;
 import { apiTimeout } from '/app.js';
+import { modalInputView } from '/modal-input.js';
 const $ = (sel, root = document) => root.querySelector(sel);
 const FROM = { mini: 'the Mac mini', bitcube: 'bitcube', modal: "Dave's agent" };
 // One name per thing (the copy rules); descriptors live on the card, never in the name.
@@ -759,13 +760,13 @@ function miChanged(v) {
 const fix = (x, d = 2) => (Math.abs(x) >= 10 ? String(Math.round(x)) : x.toFixed(d).replace(/0+$/, '').replace(/\.$/, ''));
 function miValueHTML(p) {
   if (p.kind === 'palette') return `<span class="mi-swatches" role="img" aria-label="${p.colors.length} colours: ${esc(p.colors.join(', '))}">${p.colors.map((c) => `<i style="background:${esc(c)}"></i>`).join('')}</span>`;
-  if (p.kind === 'number') return `<span class="mi-bar" aria-hidden="true"><i style="width:${Math.round(p.frac * 100)}%"></i></span> <b>${esc(fix(p.value))}</b>${p.effective != null ? ` <span class="muted">(using ${esc(fix(p.effective))} now)</span>` : ''}`;
-  if (p.kind === 'frame') return p.fields.length ? `<span class="mi-fields">${p.fields.map((f) => `<span class="mi-field"><span class="mi-bar sm" aria-hidden="true"><i style="width:${Math.round(f.frac * 100)}%"></i></span> ${esc(f.words)} <b>${esc(f.key === 'journey' ? Math.round(f.value * 100) + ' %' : f.key === 'speed' ? fix(f.value) + '×' : fix(f.value))}</b></span>`).join('')}</span>` : '<span class="muted">not known</span>';
+  if (p.kind === 'number') return `<span class="mi-bar" aria-hidden="true"><i style="width:${Math.round(p.frac * 100)}%"></i></span> <b>${esc(fix(p.value))}</b>${p.effective != null ? ` <span class="muted">(using ${esc(fix(p.effective))} now)</span>` : ''}${p.factor != null ? ` <span class="muted">· ×${esc(fix(p.factor))} of the usual</span>` : ''}`;
+  if (p.kind === 'frame') return p.fields.length ? `<span class="mi-fields">${p.fields.map((f) => `<span class="mi-field"><span class="mi-bar sm" aria-hidden="true"><i style="width:${Math.round(f.frac * 100)}%"></i></span> ${esc(f.words)} <b>${esc(f.key === 'journey' || f.key === 'mix' ? Math.round(f.value * 100) + ' %' : f.key === 'speed' ? fix(f.value) + '×' : fix(f.value))}</b></span>`).join('')}</span>` : '<span class="muted">not known</span>';
   return `<b>${esc(p.text)}</b>`;
 }
 function modalInputHTML(m) {
   if (m.show.file?.name !== M.MODAL_INPUT_FILE) { miSourceDraft = null; miStrengthDraft = null; return ''; }
-  const v = m.show.modal_input, W = M.MODAL_SOURCE_WORDS, o = off('modalinput') || !v;
+  const v = modalInputView(m.show.modal_input, m.show.fresh.probe_age_s ?? 0), W = M.MODAL_SOURCE_WORDS, o = off('modalinput') || !v;
   const src = miSourceDraft ?? v?.source ?? 'off';
   const cur = v?.strength == null ? null : Math.round(v.strength * 100), str = miStrengthDraft ?? cur ?? 60;
   const btn = (id) => `<button type="button" id="ctl-mi-${id}" data-act="mi-source" data-source="${id}" class="${src === id ? 'lit' : ''}" aria-pressed="${src === id}" ${o ? 'disabled' : ''}>${W[id].label}</button>`;
@@ -794,7 +795,7 @@ function sendingHTML(v) {
     <p class="effect">Off: the river runs on its own; nothing from Dave's agent is used.</p>${fresh ? `<p class="mi-fresh">${fresh}</p>` : ''}</div>`;
   const rows = v.params.map((p) => `<div class="mi-row${p.kind === 'frame' ? ' wide' : ''}" role="listitem"><div class="mi-name">${esc(p.label)}</div><div class="mi-val">${miValueHTML(p)}</div>
       <div class="mi-age">${p.age_s != null ? `set ${ageSpan(p.age_s)}` : ''}</div><div class="mi-drives">${p.drives ? esc(p.drives) : ''}</div></div>`).join('');
-  const sc = v.source === 'scene' && v.scene ? `${v.scene.palette_name ? `<p class="mi-note"><span class="lbl">Palette name:</span> ${esc(v.scene.palette_name)}</p>` : ''}${v.scene.journal ? `<p class="mi-note"><span class="lbl">Journal:</span> ${esc(v.scene.journal)}</p>` : ''}` : '';
+  const sc = v.source === 'scene' && v.scene ? `${v.scene.palette_name ? `<p class="mi-note"><span class="lbl">Palette name:</span> ${esc(v.scene.palette_name)}</p>` : ''}${v.scene.animation ? `<p class="mi-note"><span class="lbl">Movement:</span> ${esc(v.scene.animation)}</p>` : ''}${v.scene.journal ? `<p class="mi-note"><span class="lbl">Journal:</span> ${esc(v.scene.journal)}</p>` : ''}` : '';
   const fr = v.source === 'frames' && v.frames ? `${v.frames.note ? `<p class="mi-note"><span class="lbl">Note:</span> ${esc(v.frames.note)}</p>` : ''}
     ${v.frames.images.length ? `<div class="mi-thumbs">${v.frames.images.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener" class="mi-thumb ${x.element === 'ropes' ? 'ropes' : ''}"><img src="${esc(x.url)}" alt="Dave's picture for ${esc(x.element === 'ropes' ? 'the ropes' : x.element.replace('-', ' '))}" loading="lazy"><span>${esc(x.element === 'ropes' ? 'Ropes' : 'Screen ' + x.element.slice(-1))}</span></a>`).join('')}</div>` : ''}` : '';
   return `<div class="mi-sending"><div class="ctl-h">What Dave's agent is sending: ${esc(W[v.source].label)}</div>${warn}

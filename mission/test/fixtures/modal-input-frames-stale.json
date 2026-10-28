@@ -2,9 +2,9 @@
   "_scenario": {
     "now": 1792749540000,
     "title": "Modal input show: Dave's frames are old",
-    "description": "TouchDesigner runs river-combined-modal-inputs.toe with the Modal input on frames at 60 %, but Dave's newest frame is 21 minutes old (TouchDesigner calls a source stale after 15 minutes): it has gone back to the river on its own. The canvas and the scene are fresh. The rest of the show is fine.",
+    "description": "TouchDesigner runs river-combined-modal-inputs.toe with the Modal input on frames at 60 %, but Dave's newest frame is 21 minutes old and Modal Frames has gone quiet (SPEC §6.5): the show has faded back to plain Combined (effective_source off). The canvas and the scene are fresh. The rest of the show is fine.",
     "expect": {
-      "headline": "Dave's frames are more than 15 minutes old: showing the river without them",
+      "headline": "Dave's frames are 21 min old: showing the river without them",
       "severity": "warning",
       "items": {
         "mission control": "ok: serving the page",
@@ -124,9 +124,13 @@
             "effective_source": "off",
             "fading": false,
             "stale": true,
-            "stale_reason": "newest frame is older than 900 s",
-            "stale_after_s": 900,
+            "stale_reason": "frames quiet: newest frame is 120 s past its ttl",
             "data_age_s": 1260,
+            "mix": {
+              "canvas": 0,
+              "scene": 0,
+              "frames": 0
+            },
             "sources": {
               "canvas": {
                 "ok": true,
@@ -137,13 +141,21 @@
                 "age_s": 42,
                 "set_at": "2026-10-23T02:58:18-07:00",
                 "palette_name": "froth-deepening",
+                "animation": "drift",
                 "journal": "The room has gone quiet, so the river slows and cools toward deep water."
               },
               "frames": {
-                "ok": true,
+                "ok": false,
                 "age_s": 1260,
                 "frame_id": "2026-10-23T09-57-25Z-7f3a",
-                "note": "dusk: cooling toward deep blue"
+                "note": "dusk: cooling toward deep blue",
+                "quiet": true,
+                "rejected": null,
+                "sync": {
+                  "ok": true,
+                  "age_s": 4,
+                  "error": null
+                }
               }
             },
             "params": [
@@ -155,7 +167,8 @@
                   "speed": 1,
                   "journey": 1
                 },
-                "drives": "screen 1: his picture, rippled by the river"
+                "mix": 0.6,
+                "drives": "screen 1 target picture × river ripple"
               },
               {
                 "name": "screen-2",
@@ -165,7 +178,8 @@
                   "speed": 0.8,
                   "journey": 1
                 },
-                "drives": "screen 2: his picture, rippled by the river"
+                "mix": 0.6,
+                "drives": "screen 2 target picture × river ripple"
               },
               {
                 "name": "screen-3",
@@ -173,9 +187,10 @@
                   "amount": 0.7,
                   "contrast": 0.5,
                   "speed": 1.2,
-                  "journey": 1
+                  "journey": 0.4
                 },
-                "drives": "screen 3: his picture, rippled by the river"
+                "mix": 0.6,
+                "drives": "screen 3 target picture × river ripple"
               },
               {
                 "name": "screen-4",
@@ -185,7 +200,8 @@
                   "speed": 1,
                   "journey": 1
                 },
-                "drives": "screen 4: his picture, rippled by the river"
+                "mix": 0.6,
+                "drives": "screen 4 target picture × river ripple"
               },
               {
                 "name": "ropes",
@@ -195,7 +211,8 @@
                   "speed": 0.6,
                   "journey": 1
                 },
-                "drives": "all 20 ropes: his picture, rippled by the river"
+                "mix": 0.6,
+                "drives": "rope target picture × river ripple"
               }
             ]
           }
