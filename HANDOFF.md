@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** free (Gavin's Mac mini session finished 21:25: camera home at 3241/0, river's year showing, bitcube on c3f6b33)
-- **Where:** bitcube running Combined v0 (Will's settings); the default is still the river's year
-- **Updated:** 2026-10-27 21:25 PT
+- **Holder:** Gavin (Mac mini session A: building the remembered river on bitcube; Will and Justine on site)
+- **Where:** bitcube (building `river-remembered.toe`; Combined v0 / river's year until it's ready)
+- **Updated:** 2026-10-27 21:35 PT
 - **Next holder:** Will (Codex), for visual tuning.
 
 ## Calibration through camera views (27 Oct, Gavin): see `docs/sessions/calibrate.md`
