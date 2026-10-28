@@ -251,6 +251,102 @@ void main() {
 """
 
 
+# The approved softer projection is opt-in: only the all-looks build selects it.
+SOFT_DRAW_GLSL = """// ribbons_draw (generated from td/remembered/ribbons_gpu.py): the silk ribbons, one LED at a time
+out vec4 fragColor;
+
+uint hsh(uvec3 v) {                       // pcg3d, first lane
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    v ^= v >> 16u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    return v.x;
+}
+float h01(uvec3 v) { return float(hsh(v) >> 8u) / 16777216.0; }
+
+vec4 P(int x, int y) {
+#if TD_NUM_2D_INPUTS > 0
+    return texelFetch(sTD2DInputs[0], ivec2(x, y), 0);
+#else
+    return vec4(0.0);
+#endif
+}
+void main() {
+    vec2 px = vUV.st * uTDOutputInfo.res.zw;                       // LED (x 0..512, y 0..256 from the bottom)
+    int k = clamp(int(px.x / 128.0), 0, 3);
+    vec4 g0 = P(0, 0), g2 = P(2, 0);
+    vec4 s0 = P(0, 5 + k), s1 = P(1, 5 + k);
+    float lx = ((px.x - 128.0 * float(k)) / 128.0 - 0.5) * s1.x;
+    float ly = (px.y / 256.0 - 0.5) * s1.y;
+    float X = s0.x + lx * s0.z - ly * s0.w;                        // where this LED is in the room (frame px, real height)
+    float Y = s0.y + lx * s0.w + ly * s0.z;
+    float t = g0.x, lvl = g0.y, bright = g0.w, sw = g2.x;
+    float acc = 0.0, accg = 0.0;
+    for (int i = 0; i < 4; i++) {
+        vec4 r0 = P(0, 1 + i), r1 = P(1, 1 + i), r2 = P(2, 1 + i);
+        if (r2.z < 0.01) continue;
+        float kx = r0.y;
+        // Softer-fold projection (Will-approved local study, 28 Oct): no singular division or approximate lifted-sheet inverse.
+        // Twisting changes width and fold shading continuously, with a finite minimum width.
+        float y = Y;
+        float xs = r0.x + sw * (0.8 * sin(kx * y + r1.x) + 0.35 * sin(2.3 * kx * y + r1.y));
+        float tw = r0.z * y + r1.z + 1.3 * sin(0.8 * kx * y + r1.w);
+        float W = r0.w * (1.0 + 0.35 * sin(1.7 * kx * y + r2.x));
+        float c = cos(tw);
+        float facing = sqrt(c * c + 0.20 * 0.20);
+        float projected = W * (0.42 + 0.58 * facing / sqrt(1.04));
+        float v = (X - xs) / max(projected, 0.001);
+        if (abs(v) >= 1.0) continue;
+        float coverage = 1.0 - smoothstep(0.68, 1.0, abs(v));
+        float fold = 1.0 + 1.4 * (1.0 - min(facing, 1.0));
+        float edge = 1.0 + 0.25 * smoothstep(0.55, 0.85, abs(v));
+        float u = y + r2.y;                                         // the sheet's own coordinate, streaming down
+        uvec3 cell = uvec3(uint(int(floor(u * 3.20)) + 100000), uint(int(floor((v + 1.0) * W * 3.20))), uint(i) + 7u);
+        float h = h01(cell);
+        float sp = 0.0;
+        if (h < 0.420 * min(fold, 2.5)) {
+            float b = 0.2 + 2.5 * pow(h01(cell + uvec3(0u, 0u, 101u)), 3.0);
+            float rate = 1.5 + 5.5 * h01(cell + uvec3(0u, 0u, 202u));
+            float twk = 0.55 + 0.45 * sin(rate * t + 6.2832 * h01(cell + uvec3(0u, 0u, 303u)));
+            sp = b * twk;
+        }
+        float add = (sp * sqrt(fold) + 0.030 * fold) * edge * (0.55 + 0.45 * abs(sin(tw))) * r2.z * bright * 0.7 * coverage;
+        acc += add;
+        accg += add * r2.w;                                         // the green-leaning ribbons (every other one)
+    }
+    // loose glitter drifting down the screen
+    uvec3 dc = uvec3(uint(px.x), uint(int(floor(px.y + g2.y)) + 100000), 31u);
+    float dh = h01(dc);
+    if (dh < 0.035) {
+        float db = 0.15 + 0.6 * pow(h01(dc + uvec3(0u, 0u, 7u)), 2.0);
+        acc += db * (0.5 + 0.5 * sin(t * 5.0 + 40.0 * db)) * g2.z;
+    }
+    fragColor = TDOutputSwizzle(vec4(acc, accg, 0.0, 1.0));
+}
+"""
+
+SOFT_GLOW_GLSL = """// Screen-local 3x3 Gaussian: do not mix unrelated edges of the four packed windows.
+out vec4 fragColor;
+void main() {
+    vec4 a = vec4(0.0);
+#if TD_NUM_2D_INPUTS > 0
+    vec2 size = vec2(textureSize(sTD2DInputs[0], 0));
+    vec2 d = 1.0 / size;
+    float start = floor(vUV.s * 4.0) * 128.0;
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            float w = float((x == 0 ? 2 : 1) * (y == 0 ? 2 : 1)) / 16.0;
+            vec2 uv = vec2(clamp(vUV.s + float(x) * d.x, (start + 0.5) / size.x, (start + 127.5) / size.x),
+                           clamp(vUV.t + float(y) * d.y, 0.5 / size.y, (size.y - 0.5) / size.y));
+            a += texture(sTD2DInputs[0], uv) * w;
+        }
+    }
+#endif
+    fragColor = TDOutputSwizzle(a);
+}
+"""
+
+
 # ---- the same drawing in numpy (tests, offline renders) ---------------------------------------------------------------
 
 def _hsh(x, y, z):
@@ -267,7 +363,7 @@ def _h01(x, y, z):
     return (_hsh(x, y, z) >> np.uint32(8)).astype(np.float64) / 16777216.0
 
 
-def draw(p):
+def draw(p, soft=False):
     """ribbons_draw in numpy: params -> QH x (QW*4) x 2 (brightness, its green-leaning share), row 0 at the BOTTOM."""
     p = p.astype(np.float64)
     yy, xx = np.mgrid[0:QH, 0:QW * NQ] + 0.5
@@ -287,19 +383,34 @@ def draw(p):
             continue
         kx = r0[1]
         y = Y
-        for it in range(3):                                     # the lift, as the shader: two fixed-point steps
+        if soft:
             xs = r0[0] + sw * (0.8 * np.sin(kx * y + r1[0]) + 0.35 * np.sin(2.3 * kx * y + r1[1]))
             tw = r0[2] * y + r1[2] + 1.3 * np.sin(0.8 * kx * y + r1[3])
             W = r0[3] * (1 + 0.35 * np.sin(1.7 * kx * y + r2[0]))
-            c = np.cos(tw)
-            wc = W * c
-            with np.errstate(divide='ignore', invalid='ignore'):
-                v = np.where(np.abs(wc) < 1e-4, 9.0, (X - xs) / wc)
-            if it < 2:
-                y = Y - 0.45 * np.clip(v, -1.2, 1.2) * W * np.sin(tw)
-        ins = np.abs(v) <= 1
-        fold = np.minimum(1 / np.maximum(np.abs(c), 1e-3), FOLD_MAX)
-        edge = np.where(np.abs(v) > 0.93, 2.2, 1.0)
+            facing = np.sqrt(np.cos(tw) ** 2 + 0.20 ** 2)
+            projected = W * (0.42 + 0.58 * facing / np.sqrt(1.04))
+            v = (X - xs) / np.maximum(projected, 0.001)
+            a = np.clip((np.abs(v) - 0.68) / 0.32, 0, 1)
+            coverage = 1 - a * a * (3 - 2 * a)
+            fold = 1 + 1.4 * (1 - np.minimum(facing, 1))
+            a = np.clip((np.abs(v) - 0.55) / 0.30, 0, 1)
+            edge = 1 + 0.25 * a * a * (3 - 2 * a)
+            ins = np.abs(v) < 1
+        else:
+            for it in range(3):                                     # the lift, as the shader: two fixed-point steps
+                xs = r0[0] + sw * (0.8 * np.sin(kx * y + r1[0]) + 0.35 * np.sin(2.3 * kx * y + r1[1]))
+                tw = r0[2] * y + r1[2] + 1.3 * np.sin(0.8 * kx * y + r1[3])
+                W = r0[3] * (1 + 0.35 * np.sin(1.7 * kx * y + r2[0]))
+                c = np.cos(tw)
+                wc = W * c
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    v = np.where(np.abs(wc) < 1e-4, 9.0, (X - xs) / wc)
+                if it < 2:
+                    y = Y - 0.45 * np.clip(v, -1.2, 1.2) * W * np.sin(tw)
+            ins = np.abs(v) <= 1
+            fold = np.minimum(1 / np.maximum(np.abs(c), 1e-3), FOLD_MAX)
+            edge = np.where(np.abs(v) > 0.93, 2.2, 1.0)
+            coverage = 1.0
         u = y + r2[1]
         cu = (np.floor(u * CELLS).astype(np.int64) + 100000).astype(np.uint32)
         cv = np.floor(np.clip((v + 1) * W * CELLS, 0, 1e6)).astype(np.int64).astype(np.uint32)
@@ -309,7 +420,7 @@ def draw(p):
         rate = 1.5 + 5.5 * _h01(cu, cv, ci + np.uint32(202))
         twk = 0.55 + 0.45 * np.sin(rate * t + 6.2832 * _h01(cu, cv, ci + np.uint32(303)))
         sp = np.where(h < SPARKLE * np.minimum(fold, 2.5), b * twk, 0.0)
-        val = (sp * np.sqrt(fold) + SHEEN * fold) * edge * (0.55 + 0.45 * np.abs(np.sin(tw))) * r2[2] * bright * 0.7
+        val = (sp * np.sqrt(fold) + SHEEN * fold) * edge * (0.55 + 0.45 * np.abs(np.sin(tw))) * r2[2] * bright * 0.7 * coverage
         acc += np.where(ins, val, 0.0)
         accg += np.where(ins, val, 0.0) * r2[3]
     dcx = xx.astype(np.uint32)
@@ -330,16 +441,31 @@ def _blur(a, r=2):
     return out
 
 
+def soft_glow(a):
+    """Mirror SOFT_GLOW_GLSL: Gaussian 1-2-1, clamped separately in each screen."""
+    chunks = []
+    for k in range(NQ):
+        q = a[:, k * QW:(k + 1) * QW]
+        p = np.pad(q, ((1, 1), (1, 1), (0, 0)), mode='edge')
+        out = np.zeros_like(q)
+        for y, wy in enumerate((1, 2, 1)):
+            for x, wx in enumerate((1, 2, 1)):
+                out += p[y:y + QH, x:x + QW] * (wy * wx / 16)
+        chunks.append(out)
+    return np.concatenate(chunks, axis=1)
+
+
 class Reference:
     """The whole GPU chain in numpy: draw, glow, trail, colour. render(params, video=None) -> QH x 512 x 3, row 0 at the
     TOP (as ribbons.render_screens), for side-by-side checks."""
 
-    def __init__(self):
+    def __init__(self, soft=False):
+        self.soft = soft
         self.fb = np.zeros((QH, QW * NQ, 2), np.float32)
 
     def render(self, p, video=None):
-        d = draw(p)
-        g = np.stack([_blur(_blur(d[..., c], 1), 1) for c in range(2)], -1)
+        d = draw(p, soft=self.soft)
+        g = soft_glow(d) if self.soft else np.stack([_blur(_blur(d[..., c], 1), 1) for c in range(2)], -1)
         v = np.maximum(self.fb * TRAIL, d * 0.5 + g * 1.5)
         v[v[..., 0] < 0.015] = 0
         self.fb = v

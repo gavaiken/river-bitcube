@@ -613,7 +613,10 @@ def check_gpu(comp, show):
     panel_render, the numpy ribbons). Never raises."""
     ok = False
     try:
-        ops = [comp.op(n) for n in GPU_OPS]
+        names = GPU_OPS
+        if comp.fetch("soft_ribbon_folds", False):
+            names = tuple(dict.fromkeys((*names, "ribbons_glow_soft")))
+        ops = [comp.op(n) for n in names]
         ok = all(o is not None and not o.errors() for o in ops)
     except Exception:                                             # noqa: BLE001
         ok = False

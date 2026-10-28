@@ -40,3 +40,11 @@ Each look keeps its own settings (the remembered river's page, the fill dials, t
 [`river-two-looks.toe`](river-two-looks.html) is a frozen copy of `river-looks.toe` as it ran on the morning of 28 Oct (the remembered river and Fill my cup alternating). If the all-looks file misbehaves, switch to it (or set it as the default) in mission control. The repo as it was before this file is tagged **`before-all-looks`**.
 
 **Logic:** `td/looks/mixer.py` (the playlist mixer). **Build:** `td/build/build_all_looks.py`, which runs `build_remembered.py` with the looks driver. **Inputs:** every look's inputs, plus `River\looks\control.json`.
+
+## Softer ribbon folds (28 Oct, Will)
+
+Will approved the local shader study for the remembered-river look inside this file. Its screen shader now uses a finite projected width at edge-on twists, removes the unstable lifted-sheet inverse, feathers the silhouette and softens the rim boost. Its 3×3 Gaussian glow clamps to each screen’s own strip. The original shaders remain available; standalone and frozen shows keep them. CPU fallback remains the existing numpy ribbon renderer.
+
+Apply only the screen changes without resetting the look or playlist: `td.ps1 -File td\build\update_all_looks_ribbons.py` (save first with `td_save.ps1`, then verify and save again). A full `build_all_looks.py` also selects these shaders. Neither path changes playlist configuration, mapping, river grade or rope logic.
+
+Rollback: set `SOFT_RIBBONS=False` in the update script’s execution globals; it reconnects the original Blur TOP and restores the original DRAW shader without resetting the clock. Saved pre-deployment show and controls: `River\checkpoints\before-soft-ribbons-20261028-will\` (`disk-before.toe`, `live-before.toe`). The frozen two-looks show remains available in mission control.

@@ -14,3 +14,5 @@ registry.require_build(project.name, 'td/build/build_all_looks.py')         # ne
 _cal = registry.calibration_for(TOE)
 TOE_OVERRIDE, BUILD_OVERRIDE, DRIVER_OVERRIDE = TOE, 'td/build/build_all_looks.py', 'looks'
 exec(open(REPO + '/td/build/build_remembered.py', encoding='utf-8').read())
+# Only this show adopts the Will-approved softer projection; standalone / frozen shows keep their original shaders.
+exec(open(REPO + '/td/build/update_all_looks_ribbons.py', encoding='utf-8').read())
