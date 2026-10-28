@@ -238,8 +238,8 @@ function renderControls(v) {
     ctls.opening.update(on ? { label: 'Turn opening night off', kind: 'plain', what: changeLabel('remembered-opening', { on: false }), confirm: null,
       before: "Back to the show's usual nights." }
       : { label: 'Turn opening night on', kind: 'primary', what: changeLabel('remembered-opening', { on: true }),
-        before: "Switches the remembered river to its opening-night setting (what that changes is the show file's own; see its page). Asks first.",
-        confirm: { title: 'Turn opening night on?', body: 'The remembered river switches to its opening-night setting until someone turns it off.', ok: 'Turn it on', cancel: 'Not now', destructive: false } });
+        before: "For a crowded room: calm runs a little brighter (about 45 %) and a surge comes at least every 5 minutes. The room can still move a surge, never add one. Asks first.",
+        confirm: { title: 'Turn opening night on?', body: 'Calm runs about 45 % and a surge comes at least every 5 minutes, until someone turns it off.', ok: 'Turn it on', cancel: 'Not now', destructive: false } });
   }
   ctls.opening.update({ why: owhy, whyBy: S.m?.controls?.['remembered-opening']?.by ?? null });
 }
