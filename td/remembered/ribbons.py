@@ -28,6 +28,7 @@ PTS = 3800                       # points per ribbon per screen (streaming throu
 ROPE_PTS = 4000                  # per ribbon, over the whole height, for the ropes
 DUST = 900                       # loose glitter per screen
 BOKEH = 7                        # faint soft discs per screen
+LUT_TOP = 1.6                    # the brightest a screen pixel gets before the colour lookup
 ROPE_GRID = 512                  # rows the spine is computed on over the whole height, for the ropes
 GRID = 192                       # rows the spine is computed on per screen band
 TWINKLE = (0.55 + 0.45 * np.sin(np.arange(64) * 2 * math.pi / 64)).astype(np.float32)
@@ -208,11 +209,13 @@ class Ribbons:
         tr = np.maximum(self.trails * TRAIL, frame)
         tr[tr < 0.015] = 0.0
         self.trails = tr
-        v = np.minimum(tr, 1.6)
-        rgb = v[..., None] * col + np.clip(v - 0.55, 0, 1)[..., None] * (1 - col)          # the brightest go to white
         self.lit_pct = [int(round(100 * float(m))) for m in (tr > 0.03).mean(axis=(1, 2))]
-        # (NQ, QH, QW, 3) -> QH x (QW*4) x 3, screens side by side
-        return np.ascontiguousarray(np.clip(rgb, 0, 1).transpose(1, 0, 2, 3).reshape(QH, NQ * QW, 3))
+        # colour through a 256-step lookup (the brightest go to white), screens side by side: one gather instead of
+        # broadcasting every step to three channels (5.7 ms on bitcube)
+        lv = np.linspace(0, LUT_TOP, 256, dtype=np.float32)[:, None]
+        lut = np.clip(lv * col + np.clip(lv - 0.55, 0, 1) * (1 - col), 0, 1).astype(np.float32)
+        q = (np.minimum(tr, LUT_TOP) * (255 / LUT_TOP) + 0.5).astype(np.uint8)        # (NQ, QH, QW)
+        return lut[q.transpose(1, 0, 2).reshape(QH, NQ * QW)]
 
     def render_ropes(self, colour):
         # (speed, M7) one bincount, then each LED reads its own cell and four neighbours: no blur of the whole canvas
