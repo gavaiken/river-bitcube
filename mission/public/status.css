@@ -235,3 +235,4 @@ footer.foot .fine-print { margin-top: 4px; }
 .mf-use { font-size: 13px; color: var(--muted); line-height: 1.35; }
 .mf-use.on b { color: var(--modal-green-text); }
 .mf-v .mi-thumb span { white-space: nowrap; }
+#ctl-looks, #ctl-looks + #ctl-filling { margin-top: 22px; }
