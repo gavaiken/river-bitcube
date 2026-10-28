@@ -445,6 +445,15 @@ def reset():
         del h.clips                                               # look for the clips again
 
 
+def _project_name():
+    """The open show file (river-remembered.toe, or river-looks.toe running this show among others)."""
+    try:
+        import td                                                 # TouchDesigner's module (not in tests)
+        return td.project.name or SHOW
+    except Exception:                                             # noqa: BLE001
+        return SHOW
+
+
 def get(comp):
     h = _holder()
     if h.show is None:
@@ -452,7 +461,7 @@ def get(comp):
         mf = comp.par.Mapfile.eval() if hasattr(comp.par, 'Mapfile') else ''
         sf = comp.par.Screensfile.eval() if hasattr(comp.par, 'Screensfile') else ''
         h.show = Show(zones_mod.load(zf or None), seed=int(comp.par.Seed.eval()) if hasattr(comp.par, 'Seed') else 0,
-                      pixelmap=mf or None, screens=sf or None, show=getattr(project, 'name', SHOW) or SHOW)
+                      pixelmap=mf or None, screens=sf or None, show=_project_name())
     return h.show
 
 
