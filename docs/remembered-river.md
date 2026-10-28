@@ -127,4 +127,16 @@ TD writes `River\remembered\status.json` twice a second (read by the full check 
  "zones": {"file": "zones-2026-10-27.json", "pool_height_m": 0.6, "light": "off"}}
 ```
 
-Mission control controls (all through `probe.ps1`, refused while another show runs): `remembered-zones {pool_height_m?, light: off|pool|eddies}`, `remembered-opening {on}`. Both end up in `River\remembered\control.json` (shape in §3, "Lighting checks"; `zones.py light … --write` writes it too, with `light: leds` for individual LEDs).
+Mission control controls (all through `probe.ps1`, refused while another show runs): `remembered-zones {pool_height_m?, light: off|pool|eddies}`, `remembered-opening {on}`. Both end up in `River\remembered\control.json` (also written by `zones.py light … --write`, with `light: leds` for individual LEDs).
+
+Optional, additive: `day.profile` (`{flow, rain, temp, snow, is_day}`, 24 values each, as in `profiles.json.gz`) when bitcube plays a day that isn't Dave's (a notable day): the debug page then draws that day's hours; without it, it draws Dave's `memory.profile` only when the day playing is his.
+
+**The control request file** `River\remembered\control.json` (written by mission control through `probe.ps1`, read by TouchDesigner; built by whoever builds the TD side):
+
+```json
+{"pool_height_m": 0.6, "light": "pool", "opening_night": false, "at": "2026-10-28T04:12:09Z"}
+```
+
+- `pool_height_m`: the pool line in metres above the floor (0–1.5; `null` until someone sets it: keep the zones file's own). `light`: `off` (the show), `pool` (light the LEDs at or below the pool line, to check it) or `eddies` (light the eddy LEDs). `opening_night`: the opening-night switch. `at`: when it was written (UTC). TouchDesigner reports what it took in its status (`zones`, `opening_night`).
+- Each control changes only its own fields; the others keep what the file held. The file is written whole to `control.json.tmp` and swapped in (`[IO.File]::Replace`), so a reader never sees half of it: read it when its write time changes.
+- `probe.ps1 -Action remembered-zones -Light off|pool|eddies [-PoolHeight 0.60]` and `-Action remembered-opening [-On]` write it, only while `status.json` is under 10 s old and names `river-remembered.toe` (else `{ok: false, error: "the remembered river isn't running (…)", refused}`); mission control also refuses them (409) while the full check sees another show, and `remembered-zones` during a calibration or the test pattern. `probe.ps1 -Action remembered` reads `status.json`, Dave's `gallery_state\state.json` (only `memory`, `surge_at`, `scene`, `set_at`) and `reflex.json`, `presence.json` and `control.json`, each as `{age_s, json}`, `{missing}` or `{error}`, for `GET /api/remembered` (`mission/lib/remembered.mjs`; the page: `docs/mission-ui.md` "Remembered river page").

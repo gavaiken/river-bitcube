@@ -20,7 +20,7 @@
 //                           removed on exit. The agent gets its path in its environment (lib/agent.mjs).
 //
 // Routes (all JSON unless said; everything but /login, /healthz, /version, /shows.json and the assets sits behind the login cookie):
-//   GET  /status /lights /chat /map /hub75 /login   the v2 pages (public/*.html, docs/mission-ui.md); /, /mission and /status.html
+//   GET  /status /lights /chat /map /hub75 /remembered /login   the v2 pages (public/*.html, docs/mission-ui.md); /, /mission and /status.html
 //                                              (the v1 addresses) redirect to /status; /map/ is the engineers' diagram with live dots
 //   GET  /api/status                           lib/mission.mjs snapshot + studio + now (the server's clock) + since + last_action;
 //                                              applying: every control in flight (lib/applying.mjs; docs/mission-ui.md "Applying
@@ -32,6 +32,10 @@
 //                                              CR8 #1);
 //                                              probe.value.calibration the newest copy of the calibration job
 //   GET  /api/lights                           what TouchDesigner sends the lights now (lib/lights.mjs CONTRACT); 503 in plain words
+//   GET  /api/remembered                       the remembered river's debug data (lib/remembered.mjs CONTRACT): TouchDesigner's
+//                                              status.json, Dave's scene, reflex and the day's profile, the people counter, the
+//                                              last control request; read through probe.ps1 -Action remembered (cached 1.5 s);
+//                                              503 { ok: false, error } in plain words when bitcube can't be read
 //   GET  /api/pixelmap                         { map, screens, still }: the newest LED map and screens file (lib/lights.mjs)
 //   GET  /api/calibration                      the calibration job's progress file, or { running: false, none: true }; plus
 //                                              rebuilt: { at, map, file } | null, the last rebuild that went all the way and was
@@ -70,6 +74,7 @@ import { Studio } from './lib/studio.mjs';
 import { Mission, checkedControl } from './lib/mission.mjs';
 import { REQUEST_ID } from './lib/applying.mjs';
 import { FixtureMission, CALIBRATION_OUTCOMES } from './lib/fixtures.mjs';
+import { Remembered, shapeRemembered } from './lib/remembered.mjs';
 import { Lights, readLocalPixelmap, readLocalScreens, checkedCalibrate } from './lib/lights.mjs';
 import { History, describeEvent, feed } from './lib/history.mjs';
 import { describeTool } from './lib/steps.mjs';
@@ -160,6 +165,7 @@ const update = new SelfUpdate({ boot: codeTree(), tree: codeTree, exit: () => pr
                                 quiet: () => { const st = studio.status(); return !st.running && !st.queue.length && !!mission && !mission.busy(); } });
 const studio = new Studio({ runner: await makeRunner(), dir: STATE });
 const lights = FIXTURES ? null : new Lights({ sshHost: 'bitcube' });
+const remembered = FIXTURES ? null : new Remembered({ sshHost: 'bitcube' });
 mission = FIXTURES ? new FixtureMission({ dir: FIXTURES, stateDir: STATE, pixelmapDir: PIXELMAP_DIR, calibrateS: Number(env.MISSION_FIXTURE_CALIBRATE_S || 60),
                                                 applyS: Number(env.MISSION_FIXTURE_APPLY_S ?? 6) })
                          : new Mission({ sshHost: 'bitcube', lights, stateDir: STATE });   // fixtures: nothing is polled or run
@@ -266,7 +272,7 @@ function withWords(ev) { return ev ? { ...ev, words: describeEvent(ev), ago_s: M
 
 // ---- helpers ---------------------------------------------------------------------------------------------
 // The v2 pages (docs/mission-ui.md). A page file that is not built yet answers 404 { error: 'not built yet' } rather than 500.
-const PAGES = { '/status': 'status.html', '/lights': 'lights.html', '/chat': 'chat.html', '/map': 'map.html', '/hub75': 'hub75.html', '/login': 'login.html' };
+const PAGES = { '/status': 'status.html', '/lights': 'lights.html', '/chat': 'chat.html', '/map': 'map.html', '/hub75': 'hub75.html', '/remembered': 'remembered.html', '/login': 'login.html' };
 const REDIRECTS = { '/': '/status', '/mission': '/status', '/status.html': '/status' };     // the v1 addresses
 // Assets under public/ (styles, scripts, icons, the manifest) are served to anyone, like the login page itself: they hold no data.
 // HTML is only served through PAGES (behind the login); the design prototypes (public/proto/) are in git history.
@@ -553,6 +559,17 @@ const server = createServer(async (req, res) => {
       const r = await lights.frames();
       if (!r || r.ok === false || !r.frames) return send(res, 503, plainLightsError(r?.error));
       return send(res, 200, scrubFrames(r));
+    }
+    // The remembered river's debug view (public/remembered.*): one shape in both modes (lib/remembered.mjs)
+    if (path === '/api/remembered') {
+      let raw, at;
+      if (FIXTURES) { try { raw = mission.remembered(scenario); at = mission.clock(scenario); } catch (e) { return send(res, e.status || 503, { ok: false, error: e.message }); } }
+      else if (mission.snapshot().bitcube?.value?.online === false) return send(res, 503, { ok: false, error: 'bitcube is offline' });
+      else ({ raw, at } = await remembered.read());
+      const td = mission.snapshot(scenario).probe?.value?.td;
+      const now = FIXTURES ? mission.clock(scenario) : Date.now();
+      const body = shapeRemembered(raw, { tdFile: td && td.ok !== false && typeof td.file === 'string' ? td.file : null, readAt: at, now });
+      return send(res, body.ok ? 200 : 503, body);
     }
     if (path === '/api/pixelmap') return send(res, 200, await pixelmapPayload(scenario));
     if (path === '/api/calibration') {

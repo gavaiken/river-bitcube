@@ -54,7 +54,7 @@ test('what blocks what: a ropes change blocks the ropes, and what would block it
   m = run([{ id: 'l', action: 'lightsroute', started_at: NOW - 1000, expect_s: 30 }]);
   for (const k of ['ropes', 'hub75', 'lightsroute', 'calibrate', 'switch', 'rebuild']) assert.equal(m.controls[k].why, 'wait: the change of the lighting port is being applied', k);
   assert.equal(m.controls.mode.possible, true, 'the year is not touched by the lighting port');
-  for (const a of ['switch', 'rebuild']) assert.deepEqual([...APPLY_BLOCKS[a]].sort(), [...EVERY, 'overlay', 'modalinput'].sort(), a);
+  for (const a of ['switch', 'rebuild']) assert.deepEqual([...APPLY_BLOCKS[a]].sort(), [...EVERY, 'overlay', 'modalinput', 'remembered-zones', 'remembered-opening'].sort(), a);
   for (const a of ['hub75', 'mode', 'target']) assert.deepEqual(APPLY_BLOCKS[a], [a], a);
   // the ropes button and the test pattern both set the ropes' source: each waits for the other (and a calibration for the test)
   assert.deepEqual(APPLY_BLOCKS.ropes, ['ropes', 'test']);

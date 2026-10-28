@@ -9,6 +9,15 @@ import { fileURLToPath } from 'node:url';
 import { fixtureModalInput, fixtureModalFeed } from '../../lib/fixtures.mjs';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
+// The remembered river (docs/remembered-river.md): _shows.extra.json adds it until it is in the real shows.json.
+export const REMEMBERED_FILE = 'river-remembered.toe';
+export const REMEMBERED_ENTRY = {
+  file: REMEMBERED_FILE, title: 'The remembered river', label: 'the remembered river', kind: 'viz', offered: true, build: 'td/build/build_remembered.py',
+  calibration: { pixelmap: 'tools/pixelmap/pixelmap-2026-10-23.json', screens: 'tools/pixelmap/screens-2026-10-23.json' },
+  description: "The column relives one real day from Dry Creek's past every five minutes, chosen by Dave's agent: its rain, how high the river ran, night and day, with one surge of full light at its heaviest rain. The pool on the floor breathes; people standing still close by slow the light near them.",
+  inputs: ["Dave's agent (remembered day, palette, knobs, heard)", 'river camera (recorded clip as fallback)', 'gallery camera (people counter)'],
+  created_by: 'gavin', created: '2026-10-27', updated_by: 'gavin', updated: '2026-10-27', last_change: 'Fixture entry until the show is in shows.json',
+};
 const RECORDED = join(DIR, '_recorded-2026-10-23.json');
 const recorded = JSON.parse(readFileSync(RECORDED, 'utf8'));
 
@@ -390,6 +399,38 @@ const SCENARIOS = {
     build: () => modalShow(fixtureModalInput('frames', { ages: { canvas: 3, scene: 42, frames: 1260 }, stale: true })),
   },
 
+  // ---- the remembered river: the debug page's four situations (public/remembered.*) --------------------------------------------------
+  'remembered-calm': {
+    title: 'The remembered river: a calm stretch of the loop',
+    description: `TouchDesigner runs ${REMEMBERED_FILE}. The loop is 41 s in (hour 3.3 of a made-up wet winter day Dave's agent chose for its resemblance 3 min 40 s ago); the surge is due at hour 13.5, as Dave asked. The ropes follow the sound (heard 0.62); the river cam is live. Three people in the room against 2.1 usual, one of them standing still by ropes 7 and 8. Panels well under the 30 % rule.`,
+    expect: { headline: 'Everything is up: the remembered river is showing; lights and cameras fine', severity: 'ok', items: rememberedItems(),
+      action: 'Nothing to do. The Remembered river page shows what it is doing and why.' },
+    build: () => rememberedShow(rememberedRaw({})),
+  },
+  'remembered-surge': {
+    title: 'The remembered river: the surge',
+    description: `TouchDesigner runs ${REMEMBERED_FILE} in the surge of the loop (2 min 46 s in, hour 13.3), Dave's day and his surge hour; one screen is just over the 30 % rule (31 %), the ropes draw 1,180 W of the 1,400 W limit. Two lingerers. The ropes follow the sound, loud now (heard 0.81).`,
+    expect: { headline: 'Everything is up: the remembered river is showing; lights and cameras fine', severity: 'ok', items: rememberedItems(),
+      action: 'Nothing to do.' },
+    build: () => rememberedShow(rememberedRaw({ phase: 'surge', t_s: 166.0, heard: 0.81, river_motion: 0.66, lit: [24, 28, 31, 19], watts: 1180, presence: 5.4, usual: 2.3,
+      lingerers: [{ x: 0.42, y: 0.78, still_s: 31, ropes: [7, 8] }, { x: 0.63, y: 0.71, still_s: 9, ropes: [12] }] }), { watts: [590, 590] }),
+  },
+  'remembered-fallback': {
+    title: "The remembered river: Dave's choice is old, bitcube plays a notable day",
+    description: `TouchDesigner runs ${REMEMBERED_FILE}. Dave's choice is 7 min old (over the 5 min rule), so bitcube plays one of the notable days itself (a made-up flood day; its 24 hours come from TouchDesigner's own status). No sound from Dave (heard unknown), so the ropes follow the river cam's picture, which is the recorded clip. The surge lands at the day's heaviest rain, moved 6 s later by the room. Building toward it.`,
+    expect: { headline: 'Everything is up: the remembered river is showing; lights and cameras fine', severity: 'ok', items: rememberedItems(),
+      action: "Nothing to do; tell Dave if his agent stays quiet." },
+    build: () => rememberedShow(rememberedRaw({ phase: 'building', t_s: 121.0, heard: null, river_motion: 0.27, river_source: 'recorded', chosenAge: 420, lit: [9, 14, 11, 6], watts: 520,
+      day: { date: '2017-01-08', reason: FLOOD_LINE, chosen_by: 'significance', source: 'notable', age_s: 420, profile: DAY_FLOOD },
+      surge: { hour: 11.0, t_s: 143.5, why: "the day's heaviest rain, hour 11", room_shift_s: 6 } })),
+  },
+  'remembered-not-running': {
+    title: "The remembered river isn't running (the river's year is)",
+    description: `TouchDesigner runs the river's year, as on any normal evening; the remembered river's status file is 90 min old, from when it last ran. Dave's agent still chooses remembered days (its scene and reflex are fresh) and the people counter still writes the room.`,
+    expect: { headline: "Everything is up: the river's year is showing; lights and cameras fine", severity: 'ok', items: OK_ITEMS, action: 'Nothing to do.' },
+    build: () => ({ status: base(), ...CAMS_GOOD, remembered: rememberedRaw({ statusAge: 5400 }) }),
+  },
+
   'no-internet': {
     title: 'No internet at Gray Area',
     description: 'bitcube can\'t open connections to the internet (1.1.1.1:443 fails) while the install router answers: the router\'s uplink (the venue\'s staff Wi-Fi) has dropped. bitcube\'s existing Tailscale tunnel to the mini still carries traffic, so the mini can still probe it. Dave\'s agent is fine as seen from the mini, but the Modal link on bitcube can\'t upload: its last successful clips (the last INFO lines) are from 02:38, 20 minutes ago, and every clip since has failed with an ERROR line, so the log files are still fresh; the sync has logged nothing since its last update. The river camera (via Starlink and Will\'s tailnet) is unreachable, and the recorder\'s current run can\'t connect. The show is unaffected: the seasons file needs no network.',
@@ -409,6 +450,64 @@ const SCENARIOS = {
   },
 };
 
+// ---- the remembered river (docs/remembered-river.md section 5; lib/remembered.mjs CONTRACT) -------------------------------------
+// A made-up day for the fixtures (not the record's numbers): 24 hours of rain (mm/h), flow (cfs), temperature, snow and is_day.
+const DAY_WET = {
+  rain: [0, 0, 0, 0.2, 0.4, 0.3, 0.8, 1.2, 1.6, 2.4, 3.1, 4.2, 5.8, 7.4, 6.1, 4.0, 2.2, 1.4, 0.9, 0.5, 0.3, 0.1, 0, 0],
+  flow: [31, 31, 30, 30, 31, 32, 33, 35, 38, 44, 52, 63, 79, 102, 131, 158, 176, 181, 174, 160, 143, 126, 111, 99],
+  temp: [5.1, 4.8, 4.6, 4.4, 4.3, 4.2, 4.3, 4.8, 5.4, 6.0, 6.6, 7.0, 7.1, 7.0, 6.8, 6.5, 6.1, 5.8, 5.6, 5.4, 5.3, 5.2, 5.1, 5.0],
+  snow: Array(24).fill(0),
+  is_day: [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+};
+const DAY_FLOOD = {
+  rain: [2.1, 3.4, 4.0, 5.6, 6.2, 7.9, 9.4, 8.1, 6.6, 7.2, 9.8, 12.4, 10.1, 6.0, 3.2, 1.8, 1.0, 0.6, 0.4, 0.2, 0.1, 0, 0, 0],
+  flow: [88, 104, 131, 166, 208, 251, 297, 338, 362, 371, 384, 401, 412, 409, 398, 377, 352, 324, 298, 271, 249, 230, 214, 201],
+  temp: [9.2, 9.1, 9.0, 9.1, 9.3, 9.6, 10.0, 10.4, 10.9, 11.3, 11.6, 11.8, 11.7, 11.4, 11.0, 10.6, 10.2, 9.9, 9.7, 9.5, 9.4, 9.3, 9.2, 9.1],
+  snow: Array(24).fill(0),
+  is_day: [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+};
+const PALETTE_WINTER = ['#0b3d5c', '#1f8fb3', '#7fd3e6', '#e3f6ff'];
+const MEMORY_WET = { date: '2017-02-07', reason: 'Cold steady rain at the creek today, like 7 Feb 2017.', chosen_by: 'resemblance',
+  product: 'NWM v3 retrospective (modelled reach flow) + Open-Meteo',
+  stats: { flow_mean_cfs: 91.4, flow_pct: 88, rain_mm: 42.9, heaviest_hour: 13, season: 'winter', dry: false, cold: true }, profile: DAY_WET };
+const FLOOD_LINE = '8 Jan 2017: highest modelled flow in the record, 412 cfs; 81 mm of rain';
+const isoZ = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+/** probe.ps1 -Action remembered's answer at the fixtures' moment (each file { age_s, json }). What differs from a calm loop is passed. */
+function rememberedRaw({ statusAge = 0.3, phase = 'calm', t_s = 41.5, day = {}, surge = {}, heard = 0.62, river_motion = 0.41, river_source = 'live',
+                         lingerers = [{ x: 0.42, y: 0.78, still_s: 12, ropes: [7, 8] }], presence = 3.2, usual = 2.1, lit = [12, 8, 22, 4], watts = 410,
+                         chosenAge = 220, opening = false, zones = { file: 'zones-2026-10-27.json', pool_height_m: 0.6, light: 'off' }, fps = 60 } = {}) {
+  const chosen = NOW - chosenAge * S;
+  const dayJ = { date: MEMORY_WET.date, reason: MEMORY_WET.reason, chosen_by: 'resemblance', source: 'dave', age_s: chosenAge, next: null, ...day };
+  const relative = Math.round(presence / usual * 100) / 100;
+  const status = { t: Math.round((NOW - statusAge * S) / 10) / 100, show: REMEMBERED_FILE, fps,
+    loop: { index: 12, t_s, length_s: 300, hour: Math.round(t_s / 300 * 24 * 10) / 10 }, phase, day: dayJ,
+    surge: { hour: 13.5, t_s: 168.8, why: 'Dave: hour 13.5', room_shift_s: 0, ...surge },
+    knobs: { speed: 0.5, density: 0.6, brightness: 0.7, turbulence: 0.4, reflex: { speed: 0.05, turbulence: -0.04 } },
+    palette: PALETTE_WINTER, ropes_follow: heard == null ? 'picture' : 'sound', heard, river_motion, river_source,
+    room: { presence, usual, relative, lingerers },
+    panels: { lit_pct: lit, cap: 0.55 }, ropes: { watts }, opening_night: opening, zones };
+  const people = [{ x: 0.42, y: 0.78, h: 0.46, still_s: 12 }, { x: 0.71, y: 0.62, h: 0.3, still_s: 2 }, { x: 0.63, y: 0.71, h: 0.42, still_s: 9 }];
+  return {
+    status: { age_s: statusAge, json: status },
+    state: { age_s: 61, json: { memory: { ...MEMORY_WET, chosen_at: isoZ(chosen) }, surge_at: 13.5,
+      scene: { animation: 'drift', palette_name: 'winter-creek', colors: PALETTE_WINTER, speed: 0.5, density: 0.6, brightness: 0.7, turbulence: 0.4 }, set_at: isoPdt(chosen) } },
+    reflex: { age_s: 4, json: { live: true, offsets: { speed: 0.05, density: 0, brightness: 0, turbulence: -0.04 }, heard, updated_at: isoUtc(NOW - 4 * S) } },
+    presence: { age_s: 0.4, json: { presence, usual, relative, people: people.slice(0, Math.max(2, Math.round(presence))), lingerers } },
+    control: { age_s: 3600, json: { pool_height_m: zones.pool_height_m, light: zones.light, opening_night: opening, at: isoZ(NOW - 3600 * S) } },
+  };
+}
+/** The remembered river running (like viz-running), with its files as given. */
+function rememberedShow(remembered, { watts = [210, 200] } = {}) {
+  const st = base();
+  st.seasons = err(SEASONS_AT, 'fetch failed');
+  st.probe.value.show_files = [...SHOW_FILES, TEMPLATE_FILE, REMEMBERED_FILE];
+  st.probe.value.td = td({ file: REMEMBERED_FILE, fps: 60.0, ropes: { active: true, source: 'canvas', box_watts_cap: 600, status: sender({ watts, seq: 92 }) },
+                           seasons: null, river_cam: relay() });
+  st.probe.value.devices.seasons_page = false;
+  return { status: st, ...CAMS_GOOD, remembered };
+}
+function rememberedItems() { return items({ touchdesigner: 'ok: the remembered river at 60 fps', seasons: 'ok: not used (this show has no year)', ropes: 'ok: showing the show, sender open' }); }
+
 /** The Modal input show running (like viz-running), with td.modal_input as given. */
 function modalShow(mi) {
   const st = base();
@@ -425,8 +524,8 @@ function modalShow(mi) {
 export function buildAll() {
   const out = {};
   for (const [name, s] of Object.entries(SCENARIOS)) {
-    const { status, cameras, camera_age_s } = s.build();
-    out[name] = { _scenario: { now: NOW, title: s.title, description: s.description, expect: s.expect }, status, cameras, camera_age_s };
+    const { status, cameras, camera_age_s, remembered } = s.build();
+    out[name] = { _scenario: { now: NOW, title: s.title, description: s.description, expect: s.expect }, status, cameras, camera_age_s, ...(remembered ? { remembered } : {}) };
   }
   return out;
 }
@@ -434,6 +533,6 @@ export function buildAll() {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const all = buildAll();
   for (const [name, fixture] of Object.entries(all)) writeFileSync(join(DIR, `${name}.json`), JSON.stringify(fixture, null, 2) + '\n');
-  writeFileSync(join(DIR, '_shows.extra.json'), JSON.stringify({ shows: [VIZ_ENTRY, MODAL_ENTRY] }, null, 2) + '\n');
+  writeFileSync(join(DIR, '_shows.extra.json'), JSON.stringify({ shows: [VIZ_ENTRY, MODAL_ENTRY, REMEMBERED_ENTRY] }, null, 2) + '\n');
   console.log(`wrote ${Object.keys(all).length} fixtures to ${DIR}`);
 }

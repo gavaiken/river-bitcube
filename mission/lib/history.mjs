@@ -620,6 +620,11 @@ export function actionPhrase(ev) {
     case 'hub75': return ['Set', 'set', `the panel brightness to ${pct}`];
     case 'overlay': return ['Set', 'set', `Dave's overlay to ${Math.round(Number(b.strength) * 100)} %${b.framing ? '; river framing: ' + b.framing : ''}${b.screens ? '; screens: ' + b.screens.mode + (b.screens.mode === 'cycle' ? ', ' + b.screens.hold + ' s per look' + (b.screens.offset !== undefined ? ', ' + b.screens.offset + ' s between screens' : '') : '') : ''}`];
     case 'modalinput': return ['Set', 'set', `the Modal input to ${MODAL_SOURCE_WORDS[b.source]?.label ?? 'a new source'}${b.source !== 'off' && Number.isFinite(Number(b.strength)) ? ` at ${Math.round(Number(b.strength) * 100)} %` : ''}`];
+    case 'remembered-zones': {
+      const h = Number.isFinite(Number(b.pool_height_m)) && b.pool_height_m != null ? `, the pool line at ${Number(b.pool_height_m).toFixed(2)} m` : '';
+      return b.light === 'pool' ? ['Lit', 'light', `the pool${h}`] : b.light === 'eddies' ? ['Lit', 'light', `the eddies${h}`] : ['Put', 'put', `the pool and eddies back to the show${h}`];
+    }
+    case 'remembered-opening': return ['Switched', 'switch', `opening night ${b.on === true ? 'on' : 'off'}`];
     case 'test': return b.on === true ? ['Started', 'start', 'the test pattern on the ropes and panels'] : ['Stopped', 'stop', 'the test pattern'];
     // a switch to the file TouchDesigner was running is the button's "Restart on …" (its label says so, model.js changeLabel)
     case 'switch': return /^the restart on /.test(String(ev.label ?? '')) ? ['Restarted', 'restart', `TouchDesigner on ${fileLabel(b.file)}`]

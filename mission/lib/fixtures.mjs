@@ -48,7 +48,7 @@ import { CAMERAS, calBlocked, checkedControl, awaitsReading, startingBlocked, te
 import { Applying } from './applying.mjs';
 import { readLocalPixelmap, summarizePixelmap, checkedCalibrate } from './lights.mjs';
 import { atlasFromUprights } from '../public/screens.js';
-import { changeLabel, FILES, MODAL_INPUT_FILE } from '../public/model.js';
+import { changeLabel, FILES, MODAL_INPUT_FILE, REMEMBERED_FILE, REMEMBERED_ONLY } from '../public/model.js';
 import { FRAME_ELEMENTS } from '../public/modal-input.js';
 
 // ---- the Modal input show (docs/modal-inputs.md) in fixture mode -------------------------------------------------------------
@@ -303,6 +303,9 @@ export class FixtureMission {
     let td = null;                 // TouchDesigner in this world: a switch to the file it runs reads "the restart on ..."
     try { td = this.snapshot(scenario).probe?.value?.td ?? null; } catch { /* a half-edited scenario: plain words */ }
     const running = typeof td?.file === 'string' ? td.file : null;
+    // the remembered river's controls only while it runs (as Mission.control, by the full check's file)
+    if ((action === 'remembered-zones' || action === 'remembered-opening') && (!td || td.ok === false || running !== REMEMBERED_FILE))
+      throw Object.assign(new Error(REMEMBERED_ONLY), { status: 409 });
     let baked = null;              // a rebuild's map: the map in use once the rebuild is confirmed (as live)
     return w.applying.run(action, checked, async () => {
       this.#log(action, checked);
@@ -326,6 +329,14 @@ export class FixtureMission {
       if (action === 'modalinput') {     // as probe.ps1 -Action modalinput: only while that show answers
         if (!td || td.ok === false || running !== MODAL_INPUT_FILE) return { ok: false, error: MODAL_INPUT_ONLY, fixture: true };
         w.modalinput = { source: checked.source, strength: checked.strength };
+      }
+      if (action === 'remembered-zones' || action === 'remembered-opening') {
+        // as probe.ps1: control.json merged and written; TouchDesigner (in this world) takes it at once
+        const c = { ...(w.remembered ?? {}), at: new Date(this.clock(scenario)).toISOString() };
+        if (action === 'remembered-zones') { c.light = checked.light; if (checked.pool_height_m !== undefined) c.pool_height_m = checked.pool_height_m; }
+        else c.opening_night = checked.on;
+        w.remembered = c;
+        return { ok: true, fixture: true, action, body: checked, written: c, note: 'fixture mode: nothing was changed' };
       }
       if (action === 'test') {       // as probe.ps1 -Action test: through TouchDesigner, refused when it doesn't answer
         if (!td || td.ok === false) return { ok: false, error: 'TouchDesigner is not running', fixture: true };
@@ -388,6 +399,30 @@ export class FixtureMission {
   #log(action, body) {
     mkdirSync(this.stateDir, { recursive: true });
     appendFileSync(join(this.stateDir, 'controls.log'), JSON.stringify({ t: this.now(), action, body }) + '\n');
+  }
+
+  /** probe.ps1 -Action remembered's answer in this scenario (lib/remembered.mjs CONTRACT): the scenario's `remembered` part, its
+   *  times moved with the fixture clock, with this world's control requests applied (control.json, and TouchDesigner's status taking
+   *  them: zones and opening_night). A scenario without one has none of the files (probe.ps1 reports them missing). */
+  remembered(name) {
+    const [n, f] = this.#scenario(name);
+    const st = f.status ?? {};
+    if (st.bitcube?.value?.online === false) throw Object.assign(new Error('bitcube is offline'), { status: 503 });
+    const clock = fixtureClock(f._scenario?.now, this.now());
+    const delta = Number.isFinite(f._scenario?.now) ? clock - f._scenario.now : 0;
+    const missing = { missing: true };
+    const raw = { ok: true, action: 'remembered', now_s: clock / 1000, status: missing, state: missing, reflex: missing, presence: missing, control: missing,
+                  ...structuredClone(rebase(f.remembered ?? {}, delta)) };
+    const c = this.worldFor(n).remembered;
+    if (c) {
+      raw.control = { age_s: 0, json: { ...(raw.control?.json ?? {}), ...c } };
+      const sj = raw.status?.json;
+      if (sj && typeof sj === 'object') {
+        if (c.light !== undefined || c.pool_height_m !== undefined) sj.zones = { ...(sj.zones ?? {}), ...(c.light !== undefined ? { light: c.light } : {}), ...(c.pool_height_m !== undefined ? { pool_height_m: c.pool_height_m } : {}) };
+        if (c.opening_night !== undefined) sj.opening_night = c.opening_night;
+      }
+    }
+    return raw;
   }
 
   /** What the lights are being sent right now, synthesised from the scenario's seasons state (renderLights) and wrapped in

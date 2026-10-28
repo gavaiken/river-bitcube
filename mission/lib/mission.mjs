@@ -10,7 +10,7 @@ import { Applying } from './applying.mjs';
 import { checkedCalibrate, noAnswer } from './lights.mjs';
 import { ModalSeen, withSeen } from './modal-seen.mjs';
 import { ModalFeed, MODAL_FEED_EVERY_MS } from './modal-feed.mjs';
-import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights, TEST_ON, testShowing, FILES, MODAL_INPUT_FILE, MODAL_SOURCES } from '../public/model.js';
+import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights, TEST_ON, testShowing, FILES, MODAL_INPUT_FILE, MODAL_SOURCES, REMEMBERED_FILE, REMEMBERED_LIGHTS, REMEMBERED_POOL_M, REMEMBERED_ONLY } from '../public/model.js';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 const PROBE = PS + 'probe.ps1';
@@ -24,7 +24,7 @@ export const MODAL_INPUT_ONLY = 'the Modal input is only available while the Mod
 export const CAL_BLOCKED = ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'overlay'];
 /** Refused during a calibration here too, though probe.ps1's own $CAL_BLOCKED doesn't list it yet (tools/tests/test_mission_guards.py
  *  keeps CAL_BLOCKED equal to it): fold it into CAL_BLOCKED when probe.ps1 adds modalinput. */
-const CAL_BLOCKED_HERE = ['modalinput'];
+const CAL_BLOCKED_HERE = ['modalinput', 'remembered-zones'];
 /** The 409 a switch or a rebuild gets while TouchDesigner is starting or restarting (model.js tdStartingWhy, the pages' words; shared
  *  with fixture mode), or null. probe: the full check's reading as kept ({ at, value } or { at, error }), judged by itself, never
  *  the whole page model; a reading the rule can't read, or a slip in it, refuses (closed, CR9 #11). */
@@ -39,7 +39,7 @@ export function startingBlocked(action, probe) {
  *  decode of earlier photos) touches no lights: never refused. probe: the full check's reading as kept ({ at, value }). */
 export function testBlocked(action, body, probe) {
   const start = action === 'calibrate' && body?.action === 'start' && body.dry_run !== true && !body.decode_only;
-  if (action !== 'ropes' && action !== 'overlay' && action !== 'modalinput' && !start) return null;
+  if (action !== 'ropes' && action !== 'overlay' && action !== 'modalinput' && action !== 'remembered-zones' && !start) return null;
   const p = probe && typeof probe === 'object' && !probe.error ? probe.value : null;
   return testShowing(p) ? Object.assign(new Error(TEST_ON), { status: 409 }) : null;
 }
@@ -349,6 +349,9 @@ export class Mission {
       throw Object.assign(new Error('overlay control is only available while combined-v0 is running'), { status: 409 });
     if (action === 'modalinput' && this.data.probe?.value?.td?.file !== MODAL_INPUT_FILE)
       throw Object.assign(new Error(MODAL_INPUT_ONLY), { status: 409 });     // only what the whitelist read goes into status.applying
+    // the remembered river's controls only while it runs (by the full check; probe.ps1 refuses too, by TouchDesigner's own status file)
+    if (plan.kind === 'remembered' && this.data.probe?.value?.td?.file !== REMEMBERED_FILE)
+      throw Object.assign(new Error(REMEMBERED_ONLY), { status: 409 });
     // a calibration photographs the ropes and the panels: anything that changes them, restarts TouchDesigner or moves the
     // lighting port spoils the run (the pages refuse these too; this covers the studio chat and a stale page)
     const blocked = calBlocked(action, this.calibration()) ?? testBlocked(action, checked, this.data.probe);
@@ -368,6 +371,8 @@ export class Mission {
     return this.applying.run(action, checked, async () => {
       // the year page's answer (or its error) as a browser gets it: scrubbed, as the copy kept in data is (R10 #40)
       if (plan.kind === 'seasons') return scrubCreds(await this.#seasons(plan.path, plan.body));
+      // a remembered-river control answers with the remembered river's files, never a full check: kept out of the probe reading
+      if (plan.kind === 'remembered') return scrubCreds(await this.probe(this.sshHost, plan.args, 30_000));
       const r = await this.#probeAction(plan.args, plan.timeout, action);
       if (action === 'rebuild' && (rebuildSucceeded(r) || r?.maybe === true)) baked = this.#rebuildOf(checked.file, r);
       return r;
@@ -494,6 +499,21 @@ export function planControl(action, body = {}) {
       if (!(x >= 0 && x <= 1)) throw bad('modal input strength is 0 to 1');
       return { kind: 'probe', args: `-Action modalinput -Source ${body.source} -Strength ${x.toFixed(2)}` };
     }
+    case 'remembered-zones': {
+      // the pool and eddy adjusters (docs/remembered-river.md section 5): what to light, and optionally the pool line in metres
+      if (!REMEMBERED_LIGHTS.includes(body.light)) throw bad('light is off, pool or eddies');
+      let args = `-Action remembered-zones -Light ${body.light}`;
+      if (body.pool_height_m !== undefined) {
+        const h = num(body.pool_height_m);
+        if (!(h >= REMEMBERED_POOL_M[0] && h <= REMEMBERED_POOL_M[1])) throw bad(`pool_height_m is ${REMEMBERED_POOL_M[0]} to ${REMEMBERED_POOL_M[1]} metres`);
+        args += ` -PoolHeight ${h.toFixed(2)}`;
+      }
+      return { kind: 'remembered', args };
+    }
+    case 'remembered-opening': {
+      if (typeof body.on !== 'boolean') throw bad('on is true or false');
+      return { kind: 'remembered', args: `-Action remembered-opening${body.on ? ' -On' : ''}` };
+    }
     case 'hub75': {
       const x = num(body.brightness);
       if (!(x >= 0 && x <= 1)) throw bad('brightness is 0 to 1');
@@ -543,6 +563,8 @@ export function checkedControl(action, body = {}) {
     case 'overlay': return { strength: Number(num(body.strength).toFixed(2)), ...(body.framing !== undefined ? { framing: body.framing } : {}), ...(body.screens !== undefined ? { screens: checkedScreens(body.screens) } : {}) };
     case 'modalinput': return { source: body.source, strength: Number(num(body.strength).toFixed(2)) };
     case 'test': return { on: body.on === true };
+    case 'remembered-zones': return { light: body.light, ...(body.pool_height_m !== undefined ? { pool_height_m: Number(num(body.pool_height_m).toFixed(2)) } : {}) };
+    case 'remembered-opening': return { on: body.on === true };
     case 'bootfile': case 'switch': case 'rebuild': return { file: body.file };
     case 'lightsroute': return { route: body.route };
     default: return {};

@@ -20,7 +20,7 @@ const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
 const SEASONS_FILE = 'river-local-oct-22-seasons.toe', ONLINE_FILE = 'river-online-oct-23.toe';
 // probe.ps1 offers only the first two; a bitcube that hasn't pulled the old-… rename (execution plan D27), like the
 // 23 Oct recording behind lights-not-connected, still lists the 20 Oct file under its earlier name.
-const SHOW_FILES = [SEASONS_FILE, ONLINE_FILE, 'river-online-oct-20.toe', 'river-baseline-template.toe', 'river-fixture-fireflies.toe', 'river-combined-modal-inputs.toe'];   // + viz-running's template and test viz (_shows.json)
+const SHOW_FILES = [SEASONS_FILE, ONLINE_FILE, 'river-online-oct-20.toe', 'river-baseline-template.toe', 'river-fixture-fireflies.toe', 'river-combined-modal-inputs.toe', 'river-remembered.toe'];   // + viz-running's template and test viz (_shows.json)
 const DEVICES = ['internet', 'router', 'gallery_cam', 'river_cam', 'psac10_1', 'psac10_2', 'seasons_page'];
 const SENDER_KEYS = ['error', 'sent', 'dropped', 'packets', 'watts', 'seq', 'active', 'open', 'source', 'retrying'];
 const RELAY_KEYS = ['relay', 'frames', 'last_frame_age_s', 'fresh', 'error', 'colourfulness', 'night', 'nightness'];
@@ -139,7 +139,9 @@ function checkFixture(name, f) {
   const ok = (cond, msg) => { if (!cond) bad.push(msg); return !!cond; };
 
   // 1. format
-  ok(sameKeys(f, ['_scenario', 'status', 'cameras', 'camera_age_s']), `top-level keys must be _scenario, status, cameras, camera_age_s (got ${Object.keys(f).join(', ')})`);
+  // remembered: probe.ps1 -Action remembered's answer (lib/remembered.mjs), only in the remembered-river scenarios
+  ok(sameKeys(f, ['_scenario', 'status', 'cameras', 'camera_age_s']) || sameKeys(f, ['_scenario', 'status', 'cameras', 'camera_age_s', 'remembered']),
+     `top-level keys must be _scenario, status, cameras, camera_age_s (and remembered) (got ${Object.keys(f).join(', ')})`);
   const sc = f._scenario ?? {}, st = f.status ?? {}, cams = f.cameras ?? {}, ages = f.camera_age_s ?? {};
 
   // 2. _scenario.expect

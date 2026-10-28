@@ -19,10 +19,17 @@
 #                                                                (docs/modal-inputs.md); status then has td.modal_input
 #   [-Action test -On]                                           the test pattern on the ropes and panels (without -On: back to
 #                                                                what they showed before; td_mission.py keeps which)
+#   [-Action remembered]                                         the remembered river's files only (docs/remembered-river.md
+#                                                                section 5; mission/lib/remembered.mjs CONTRACT): no device checks,
+#                                                                no TouchDesigner call; prints them and stops
+#   [-Action remembered-zones -Light pool -PoolHeight 0.60]      the remembered river only: what to light to check the zones
+#                                                                (off|pool|eddies) and the pool line (0..1.5 m); writes
+#                                                                River\remembered\control.json for TouchDesigner, then as above
+#   [-Action remembered-opening -On]                             the remembered river only: the opening-night switch (without -On: off)
 #   ropes, hub75, test, switch, rebuild and lightsroute are refused while a calibration runs ({ ok: false, error: "a calibration is
 #   running. Stop it on the Lights page first", refused: <action> } with the status), whoever runs this script; a dry run (or a
 #   decode of earlier photos) touches no lights and refuses nothing.
-param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25, [ValidateSet('auto','original','channel','channel-multi','pool','pool-multi')][string]$Framing, [ValidateSet('current','gavin','recorded','manual','cycle')][string]$Screenmode, [ValidateRange(0,1)][double]$Screenblend=0, [ValidateSet(15,30,60,120)][int]$Screenhold=30, [ValidateRange(0,1)][Nullable[double]]$Screenrecorded, [ValidateRange(0,120)][Nullable[double]]$Screenoffset, [ValidateSet('off','canvas','scene','frames')][string]$Source, [ValidateRange(0,1)][Nullable[double]]$Strength)
+param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25, [ValidateSet('auto','original','channel','channel-multi','pool','pool-multi')][string]$Framing, [ValidateSet('current','gavin','recorded','manual','cycle')][string]$Screenmode, [ValidateRange(0,1)][double]$Screenblend=0, [ValidateSet(15,30,60,120)][int]$Screenhold=30, [ValidateRange(0,1)][Nullable[double]]$Screenrecorded, [ValidateRange(0,120)][Nullable[double]]$Screenoffset, [ValidateSet('off','canvas','scene','frames')][string]$Source, [ValidateRange(0,1)][Nullable[double]]$Strength, [ValidateSet('off','pool','eddies')][string]$Light, [ValidateRange(0,1.5)][Nullable[double]]$PoolHeight)
 $ErrorActionPreference = 'Continue'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $river = Split-Path $repo -Parent
@@ -101,6 +108,55 @@ if ($CAL_BLOCKED -contains $Action) {
         $out.ok = $false; $out.error = 'a calibration is running. Stop it on the Lights page first'; $out.refused = $Action
         $Action = 'status'
     }
+}
+# The remembered river (docs/remembered-river.md section 5): its files, and its two controls. Each file is { age_s, json },
+# { missing = true } or { error }. A control is taken only while TouchDesigner's own status file says the remembered river runs (written
+# twice a second: under 10 s old, show river-remembered.toe); it writes control.json ({ pool_height_m, light, opening_night, at }, merged
+# with what was there) to a temporary file and swaps it in, so TouchDesigner never reads half a file. Nothing else runs.
+if ($Action -in 'remembered', 'remembered-zones', 'remembered-opening') {
+    $rdir = Join-Path $river 'remembered'
+    function Read-RiverJson([string]$path) {
+        if (-not (Test-Path -LiteralPath $path)) { return [ordered]@{ missing = $true } }
+        foreach ($try in 1..3) {        # TouchDesigner replaces status.json twice a second; a read can land on the swap
+            try {
+                $item = Get-Item -LiteralPath $path -ErrorAction Stop
+                $json = Get-Content -Raw -LiteralPath $path -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+                return [ordered]@{ age_s = [math]::Round(((Get-Date) - $item.LastWriteTime).TotalSeconds, 1); json = $json }
+            } catch { Start-Sleep -Milliseconds 60 }
+        }
+        return [ordered]@{ error = "unreadable $(Split-Path $path -Leaf)" }
+    }
+    $out.action = $Action
+    $out.now_s = [math]::Round(([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) / 1000.0, 2)
+    $ctlFile = Join-Path $rdir 'control.json'
+    if ($Action -ne 'remembered') {
+        $st = Read-RiverJson (Join-Path $rdir 'status.json')
+        $runs = $st.json -and $st.json.show -eq 'river-remembered.toe' -and $st.age_s -lt 10
+        if (-not $runs) { $out.ok = $false; $out.error = "the remembered river isn't running (its controls work only while it runs)"; $out.refused = $Action }
+        elseif ($Action -eq 'remembered-zones' -and -not $Light) { $out.ok = $false; $out.error = 'remembered-zones needs -Light off|pool|eddies'; $out.refused = $Action }
+        else {
+            $ctl = [ordered]@{ pool_height_m = $null; light = 'off'; opening_night = $false; at = $null }
+            $was = Read-RiverJson $ctlFile
+            if ($was.json) { foreach ($k in 'pool_height_m', 'light', 'opening_night') { if ($null -ne $was.json.$k) { $ctl[$k] = $was.json.$k } } }
+            if ($Action -eq 'remembered-zones') { $ctl.light = $Light; if ($null -ne $PoolHeight) { $ctl.pool_height_m = [math]::Round([double]$PoolHeight, 2) } }
+            else { $ctl.opening_night = [bool]$On }
+            $ctl.at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            $null = New-Item -ItemType Directory -Force -Path $rdir
+            $tmp = "$ctlFile.tmp"
+            [IO.File]::WriteAllText($tmp, ($ctl | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding $false))
+            if (Test-Path -LiteralPath $ctlFile) { [IO.File]::Replace($tmp, $ctlFile, $null) } else { [IO.File]::Move($tmp, $ctlFile) }
+            $out.written = $ctl
+        }
+    }
+    $out.status = Read-RiverJson (Join-Path $rdir 'status.json')
+    $state = Read-RiverJson (Join-Path $river 'gallery_state\state.json')
+    if ($state.json) { $state.json = [ordered]@{ memory = $state.json.memory; surge_at = $state.json.surge_at; scene = $state.json.scene; set_at = $state.json.set_at } }
+    $out.state = $state
+    $out.reflex = Read-RiverJson (Join-Path $river 'gallery_state\reflex.json')
+    $out.presence = Read-RiverJson (Join-Path $river 'presence.json')
+    $out.control = Read-RiverJson $ctlFile
+    $out | ConvertTo-Json -Compress -Depth 10
+    exit 0
 }
 if ($Action -eq 'rebuild') {
     # Rebuild = build + save + switch, each step reported; any failure stops the chain and the JSON says where.
