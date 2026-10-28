@@ -96,6 +96,36 @@ function withModalInput(mi, set) {
            stale_reason: stale ? `newest ${set.source} is older than ${base.stale_after_s ?? 900} s` : null,
            data_age_s: set.source === 'off' ? null : age ?? null, params: structuredClone(MI_PARAMS[set.source] ?? []) };
 }
+/** What Modal's public endpoints answered (lib/modal-feed.mjs value(), served as status.modal_feed), at the fixtures' moment:
+ *  copies of the real public/scene.json and frames/latest.json (28 Oct), moved to the fixture's scene and frame, each with one
+ *  field Modal doesn't send today (scene.json `weather`, the ropes' `glow`), which the page must still show. */
+export function fixtureModalFeed({ frameId = FRAME_ID, sceneError = null } = {}) {
+  const fetched = new Date(FIXTURE_NOW - 8000).toISOString();
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})Z/.exec(frameId);
+  const issued = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`;
+  const river = (el) => (el === 'ropes' ? { amount: 0.7, contrast: 0.4, speed: 0.8 } : { amount: 0.53, contrast: 0.4, speed: 0.54 });
+  const sha = ['07897f6601eea6e6eb24608bc6a2a6133bbc6fac92b80383d374a681089d764e', '4a4690c58720cddd232cf22d9a73d557bef68c529d523199663fd537dab4aa2f',
+               '644ba5afacf91c334eb63d90cd806174ae057bb21a12fe3092fc9ca5be58a6c7', 'a7012552980591c82d20d01234c79a265c2440d364f4f4637394018eb96786cb',
+               'b0c11fa47feb26bd03d1f0a53c599794dbb56ac1c615d55eec4f5a7dd4d2c96e'];
+  return {
+    scene: { ok: !sceneError, error: sceneError, fetched_at: fetched, changed_at: '2026-10-23T09:58:20.000Z', json: {
+      updated_at: '2026-10-23T09:58:50+00:00',
+      scene: { animation: 'drift', colors: ['#dce7f5', '#8faac4', '#4d6a8a', '#1f2f45'], palette_name: 'froth-deepening', speed: 0.19, density: 0.41,
+               brightness: 0.56, turbulence: 0.62, transition_seconds: 75, placeholder: false, set_at: '2026-10-23T02:58:18-07:00', tick: 5399 },
+      reflex: { live: true, offsets: { speed: 0, density: 0, brightness: 0, turbulence: -0.07 }, updated_at: '2026-10-23T09:58:50+00:00' },
+      effective: { speed: 0.19, density: 0.41, brightness: 0.56, turbulence: 0.55 },
+      journal: { tick: 5399, timestamp: '2026-10-23T02:58:19-07:00', mood_word: 'hushed', summary: 'The room has gone quiet, so the river slows and cools toward deep water.' },
+      weather: { sky: 'overcast', wind_kph: 12 },
+    } },
+    frames: { ok: true, error: null, fetched_at: fetched, changed_at: fetched, json: {
+      schema: 'modal-frames/1', layout_version: 1, frame_id: frameId, issued_at: issued, ttl_s: 900,
+      transition: { duration_ms: 60000, easing: 'ease-in-out', space: 'oklch', via: [] },
+      elements: Object.fromEntries(FRAME_ELEMENTS.map((el, k) => [el, { image: `/frames/${frameId}/${el}.png`, sha256: sha[k], river: river(el),
+                                                                     ...(el === 'ropes' ? { glow: 0.3 } : {}) }])),
+      note: 'dusk: cooling toward deep blue',
+    } },
+  };
+}
 
 const NAME = /^[a-z0-9-]+$/;
 const STILL_AGE_S = 20;
@@ -219,6 +249,8 @@ export class FixtureMission {
     }
     if (out.probe?.value?.td?.file === MODAL_INPUT_FILE && out.probe.value.td.ok !== false) {
       out.probe = { ...out.probe, value: { ...out.probe.value, td: { ...out.probe.value.td, modal_input: withModalInput(out.probe.value.td.modal_input, w.modalinput) } } };
+      // what Modal's public endpoints answered: the scenario's own copy, else (a world switched to the show) the fixtures' usual one
+      if (!out.modal_feed) out.modal_feed = rebase(fixtureModalFeed(), delta);
     }
     if (out.probe?.value) w.applying.confirm(out.probe.value, this.now());
     out.applying = w.applying.list(clock);

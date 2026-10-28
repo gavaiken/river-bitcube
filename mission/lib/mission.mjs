@@ -9,6 +9,7 @@ import { scrubCreds } from './scrub.mjs';
 import { Applying } from './applying.mjs';
 import { checkedCalibrate, noAnswer } from './lights.mjs';
 import { ModalSeen, withSeen } from './modal-seen.mjs';
+import { ModalFeed, MODAL_FEED_EVERY_MS } from './modal-feed.mjs';
 import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights, TEST_ON, testShowing, FILES, MODAL_INPUT_FILE, MODAL_SOURCES } from '../public/model.js';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
@@ -117,7 +118,7 @@ export class Mission {
   constructor({ bitcubeHost = '100.73.68.60', sshHost = 'bitcube', seasonsUrl = 'http://100.73.68.60:9981',
                 modalUrl = 'https://to-be-a-river--river.modal.run', riverCam = { host: '192.168.8.217', port: 554 },
                 probe = sshProbe, snap = sshSnap, now = () => Date.now(), lights = null, stateDir = null,
-                later = (fn, ms) => setTimeout(fn, ms).unref?.(), recheckMs = RECHECK_MS, seasonsTimeoutMs = 5000 } = {}) {
+                later = (fn, ms) => setTimeout(fn, ms).unref?.(), recheckMs = RECHECK_MS, seasonsTimeoutMs = 5000, feed = null } = {}) {
     // later(fn, ms): the timer the follow-up reads use (a test passes its own); seasonsTimeoutMs: a seasons page POST's limit
     Object.assign(this, { bitcubeHost, sshHost, seasonsUrl, modalUrl, riverCam, probe, snap, now, lights, stateDir, later, recheckMs, seasonsTimeoutMs });
     this.snaps = {};         // cam -> { at, jpeg, pending }
@@ -126,6 +127,7 @@ export class Mission {
     this.timers = [];
     this.applying = new Applying({ now });     // every control in flight (status.applying; the 409 "wait: ...")
     this.modalSeen = new ModalSeen();   // the last few frame ids and scene times the Modal input show reported (lib/modal-seen.mjs)
+    this.feed = feed ?? new ModalFeed({ base: modalUrl, now });   // everything Modal sends, from its public endpoints (lib/modal-feed.mjs)
     this.calNote = null;     // { at, value }: the newest progress file Lights answered with (start, cancel, a progress read)
     this.lastRebuild = this.#readRebuilt();
   }
@@ -182,6 +184,7 @@ export class Mission {
     const every = (fn, ms) => { fn().catch(() => {}); this.timers.push(setInterval(() => fn().catch(() => {}), ms)); };
     every(() => this.pollFast(), 5000);
     every(() => this.pollModal(), 30_000);
+    every(() => this.feed.poll(), MODAL_FEED_EVERY_MS);
     every(() => this.pollProbe(), 60_000);
     every(() => this.pollCalibration(), CAL_POLL_MS);
   }
@@ -203,6 +206,7 @@ export class Mission {
       this.modalSeen.observe(mi);
       out.probe = { ...out.probe, value: { ...out.probe.value, td: { ...out.probe.value.td, modal_input: withSeen(mi, this.modalSeen) } } };
     }
+    out.modal_feed = this.feed.value();    // what Modal sends, as it last answered (never waited on: lib/modal-feed.mjs)
     out.applying = this.applying.list();
     // the server's verdict on every change it confirmed or gave up on in the last 10 min: a page confirms its own switch,
     // restart, rebuild or boot-file change only by its entry's id here, never from a file name (R7 #6, #25)
