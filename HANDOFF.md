@@ -45,9 +45,9 @@ file, offered (so bitcube can switch to it) but **not the default**; page `docs/
   `all-looks-auto`, `all-looks-manual`; docs/mission-ui.md "Looks page"). `POST /api/control/looks {mode, look?, playlist?}`
   -> `probe.ps1 -Action looks -Mode auto -Playlist '<json>'`. **Checked on bitcube:** the probe validates the playlist on real
   PowerShell 5.1 (a bad unit is refused with the reason) and writes control.json when the JSON reaches it intact (run from a
-  PowerShell session). **Not checked:** the JSON surviving mission control's ssh -> cmd.exe -> powershell path (mission
-  escapes each `"` as `\"`); the first Apply from the Looks tab against the real bitcube will tell. If it fails with
-  "playlist is a list of { look, for }", the quoting is the cause: pass the playlist base64-encoded instead (probe decodes).
+  PowerShell session). **Also checked (11:00):** the exact ssh -> cmd.exe -> powershell -File command mission control sends
+  (`playlistArg`, `"` escaped as `\"`) reached the probe intact and wrote control.json with the playlist. So Apply on the
+  Looks tab works end to end against the real bitcube.
   Settings that bitcube refuses unless the look shows (the fill dials, the Modal source) can't be set ahead; the page says so.
 - The seasons look's `seasons_exec` (its engine, presence, the 9981 page) keeps running while the COMP's cooking is off;
   Python cost was 0.2 ms with seasons showing and ~5 ms with the remembered river, so it's cheap, but it wasn't profiled
