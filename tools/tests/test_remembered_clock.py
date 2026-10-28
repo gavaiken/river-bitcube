@@ -115,8 +115,8 @@ def test_phases_in_order_around_the_surge():
 
 def test_dave_day_needs_fresh_choice_and_mirror():
     assert clock.dave_day(state_for(chosen_at=T0 - 60), T0)[0]['source'] == 'dave'
-    day, why = clock.dave_day(state_for(chosen_at=T0 - 301), T0)
-    assert day is None and 'over 300' in why
+    day, why = clock.dave_day(state_for(chosen_at=T0 - 901), T0)
+    assert day is None and 'over 900' in why
     assert clock.dave_day(state_for(), T0, mirror_age_s=clock.MIRROR_STALE_S + 1)[0] is None
     assert clock.dave_day({'scene': {}}, T0)[0] is None
     assert clock.dave_day(state_for(surge_at='absent'), T0)[0].get('surge_at', 'absent') == 'absent'
@@ -181,3 +181,13 @@ def test_surge_plan_locks_once_building():
     tm = loop.times
     loop.update(T0 + tm['build'] + 1, day, room={'available': True, 'relative': 3.0, 'presence': 5, 'lingerers': []})
     assert loop.plan['t_s'] == first                                # locked: the busy room no longer moves it
+
+
+def test_each_dave_choice_plays_once_then_bitcube_fills_in():
+    lib = clock.load_library(REPO_DATA) if 'REPO_DATA' in globals() else None
+    loop = clock.Loop(seed=1) if 'seed' in clock.Loop.__init__.__code__.co_varnames else clock.Loop()
+    dave = clock.dave_day(state_for(chosen_at=T0 - 60), T0)[0]
+    first = loop._choose(T0, dave, lib)
+    assert first['source'] == 'dave'
+    again = loop._choose(T0 + 300, dave, lib)
+    assert again['source'] != 'dave'

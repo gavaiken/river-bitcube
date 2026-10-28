@@ -29,7 +29,7 @@ SURGE_MIN_S, SURGE_MAX_S = 90.0, 216.0
 ROOM_SHIFT_S = 30.0
 BUSY_RELATIVE = 1.3
 EMPTY_ROOM_S = 60.0                  # nobody for this long = an empty room
-MEMORY_MAX_AGE_S = 300.0             # Dave's chosen_at older than this -> bitcube picks
+MEMORY_MAX_AGE_S = 900.0             # Dave's chosen_at older than this -> bitcube picks (his ticks run ~5-15 min apart)
 MIRROR_STALE_S = 900.0               # state.json (the mirror) not rewritten for this long -> stale
 NO_REPEAT_S = 3600.0                 # a fallback date never plays twice within an hour
 DRAWBACK_S = 8.0                     # the last seconds before the surge: the pool dims, the top metre glows
@@ -336,9 +336,12 @@ class Loop:
         self.locked = False
         self.wave_start = None
         self.dave_why = ''
+        self.dave_played = None      # chosen_at of the last of Dave's choices that played
 
     def _choose(self, now, dave, lib):
-        if dave is not None:
+        # each of Dave's choices plays once; between his choices bitcube fills the loop with a notable day
+        if dave is not None and dave.get('chosen_at') != self.dave_played:
+            self.dave_played = dave.get('chosen_at')
             return dave
         return fallback_day(lib or {}, self.history, now, self.rng) or preset_day()
 
