@@ -47,7 +47,9 @@ def locate(quarters, black, thresh=40, min_px=30):
     when any quarter wasn't seen (the screen is out of view or partly hidden).
     The screen is the largest region lit in any of the four frames together; each quarter is then looked for only
     there, so something else changing in one frame (someone walking by, 23 Oct) can't pull a corner away."""
-    lit = {q: (f - black).max(axis=2) > thresh for q, f in quarters.items()}
+    # Opened (eroded, then grown back): a lit quarter is a solid patch, while a camera still swaying after a pan/tilt
+    # turns every edge in the room into a thin line of difference (27 Oct) that would join into a bigger region.
+    lit = {q: _dilate(_erode((f - black).max(axis=2) > thresh, 2), 2) for q, f in quarters.items()}
     union = np.logical_or.reduce(list(lit.values()))
     if union.sum() < min_px:
         return None
@@ -76,6 +78,10 @@ def locate(quarters, black, thresh=40, min_px=30):
     if area < 400 or area < 0.3 * sum(sizes) or min(sizes) < 0.3 * max(sizes):
         return None
     return {'corners': corners, 'px': int(sum(sizes)), 'balance': round(min(sizes) / max(sizes), 2)}
+
+
+def _erode(m, n=1):
+    return ~_dilate(~m, n)
 
 
 def quad_area(pts):
@@ -176,7 +182,7 @@ def main():
                 with ptz.Ptz(a.cam) as c:
                     pan, tilt = v.get('ptz') or (None, None)
                     print(f'view {name}: camera to', c.move_to(pan, tilt, (views_cfg or {}).get('tol', 3)))
-                time.sleep(1.0)
+                time.sleep(4.0)                    # the camera sways for a moment after a tilt
                 per_view[name] = shoot(capture, comp, cam, out, a.settle, f'{name}-')
                 # The camera never lands exactly where the calibration had it: measure the difference in the picture.
                 ref = capture.REPO / 'frames' / v['capture'] / 'A' / 'black.png'
