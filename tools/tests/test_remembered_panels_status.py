@@ -242,7 +242,7 @@ def test_v2_status_has_people_knob_parts_signals_and_logs_inputs(tmp_path):
     assert st['inputs']['lingerers']['value'] == [7, 8] and st['inputs']['day']['source'] == 'notable'
     assert st['people']['headcount'] == 3 and st['people']['available'] and 0 < st['people']['crowd'] < 0.1
     assert 7 in st['people']['linger_ropes'] and len(st['people']['linger_ropes']) <= 4
-    assert all('→' in st['knobs']['why'][k] and 'day' in st['knobs']['why'][k] for k in show.KNOBS)
+    assert all('->' in st['knobs']['why'][k] and 'day' in st['knobs']['why'][k] for k in show.KNOBS)
     assert st['signals'] == {'gallery': {}, 'river': {}}
     assert all(st['params'][k]['source'] == 'auto' for k in st['params']) and st['simulating'] is False
     assert st['params']['calm_min']['value'] == 0.18 and st['params']['master_brightness']['value'] == 1.0

@@ -12,7 +12,7 @@ Three parts, added up and clamped:
 - **The reflex** nudges (reflex.json offsets), easing in over ~4 s.
 
 value = W_DAVE * dave + (1 - W_DAVE) * day + REFLEX_GAIN * reflex (dave alone + reflex until the show passes a day).
-parts() returns every part so status can show "Dave 0.42 · day 0.61 → 0.52".
+parts() returns every part so status can show "Dave 0.42 / day 0.61 -> 0.52".
 """
 import math
 
@@ -234,14 +234,14 @@ class Knobs:
 
 
 def describe(parts):
-    """{knob: 'Dave 0.42 · day 0.61 → 0.52'} for status (the reflex shown only when it moves the knob)."""
+    """{knob: 'Dave 0.42 / day 0.61 -> 0.52'} for status (the reflex shown only when it moves the knob)."""
     out = {}
     for k in KNOBS:
         s = f"Dave {parts['dave'][k]:.2f}"
         if parts.get('day') is not None:
-            s += f" · day {parts['day'][k]:.2f}"
+            s += f" / day {parts['day'][k]:.2f}"
         rx = parts['reflex'][k]
         if abs(rx) >= 0.005:
-            s += f' · reflex {rx:+.2f}'
-        out[k] = s + f" → {parts['value'][k]:.2f}"
+            s += f' / reflex {rx:+.2f}'
+        out[k] = s + f" -> {parts['value'][k]:.2f}"
     return out

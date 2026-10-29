@@ -95,7 +95,7 @@ def test_blend_parts_and_describe():
     assert p['reflex']['speed'] == pytest.approx(0.2, abs=1e-3)
     assert p['value']['speed'] == pytest.approx(0.5 * p['dave']['speed'] + 0.5 * p['day']['speed'] + 0.2, abs=1e-3)
     d = knobs.describe(p)
-    assert d['speed'].startswith('Dave 0.50 · day ') and 'reflex +0.20' in d['speed'] and '→' in d['speed']
+    assert d['speed'].startswith('Dave 0.50 / day ') and 'reflex +0.20' in d['speed'] and '->' in d['speed']
     assert 'reflex' not in d['density']
     assert k.reflex_now == p['reflex'] and k.seconds == 0.0 and k.colors is None
 

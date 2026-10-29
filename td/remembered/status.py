@@ -122,5 +122,5 @@ def write(path, obj):
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_name(p.name + '.tmp')
-    tmp.write_text(json.dumps(obj, separators=(',', ':')), encoding='utf-8')
+    tmp.write_text(json.dumps(obj, separators=(',', ':'), ensure_ascii=True), encoding='utf-8')   # ASCII only: probe.ps1 reads it as ANSI
     os.replace(tmp, p)
