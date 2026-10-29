@@ -11,7 +11,7 @@
 # Runs as SYSTEM (with or without the desktop session). shutdown /f so no dialog (TouchDesigner's "save?") can hold it:
 # nothing is lost, the show file is only ever saved with td_save.ps1. From the Mac mini: tools/mini/bitcube_ps.sh.
 param(
-    [string[]]$Times = @('2026-10-29 18:05', '2026-10-30 20:05', '2026-10-31 20:05', '2026-11-01 20:05'),
+    [string[]]$Times = @('2026-10-29 18:30', '2026-10-30 20:30', '2026-10-31 20:30', '2026-11-01 20:30'),
     [switch]$Status,
     [switch]$Remove
 )

@@ -78,7 +78,7 @@ Three separate circuits if you can (ask Gray Area which outlets are on which bre
 5. **Ask the studio chat** (mission control → Studio chat): "The ceiling install is done, check everything." It can see bitcube, the router and the cameras, and says what's wrong.
 
 ## Nights and mornings (show week, 29 Oct – 1 Nov)
-- **bitcube shuts itself down 5 minutes after closing** (Thu 18:05; Fri, Sat, Sun 20:05: the scheduled task `River-NightlyShutdown`, `tools/power/nightly_shutdown.ps1`), so pulling the power afterwards never cuts Windows mid-write. Once it is off the ropes show the boxes' own colour cycle until the power is pulled, as before. Pull the power *after* 18:10 / 20:10, not before.
+- **bitcube shuts itself down 30 minutes after closing** (Thu 18:30; Fri, Sat, Sun 20:30: the scheduled task `River-NightlyShutdown`, `tools/power/nightly_shutdown.ps1`), so pulling the power afterwards never cuts Windows mid-write. Once it is off the ropes show the boxes' own colour cycle until the power is pulled, as before. Pull the power *after* 18:35 / 20:35, not before.
 - **Mornings:** plugging bitcube back in boots it by itself (BIOS Auto Power On; about 2 minutes to the show). If nobody pulled the power, the Mac mini wakes it over the network an hour before opening (13:00 Thu and Fri, 12:00 Sat and Sun; `tools/mini/wake_bitcube.sh`, log `~/claude/local/wake-bitcube.log` on the mini). By hand, from the mini: `tools/mini/wake_bitcube.sh`. If it still shows offline on mission control 10 minutes before opening: pull its power and plug it back in.
 
 ## If something's off
