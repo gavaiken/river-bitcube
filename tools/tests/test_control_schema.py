@@ -160,3 +160,74 @@ def test_probe_writes_the_canonical_shape():
     assert "$ctl.Remove('zones')" in rem and "$ctl.Remove('t')" in rem and '$ctl.light_at' in rem
     assert "-not $ctl.Contains($k)" in rem
     assert 'ConvertTo-Json -InputObject $ctl -Compress -Depth' in rem
+
+
+# ---- overrides (v2 plan decision 6) -------------------------------------------------------------------------------------
+
+def test_every_param_has_range_default_unit_group_modes_and_doc():
+    assert set(cs.PARAMS) == {'day', 'surge_hour', 'knob.speed', 'knob.density', 'knob.brightness', 'knob.turbulence',
+                              'palette', 'flow_level', 'headcount', 'lingerer_rope', 'calm_min', 'calm_max',
+                              'master_brightness'}
+    for name, p in cs.PARAMS.items():
+        assert {'type', 'default', 'unit', 'group', 'modes', 'doc'} <= set(p), name
+        assert p['modes'][0] == 'auto' and set(p['modes']) <= set(cs.MODES), name
+        if p['type'] in ('number', 'int'):
+            assert p['min'] < p['max'] and (p['default'] is None or p['min'] <= p['default'] <= p['max']), name
+        else:
+            assert 'adjust' not in p['modes'], name
+    assert cs.SIMULATED == ('headcount', 'lingerer_rope') and cs.SIMULATED_MAX_S == 120
+    assert (cs.PARAMS['master_brightness']['max'], cs.PARAMS['surge_hour']['max'], cs.PARAMS['lingerer_rope']['max'],
+            cs.PARAMS['headcount']['max']) == (1.5, 24.0, 19, 20.0)
+    body = cs.OUT.read_text(encoding='utf-8')
+    data = json.loads(body[body.index('export default ') + len('export default '):].rstrip().rstrip(';'))
+    assert data['params']['knob.speed']['modes'] == ['auto', 'fix', 'adjust']
+    assert data['overrides']['simulated_max_s'] == 120 and data['overrides']['days']['count'] > 7000
+
+
+def test_override_values_are_checked_per_type():
+    assert cs.param_value('day', '2017-02-07') == '2017-02-07'
+    assert cs.param_value('day', '1990-01-01') is None, 'not a day in days.csv'
+    assert cs.param_value('day', '2017-02-30') is None and cs.param_value('day', 20170207) is None
+    assert cs.param_value('palette', ['#0B3D5C', '#1f8fb3', '#bfefff']) == ['#0b3d5c', '#1f8fb3', '#bfefff']
+    assert cs.param_value('palette', ['#0b3d5c', '#1f8fb3']) is None and cs.param_value('palette', ['red'] * 3) is None
+    assert cs.param_value('lingerer_rope', 7) == 7 and cs.param_value('lingerer_rope', 7.5) is None
+    assert cs.param_value('lingerer_rope', 20) is None and cs.param_value('headcount', 3) == 3.0
+    assert cs.param_value('master_brightness', 1.5) == 1.5 and cs.param_value('master_brightness', 1.6) is None
+    assert cs.param_value('knob.speed', True) is None and cs.param_value('knob.speed', float('nan')) is None
+
+
+def test_validate_overrides_keeps_only_valid_unexpired_entries():
+    now = T0 + 30
+    raw = {'knob.speed': {'mode': 'adjust', 'offset': 0.1, 'gain': 1.2, 'at': cs.iso(T0), 'expires_at': None},
+           'knob.density': {'mode': 'fix', 'value': 0.9},
+           'knob.turbulence': {'mode': 'auto', 'value': 0.2},              # auto = no override
+           'knob.brightness': {'mode': 'fix', 'value': 2},                 # out of range
+           'palette': {'mode': 'adjust', 'offset': 0.1},                    # adjust: numbers only
+           'surge_hour': {'mode': 'fix', 'value': 9, 'expires_at': cs.iso(T0 + 10)},   # expired
+           'calm_min': {'mode': 'fix', 'value': 0.1, 'expires_at': 'later'},          # unreadable expiry
+           'flow_level': {'mode': 'adjust', 'gain': 5},                     # gain over 4
+           'day': {'mode': 'fix', 'value': '2017-02-07'},
+           'nonsense': {'mode': 'fix', 'value': 1}, 'master_brightness': 1.2}
+    v = cs.validate_overrides(raw, now)
+    assert set(v) == {'knob.speed', 'knob.density', 'day'}
+    assert v['knob.speed'] == {'mode': 'adjust', 'offset': 0.1, 'gain': 1.2, 'at': cs.iso(T0), 'expires_at': None}
+    assert v['knob.density'] == {'mode': 'fix', 'value': 0.9, 'at': None, 'expires_at': None}
+    assert 'surge_hour' in cs.validate_overrides(raw, T0 + 5)
+    assert cs.validate_overrides(None, now) == {} and cs.validate_overrides([1], now) == {}
+    # through validate(): present only when it holds something; parse_control ignores it
+    assert cs.validate({'overrides': raw}, now)['overrides'] == v
+    assert 'overrides' not in cs.validate({'overrides': {'knob.speed': {'mode': 'auto'}}}, now)
+    assert show.parse_control({'overrides': raw}) == show.CONTROL_DEFAULT
+
+
+def test_simulated_people_never_last_past_two_minutes():
+    raw = {'headcount': {'mode': 'fix', 'value': 8, 'at': cs.iso(T0), 'expires_at': cs.iso(T0 + 3600)},
+           'lingerer_rope': {'mode': 'fix', 'value': 7, 'at': cs.iso(T0), 'expires_at': cs.iso(T0 + 30)}}
+    v = cs.validate_overrides(raw, T0 + 10)
+    assert v['headcount']['expires_at'] == cs.iso(T0 + 120) and v['lingerer_rope']['expires_at'] == cs.iso(T0 + 30)
+    assert set(cs.validate_overrides(raw, T0 + 60)) == {'headcount'}
+    assert cs.validate_overrides(raw, T0 + 120) == {}
+    assert cs.validate_overrides({'headcount': {'mode': 'fix', 'value': 8}}, T0) == {}, 'no at: cannot be bounded'
+    future = {'headcount': {'mode': 'fix', 'value': 8, 'at': cs.iso(T0 + 3600)}}
+    assert cs.validate_overrides(future, T0) == {}, 'a wrong clock never makes a simulation stick'
+    assert cs.validate_overrides({'headcount': {'mode': 'adjust', 'offset': 2, 'at': cs.iso(T0)}}, T0) == {}

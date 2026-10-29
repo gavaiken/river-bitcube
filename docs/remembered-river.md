@@ -125,8 +125,44 @@ TD writes `River\remembered\status.json` twice a second (read by the full check 
  "screens": {"mode": "particles", "field": "ribbons", "video": 0.15, "intensity": 0.82, "threshold": 0.35},
  "ropes": {"watts": 410},
  "opening_night": false,
- "zones": {"file": "zones-2026-10-27.json", "pool_height_m": 0.6, "light": "off"}}
+ "zones": {"file": "zones-2026-10-27.json", "pool_height_m": 0.6, "light": "off"},
+ "inputs": {
+   "day": {"value": "2017-02-07", "source": "dave", "age_s": 220.0, "fresh": true},
+   "scene": {"value": [0.6, 0.4, 0.7, 0.3], "source": "dave", "age_s": 220.0, "fresh": true},
+   "reflex": {"value": [0.05, 0.0, 0.0, 0.0], "source": "dave", "age_s": 4.0, "fresh": true},
+   "heard": {"value": 0.62, "source": "sound", "age_s": 4.0, "fresh": true},
+   "river_motion": {"value": 0.41, "source": "cam", "age_s": 0.1, "fresh": true},
+   "headcount": {"value": 3.2, "source": "counter", "age_s": 0.5, "fresh": true},
+   "lingerers": {"value": [7, 8], "source": "counter", "age_s": 0.5, "fresh": true},
+   "control": {"value": null, "source": "control", "age_s": 812.0, "fresh": true}},
+ "params": {
+   "day": {"mode": "auto", "auto": "2017-02-07", "value": "2017-02-07", "source": "auto", "expires_in_s": null},
+   "surge_hour": {"mode": "auto", "auto": 13.5, "value": 13.5, "source": "auto", "expires_in_s": null},
+   "knob.speed": {"mode": "adjust", "auto": 0.5, "value": 0.7, "source": "adjusted", "expires_in_s": null},
+   "knob.density": {"mode": "auto", "auto": 0.6, "value": 0.6, "source": "auto", "expires_in_s": null},
+   "knob.brightness": {"mode": "auto", "auto": 0.7, "value": 0.7, "source": "auto", "expires_in_s": null},
+   "knob.turbulence": {"mode": "auto", "auto": 0.4, "value": 0.4, "source": "auto", "expires_in_s": null},
+   "palette": {"mode": "auto", "auto": ["#0b3d5c", "#1f8fb3", "#bfefff"], "value": ["#0b3d5c", "#1f8fb3", "#bfefff"], "source": "auto", "expires_in_s": null},
+   "flow_level": {"mode": "auto", "auto": 0.62, "value": 0.62, "source": "auto", "expires_in_s": null},
+   "headcount": {"mode": "fix", "auto": 3.2, "value": 8, "source": "fixed", "expires_in_s": 74},
+   "lingerer_rope": {"mode": "auto", "auto": 7, "value": 7, "source": "auto", "expires_in_s": null},
+   "calm_min": {"mode": "auto", "auto": 0.18, "value": 0.18, "source": "auto", "expires_in_s": null},
+   "calm_max": {"mode": "auto", "auto": 0.6, "value": 0.6, "source": "auto", "expires_in_s": null},
+   "master_brightness": {"mode": "auto", "auto": 1.0, "value": 1.0, "source": "auto", "expires_in_s": null}},
+ "effects": {},
+ "overrides": {},
+ "simulating": true}
 ```
+
+**v2 additions** (plan decisions 5, 6, 8; `status.py` `build(sources=, params=, effects=, overrides=)`), so mission control can show inputs → parameters → outputs and who is steering:
+
+- `inputs`: always every name in `status.INPUTS` (`day`, `scene`, `reflex`, `heard`, `river_motion`, `headcount`, `lingerers`, `control`), each `{value, source, age_s, fresh}` (`value` a number, string, list or null, never an object: `scene` and `reflex` give their knobs as `[speed, density, brightness, turbulence]`); `source` is one of `dave`, `notable`, `preset`, `cam`, `clip`, `sound`, `counter`, `simulated`, `control` (null: no such input now, `fresh` false). A simulated headcount or lingerer reports `source: "simulated"`.
+- `params`: always every overridable parameter (`control_schema.PARAMS`), each `{mode: auto|fix|adjust, auto, value, source: auto|fixed|adjusted, expires_in_s}`: what the show computed, what it used, and how long an override has left (null: sticky until cleared).
+- `effects`: what the people effects in the ropes are doing (from `ropes.py`, passed through as it gives them; `{}` while they report nothing). Its keys are the ropes' own.
+- `overrides`: the overrides in force, keyed by parameter, each the cleaned `control.json` entry plus `expires_in_s` and `simulated`, e.g. `{"headcount": {"mode": "fix", "value": 8.0, "at": "2026-10-29T04:12:09Z", "expires_at": "2026-10-29T04:14:09Z", "expires_in_s": 74, "simulated": true}, "knob.speed": {"mode": "adjust", "offset": 0.1, "gain": 1.2, "at": "2026-10-29T04:00:00Z", "expires_at": null, "expires_in_s": null, "simulated": false}}`.
+- `simulating`: true while a simulated headcount or lingerer is in force (the page's red SIMULATING banner).
+
+**The inputs log** `River\logs\inputs.jsonl` (`td/remembered/inputs_log.py`): one line `{"t", "inputs": {name: {"v", "s"}}, "params": {name: {"v", "s"}}}` every 5 s, or sooner (at most once a second) when an input's or parameter's source changes or its value moves by more than 2 % (of a 0–1 range; 2 % of the value above 1). At 20 MB it moves to `inputs.jsonl.1` (one old file kept). `inputs_log.recent(path, seconds=86400, fields=['inputs.heard', 'params.knob.speed'])` returns `{field: [[t, value], ...]}`, at most 300 points per field (numbers averaged per time bucket), for the page's sparklines.
 
 Mission control controls (all through `probe.ps1`, refused while another show runs): `remembered-zones {pool_height_m?, light: off|pool|eddies}`, `remembered-opening {on}`, `remembered-screens {video?, intensity?, threshold?}`. All end up in `River\remembered\control.json` (also written by `zones.py light … --write`, with `light: leds` for individual LEDs).
 
@@ -155,7 +191,22 @@ Optional, additive: `day.profile` (`{flow, rain, temp, snow, is_day}`, 24 values
 - **Precedence:** a flat key wins. The older spellings count only when the flat key is absent: `zones.{pool_height_m, light, leds}` (and its `t` as `light_at`; what `zones.py light --write` writes), `opening.on`, `screen_<name>`. An invalid value is dropped (its default stands), it never lets an older spelling back in. probe.ps1 folds the nested `zones` block (and `t`, `opening`) into flat keys on every write and drops it, so after one mission control write the file is canonical again.
 - **Light checks never stick:** TouchDesigner ignores a `light` other than `off` that was set before the show started (a restart of bitcube or TouchDesigner, or a rebuild: it never comes up in calibration white) or more than 10 minutes ago (`control_schema.LIGHT_MAX_S`): it goes back to the show by itself and prints why once. TouchDesigner only reads the file (no second writer); since `light_at` moves only when someone picks a light, a later slider write doesn't bring an old light back. Its status reports the light it actually uses (`zones.light`).
 - **Nothing is seeded:** a write changes only its own fields; the others keep what the file held, and a field nobody set stays absent (TouchDesigner uses its default). In particular `opening_night` is written only by `remembered-opening`. The screens' Apply sends only the sliders moved, in 1 % steps. The file is written whole to `control.json.tmp` and swapped in (`[IO.File]::Replace`), so a reader never sees half of it.
-- Room is left for an `overrides` block (plan step 3c); nothing reads one yet. TouchDesigner reports what it took in its status (`zones`, `opening_night`, `screens`).
+- TouchDesigner reports what it took in its status (`zones`, `opening_night`, `screens`, `params`, `overrides`).
+- **Overrides** (v2, plan decision 6): `"overrides": {<param>: {"mode": "auto"|"fix"|"adjust", "value", "offset", "gain", "at", "expires_at"}}`, one entry per parameter in `control_schema.PARAMS` (the generated module carries them as `params`, with range, default, unit, group, the modes each allows and its doc). **fix** uses `value` instead of the show's own; **adjust** (numbers only) uses `auto × gain + offset` (gain 0–4, default 1; offset within ± the range, default 0), clamped to the parameter's range; **auto** or no entry: the show's own value. Sticky until cleared (the entry removed or set to auto) or `expires_at` (UTC; null: no expiry). **Simulated people** (`headcount` 0–20, `lingerer_rope` 0–19, fix only) need an `at` and never last past `at` + 2 minutes (`SIMULATED_MAX_S`), whatever `expires_at` says; one stamped over a minute in the future is ignored. Invalid entries, unknown parameters and expired entries are dropped when read (`validate_overrides(raw, now)`); `td/remembered/overrides.py` applies them (`apply(name, auto, overrides, now) -> (value, how)`, `simulated_people`).
+
+| Parameter | Range | Modes | What |
+|---|---|---|---|
+| `day` | a date in `data/remembered/days.csv` | fix | the remembered day playing |
+| `surge_hour` | 0–24 h | fix, adjust | the remembered hour the main surge lands on |
+| `knob.speed` `.density` `.brightness` `.turbulence` | 0–1 | fix, adjust | the four knobs (Dave's scene + reflex, the day's hours) |
+| `palette` | 3 × `#rrggbb` | fix | deep / mid / light |
+| `flow_level` | 0–1 | fix, adjust | how hard the ropes flow (heard, else the river cam's motion) |
+| `headcount` | 0–20 | fix (simulated, ≤ 2 min) | people in the room |
+| `lingerer_rope` | 0–19 | fix (simulated, ≤ 2 min) | someone standing still by this rope |
+| `calm_min` / `calm_max` | 0–1 (0.18 / 0.6) | fix, adjust | the floor and ceiling of the calm brightness curve |
+| `master_brightness` | 0–1.5 (1.0) | fix, adjust | every rope's brightness times this (the power limit still applies) |
+
+The screens' intensity, threshold and river video stay the plain `screens.*` fields above, not overrides.
 - `probe.ps1 -Action remembered-zones -Light off|pool|eddies [-PoolHeight 0.60]` and `-Action remembered-opening [-On]` (and `-Action remembered-screens [-Video] [-Intensity] [-Threshold] <0..1>`) write it, only while `status.json` is under 10 s old and names `river-remembered.toe`, or `River\looks\status.json` is under 10 s old and says `river-looks.toe` shows the remembered look (else `{ok: false, error: "the remembered river isn't running (…)", refused}`); mission control also refuses them (409) while the full check sees another show, and `remembered-zones` during a calibration or the test pattern. `probe.ps1 -Action remembered` reads `status.json`, Dave's `gallery_state\state.json` (only `memory`, `surge_at`, `scene`, `set_at`) and `reflex.json`, `presence.json` and `control.json`, each as `{age_s, json}`, `{missing}` or `{error}`, for `GET /api/remembered` (`mission/lib/remembered.mjs`; the page: `docs/mission-ui.md` "Remembered river page").
 
 ## Round 2: the artists on site (27 Oct, night)
