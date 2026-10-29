@@ -175,7 +175,7 @@ def test_probe_v2_overrides_are_checked_and_merged_like_the_other_remembered_con
     assert "$ls.json.show -eq 'river-all-looks-v2.toe'" in v2 and "$ls.json.look -ne 'remembered'" in v2
     assert 'Get-RememberedSchema' in src and "mission\\public\\remembered-schema.js" in src
     assert '$was.json.PSObject.Properties' in v2 and '$ctl.overrides = $ov' in v2 and '$expIso' in v2
-    assert '.tmp' in v2 and '[IO.File]::Replace(' in v2
+    assert '.tmp' in v2 and ('[IO.File]::Replace(' in v2 or 'Move-Item -LiteralPath $tmp' in v2)
     assert "$Action = 'remembered'" in v2
     for words in ("the river v2 isn't running (overrides work only in it)",):
         assert words in src and words in MODEL_JS.read_text(encoding='utf-8'), words

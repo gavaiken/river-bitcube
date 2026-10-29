@@ -259,7 +259,7 @@ if ($Action -in 'remembered-override', 'remembered-override-clear', 'remembered-
             $null = New-Item -ItemType Directory -Force -Path $rdir
             $tmp = "$ctlFile.tmp"
             [IO.File]::WriteAllText($tmp, (ConvertTo-Json -InputObject $ctl -Compress -Depth 8), (New-Object Text.UTF8Encoding $false))
-            if (Test-Path -LiteralPath $ctlFile) { [IO.File]::Replace($tmp, $ctlFile, $null) } else { [IO.File]::Move($tmp, $ctlFile) }
+            Move-Item -LiteralPath $tmp -Destination $ctlFile -Force   # (not IO.File::Replace: its $null backup arg fails under -EncodedCommand)
             $out.written = $ctl
         } catch { $out.ok = $false; $out.error = "couldn't write the remembered river's control file: $($_.Exception.Message)" }
     }
@@ -343,7 +343,7 @@ if ($Action -in 'remembered', 'remembered-zones', 'remembered-opening', 'remembe
             $null = New-Item -ItemType Directory -Force -Path $rdir
             $tmp = "$ctlFile.tmp"
             [IO.File]::WriteAllText($tmp, (ConvertTo-Json -InputObject $ctl -Compress -Depth 6), (New-Object Text.UTF8Encoding $false))
-            if (Test-Path -LiteralPath $ctlFile) { [IO.File]::Replace($tmp, $ctlFile, $null) } else { [IO.File]::Move($tmp, $ctlFile) }
+            Move-Item -LiteralPath $tmp -Destination $ctlFile -Force   # (not IO.File::Replace: its $null backup arg fails under -EncodedCommand)
             $out.written = $ctl
         }
     }
@@ -454,7 +454,7 @@ if ($Action -eq 'filling') {
             $null = New-Item -ItemType Directory -Force -Path $fdir -ErrorAction Stop
             $tmp = "$ctlFile.tmp"
             [IO.File]::WriteAllText($tmp, ($ctl | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding $false))
-            if (Test-Path -LiteralPath $ctlFile) { [IO.File]::Replace($tmp, $ctlFile, $null) } else { [IO.File]::Move($tmp, $ctlFile) }
+            Move-Item -LiteralPath $tmp -Destination $ctlFile -Force   # (not IO.File::Replace: its $null backup arg fails under -EncodedCommand)
             $out.written = $ctl
         } catch { $out.ok = $false; $out.error = "couldn't write the filling glass's control file: $($_.Exception.Message)" }
     }
