@@ -77,6 +77,10 @@ Three separate circuits if you can (ask Gray Area which outlets are on which bre
 4. **On a phone** (any internet): open **[mission control](https://gav-m1-mini.tailddc624.ts.net)**, log in with the team password. **System status** should show green for bitcube, TouchDesigner, the router, the gallery camera, both rope boxes and the HUB75 sender. Red is the thing to fix; the **System map** tab shows where it sits.
 5. **Ask the studio chat** (mission control → Studio chat): "The ceiling install is done, check everything." It can see bitcube, the router and the cameras, and says what's wrong.
 
+## Nights and mornings (show week, 29 Oct – 1 Nov)
+- **bitcube shuts itself down 5 minutes after closing** (Thu 18:05; Fri, Sat, Sun 20:05: the scheduled task `River-NightlyShutdown`, `tools/power/nightly_shutdown.ps1`), so pulling the power afterwards never cuts Windows mid-write. Once it is off the ropes show the boxes' own colour cycle until the power is pulled, as before. Pull the power *after* 18:10 / 20:10, not before.
+- **Mornings:** plugging bitcube back in boots it by itself (BIOS Auto Power On; about 2 minutes to the show). If nobody pulled the power, the Mac mini wakes it over the network an hour before opening (13:00 Thu and Fri, 12:00 Sat and Sun; `tools/mini/wake_bitcube.sh`, log `~/claude/local/wake-bitcube.log` on the mini). By hand, from the mini: `tools/mini/wake_bitcube.sh`. If it still shows offline on mission control 10 minutes before opening: pull its power and plug it back in.
+
 ## If something's off
 
 | You see | Likely | Fix |
@@ -84,7 +88,7 @@ Three separate circuits if you can (ask Gray Area which outlets are on which bre
 | Ropes cycle colours by themselves | bitcube's signal isn't reaching the boxes | White cable from bitcube's **white** port into rack **NET1** (not DMX512 or WALL PAD); rack NET2 → box 1 NET1; box 1 NET2 → box 2 NET1. With a lighting switch: it's powered and all three are on it |
 | Ropes dark, panels fine | Boxes unpowered or on the wrong voltage | powerCON in and breaker on; selector on 110 V |
 | Panels black, ropes fine | HDMI or sender | HDMI seated at both ends; sender powered; long cable to the receive card |
-| Everything dark | bitcube off or not booted | Its power; wait 2 minutes after power; mission control shows whether it's online |
+| Everything dark | bitcube off or not booted | Its power; wait 2 minutes after power; mission control shows whether it's online. After a night's scheduled shutdown with the power never pulled: `tools/mini/wake_bitcube.sh` from the mini, or pull and restore its power |
 | Mission control: bitcube offline | No network | Blue cable into router **LAN2**; router powered. bitcube also falls back to Wi-Fi by itself |
 | Mission control: router or internet red | Router has no uplink | The drop in **WAN**; otherwise it should use Gray Area's staff Wi-Fi by itself (can take a few minutes after a power cut) |
 | The lighting switch had to go into the router | No cable run to bitcube's white port | Allowed as a fallback: plug it into a router LAN port, then in mission control → Mission control → Lights choose **the router (fallback)** |

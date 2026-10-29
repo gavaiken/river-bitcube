@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Wakes bitcube from the Mac mini an hour before each opening of the show at Gray Area (28 Oct 2026, Gavin):
+     tools/mini/wake_bitcube.sh. A LaunchAgent for user gav on the mini (gav holds the ssh keys for bitcube and the
+     install router). Dated: one fire per show day, nothing after. Install:
+       cp tools/mini/com.river.wake-bitcube.plist ~/Library/LaunchAgents/
+       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.river.wake-bitcube.plist
+       launchctl print gui/$(id -u)/com.river.wake-bitcube | grep -A3 calendar
+     Remove: launchctl bootout gui/$(id -u)/com.river.wake-bitcube; rm ~/Library/LaunchAgents/com.river.wake-bitcube.plist -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.river.wake-bitcube</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/gav/claude/Source/river-bitcube/tools/mini/wake_bitcube.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Month</key><integer>10</integer><key>Day</key><integer>29</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Month</key><integer>10</integer><key>Day</key><integer>30</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Month</key><integer>10</integer><key>Day</key><integer>31</integer><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Month</key><integer>11</integer><key>Day</key><integer>1</integer><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
+  <key>StandardOutPath</key><string>/Users/gav/claude/local/wake-bitcube.launchd.log</string>
+  <key>StandardErrorPath</key><string>/Users/gav/claude/local/wake-bitcube.launchd.log</string>
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>/usr/bin:/bin:/usr/sbin:/sbin</string><key>HOME</key><string>/Users/gav</string></dict>
+</dict>
+</plist>

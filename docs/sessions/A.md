@@ -150,3 +150,7 @@ Notes kept here while another session is editing the shared docs; folded into th
   updates itself within five minutes.
 - **Not done:** the palette override (planned in HANDOFF, about an hour); a full adversarial UX review (one pass against the
   house rules only).
+
+## SESSION SUMMARY (28 Oct, afternoon, session A, Gavin / Claude)
+- **`/explainer`** in mission control (what is happening, what feeds what, for Justine and Colin before the press): two inline SVG diagrams, the inputs table, fallbacks, the agent; menu link and Help link; commit 50ba983.
+- **Nights:** `tools/power/nightly_shutdown.ps1` (bitcube's `River-NightlyShutdown` task, closing + 5 min each show night), `tools/mini/wake_bitcube.sh` + `com.river.wake-bitcube.plist` (the mini wakes bitcube an hour before opening via `etherwake` on the install router); install guide, system map and HANDOFF updated. Checked bitcube's NIC WoL settings (all on). `etherwake` on the router needs `opkg install etherwake` (root on the router: a write the agent's classifier blocked; Gavin runs it). The live shutdown-and-wake test needs Gavin's go (the piece dark ~4 min).
