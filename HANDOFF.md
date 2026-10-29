@@ -1,8 +1,8 @@
 # Handoff: where things stand
 
-- **Holder:** nobody on bitcube (Will finished 13:58; Gavin's agent did repo-only work after). Last on bitcube: Will (Codex), mask restored with independent GPU video delivery; no active visual edit; diagnostic capture retained
+- **Holder:** Gavin's agent (Claude, Mac mini), on bitcube: the remembered river v2 plan, `docs/remembered-v2-plan.md` (bug fixes in v1, freeze v1 as the rollback, build `river-all-looks-v2.toe`). Rebuilds any time until ~12:00 PT 29 Oct.
 - **Where:** bitcube running **`river-all-looks.toe`** ("The river: all looks (playlist)", auto, ~58–60 fps), **the boot default since 11:20** (Gavin); `river-looks.toe` (three looks) retired as `old-river-looks.toe`, its frozen copy `river-two-looks.toe` stays offered
-- **Updated:** 2026-10-28 23:50 PT (Gavin / Claude: the nightly shutdown task on bitcube and the morning wake from the mini; no show, control or network change)
+- **Updated:** 2026-10-29 00:15 PT (Gavin / Claude: baton taken for the v2 plan)
 - **Next holder:** Will. All-looks stays default / Auto, softer ribbons retained. Approved 30 fps footage is now persistent for all-looks; reload/reboot retains it. Originals and frozen shows preserved. The latest cascade revision has its own rollback below; restore it before using the older media rollback.
 
 ## Nights: a clean shutdown after closing, a wake before opening (28 Oct, 15:10, Gavin / Claude)
