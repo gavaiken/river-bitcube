@@ -84,7 +84,7 @@
       "created": "2026-10-28",
       "updated_by": "Gavin (Claude, Mac mini)",
       "updated": "2026-10-29",
-      "last_change": "build scripts take REPO_OVERRIDE so a frozen show can build from its own pinned checkout (remembered v2 plan, step 2); .toe unchanged",
+      "last_change": "FROZEN (tag all-looks-v1-frozen): rebuilt from the pinned checkout C:\\Users\\user\\River\\river-bitcube-v1 (git worktree at all-looks-v1-bugs), so its td/remembered and td/looks code never changes with a pull. The rollback for river-all-looks-v2.toe. Never rebuild it from the live checkout.",
       "composite": true
     },
     {

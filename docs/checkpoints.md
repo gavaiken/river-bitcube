@@ -61,3 +61,12 @@ The remembered river as the artists saw it on the night of 27 Oct: the remembere
 | bitcube | `C:\Users\user\Archive\remembered-particles-v1\` (river-remembered.toe, boot-file.txt) |
 
 Going back: as above (`git checkout remembered-particles-v1 -- td/remembered td/build/build_remembered.py river-remembered.toe`, commit, pull on bitcube, rebuild or reopen).
+
+## `all-looks-v1-frozen` (29 Oct, 01:00, Gavin / Claude)
+
+`river-all-looks.toe` as the rollback for the remembered river v2. Its DATs import `td/remembered`, `td/looks` and `td/filling` from **`C:\Users\user\River\river-bitcube-v1`**, a git worktree of this repo detached at tag `all-looks-v1-bugs` (the five control bugs fixed, the control schema), not from the live checkout: a `git pull` on `River\river-bitcube` can't change what it runs. Built once with `REPO_OVERRIDE` (`td.ps1 "exec(open('C:/Users/user/River/river-bitcube-v1/td/build/build_all_looks.py').read(), dict(globals(), REPO_OVERRIDE='C:/Users/user/River/river-bitcube-v1'))"`), saved, then TD restarted so the fresh process imports from the pinned tree (verified: `sys.modules['remembered.show'].__file__` is under `river-bitcube-v1`).
+
+- **Roll back to it:** mission control, What's showing → `river-all-looks.toe` (or `probe.ps1 -Action switch -BootFile river-all-looks.toe`); set it as default if v2 was made the default.
+- **Never rebuild it from the live checkout** (`build_all_looks.py` without `REPO_OVERRIDE`): that would bake the live code back in. To move the frozen point: `git -C C:\Users\user\River\river-bitcube-v1 checkout <tag>`, rebuild with the override, save, restart.
+- The runtime helpers `tools/remembered/direct_video.py` and `video_trial.py` patch the running module from the **live** source; don't run them against the frozen file.
+- v2 work: `td/remembered/` in the live checkout, `river-all-looks-v2.toe` (`td/build/build_all_looks_v2.py`), plan `docs/remembered-v2-plan.md`.
