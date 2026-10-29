@@ -45,7 +45,10 @@ def trial():
     after = [str(ROOT / n).replace('\\', '/') for n in NAMES]
     current = list(holder.clips)
     if current not in (before, after):
-        raise RuntimeError('Unexpected clip list; preserve it and investigate before changing anything')
+        if ACTION == 'status':
+            print('video_trial.py: the running clips are neither the originals nor this trial (another library, e.g. the dedup one):', current)
+        else:
+            raise RuntimeError('Unexpected clip list; preserve it and investigate before changing anything')
     statefile = ROOT / 'trial-state.json'
     preference = ORIGINAL.parents[2] / 'remembered' / 'video-library.json'
     previous = preference.read_bytes() if preference.exists() else None
