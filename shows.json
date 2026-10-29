@@ -84,7 +84,7 @@
       "created": "2026-10-28",
       "updated_by": "Gavin (Claude, Mac mini)",
       "updated": "2026-10-29",
-      "last_change": "FROZEN (tag all-looks-v1-frozen): rebuilt from the pinned checkout C:\\Users\\user\\River\\river-bitcube-v1 (git worktree at all-looks-v1-bugs), so its td/remembered and td/looks code never changes with a pull. The rollback for river-all-looks-v2.toe. Never rebuild it from the live checkout.",
+      "last_change": "FROZEN (tag all-looks-v1-frozen): built only from the pinned checkout C:\\Users\\user\\River\\river-bitcube-v1 (git worktree at all-looks-v1-bugs); never rebuild it from the live checkout. Not rebuilt: the live td/build/update_all_looks_ribbons.py (shared with the v2 build) now accepts river-all-looks-v2.toe too; this file's pinned copy is unchanged, and the runtime tools in tools/remembered now refuse to patch it.",
       "composite": true
     },
     {
@@ -97,7 +97,7 @@
       "calibration": {
         "pixelmap": "tools/pixelmap/pixelmap-2026-10-28.json",
         "screens": "tools/pixelmap/screens-2026-10-28.json",
-        "zones": "tools/pixelmap/zones-2026-10-28.json"
+        "zones": "tools/pixelmap/zones-2026-10-29.json"
       },
       "description": "The all-looks playlist with the remembered river v2: people visibly change the ropes (a lingerer's ropes spark and gather the light, a crowd stirs turbulence below head height, an empty room settles to a still pond); the remembered day's own hours drive speed, density and turbulence; every input can be fixed, adjusted or simulated from mission control's Remembered river v2 page. river-all-looks.toe is the frozen rollback.",
       "inputs": [
@@ -172,7 +172,7 @@
       "created": "2026-10-28",
       "updated_by": "Gavin (Claude, Mac mini)",
       "updated": "2026-10-29",
-      "last_change": "created as a copy of the frozen river-all-looks.toe; to be rebuilt from the live code (docs/remembered-v2-plan.md step 3d)",
+      "last_change": "pins zones-2026-10-29.json: the driftwood eddies (11 runs where ropes cross the logs, marked on the show-view still, checked by lighting them on the piece 07:49); rebuilt",
       "composite": true
     },
     {
