@@ -38,18 +38,20 @@ Gavin audited the remembered river on 28 Oct (the look in `river-all-looks.toe`)
 | 1b | Control schema (`td/remembered/control_schema.py` → generated JSON for probe/mission/page); fix opening-night seed, nested-zones precedence, light reset at boot, intensity 0, slider snap; tolerant `Knobs.set_scene` | Opus | ✅ `53b3c68` |
 | 1c | Rebuild `river-all-looks.toe`, verify on the piece, tag `all-looks-v1-bugs` | Fable | ✅ `84fde12`, tag `all-looks-v1-bugs`; opening night restored to ON (bug 1 had written it off at 16:15 on 28 Oct) |
 | 2 | Freeze v1: `river-all-looks.toe` built from the pinned worktree `River\river-bitcube-v1` (`REPO_OVERRIDE`); TD restarted on it; tag `all-looks-v1-frozen`; `shows.json`, `docs/checkpoints.md` | Fable | ✅ `092fdfc`, verified 01:00 (modules load from `river-bitcube-v1`, no errors) |
-| 3a | People effects in `ropes.py` + `show.py` (lingerer sparks/splashes + gathering; crowd turbulence ≤ 1.8 m; empty-room ocean → pond; mini-surge rules); tests | Opus | ➡️ |
-| 3b | Knobs from the day's profile + Dave remap (`clock.py`, `show.py` Knobs); tests | Opus | ➡️ |
-| 3c | Overrides in `parse_control` + schema; simulated people with 2-min expiry; master brightness; calm range; applied in `show.py`; reported in `status.json` with sources; inputs logger | Opus | ➡️ |
-| 3d | Build `river-all-looks-v2.toe` (`build_all_looks_v2.py`), `shows.json` entry, rebuild, verify with simulated people, tag | Fable | ❌ |
-| 4 | v2 page: `mission/public/remembered-v2.*`, `/api/remembered` extended, overrides API in `mission.mjs` + `probe.ps1`, route detection, explainers; tests; `docs/mission-ui.md` | Opus | ❌ |
-| 5 | Perf + dead code: `panels.py` → `motion.py`; drop `particles.py`/`flow.py` if unreachable; one motion pass; `lit_pct` cheaper; library load off-thread; mtime-gated reads; constants in one place | Opus | ❌ |
+| 3a | People effects: `room.py` (the people model) + `ropes.py` (sparks/splashes, gathering, crowd turbulence ≤ 1.8 m, ocean → pond); tests, offline preview | Opus | ✅ `04e43e1` |
+| 3b | Knobs from the day's profile + Dave remap (`knobs.py`, `clock.py` valid_until + signals); tests | Opus | ✅ `4562c73` |
+| 3c | Overrides in `parse_control` + schema; simulated people with 2-min expiry; master brightness; calm range; applied in `show.py`; reported in `status.json` with sources; inputs logger | Opus | ✅ `66825e4` (modules), `6268ce2` (`show.py` wired) |
+| 3d | Build `river-all-looks-v2.toe` (`build_all_looks_v2.py`), `shows.json` entry, rebuild, verify with simulated people, tag | Fable | ➡️ `4107199` registered, `5186f33` rebuilt from live code, TD on it 01:35; boot default still `river-all-looks.toe` (v1) |
+| 4 | v2 page: `mission/public/remembered-v2.*`, `/api/remembered` extended, overrides API in `mission.mjs` + `probe.ps1`, route detection, explainers; tests; `docs/mission-ui.md` | Opus | ➡️ |
+| 5 | Perf + dead code: `panels.py` → `motion.py`; drop `particles.py`/`flow.py` if unreachable; one motion pass; `lit_pct` cheaper; library load off-thread; mtime-gated reads; constants in one place | Opus | ➡️ |
 | 6 | `river-agent` PR: `signals` block in `reflex.json`; `memory.valid_until` | Opus | ✅ [PR #14](https://github.com/drocamor/river-agent/pull/14), awaiting Dave; the show reads both in 3b/3c |
 | 7 | Docs: `remembered-river.md` v2 section, explainer page, GLOSSARY, HANDOFF | Fable | ❌ |
 
 ✅ done · ➡️ in progress · ❌ not started
 
 ## Log
+
+- 29 Oct 01:35 v2 file built from the live code and running on bitcube (`5186f33`); step 4 (page) and 5 (perf) agents running; simulated-people test next. Found: `probe.ps1`'s looks / remembered-* guards only accept `river-all-looks.toe`, so they refuse while v2 runs (fix in step 4).
 
 - 29 Oct 01:00 steps 1 and 2 done; the rollback is in place. 3a/3b/3c started in parallel, each owning its own files (`ropes.py`+`room.py`; `clock.py`+`knobs.py`; `control_schema.py`+`status.py`+`overrides.py`+`inputs_log.py`); `show.py` is wired afterwards by Fable.
 
