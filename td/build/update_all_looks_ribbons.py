@@ -4,7 +4,7 @@
 import importlib
 import sys
 
-REPO = 'C:/Users/user/River/river-bitcube'
+REPO = globals().get('REPO_OVERRIDE', 'C:/Users/user/River/river-bitcube')   # a frozen show builds from its own pinned checkout
 if project.name != 'river-all-looks.toe':
     raise RuntimeError('This update is only for river-all-looks.toe')
 if REPO + '/td' not in sys.path:

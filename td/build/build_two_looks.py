@@ -4,7 +4,7 @@
 import importlib
 import sys
 
-REPO = 'C:/Users/user/River/river-bitcube'
+REPO = globals().get('REPO_OVERRIDE', 'C:/Users/user/River/river-bitcube')   # a frozen show builds from its own pinned checkout
 TOE = 'river-two-looks.toe'
 if REPO + '/td/build' not in sys.path:
     sys.path.insert(0, REPO + '/td/build')

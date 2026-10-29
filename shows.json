@@ -82,9 +82,9 @@
       },
       "created_by": "Gavin (session A)",
       "created": "2026-10-28",
-      "updated_by": "Will (Codex)",
-      "updated": "2026-10-28",
-      "last_change": "Saved and verified Will-approved softer ribbon folds and screen-local glow on bitcube: GPU, 59 fps, no project/shader errors, expanded secret scan 0 hits. Targeted shader-only update; playlist/clock, rope engine, video grade, calibration and default preserved.",
+      "updated_by": "Gavin (Claude, Mac mini)",
+      "updated": "2026-10-29",
+      "last_change": "build scripts take REPO_OVERRIDE so a frozen show can build from its own pinned checkout (remembered v2 plan, step 2); .toe unchanged",
       "composite": true
     },
     {
@@ -111,9 +111,9 @@
       ],
       "created_by": "Gavin (session A)",
       "created": "2026-10-28",
-      "updated_by": "Gavin (session A)",
-      "updated": "2026-10-28",
-      "last_change": "river-two-looks.toe committed: a byte-for-byte copy of river-looks.toe as saved at 09:32 on 28 Oct; secret scan 0 hits; retitled 'The river: two looks (28 Oct copy)' when river-looks.toe was retired",
+      "updated_by": "Gavin (Claude, Mac mini)",
+      "updated": "2026-10-29",
+      "last_change": "build scripts take REPO_OVERRIDE so a frozen show can build from its own pinned checkout (remembered v2 plan, step 2); .toe unchanged",
       "composite": true
     },
     {
@@ -273,9 +273,9 @@
       ],
       "created_by": "Gavin (session A)",
       "created": "2026-10-27",
-      "updated_by": "Gavin (session A)",
-      "updated": "2026-10-28",
-      "last_change": "river-remembered.toe rebuilt and saved with the GPU ribbons and GPU river (as river-looks.toe), no vsync, ropes at 30 Hz: 61 fps, ribbons-gpu on the piece; secret scan 0 hits"
+      "updated_by": "Gavin (Claude, Mac mini)",
+      "updated": "2026-10-29",
+      "last_change": "build scripts take REPO_OVERRIDE so a frozen show can build from its own pinned checkout (remembered v2 plan, step 2); .toe unchanged"
     },
     {
       "file": "river-filling.toe",

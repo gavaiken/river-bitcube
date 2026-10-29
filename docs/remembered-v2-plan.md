@@ -34,7 +34,7 @@ Gavin audited the remembered river on 28 Oct (the look in `river-all-looks.toe`)
 
 | Step | What | Agent | Status |
 |---|---|---|---|
-| 1a | People counter: retry the `presence.json` swap instead of crashing; keep stillness clocks across a restart | Opus | ➡️ |
+| 1a | People counter: retry the `presence.json` swap instead of crashing; keep stillness clocks across a restart | Opus | ✅ `450ba77`, deployed on bitcube 00:38 |
 | 1b | Control schema (`td/remembered/control_schema.py` → generated JSON for probe/mission/page); fix opening-night seed, nested-zones precedence, light reset at boot, intensity 0, slider snap; tolerant `Knobs.set_scene` | Opus | ➡️ |
 | 1c | Rebuild `river-all-looks.toe`, verify on the piece, tag `all-looks-v1-bugs` | Fable | ❌ |
 | 2 | Freeze v1: vendor `td/remembered_v1/`, `td/looks_v1/`; `build_all_looks.py` imports them; rebuild; tag `all-looks-v1-frozen`; `shows.json` + docs | Fable | ❌ |
@@ -44,11 +44,12 @@ Gavin audited the remembered river on 28 Oct (the look in `river-all-looks.toe`)
 | 3d | Build `river-all-looks-v2.toe` (`build_all_looks_v2.py`), `shows.json` entry, rebuild, verify with simulated people, tag | Fable | ❌ |
 | 4 | v2 page: `mission/public/remembered-v2.*`, `/api/remembered` extended, overrides API in `mission.mjs` + `probe.ps1`, route detection, explainers; tests; `docs/mission-ui.md` | Opus | ❌ |
 | 5 | Perf + dead code: `panels.py` → `motion.py`; drop `particles.py`/`flow.py` if unreachable; one motion pass; `lit_pct` cheaper; library load off-thread; mtime-gated reads; constants in one place | Opus | ❌ |
-| 6 | `river-agent` PR: `signals` block in `reflex.json`; tick-gap tolerance | Opus | ❌ |
+| 6 | `river-agent` PR: `signals` block in `reflex.json`; `memory.valid_until` | Opus | ✅ [PR #14](https://github.com/drocamor/river-agent/pull/14), awaiting Dave; the show reads both in 3b/3c |
 | 7 | Docs: `remembered-river.md` v2 section, explainer page, GLOSSARY, HANDOFF | Fable | ❌ |
 
 ✅ done · ➡️ in progress · ❌ not started
 
 ## Log
 
+- 29 Oct 00:55 1a deployed (counter restarted on bitcube, streaming); river-agent PR #14 open. Step 2 design: the frozen file builds from a pinned second checkout `C:\Users\user\River\river-bitcube-v1` (git worktree at the tag) via `REPO_OVERRIDE` in the build scripts, instead of vendored copies: no import rewrites, and the live repo's code can't reach it.
 - 29 Oct 00:10 plan written; baton taken on bitcube (HANDOFF). Step 1a and 1b started in parallel (different files).

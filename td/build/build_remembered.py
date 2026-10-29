@@ -24,7 +24,7 @@ import glob
 import importlib
 import sys
 
-REPO = 'C:/Users/user/River/river-bitcube'
+REPO = globals().get('REPO_OVERRIDE', 'C:/Users/user/River/river-bitcube')   # a frozen show builds from its own pinned checkout
 TOE = globals().get('TOE_OVERRIDE', 'river-remembered.toe')
 # build_looks.py runs this file for river-looks.toe ("The river (all looks)", M8): the same COMP, inputs and outputs, but
 # its Execute DAT and Script TOPs call the looks mixer (td/looks/mixer.py), which runs this show among others.
@@ -54,7 +54,7 @@ if missing:
 # package td/remembered ("remembered"), imported with <repo>/td on sys.path.
 if TD_DIR not in sys.path:
     sys.path.insert(0, TD_DIR)
-for _m in ('palette', 'zones', 'clock', 'ropes', 'panels', 'water', 'particles', 'flow', 'ribbons', 'ribbons_gpu', 'status', 'show'):
+for _m in ('control_schema', 'palette', 'zones', 'clock', 'ropes', 'panels', 'water', 'particles', 'flow', 'ribbons', 'ribbons_gpu', 'video_library', 'status', 'show'):
     if 'remembered.' + _m in sys.modules:
         importlib.reload(sys.modules['remembered.' + _m])
 from remembered import show as remembered_show                         # noqa: E402
