@@ -11,6 +11,15 @@ The artists' rules (docs/files/river-remembered.md has them in full):
   pool (deeper, bluer, 0.3x flow, churns white); the swell at 60 % through the body (+15 %, a 2 s pulse top to floor).
 - settling: colour drains (~15 s), then speed (~30 s), foam thins, the ropes go dark top-down one by one in random
   order, the pool fades last leaving a slow drip.
+- people (v2, Gavin 29 Oct; room.py smooths the room into crowd, empty and linger):
+  - a lingerer: sparks and splashes run up and down their 2-4 nearest ropes (short bright streaks, 5-20 px, thrown up
+    from the waterline and falling from above, in the palette's light and foam, several a second; landing in the pool
+    they splash), the light gathers there (those ropes x1.5-2 with a standing glow, the rest a little dimmer) and the
+    waterline rises on those ropes. Strongest between 0.5 and 1.8 m.
+  - a crowd: Fantasia-style turbulence at head height and below (LEDs <= 1.8 m): swirling eddies, a slosh across the
+    ropes, bursts; 1 person a hint, 4+ full; calm brightens toward 0.6 and more ropes carry drips.
+  - an empty room: the calm becomes slow ocean waves over the pool and across the ropes (10-20 s), settling to a still
+    pond breathing at ~0.15; the main surge still plays, at ~60 %. Anyone entering wakes it (a ripple across the pool).
 - safety: the whole column's mean brightness never changes faster than MAX_MEAN_RATE per second (every change ramps over
   >= 0.5 s, no whole-column flashing), and the frame never asks for more than BUDGET_W (artnet_out's power model) so
   artnet_out's own 1,400 W limit never has to cut in.
@@ -41,6 +50,32 @@ RIPPLE_LIFE = 1.8                          # s
 EASE_RANGE = (1.0, 60.0)                   # s: each surge eases in and out over a duration in this range (log-uniform)
 DOT_SLOTS = 40                             # black dots in the surge body: as many as the foam
 MINI_BODY, MINI_SETTLE, MINI_GAIN = 10.0, 14.0, 0.55   # a small surge (M4: random when the room is empty, or the room's)
+# v2 (29 Oct): people visibly change the ropes
+LINGER_GAIN = 0.9                          # a lingerer's ropes up to x1.9 ...
+LINGER_DIM = 0.25                          # ... and every other rope down by up to this
+LINGER_GLOW = 0.16                         # a standing, shimmering glow on a lingerer's ropes (in LINGER_BAND_M)
+LINGER_RISE_M = 0.4                        # the waterline rises this much on a lingerer's ropes
+LINGER_BAND_M = (0.5, 1.8)                 # the sparks and the gathering are strongest between these heights
+LINGER_SLOW = 0.6                          # and the water there slows by up to this
+SPARK_SLOTS = 64
+SPARK_RATE = 7.0                           # sparks a second on a fully lingered rope
+SPARK_UP = 0.6                             # the share thrown up from the waterline (the rest fall from above)
+SPARK_LEN_PX = (5.0, 20.0)
+SPARK_V = (90.0, 170.0)                    # px/s thrown up from the waterline (2.2-4 m/s)
+SPARK_FROM_M = (1.6, 2.6)                  # the falling ones start this high
+SPARK_G = 160.0                            # px/s^2 pulling every spark down into the pool, where it splashes
+SPARK_LIFE_S = 2.2
+CROWD_FULL_AT = 1.0                        # crowd (room.py: 4 people = 1) at which the turbulence is full
+CROWD_TOP_M = 1.8                          # the crowd's turbulence: at head height and below
+CROWD_CALM = 0.6                           # a full crowd lifts the calm level toward this
+CROWD_TURB = 0.4                           # and adds this to the turbulence knob
+BURST_SLOTS = 10
+BURST_LIFE = 0.9                           # s
+BURST_RATE = 3.0                           # bursts a second at a full crowd (x crowd^2: 1 person ~0.2/s)
+EMPTY_POND = 0.15                          # an empty room settles to a still pond breathing at about this
+EMPTY_WAVE_S = (13.0, 19.0)                # its slow ocean waves' periods (across the ropes, and up from the pool)
+EMPTY_WAVE_M = 0.14                        # how far they lift the waterline
+EMPTY_SURGE = 0.6                          # an empty room's main surge plays at this gain
 
 
 def front_vmax(flow_pct):
@@ -129,7 +164,8 @@ def default_ctx(**kw):
            'flow_pct': 50.0, 'rain': 0.3, 'cold': False, 'dry': False, 'flow_level': 0.5,
            'knobs': {'speed': 0.5, 'density': 0.5, 'brightness': 0.5, 'turbulence': 0.5},
            'linger': np.zeros(N_ROPES, np.float32), 'night': 0.0, 'calm_level': 0.35, 'level': 1.0,
-           'wave': None, 'light': 'off', 'pool_height_m': None}
+           'wave': None, 'light': 'off', 'pool_height_m': None,
+           'crowd': 0.0, 'empty': 0.0, 'headcount': 0, 'wake': 0.0}   # the room (room.RoomState.ctx())
     ctx.update(kw)
     return ctx
 
@@ -191,6 +227,26 @@ class Ropes:
         self.dot_rank = rng.uniform(0, 1, (R, DOT_SLOTS))
         self.pw = np.zeros((R, N_PX), np.float32)
         self.hw = np.zeros(R, np.float32)
+        # v2: the people effects
+        h = zones.height.astype(np.float32)
+        lo, hi = LINGER_BAND_M
+        self.band = (0.3 + 0.7 * smooth((h - (lo - 0.25)) / 0.25) * smooth(((hi + 0.5) - h) / 0.5)).astype(np.float32)
+        self.crowd_mask = smooth((CROWD_TOP_M + 0.25 - h) / 0.35).astype(np.float32)
+        self.sp_live = np.zeros(SPARK_SLOTS, bool)
+        self.sp_rope = np.zeros(SPARK_SLOTS, np.int64)
+        self.sp_x = np.zeros(SPARK_SLOTS, np.float32)
+        self.sp_v = np.zeros(SPARK_SLOTS, np.float32)
+        self.sp_len = np.zeros(SPARK_SLOTS, np.float32)
+        self.sp_age = np.zeros(SPARK_SLOTS, np.float32)
+        self.sp_amp = np.zeros(SPARK_SLOTS, np.float32)
+        self.sp_mix = np.zeros(SPARK_SLOTS, np.float32)
+        self.sp_gen = np.zeros(SPARK_SLOTS, np.int8)
+        self.bu_rx = np.zeros(BURST_SLOTS, np.float32)
+        self.bu_h = np.zeros(BURST_SLOTS, np.float32)
+        self.bu_t0 = np.full(BURST_SLOTS, -99.0, np.float32)
+        self.bu_i = 0
+        self.wake_prev = 0.0
+        self.effects = {'lingerer': 0.0, 'crowd': 0.0, 'empty': 0.0, 'sparks': 0}
 
     # ---- envelopes ---------------------------------------------------------------------------------------------------
 
@@ -226,15 +282,18 @@ class Ropes:
         self.rip_x[i], self.rip_t0[i], self.rip_a[i] = self.rx[rope], self.time, strength
         self.rip_i += 1
 
-    def _pool_weight(self, c, fl, surge_fill, turb):
-        """0..1 per LED: how much it is in the pool. The waterline rises with the river and in a surge, sloshes as a
-        slow wave across the ropes in their real order, and is a soft band, never a hard edge."""
+    def _pool_weight(self, c, fl, surge_fill, turb, rise_r=0.0, ocean=0.0, still=0.0):
+        """0..1 per LED: how much it is in the pool. The waterline rises with the river and in a surge (and per rope by
+        rise_r: a lingerer's ropes), sloshes as a slow wave across the ropes in their real order (stilled by `still`, an
+        empty room, which rolls slow ocean waves of height `ocean` instead), and is a soft band, never a hard edge."""
         T = self.time
         base = c.get('pool_height_m')
         base = float(self.z.pool_height_m if base is None else base)
-        rise = POOL_RISE_M[0] * fl + POOL_RISE_M[1] * surge_fill
-        amp = SLOSH_M[0] + (SLOSH_M[1] - SLOSH_M[0]) * turb
+        rise = POOL_RISE_M[0] * fl + POOL_RISE_M[1] * surge_fill + np.asarray(rise_r, np.float32)
+        amp = (SLOSH_M[0] + (SLOSH_M[1] - SLOSH_M[0]) * turb) * (1 - still)
         slosh = amp * (np.sin(2 * np.pi * (self.rx / 0.7) - 0.55 * T) + 0.45 * np.sin(2 * np.pi * (self.rx / 0.23) + 1.2 * T))
+        if ocean > 0:
+            slosh = slosh + ocean * (0.5 + 0.5 * np.sin(2 * np.pi * (self.rx / 1.4 - T / EMPTY_WAVE_S[0])))
         self.hw = (base + rise + slosh).astype(np.float32)                # the waterline, per rope (m)
         return smooth((self.hw[:, None] - self.z.height) / POOL_BAND_M + 0.5).astype(np.float32)
 
@@ -260,6 +319,15 @@ class Ropes:
         turb, spd, dens, bri = (float(k.get(n, 0.5)) for n in ('turbulence', 'speed', 'density', 'brightness'))
         fl = 0.5 if c.get('flow_level') is None else float(c['flow_level'])
         linger = np.asarray(c.get('linger', np.zeros(R)), np.float32)
+        if linger.shape != (R,):
+            linger = np.zeros(R, np.float32)
+        ls = smooth(linger).astype(np.float32)                         # the lingerer's ropes (room.py ramps them)
+        crowd = float(np.clip(c.get('crowd') or 0.0, 0.0, 1.0))
+        crowd_a = min(1.0, crowd / CROWD_FULL_AT) ** 0.8               # how much turbulence (1 person ~0.3)
+        empty = float(np.clip(c.get('empty') or 0.0, 0.0, 1.0))
+        turb = min(1.0, turb + CROWD_TURB * crowd)
+        # an empty room: slow ocean waves come in, then settle to a still pond (a faint swell at empty = 1)
+        ocean_a = float(smooth(empty / 0.35)) * (1 - 0.75 * float(smooth((empty - 0.45) / 0.55)))
         pool_hard = self.z.pool_mask(c.get('pool_height_m'))
         x = self.x
         pal = c['pal']
@@ -275,10 +343,10 @@ class Ropes:
             return self._finish(f, dt)
 
         e = self._env(c)
-        b, tau, tau_s, ls = e['b'], e['tau'], e['tau_s'], e['ls']
+        b, tau, tau_s, ls_ = e['b'], e['tau'], e['tau_s'], e['ls']
         dry = bool(c.get('dry'))
         settling = tau_s is not None
-        rr = (tau_s / ls) if settling else 0.0
+        rr = (tau_s / ls_) if settling else 0.0
         # M5: a new surge picks how it eases in and out (1 s to 1 min, log-uniform: mostly a few seconds)
         if tau is not None and (self.last_tau is None or tau < self.last_tau):
             lo, hi = math.log(EASE_RANGE[0]), math.log(EASE_RANGE[1])
@@ -290,20 +358,21 @@ class Ropes:
         surge_fill = 0.0
         if tau is not None:
             surge_fill = float(smooth(tau / 6.0)) * ((1 - float(smooth(rr / 0.8))) if settling else 1.0)
-        pool = self._pool_weight(c, fl, max(surge_fill, float(c.get('mini_fill', 0.0))), turb)
+        pool = self._pool_weight(c, fl, max(surge_fill, float(c.get('mini_fill', 0.0))), turb,
+                                 rise_r=LINGER_RISE_M * ls, ocean=EMPTY_WAVE_M * ocean_a, still=float(smooth(empty / 0.5)))
         self.pw = pool
 
         # speeds (px/s): drips in calm/building, the body in the surge, easing back while settling
         nz = 0.5 * (np.sin(2 * np.pi * self.noise_f[:, 0] * T + self.noise_p[:, 0])
                     + np.sin(2 * np.pi * self.noise_f[:, 1] * T + self.noise_p[:, 1]))
         var = min(0.45, 0.3 * (0.4 + 1.2 * turb))
-        mul = (1 + var * nz) * (1 - 0.6 * linger)
+        mul = (1 + var * nz) * (1 - LINGER_SLOW * ls)
         v_drip = (14.0 + 50.0 * b) * (0.7 + 0.6 * fl) * (0.6 + 0.8 * spd)
         v_body = front_vmax(c['flow_pct']) * (0.6 + 0.8 * spd) * (0.85 + 0.3 * fl)
         if tau is not None and not settling:
             v = v_body
         elif settling:
-            v = v_body + (v_drip - v_body) * float(smooth((tau_s - ls / 3) / (2 * ls / 3)))
+            v = v_body + (v_drip - v_body) * float(smooth((tau_s - ls_ / 3) / (2 * ls_ / 3)))
         else:
             v = v_drip
         self.phase += v * mul * dt
@@ -314,39 +383,53 @@ class Ropes:
         # ---- calm layer: drips joining into flow, the breathing pool
         act_n = (0.12 if dry else 0.15 + 0.2 * c['energy']) * R
         act_n = act_n + (R - act_n) * (0.0 if dry else b)
+        act_n = (act_n + (R - act_n) * 0.6 * crowd_a) * (1 - 0.8 * empty)   # a crowd wakes more ropes; an empty room fewer
         act = np.clip(act_n - self.rank, 0.0, 1.0)[:, None]
         join = b ** 1.5
         d = np.mod(ph - x, self.spacing)
         tail = 10.0 + join * (self.spacing * 0.95 - 10.0)
         drip = np.where(d < tail, np.exp(-3.0 * d / tail), 0.0) + 0.10 * join
-        level = c['calm_level'] + (0.55 - c['calm_level']) * b
+        cl = float(c['calm_level'])
+        cl = cl + max(0.0, CROWD_CALM - cl) * crowd_a                 # a crowd lifts the calm toward CROWD_CALM
+        cl = cl + (EMPTY_POND - cl) * empty                           # an empty room settles toward the still pond
+        level = cl + (0.55 - cl) * b
         i_calm = act * drip * level
         # drips landing in the pool send ripples to the neighbouring ropes (M3)
         rate = act[:, 0] * v_drip * mul / self.spacing[:, 0] * dt * 0.6
         for r in np.nonzero(self.rng.random(R) < rate)[0]:
             self.ripple(int(r), 0.35 + 0.3 * b)
         i_calm = i_calm * (1 - pool)
-        breathe = (0.12 + 0.05 * math.sin(2 * math.pi * T / 9.0)) * (c['calm_level'] / 0.35)
-        pool_tex = 0.8 + 0.2 * np.sin(2 * np.pi * (self.pool_phase - x) / 37.0 + self.tex_p[:, :1])
+        breathe = (0.12 + 0.05 * math.sin(2 * math.pi * T / 9.0)) * (cl / 0.35)
+        breathe = breathe + (EMPTY_POND + 0.02 * math.sin(2 * math.pi * T / 12.0) - breathe) * empty
+        pool_tex = 0.8 + 0.2 * (1 - 0.7 * empty) * np.sin(2 * np.pi * (self.pool_phase - x) / 37.0 + self.tex_p[:, :1])
         # soft bubbles rising in the pool: round, slow, never single-LED flicker
         bub = np.sin(2 * np.pi * (self.z.height * 2.5 - 0.35 * T) + self.tex_p[:, :1]) * np.sin(2 * np.pi * (T * 0.21 + self.rx[:, None] * 3.1))
         bubbles = 0.35 * smooth((bub - 0.55) / 0.45)
         near_line = np.exp(-np.maximum(self.hw[:, None] - self.z.height, 0) / 0.35)
         rip = self._ripples()[:, None] * near_line
-        i_pool = pool * (breathe * pool_tex + 0.25 * bubbles + 0.45 * rip)
+        wake = float(c.get('wake') or 0.0)
+        if wake > self.wake_prev + 0.2:                                # someone came in: the pond notices
+            for r in self.rng.choice(R, 4, replace=False):
+                self.ripple(int(r), 0.4 + 0.6 * wake)
+        self.wake_prev = wake
+        i_pool = pool * (breathe * pool_tex * (1 + 0.5 * wake) + 0.25 * (1 - 0.6 * empty) * bubbles + 0.45 * rip)
         sat_calm = 0.55 * (1 - b)
         mid = norm(pal_mod.desaturate(pal['mid'], sat_calm))
         light = norm(pal_mod.desaturate(pal['light'], sat_calm))
         deep = norm(pal['deep'])
         head = np.clip(drip, 0, 1)[..., None]
         calm = (i_calm[..., None] * (mid * (1 - 0.5 * head) + light * 0.5 * head) + i_pool[..., None] * deep)
+        if ocean_a > 0.01:                                             # the empty room's slow waves, up from the pool
+            calm += self._ocean(ocean_a, pool)[..., None] * norm(pal_mod.desaturate(pal['mid'], 0.3))
         calm *= e['g_calm']
         if e['glow'] > 0:
             calm += (e['glow'] * self.top)[..., None] * light
 
         frame = calm
+        g_surge = 1 - (1 - EMPTY_SURGE) * empty                       # an empty room's surge plays softer
         if tau is not None:
-            frame = frame + self._surge(c, tau, tau_s, ls, rr, ph, pool, dt, turb, dens, bri, dry, self.ease, self.landed)
+            frame = frame + g_surge * self._surge(c, tau, tau_s, ls_, rr, ph, pool, dt, turb, dens, bri, dry, self.ease,
+                                                  self.landed)
         # M4: a smaller surge of its own (random when the room is empty, or brought on by the room), between main ones
         mt = c.get('mini_tau')
         if mt is not None and tau is None:
@@ -354,7 +437,7 @@ class Ropes:
                 self.mini_landed[:] = False
             ms = mt - MINI_BODY if mt > MINI_BODY else None
             mrr = (ms / MINI_SETTLE) if ms is not None else 0.0
-            frame = frame + MINI_GAIN * self._surge(c, mt, ms, MINI_SETTLE, mrr, ph, pool, dt, turb, dens, bri, dry,
+            frame = frame + g_surge * MINI_GAIN * self._surge(c, mt, ms, MINI_SETTLE, mrr, ph, pool, dt, turb, dens, bri, dry,
                                                     c.get('mini_ease', (2.0, 6.0)), self.mini_landed)
 
         # ---- the decision wave: one slow wave of light down every rope
@@ -365,12 +448,122 @@ class Ropes:
             band = amp * np.exp(-0.5 * ((x - y) / 18.0) ** 2)
             frame = np.maximum(frame, band[..., None] * norm(pal['light']))
 
+        # ---- the crowd: turbulence at head height and below (rides the surge; dims with the draw-back before it)
+        if crowd_a > 0.005:
+            cg = e['g_calm'] if tau is None else 1.0
+            frame = frame + cg * self._crowd(crowd_a, dt, pool, pal)
+
         # ---- night, lingerers, the day's level
         gain = (1 - 0.35 * float(c.get('night', 0.0))) * float(c.get('level', 1.0))
-        g_rope = 1 + 0.8 * linger - 0.3 * float(linger.max(initial=0.0)) * (1 - linger)
+        lmax = float(ls.max(initial=0.0))
+        g_rope = 1 + LINGER_GAIN * ls - LINGER_DIM * lmax * (1 - ls)
         frame = frame * (gain * g_rope)[:, None, None]
-        self.state = {'b': b, 'tau': tau, 'tau_s': tau_s}
+        n_sparks = 0
+        if lmax > 0.01 or self.sp_live.any():                          # the lingerer: the light gathers, sparks fly
+            glow = LINGER_GLOW * ls[:, None] * self.band * (1 - 0.6 * pool) * (
+                0.75 + 0.25 * np.sin(2 * np.pi * (self.z.height * 1.3 - 0.4 * T) + self.tex_p[:, :1]))
+            sparks, n_sparks = self._sparks(dt, ls, pal)
+            frame = frame + gain * (glow[..., None] * norm(pal['light']) + sparks)
+        self.effects = {'lingerer': round(lmax, 3), 'crowd': round(crowd, 3), 'empty': round(empty, 3),
+                        'sparks': int(n_sparks)}
+        self.state = {'b': b, 'tau': tau, 'tau_s': tau_s, 'effects': dict(self.effects)}
         return self._finish(frame, dt)
+
+    # ---- v2: the people effects -------------------------------------------------------------------------------------
+
+    def _ocean(self, amp, pool):
+        """The empty room's slow ocean waves: long crests rolling across the ropes and up from the waterline."""
+        T = self.time
+        above = np.maximum(self.z.height - self.hw[:, None], 0.0)
+        reach = np.exp(-above / 0.9) * (1 - 0.5 * pool)
+        u = self.rx[:, None]
+        w = (np.sin(2 * np.pi * (u / 1.1 - T / EMPTY_WAVE_S[0]) + 2 * np.pi * above / 2.5)
+             + 0.6 * np.sin(2 * np.pi * (-u / 0.8 - T / EMPTY_WAVE_S[1]) + 1.3))
+        crest = smooth((w + 0.2) / 1.6)
+        return (amp * 0.22 * crest * reach).astype(np.float32)
+
+    def _crowd(self, a, dt, pool, pal):
+        """Fantasia-style turbulence at head height and below: swirling eddies, a slosh across the ropes, bursts."""
+        T = self.time
+        u = self.rx[:, None] * np.ones((1, N_PX), np.float32)
+        v = self.z.height
+        w1 = np.sin(2 * np.pi * (v / 0.7 + 0.35 * T) + 2.5 * np.sin(2 * np.pi * (u * 0.8 - 0.11 * T)))
+        w2 = np.sin(2 * np.pi * (u * 1.3 + 0.17 * T) + 2.0 * np.sin(2 * np.pi * (v / 0.9 - 0.23 * T) + 3 * u))
+        crests = smooth((w1 * w2 - 0.2) / 0.5)
+        cx = 0.5 + 0.48 * math.sin(2 * math.pi * T / 6.5) + 0.12 * math.sin(2 * math.pi * T / 2.3)
+        slosh = np.exp(-((u - cx) / 0.14) ** 2) * (0.5 + 0.5 * np.sin(2 * np.pi * (v / 0.5 - 0.6 * T)))
+        # bursts: a bright bloom somewhere below head height, spreading to the neighbouring ropes
+        n = self.rng.poisson(BURST_RATE * a * a * dt)
+        for _ in range(int(n)):
+            i = self.bu_i % BURST_SLOTS
+            self.bu_rx[i], self.bu_h[i], self.bu_t0[i] = self.rng.uniform(0, 1), self.rng.uniform(0.4, 1.6), T
+            self.bu_i += 1
+        bursts = np.zeros_like(v)
+        age = T - self.bu_t0
+        for i in np.nonzero((age >= 0) & (age < BURST_LIFE))[0]:
+            d = np.sqrt(((u - self.bu_rx[i]) / 0.12) ** 2 + ((v - self.bu_h[i]) / 0.35) ** 2)
+            bursts += np.exp(-(d - 2.2 * age[i] / BURST_LIFE) ** 2 / 0.3) * (1 - age[i] / BURST_LIFE) ** 2
+        m = self.crowd_mask * (1 - 0.5 * pool)
+        light, mid, foam = norm(pal['light']), norm(pal['mid']), norm(pal['foam'])
+        return m[..., None] * (a * (0.38 * crests)[..., None] * light + a * (0.25 * slosh)[..., None] * mid
+                               + (0.7 * np.clip(bursts, 0, 1.2))[..., None] * foam)
+
+    def _sparks(self, dt, ls, pal):
+        """The lingerer's sparks: thrown up from the waterline or falling from above on their ropes, pulled down into
+        the pool, where they splash (a ripple and a small child spark). Returns (rgb layer, how many are flying)."""
+        R = N_ROPES
+        h = self.z.height
+        under = h <= self.hw[:, None]
+        wl = np.where(under.any(1), under.argmax(1), N_PX - 1).astype(np.float32)   # the waterline's LED, per rope
+        rng = self.rng
+        if ls.max(initial=0.0) > 0.01:                                  # launch
+            counts = rng.poisson(SPARK_RATE * ls * dt)
+            for r in np.nonzero(counts)[0]:
+                for _ in range(int(counts[r])):
+                    if rng.random() < SPARK_UP:
+                        self._spark(int(r), wl[r], -rng.uniform(*SPARK_V), rng.uniform(*SPARK_LEN_PX), 0)
+                    else:
+                        hs = rng.uniform(*SPARK_FROM_M)
+                        above = h[r] <= hs
+                        x0 = float(above.argmax()) if above.any() else 0.0
+                        self._spark(int(r), x0, rng.uniform(10.0, 60.0), rng.uniform(*SPARK_LEN_PX), 0)
+        live = self.sp_live
+        self.sp_v[live] += SPARK_G * dt
+        self.sp_x[live] += self.sp_v[live] * dt
+        self.sp_age[live] += dt
+        landed = live & (self.sp_v > 0) & (self.sp_x >= wl[self.sp_rope])
+        for i in np.nonzero(landed)[0]:                                 # a splash where it lands
+            r = int(self.sp_rope[i])
+            self.sp_live[i] = False
+            if self.sp_gen[i] == 0:
+                self.ripple(r, 0.5 * float(self.sp_amp[i]))
+                if rng.random() < 0.6:
+                    self._spark(r, wl[r], -rng.uniform(40.0, 80.0), rng.uniform(5.0, 8.0), 1, 0.7 * float(self.sp_amp[i]))
+        self.sp_live &= (self.sp_age < SPARK_LIFE_S) & (self.sp_x > -SPARK_LEN_PX[1])
+        idx = np.nonzero(self.sp_live)[0]
+        if not len(idx):
+            return np.zeros((R, N_PX, 3), np.float32), 0
+        xh, vv = self.sp_x[idx, None], self.sp_v[idx, None]
+        dirn = np.where(vv >= 0, 1.0, -1.0)
+        bd = (xh - self.x) * dirn                                       # px behind the head (the tail trails it)
+        lpx = self.sp_len[idx, None] * np.clip(np.abs(vv) / 120.0, 0.5, 1.3)
+        prof = np.where(bd >= 0, np.clip(1 - bd / lpx, 0, 1) ** 1.5, np.clip(1 + bd, 0, 1))
+        fade = np.clip(1 - self.sp_age[idx] / SPARK_LIFE_S, 0, 1) * np.clip(self.sp_age[idx] / 0.05, 0, 1)
+        prof = prof * (self.sp_amp[idx] * fade)[:, None] * self.band[self.sp_rope[idx]]
+        light, foam = norm(pal['light']), norm(pal['foam'])
+        mix = self.sp_mix[idx, None]
+        col = light[None, :] * (1 - mix) + foam[None, :] * mix
+        onehot = (self.sp_rope[idx][None, :] == np.arange(R)[:, None]).astype(np.float32)   # R x n: which rope
+        out = np.stack([onehot @ (prof * col[:, k:k + 1]) for k in range(3)], axis=-1).astype(np.float32)
+        return out, len(idx)
+
+    def _spark(self, rope, x0, v0, length, gen, amp=None):
+        free = np.nonzero(~self.sp_live)[0]
+        i = int(free[0]) if len(free) else int(np.argmax(self.sp_age))
+        self.sp_live[i], self.sp_rope[i], self.sp_x[i], self.sp_v[i] = True, rope, x0, v0
+        self.sp_len[i], self.sp_age[i], self.sp_gen[i] = length, 0.0, gen
+        self.sp_amp[i] = self.rng.uniform(0.75, 1.0) if amp is None else amp
+        self.sp_mix[i] = self.rng.uniform(0.0, 1.0)
 
     def _surge(self, c, tau, tau_s, ls, rr, ph, pool, dt, turb, dens, bri, dry, ease=(2.0, 8.0), landed=None):
         R = N_ROPES

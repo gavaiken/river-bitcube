@@ -11,6 +11,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'td'))
 from remembered import clock  # noqa: E402
 from remembered import palette  # noqa: E402
+from remembered import room  # noqa: E402
 from remembered import ropes  # noqa: E402
 from remembered import zones  # noqa: E402
 
@@ -218,3 +219,122 @@ def test_zones_file_shape_as_built(tmp_path):
     assert z.screens[1]['tilt_deg'] == -4.5 and z.screen_order()[0] == 1
     assert z.eddy_mask[4, 250] and z.eddy_mask.sum() == 17
     assert zones.load(None).file == 'default'
+
+
+# ---- v2: people visibly change the ropes (room.py -> ctx crowd, empty, linger, wake) ----------------------------------
+
+def people_run(seconds, count=0, lingerers=(), seed=4, z=None, times=None, day=None, warm=0.0, fps=30, keep_every=None):
+    """Step Ropes with a RoomState fed a constant room; returns (ropes, room, frames after warm, means)."""
+    z = z or zones.Zones()
+    r, rs = ropes.Ropes(z, seed=seed), room.RoomState(z)
+    frames, means = [], []
+    for i in range(int(seconds * fps)):
+        t = i / fps
+        rs.update(1 / fps, count, lingerers, True)
+        c = ctx_at(day, t, times, **rs.ctx()) if day is not None else ropes.default_ctx(t=t, **rs.ctx())
+        f = r.step(1 / fps, c)
+        means.append(float(f.mean()))
+        if t >= warm and (keep_every is None or i % keep_every == 0):
+            frames.append(f)
+    return r, rs, frames, np.array(means)
+
+
+def test_a_lingerer_sparks_gathers_the_light_and_raises_the_pool():
+    z = zones.Zones()
+    ling = [{'ropes': [7], 'still_s': 10, 'x': 0.37, 'y': 0.85}]
+    plain, _, fp, _ = people_run(20, 1, (), warm=5)
+    held, rs, fh, _ = people_run(20, 1, ling, warm=5)
+    mine = np.nonzero(rs.linger > 0.3)[0]
+    assert 2 <= len(mine) <= 4 and 7 in mine
+    band = (z.height >= 0.5) & (z.height <= 1.8)
+    bp = np.mean([f.max(axis=2)[band.nonzero()].reshape(20, -1).mean(1) for f in fp], axis=0)
+    bh = np.mean([f.max(axis=2)[band.nonzero()].reshape(20, -1).mean(1) for f in fh], axis=0)
+    assert (bh[mine] / bp[mine]).min() > 2.0                         # obvious from across the room
+    others = np.setdiff1d(np.arange(20), mine)
+    assert np.median(bh[others] / bp[others]) < 1.0                    # the rest a little dimmer
+    assert held.hw[7] - plain.hw[7] > 0.3                              # the waterline rises there
+    assert held.state['effects']['lingerer'] == pytest.approx(1.0) and held.state['effects']['sparks'] >= 5
+    # sparks: short bright streaks moving both up and down the rope, on their ropes only
+    assert (held.sp_v[held.sp_live] < 0).any() and (held.sp_v[held.sp_live] > 0).any()
+    assert set(held.sp_rope[held.sp_live].tolist()) <= set(mine.tolist())
+    assert max(f[7].max() for f in fh) > 0.8
+
+
+def test_a_lingerer_builds_over_seconds_not_a_jump():
+    ling = [{'ropes': [7]}]
+    z = zones.Zones()
+    r, rs = ropes.Ropes(z, seed=1), room.RoomState(z)
+    m7 = []
+    for i in range(int(12 * 30)):
+        rs.update(1 / 30, 1, ling if i >= 4 * 30 else (), True)
+        f = r.step(1 / 30, ropes.default_ctx(t=i / 30, **rs.ctx()))
+        m7.append(float(f[7].mean()))
+    m7 = np.array(m7)
+    before, half, full = m7[3 * 30:4 * 30].mean(), m7[int(5.2 * 30):int(5.6 * 30)].mean(), m7[9 * 30:].mean()
+    assert before < half < full and full > 2 * before
+
+
+def test_a_crowd_stirs_head_height_and_below():
+    z = zones.Zones()
+    _, _, f0, m0 = people_run(30, 0, warm=10, keep_every=3)
+    r, rs, f6, m6 = people_run(90, 6, warm=70, keep_every=3)
+    assert rs.crowd == pytest.approx(1.0)
+    low = (z.height <= ropes.CROWD_TOP_M) & (z.height > z.pool_height_m + 0.5)
+    high = z.height >= ropes.CROWD_TOP_M + 0.8
+    lo0, lo6 = np.mean([f.max(axis=2)[low].mean() for f in f0]), np.mean([f.max(axis=2)[low].mean() for f in f6])
+    hi0, hi6 = np.mean([f.max(axis=2)[high].mean() for f in f0]), np.mean([f.max(axis=2)[high].mean() for f in f6])
+    assert lo6 > lo0 + 0.08                                            # turbulence below head height ...
+    assert hi6 - hi0 < 0.5 * (lo6 - lo0)                               # ... far more than above it
+    # it moves: the low region changes frame to frame (swirls, sloshing, bursts), never a static wash
+    d = np.mean([np.abs(a[low] - b[low]).mean() for a, b in zip(f6[:-1], f6[1:])])
+    assert d > 0.01
+    assert r.state['effects']['crowd'] == pytest.approx(1.0)
+    assert np.abs(np.diff(m6)).max() <= ropes.MAX_MEAN_RATE / 30 + 1e-6
+    assert r.watts <= ropes.BUDGET_W + 1
+
+
+def test_one_person_is_a_hint():
+    z = zones.Zones()
+    low = (z.height <= ropes.CROWD_TOP_M) & (z.height > z.pool_height_m + 0.5)
+    _, _, f0, _ = people_run(90, 0, warm=70, keep_every=3)
+    _, _, f1, _ = people_run(90, 1, warm=70, keep_every=3)
+    _, _, f6, _ = people_run(90, 6, warm=70, keep_every=3)
+    lo = [np.mean([f.max(axis=2)[low].mean() for f in fs]) for fs in (f0, f1, f6)]
+    assert lo[0] < lo[1] < lo[2] and (lo[1] - lo[0]) < 0.5 * (lo[2] - lo[0])
+
+
+def test_an_empty_room_settles_to_a_still_pond_and_its_surge_plays_softer():
+    z = zones.Zones()
+    _, _, fb, _ = people_run(30, 2, warm=20, keep_every=3)
+    r, rs, fe, _ = people_run(90, 0, warm=80, keep_every=3)
+    assert rs.empty == pytest.approx(1.0) and r.state['effects']['empty'] == pytest.approx(1.0)
+    above = z.height > z.pool_height_m + 0.8
+    assert np.mean([f[above].mean() for f in fe]) < 0.5 * np.mean([f[above].mean() for f in fb])   # drips fade out
+    pool = z.pool_mask()
+    pm = np.array([f[pool].max(axis=1).mean() for f in fe])
+    assert 0.06 < pm.mean() < 0.2 and pm.std() < 0.03                  # a still pond breathing low
+    # mid-way the ocean waves roll: the waterline swings slowly
+    r2, z2 = ropes.Ropes(z, seed=4), room.RoomState(z)
+    hws = []
+    for i in range(int(50 * 30)):
+        z2.update(1 / 30, 0, (), True)
+        r2.step(1 / 30, ropes.default_ctx(t=i / 30, **z2.ctx()))
+        if 0.3 < z2.empty < 0.6:
+            hws.append(r2.hw.copy())
+    hws = np.array(hws)
+    assert np.ptp(hws, axis=0).mean() > 0.06
+    # the main surge still plays, at ~60 %
+    day = wet_day()
+    times = clock.phase_times(day, 100.0)
+    knobs = {'speed': 0.5, 'density': 0.5, 'brightness': 0.5, 'turbulence': 0.5}
+    out = {}
+    for name, extra in (('busy', {}), ('empty', {'empty': 1.0})):
+        rr = ropes.Ropes(z, seed=6)
+        acc = []
+        for i in range(int(times['settle'] * 30)):
+            t = i / 30
+            f = rr.step(1 / 30, ctx_at(day, t, times, knobs=knobs, **extra))
+            if times['surge'] + 10 <= t < times['surge'] + 20:
+                acc.append(f[~pool].mean())
+        out[name] = np.mean(acc)
+    assert 0.45 < out['empty'] / out['busy'] < 0.75
