@@ -88,3 +88,11 @@ def desaturate(c, f):
 def as_hex(pal):
     """Three colours for status.json: deep, mid, light."""
     return [rgb_hex(pal[k]) for k in ('deep', 'mid', 'light')]
+
+
+def from_hex(colors, base=None):
+    """as_hex's inverse: three '#rrggbb' (deep, mid, light, in that order: a fixed palette is taken as given, not sorted
+    or cooled) -> a palette. foam comes from base (the palette it replaces), else the autumn season's."""
+    deep, mid, light = (hex_rgb(c) for c in colors)
+    foam = tuple((base or {}).get('foam') or SEASONS['autumn']['foam'])
+    return {'deep': deep, 'mid': mid, 'light': light, 'foam': foam}

@@ -18,7 +18,7 @@ from . import overrides as overrides_mod
 
 KEYS = ('t', 'show', 'fps', 'loop', 'phase', 'day', 'surge', 'knobs', 'palette', 'ropes_follow', 'heard', 'river_motion',
         'river_source', 'room', 'panels', 'screens', 'ropes', 'opening_night', 'zones', 'inputs', 'params', 'effects',
-        'overrides', 'simulating')
+        'overrides', 'simulating', 'people', 'signals')
 WRITE_EVERY = 0.5
 # the inputs status.json reports, each {value, source, age_s, fresh}; source one of SOURCES
 INPUTS = ('day', 'scene', 'reflex', 'heard', 'river_motion', 'headcount', 'lingerers', 'control')
@@ -71,10 +71,12 @@ def _param(how):
 
 def build(*, now, show, fps, loop, day, plan, knobs, reflex, palette, heard, river_motion, river_source, room,
           lit_pct, cap, watts, opening_night, zones_file, pool_height_m, light, field=None, screens=None,
-          sources=None, params=None, effects=None, overrides=None):
+          sources=None, params=None, effects=None, overrides=None, people=None, knobs_why=None, signals=None):
     """The status object. loop: Loop.snapshot(); day: the playing remembered day; plan: the surge plan.
     sources: {input: {value, source, age_s, fresh}} (INPUTS); params: {param: how} from overrides.apply; effects: the
-    ropes' people effects (passed through); overrides: control.json's overrides block (validated or raw)."""
+    ropes' people effects (passed through); overrides: control.json's overrides block (validated or raw).
+    people: room.RoomState.status() (passed through); knobs_why: knobs.describe() ({knob: 'Dave 0.42 · day 0.61 → 0.52'},
+    as knobs.why); signals: clock.read_signals() ({group: {name: {value, slow, age_s, stale}}}, passed through)."""
     chosen = day.get('chosen_at') if day else None
     sources = sources or {}
     params = params or {}
@@ -91,7 +93,8 @@ def build(*, now, show, fps, loop, day, plan, knobs, reflex, palette, heard, riv
         'surge': {'hour': _r(plan.get('hour')), 't_s': _r(plan.get('t_s'), 1), 'why': plan.get('why', ''),
                   'room_shift_s': int(plan.get('room_shift_s') or 0)},
         'knobs': {**{k: _r(knobs.get(k, 0.5), 3) for k in ('speed', 'density', 'brightness', 'turbulence')},
-                  'reflex': {k: _r(v, 3) for k, v in (reflex or {}).items()}},
+                  'reflex': {k: _r(v, 3) for k, v in (reflex or {}).items()},
+                  'why': {k: (knobs_why or {}).get(k) for k in ('speed', 'density', 'brightness', 'turbulence')}},
         'palette': list(palette),
         'ropes_follow': 'sound' if heard is not None else 'picture',
         'heard': _r(heard),
@@ -109,6 +112,8 @@ def build(*, now, show, fps, loop, day, plan, knobs, reflex, palette, heard, riv
         'effects': _val(effects or {}),
         'overrides': _val(overrides_mod.active(overrides, now)),
         'simulating': overrides_mod.simulating(overrides, now),
+        'people': dict(people or {}),                            # plain numbers already (RoomState.status: ints stay ints)
+        'signals': signals if isinstance(signals, dict) else {'gallery': {}, 'river': {}},
     }
 
 

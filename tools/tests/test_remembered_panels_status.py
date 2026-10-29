@@ -119,7 +119,7 @@ def same_shape(a, b, path='status'):
     assert type(a) is dict and type(b) is dict, path
     assert set(a) == set(b), f'{path}: {sorted(set(a) ^ set(b))}'
     for k, v in b.items():
-        if isinstance(v, dict) and k != 'reflex':
+        if isinstance(v, dict) and k not in ('reflex', 'effects', 'overrides', 'signals'):
             same_shape(a[k], v, f'{path}.{k}')
 
 
@@ -257,3 +257,128 @@ def test_build_script_and_registry_entry():
     assert entry['offered'] is False or (ROOT / 'river-remembered.toe').is_file()     # offered once the .toe lands
     assert (ROOT / 'docs' / 'files' / 'river-remembered.md').is_file()
     assert 'files/river-remembered.html' in (ROOT / 'docs' / 'show-files.md').read_text(encoding='utf-8')
+
+
+# ---- v2 wiring: knobs, the room, overrides, status, the inputs log (show.py) ------------------------------------
+
+def _v2_show(tmp_path, overrides=None, presence=None):
+    river = tmp_path / 'River'
+    (river / 'remembered').mkdir(parents=True)
+    data = tmp_path / 'data'
+    data.mkdir()
+    (data / 'notable.json').write_text(json.dumps([{'date': '2005-12-31', 'kind': 'flood', 'line': 'a flood'}]))
+    prof = {'flow': [10 + h for h in range(24)], 'rain': [0.0] * 12 + [5.0] * 3 + [0.0] * 9, 'temp': [5.0] * 24,
+            'is_day': [0] * 7 + [1] * 11 + [0] * 6}
+    with gzip.open(data / 'profiles.json.gz', 'wt') as f:
+        json.dump({'2005-12-31': {'flow': [5] * 24, 'rain': [1.0] * 24}, '2017-02-07': prof}, f)
+    if overrides is not None:
+        (river / 'remembered' / 'control.json').write_text(json.dumps({'overrides': overrides}))
+    if presence is not None:
+        (river / 'presence.json').write_text(json.dumps(presence))
+    return river, show.Show(river_dir=river, data_dir=data, seed=1)
+
+
+def test_v2_status_has_people_knob_parts_signals_and_logs_inputs(tmp_path):
+    river, s = _v2_show(tmp_path, presence={'t': T0, 'count': 3, 'people': [],
+                                             'lingerers': [{'x': 0.4, 'y': 0.8, 'still_s': 12, 'ropes': [7, 8]}]})
+    for i in range(60):
+        s.tick(T0 + i / 30, 1 / 30, 30)
+    st = s.last_status
+    assert set(st['inputs']) == {'day', 'scene', 'reflex', 'heard', 'river_motion', 'headcount', 'lingerers', 'control'}
+    assert st['inputs']['headcount'] == {'value': 3.0, 'source': 'counter', 'age_s': st['inputs']['headcount']['age_s'],
+                                         'fresh': True}
+    assert st['inputs']['lingerers']['value'] == [7, 8] and st['inputs']['day']['source'] == 'notable'
+    assert st['people']['headcount'] == 3 and st['people']['available'] and 0 < st['people']['crowd'] < 0.1
+    assert 7 in st['people']['linger_ropes'] and len(st['people']['linger_ropes']) <= 4
+    assert all('→' in st['knobs']['why'][k] and 'day' in st['knobs']['why'][k] for k in show.KNOBS)
+    assert st['signals'] == {'gallery': {}, 'river': {}}
+    assert all(st['params'][k]['source'] == 'auto' for k in st['params']) and st['simulating'] is False
+    assert st['params']['calm_min']['value'] == 0.18 and st['params']['master_brightness']['value'] == 1.0
+    lines = (river / 'logs' / 'inputs.jsonl').read_text().splitlines()
+    first = json.loads(lines[0])
+    assert first['inputs']['headcount'] == {'v': 3.0, 's': 'counter'} and first['params']['knob.speed']['s'] == 'auto'
+
+
+def test_v2_overrides_steer_knobs_palette_brightness_calm_and_flow(tmp_path):
+    at = iso(T0)
+    ov = {'knob.speed': {'mode': 'fix', 'value': 0.9, 'at': at}, 'knob.turbulence': {'mode': 'adjust', 'offset': 0.2, 'at': at},
+          'palette': {'mode': 'fix', 'value': ['#102030', '#405060', '#a0b0c0'], 'at': at},
+          'master_brightness': {'mode': 'fix', 'value': 0.5, 'at': at},
+          'calm_min': {'mode': 'fix', 'value': 0.05, 'at': at}, 'calm_max': {'mode': 'fix', 'value': 0.1, 'at': at},
+          'flow_level': {'mode': 'fix', 'value': 0.8, 'at': at}, 'bogus': {'mode': 'fix', 'value': 1},
+          'knob.density': {'mode': 'fix', 'value': 'lots'}}
+    river, s = _v2_show(tmp_path, ov)
+    seen = {}
+    real_step = s.ropes.step
+
+    def spy(dt, ctx):
+        seen.update(ctx)
+        return real_step(dt, ctx)
+    s.ropes.step = spy
+    for i in range(30):
+        s.tick(T0 + i / 30, 1 / 30, 30)
+    st = s.last_status
+    p = st['params']
+    assert p['knob.speed'] == {'mode': 'fix', 'auto': p['knob.speed']['auto'], 'value': 0.9, 'source': 'fixed',
+                               'expires_in_s': None}
+    assert p['knob.turbulence']['source'] == 'adjusted'
+    assert p['knob.turbulence']['value'] == pytest.approx(min(1.0, p['knob.turbulence']['auto'] + 0.2), abs=1e-3)
+    assert p['knob.density']['source'] == 'auto', 'an invalid override is dropped, never raises'
+    assert st['knobs']['speed'] == 0.9 and seen['knobs']['speed'] == 0.9
+    assert st['palette'] == ['#102030', '#405060', '#a0b0c0'] and p['palette']['value'] == ['#102030', '#405060', '#a0b0c0']
+    assert seen['level'] == 0.5 and seen['flow_level'] == 0.8 and 0.05 <= seen['calm_level'] <= 0.1
+    assert set(st['overrides']) >= {'knob.speed', 'palette', 'master_brightness'} and 'bogus' not in st['overrides']
+
+
+def test_v2_simulated_people_replace_the_counter_and_clear_after_two_minutes(tmp_path):
+    at = iso(T0)
+    river, s = _v2_show(tmp_path, {'headcount': {'mode': 'fix', 'value': 8, 'at': at},
+                                   'lingerer_rope': {'mode': 'fix', 'value': 12, 'at': at}},
+                        presence={'t': T0, 'count': 1, 'people': [], 'lingerers': []})
+    for i in range(20):
+        s.tick(T0 + i * 0.5, 0.5, 30)
+    st = s.last_status
+    assert st['simulating'] is True and st['inputs']['headcount']['source'] == 'simulated'
+    assert st['inputs']['headcount']['value'] == 8.0 and st['inputs']['lingerers']['value'] == [12]
+    assert st['people']['headcount'] == 8 and 12 in st['people']['linger_ropes'] and st['people']['crowd'] > 0
+    assert st['params']['headcount']['auto'] == 1.0 and st['params']['headcount']['value'] == 8.0
+    # past at + 2 minutes the counter comes back by itself
+    (river / 'presence.json').write_text(json.dumps({'t': T0 + 130, 'count': 1, 'people': [], 'lingerers': []}))
+    for i in range(4):
+        s.tick(T0 + 130 + i * 0.5, 0.5, 30)
+    st = s.last_status
+    assert st['simulating'] is False and st['inputs']['headcount'] == {
+        'value': 1.0, 'source': 'counter', 'age_s': st['inputs']['headcount']['age_s'], 'fresh': True}
+
+
+def test_v2_a_fixed_day_plays_from_the_next_loop_and_a_missing_one_is_ignored(tmp_path):
+    at = iso(T0)
+    river, s = _v2_show(tmp_path, {'day': {'mode': 'fix', 'value': '2017-02-07', 'at': at},
+                                   'surge_hour': {'mode': 'fix', 'value': 10.0, 'at': at}})
+    s.tick(T0, 0.0)
+    assert s.last_status['day']['date'] == '2017-02-07' and s.last_status['day']['source'] == 'override'
+    assert s.last_status['inputs']['day']['source'] == 'control' and s.last_status['params']['day']['source'] == 'fixed'
+    assert s.last_status['surge']['hour'] == 10.0 and s.last_status['surge']['t_s'] == 125.0
+    assert s.last_status['params']['surge_hour'] == {'mode': 'fix', 'auto': 11.5, 'value': 10.0, 'source': 'fixed',
+                                                     'expires_in_s': None}
+    s.tick(T0 + 301, 1.0)
+    assert s.last_status['day']['date'] == '2017-02-07', 'it keeps playing while the override holds'
+    # 2008-10-02 is a real day (days.csv) but not in this library: the show plays its own day, no error
+    (river / 'remembered' / 'control.json').write_text(json.dumps(
+        {'overrides': {'day': {'mode': 'fix', 'value': '2008-10-02', 'at': at}}}))
+    s.tick(T0 + 302, 1.0)
+    s.tick(T0 + 602, 0.25)
+    assert s.last_status['day']['date'] == '2005-12-31' and s.last_status['params']['day']['source'] == 'auto'
+    assert s.error is None
+
+
+def test_v2_no_random_small_surge_while_the_room_is_busy(tmp_path):
+    s = show.Show(river_dir=tmp_path)
+    snap = {'times': {'drawback': 1e6, 'calm': 2e6}, 't_s': 10.0, 'phase': 'calm'}
+    quiet = {'available': True, 'presence': 0.0, 'relative': 0.0, 'lingerers': []}
+    s.room_state.crowd = 0.5                               # a crowd mounting, but the 30 s median still says empty
+    now = 1000.0
+    for i in range(int(600 / 0.5)):
+        now += 0.5
+        s._mini(now, snap, quiet)
+        assert s.mini_t0 is None

@@ -117,7 +117,9 @@ TD writes `River\remembered\status.json` twice a second (read by the full check 
  "phase": "building",
  "day": {"date": "2017-02-07", "reason": "...", "chosen_by": "resemblance", "source": "dave", "age_s": 220, "next": null},
  "surge": {"hour": 13.5, "t_s": 162.0, "why": "Dave: hour 13.5", "room_shift_s": 0},
- "knobs": {"speed": 0.5, "density": 0.6, "brightness": 0.7, "turbulence": 0.4, "reflex": {"speed": 0.05}},
+ "knobs": {"speed": 0.5, "density": 0.6, "brightness": 0.7, "turbulence": 0.4, "reflex": {"speed": 0.05},
+           "why": {"speed": "Dave 0.42 · day 0.61 · reflex +0.05 → 0.57", "density": "Dave 0.55 · day 0.65 → 0.60",
+                   "brightness": "Dave 0.70 · day 0.70 → 0.70", "turbulence": "Dave 0.35 · day 0.45 → 0.40"}},
  "palette": ["#0b3d5c", "#1f8fb3", "#bfefff"],
  "ropes_follow": "sound", "heard": 0.62, "river_motion": 0.41, "river_source": "live",
  "room": {"presence": 3.2, "usual": 2.1, "relative": 1.5, "lingerers": [{"x": 0.4, "y": 0.8, "still_s": 12, "ropes": [7, 8]}]},
@@ -151,16 +153,22 @@ TD writes `River\remembered\status.json` twice a second (read by the full check 
    "master_brightness": {"mode": "auto", "auto": 1.0, "value": 1.0, "source": "auto", "expires_in_s": null}},
  "effects": {},
  "overrides": {},
- "simulating": true}
+ "simulating": true,
+ "people": {"available": true, "headcount": 8, "crowd": 0.62, "empty": 0.0, "wake": 0.0, "linger_strength": 0.8,
+            "linger_ropes": [6, 7, 8], "lingerers": 1, "nobody_s": 0.0},
+ "signals": {"gallery": {}, "river": {}}}
 ```
 
-**v2 additions** (plan decisions 5, 6, 8; `status.py` `build(sources=, params=, effects=, overrides=)`), so mission control can show inputs → parameters → outputs and who is steering:
+**v2 additions** (plan decisions 5, 6, 8; `status.py` `build(sources=, params=, effects=, overrides=, people=, knobs_why=, signals=)`, all filled by `show.py`), so mission control can show inputs → parameters → outputs and who is steering:
 
 - `inputs`: always every name in `status.INPUTS` (`day`, `scene`, `reflex`, `heard`, `river_motion`, `headcount`, `lingerers`, `control`), each `{value, source, age_s, fresh}` (`value` a number, string, list or null, never an object: `scene` and `reflex` give their knobs as `[speed, density, brightness, turbulence]`); `source` is one of `dave`, `notable`, `preset`, `cam`, `clip`, `sound`, `counter`, `simulated`, `control` (null: no such input now, `fresh` false). A simulated headcount or lingerer reports `source: "simulated"`.
 - `params`: always every overridable parameter (`control_schema.PARAMS`), each `{mode: auto|fix|adjust, auto, value, source: auto|fixed|adjusted, expires_in_s}`: what the show computed, what it used, and how long an override has left (null: sticky until cleared).
 - `effects`: what the people effects in the ropes are doing (from `ropes.py`, passed through as it gives them; `{}` while they report nothing). Its keys are the ropes' own.
 - `overrides`: the overrides in force, keyed by parameter, each the cleaned `control.json` entry plus `expires_in_s` and `simulated`, e.g. `{"headcount": {"mode": "fix", "value": 8.0, "at": "2026-10-29T04:12:09Z", "expires_at": "2026-10-29T04:14:09Z", "expires_in_s": 74, "simulated": true}, "knob.speed": {"mode": "adjust", "offset": 0.1, "gain": 1.2, "at": "2026-10-29T04:00:00Z", "expires_at": null, "expires_in_s": null, "simulated": false}}`.
 - `simulating`: true while a simulated headcount or lingerer is in force (the page's red SIMULATING banner).
+- `knobs.why`: each knob's parts in words (`knobs.describe`): Dave's remapped voice, the remembered day's hour, the reflex when it moves the knob, and the knob before any override (`params.knob.*` has the override).
+- `people`: the room as the ropes feel it (`room.RoomState.status()`, from the counter's newest count, or the simulated people): `headcount`, `crowd` (0–1, mounts and subsides over ~60 s), `empty` (0–1), `wake` (someone just came into an emptying room), `linger_strength` and `linger_ropes` (the ropes gathering light), `lingerers`, `nobody_s`.
+- `signals`: Dave's raw signals from `reflex.json` (drocamor/river-agent#14; `clock.read_signals`), `{group: {name: {value, slow, age_s, stale}}}`, with `gallery` and `river` always present (empty until his agent sends them).
 
 **The inputs log** `River\logs\inputs.jsonl` (`td/remembered/inputs_log.py`): one line `{"t", "inputs": {name: {"v", "s"}}, "params": {name: {"v", "s"}}}` every 5 s, or sooner (at most once a second) when an input's or parameter's source changes or its value moves by more than 2 % (of a 0–1 range; 2 % of the value above 1). At 20 MB it moves to `inputs.jsonl.1` (one old file kept). `inputs_log.recent(path, seconds=86400, fields=['inputs.heard', 'params.knob.speed'])` returns `{field: [[t, value], ...]}`, at most 300 points per field (numbers averaged per time bucket), for the page's sparklines.
 
