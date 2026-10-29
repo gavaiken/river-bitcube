@@ -118,7 +118,7 @@ def test_lingerers_are_still_and_close_with_their_nearest_ropes():
     ls = counter.lingerers(ppl, feet, 640 / 360)
     assert ls == [{'x': 0.41, 'y': 0.94, 'still_s': 12.0, 'ropes': [2, 3]},
                   {'x': 0.95, 'y': 0.94, 'still_s': 9.0, 'ropes': []}]
-    assert counter.LINGER_STILL_S == 8.0 and counter.LINGER_MIN_H == 0.40
+    assert counter.LINGER_STILL_S == 5.0 and counter.LINGER_MIN_H == 0.25
 
 
 def test_presence_record_keeps_t_and_count(tmp_path):
