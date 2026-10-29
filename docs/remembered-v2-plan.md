@@ -43,13 +43,15 @@ Gavin audited the remembered river on 28 Oct (the look in `river-all-looks.toe`)
 | 3c | Overrides in `parse_control` + schema; simulated people with 2-min expiry; master brightness; calm range; applied in `show.py`; reported in `status.json` with sources; inputs logger | Opus | ✅ `66825e4` (modules), `6268ce2` (`show.py` wired) |
 | 3d | Build `river-all-looks-v2.toe` (`build_all_looks_v2.py`), `shows.json` entry, rebuild, verify with simulated people, tag | Fable | ✅ `4107199` registered, `5186f33` rebuilt from live code, TD on it 01:35; verified 01:36 with a simulated lingerer (rope 7) + 6 people: sparks 25–40, crowd 0→0.68 in 42 s, 300–960 W, 57–64 fps, the column visibly lit on the cam. **Boot default still `river-all-looks.toe` (v1)** until Gavin says. |
 | 4 | v2 page: `mission/public/remembered-v2.*`, `/api/remembered` extended, overrides API in `mission.mjs` + `probe.ps1`, route detection, explainers; tests; `docs/mission-ui.md` | Opus | ✅ `03c28cf` + `e97c8fb` (the writers swap with Move-Item: IO.File::Replace failed on bitcube); all six probe actions exercised on bitcube 01:51 |
-| 5 | Perf + dead code: `panels.py` → `motion.py`; drop `particles.py`/`flow.py` if unreachable; one motion pass; `lit_pct` cheaper; library load off-thread; mtime-gated reads; constants in one place | Opus | ➡️ |
+| 5 | Perf + dead code: `panels.py` → `motion.py`; drop `particles.py`/`flow.py` if unreachable; one motion pass; `lit_pct` cheaper; library load off-thread; mtime-gated reads; constants in one place | Opus | ✅ `e1cf141`: 3.5 → 2.2 ms a tick offline; on bitcube Python 11–15 → 3 ms, 60 fps; v2 now plays the approved 30 fps clips (it matched only the v1 name) |
 | 6 | `river-agent` PR: `signals` block in `reflex.json`; `memory.valid_until` | Opus | ✅ [PR #14](https://github.com/drocamor/river-agent/pull/14), awaiting Dave; the show reads both in 3b/3c |
-| 7 | Docs: `remembered-river.md` v2 section, explainer page, GLOSSARY, index; HANDOFF + session summary | Opus (docs), Fable (handoff) | ➡️ |
+| 7 | Docs: `remembered-river.md` v2 section, explainer page, GLOSSARY, index; HANDOFF + session summary | Opus (docs), Fable (handoff) | ✅ `d77c76e`, `docs/sessions/V2.md` |
 
 ✅ done · ➡️ in progress · ❌ not started
 
 ## Log
+
+- 29 Oct 02:15 **all steps done.** v2 rebuilt after step 5 and running on bitcube (`abab5ab`), 60 fps, Python ~3 ms. Open: v2 as the boot default (Gavin); Dave's PR #14.
 
 - 29 Oct 01:52 v2 page live in mission control (self-updates within ~5 min); probe actions proven on bitcube; perf agent (5) and docs agent (7) running.
 
