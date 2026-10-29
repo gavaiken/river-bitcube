@@ -3,6 +3,7 @@
 River/remembered/video-library.json:
 {"shows": {"river-all-looks.toe": {"directory": "remembered-30fps-20261028", "files": ["a.mp4", "b.mp4"]}}}
 Directory and files are plain names under River/recordings/river. Read only on project initialization.
+river-all-looks-v2.toe falls back to river-all-looks.toe's entry when it has none of its own.
 """
 import json
 from pathlib import Path
@@ -14,7 +15,9 @@ def clips_for(river, show):
     fallback = sorted(str(p).replace('\\', '/') for p in (base / 'remembered').glob('*.mp4'))
     try:
         config = json.loads((river / 'remembered' / 'video-library.json').read_text(encoding='utf-8-sig'))
-        entry = config['shows'][show]
+        shows = config['shows']
+        # river-all-looks-v2.toe plays what river-all-looks.toe was given (the approved 30 fps clips) unless it has its own entry
+        entry = shows[show] if show in shows else shows[show.replace('-v2.toe', '.toe')]
         directory, files = entry['directory'], entry['files']
         def plain(value):
             return isinstance(value, str) and value not in ('', '.', '..') and not any(c in value for c in '/\\:')

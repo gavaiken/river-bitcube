@@ -60,3 +60,17 @@ def test_actual_runtime_holder_uses_preference_on_fresh_start(tmp_path, monkeypa
     monkeypatch.delitem(sys.modules, 'remembered_live', raising=False)
     assert show._holder().clips == clips_for(tmp_path, 'river-all-looks.toe')
     assert all('/smooth/' in p for p in show._holder().clips)
+
+
+def test_v2_takes_the_all_looks_entry_when_it_has_none(tmp_path):
+    base = tmp_path / 'recordings' / 'river'
+    (base / 'remembered').mkdir(parents=True)
+    (base / 'remembered' / 'orig.mp4').write_bytes(b'x')
+    (base / 'fast').mkdir()
+    (base / 'fast' / 'a.mp4').write_bytes(b'x')
+    (tmp_path / 'remembered').mkdir()
+    (tmp_path / 'remembered' / 'video-library.json').write_text(
+        '{"shows": {"river-all-looks.toe": {"directory": "fast", "files": ["a.mp4"]}}}')
+    from remembered import video_library
+    assert video_library.clips_for(tmp_path, 'river-all-looks-v2.toe') == [str(base / 'fast' / 'a.mp4').replace('\\', '/')]
+    assert video_library.clips_for(tmp_path, 'river-remembered.toe') == [str(base / 'remembered' / 'orig.mp4').replace('\\', '/')]

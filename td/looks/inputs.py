@@ -20,17 +20,21 @@ Read the way the remembered river reads them (td/remembered/show.py, clock.py, p
   remembered\\status.json     the river (river_source, river_motion) while under RIVER_STALE_S old, else the live show's
                              own river, else none; and the room's usual (median over 10 min)
   presence.json              people (count) and lingerers ({ropes, still_s}) while under PRESENCE_STALE_S old
+While the remembered river is ticking (its last tick under SHOW_FRESH_S ago) these are the show's own parsed copies
+(show.state, show.reflex, show.presence_raw, show.last_status) instead of a second read; otherwise each file is parsed
+again only when it changed (remembered/files.py).
 """
 import datetime as dt
 import math
 from pathlib import Path
 
+from remembered import files
 from remembered import palette as palette_mod
 from remembered import show as rshow
+from remembered.files import PRESENCE_STALE_S, RIVER_STALE_S   # noqa: F401 (status.json older: the show isn't writing)
+from remembered.knobs import KNOBS
 
-KNOBS = ('speed', 'density', 'brightness', 'turbulence')
-RIVER_STALE_S = 10.0                 # remembered\status.json older than this: the remembered river isn't writing
-PRESENCE_STALE_S = 30.0              # as the remembered river (show.PRESENCE_STALE_S)
+SHOW_FRESH_S = 3.0                   # the remembered show ticked this recently: reuse what it read (it reads every <= 2 s)
 SOURCES = ('live', 'clip', 'none')
 
 
@@ -59,13 +63,14 @@ def _age(now, stamp):
 
 
 def _read(path):
-    """(json or None, mtime or None)."""
-    data = rshow.read_json(path)
-    try:
-        mtime = Path(path).stat().st_mtime
-    except OSError:
-        mtime = None
-    return data, mtime
+    """(json or None, mtime or None), parsed again only when the file changed (read-only: copy before changing it)."""
+    return files.read_json_cached(path)
+
+
+def _live(show, now):
+    """The remembered show, if it ticked within SHOW_FRESH_S (then its parsed inputs are current), else None."""
+    t = _num(getattr(show, 'last_tick', None)) if show is not None else None
+    return show if t is not None and 0 <= now - t < SHOW_FRESH_S else None
 
 
 def _epoch(x):
@@ -123,9 +128,15 @@ def _scene(state):
     return name, pal, knobs
 
 
-def _dave(river, now):
+def _dave(river, now, show=None):
     out = dict.fromkeys(('age_s', 'memory_date', 'surge_at', 'scene', 'palette', 'knobs', 'heard', 'heard_age_s'))
-    state, mtime = _read(river / 'gallery_state' / 'state.json')
+    if show is not None:
+        state, mtime = show.state, show.state_mtime
+        reflex = show.reflex
+        rmtime = reflex.get('_mtime') if isinstance(reflex, dict) else None
+    else:
+        state, mtime = _read(river / 'gallery_state' / 'state.json')
+        reflex, rmtime = _read(river / 'gallery_state' / 'reflex.json')
     if isinstance(state, dict):
         stamp = _epoch(state.get('set_at_epoch'))
         if stamp is None:
@@ -136,7 +147,6 @@ def _dave(river, now):
             out['memory_date'] = mem['date']
         out['surge_at'] = _surge_at(state)
         out['scene'], out['palette'], out['knobs'] = _scene(state)
-    reflex, rmtime = _read(river / 'gallery_state' / 'reflex.json')
     if isinstance(reflex, dict):
         stamp = _num(reflex.get('updated_epoch'))
         out['heard_age_s'] = _age(now, stamp if stamp else rmtime)
@@ -152,9 +162,13 @@ def _dave(river, now):
 
 # ---- the river and the room ------------------------------------------------------------------------------------------
 
-def _remembered_status(river, now):
-    """remembered\\status.json while it's fresh (the remembered river writing it), else None. Returns (status, age_s)."""
-    st, mtime = _read(river / 'remembered' / 'status.json')
+def _remembered_status(river, now, show=None):
+    """remembered\\status.json while it's fresh (the remembered river writing it), else None. Returns (status, age_s).
+    The live show's own last status when it's ticking (it wrote that file)."""
+    if show is not None and isinstance(getattr(show, 'last_status', None), dict):
+        st, mtime = show.last_status, None
+    else:
+        st, mtime = _read(river / 'remembered' / 'status.json')
     if not isinstance(st, dict):
         return None, None
     t = _num(st.get('t'))
@@ -178,7 +192,7 @@ def _river(status, status_age, show, now):
                 src = src if src in SOURCES else None
                 motion = None
                 if src not in (None, 'none'):
-                    motion = _r(show.panels.motion.level)
+                    motion = _r(show.motion.level)
                 return {'source': src, 'motion': motion, 'age_s': _age(now, rt)}
         except Exception:                                         # noqa: BLE001 - a half-built show is no river
             pass
@@ -197,9 +211,9 @@ def _usual(status, show, now):
     return None
 
 
-def _room(river, now, usual):
+def _room(river, now, usual, show=None):
     out = {'people': None, 'usual': usual, 'lingerers': None}
-    data, _ = _read(river / 'presence.json')
+    data = show.presence_raw if show is not None else _read(river / 'presence.json')[0]
     if not isinstance(data, dict):
         return out
     t = _num(data.get('t'))
@@ -237,12 +251,13 @@ def gather(river_dir, now, remembered_show=None):
         now = float(now)
     except (TypeError, ValueError):
         return out
+    live = _live(remembered_show, now)
     try:
-        out['dave'] = _dave(river, now)
+        out['dave'] = _dave(river, now, live)
     except Exception:                                             # noqa: BLE001 - never stop the show
         pass
     try:
-        status, status_age = _remembered_status(river, now)
+        status, status_age = _remembered_status(river, now, live)
     except Exception:                                             # noqa: BLE001
         status, status_age = None, None
     try:
@@ -250,7 +265,7 @@ def gather(river_dir, now, remembered_show=None):
     except Exception:                                             # noqa: BLE001
         pass
     try:
-        out['room'] = _room(river, now, _usual(status, remembered_show, now))
+        out['room'] = _room(river, now, _usual(status, remembered_show, now), live)
     except Exception:                                             # noqa: BLE001
         pass
     return out

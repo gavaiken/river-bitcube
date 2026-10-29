@@ -363,7 +363,7 @@
       "created": "2026-10-27",
       "updated_by": "Gavin (Claude, Mac mini)",
       "updated": "2026-10-29",
-      "last_change": "build scripts take REPO_OVERRIDE so a frozen show can build from its own pinned checkout (remembered v2 plan, step 2); .toe unchanged"
+      "last_change": "build_remembered.py reloads the v2 modules (files, knobs, room, overrides, inputs_log, motion, geometry) in place of the deleted panels/particles/flow (remembered v2 plan, step 5); .toe unchanged"
     },
     {
       "file": "river-filling.toe",

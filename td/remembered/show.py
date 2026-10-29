@@ -18,7 +18,6 @@ Everything up to the TD wrappers at the bottom is plain Python + numpy and is te
 Live state lives in a holder module in sys.modules ('remembered_live'), never in comp.storage; times are wall-clock
 (time.time()), never absTime.
 """
-import json
 import math
 import sys
 import time
@@ -36,28 +35,29 @@ from . import knobs as knobs_mod
 from . import overrides as overrides_mod
 from . import palette
 from . import room as room_mod
-from . import panels as panels_mod
+from . import files
+from . import motion as motion_mod
 from . import ropes as ropes_mod
 from . import status as status_mod
 from . import water as water_mod
 from . import video_library
-from . import particles as particles_mod
-from . import flow as flow_mod
 from . import ribbons as ribbons_mod
 from . import ribbons_gpu
 from . import zones as zones_mod
 # the knobs (Dave's remapped voice + the remembered day + the reflex) and the shared warn-once set live in knobs.py
 from .knobs import Knobs, fresh_reflex, KNOBS, NEUTRAL, REFLEX_TAU, REFLEX_MTIME_S, _warned, warn_once, num_or  # noqa: F401
 
-RIVER = Path(r'C:\Users\user\River')
+RIVER = files.RIVER
 REPO = Path(__file__).resolve().parents[2]
 SHOW = 'river-remembered.toe'
+# how often each input is looked at; a file is parsed again only when it changed (files.read_json_cached), and the
+# library only when its files did (clock.load_library)
 READ_DAVE_S, READ_PRESENCE_S, READ_CONTROL_S, READ_LIBRARY_S = 2.0, 0.5, 1.0, 600.0
-PRESENCE_STALE_S = 30.0
+PRESENCE_STALE_S = files.PRESENCE_STALE_S
 NOW_WINDOW, USUAL_WINDOW, USUAL_FLOOR = 30.0, 600.0, 0.75
 NIGHT_TAU = 1.5
 DAY_PALETTE_S = 8.0                 # a new day's palette glides in with the decision wave
-RIVER_STALE_S = 10.0
+RIVER_STALE_S = files.RIVER_STALE_S
 ROPE_EVERY = 2                      # the ropes step every 2nd frame (30 Hz), alternating with the ribbons
 PANEL_EVERY = 2                     # screens step every 2nd frame
 # control.json's fields (control_schema.FIELDS) -> the keys the show uses
@@ -71,15 +71,22 @@ CONTROL_KEYS = {'pool_height_m': 'pool_height_m', 'light': 'light', 'leds': 'led
 CONTROL_DEFAULT = {key: control_schema.DEFAULTS[name] for name, key in CONTROL_KEYS.items()}
 CONTROL_DEFAULT.update(leds=[], screen_intensity=None, screen_threshold=None)
 LIGHT_CLOCK_SLACK_S = 2.0           # a light stamped this much before the show started still counts (clock rounding)
-# the particle fields: ribbons (silk of glitter, Gavin's reference, 28 Oct, the default) | fine (M2's smoky streaks with
-# ledges, flow.py) | streaks (round 2b, particles.py, checkpoint remembered-particles-v1)
+# the particle field: ribbons (silk of glitter, Gavin's reference, 28 Oct). control_schema still accepts the retired
+# 'fine' (M2, flow.py) and 'streaks' (round 2b, particles.py; checkpoint remembered-particles-v1) that no page offered:
+# both run the ribbons now (29 Oct, step 5). A ribbon field that can't be built leaves the screens black ('none').
 FIELDS = tuple(control_schema.FIELDS['screens.field']['choices'])   # ('ribbons', 'fine', 'streaks')
+RETIRED_FIELDS = {'fine': 'ribbons', 'streaks': 'ribbons'}
+LIT_EVERY = 600                     # GPU ribbons: the lit share in status.json sampled every ~10 s (Ribbons.lit_sample)
 # M4 (the artists, 27 Oct: "more dynamic"): small surges between the main ones
 MINI_EMPTY_S = (60.0, 240.0)        # an empty room: a random small surge every 1-4 minutes
 MINI_ROOM_GAP_S = 60.0              # a busy room or a lingerer: at most one a minute
 MINI_BUSY_CROWD = 0.3               # v2: no random small surges while the crowd (room.py) is above this or anyone lingers
 MINI_LEN_S = 24.0                   # a small surge's body and settling (ropes.MINI_BODY + MINI_SETTLE)
 MINI_CLEAR_S = 45.0                 # never within this of the main surge
+VIDEO_CALM = 0.45                   # the river video behind the GPU ribbons in calm, as a share of a surge's
+VIDEO_BOOST = 1.6                   # and brighter than the simulator's intensity (it shares the screens with the ribbons)
+GPU_OPS = ('ribbons_draw', 'ribbons_trail', 'ribbons_out', 'river_gpu')
+ALL_LOOKS = 'river-all-looks'       # river-all-looks.toe (the frozen v1) and river-all-looks-v2.toe: the readback rules
 SCREEN_CALM = 0.4                   # the screens in calm, as a share of their intensity (artists, 27 Oct: follow the loop)
 DARK_LUMA = 0.08                    # the live cam darker than this (night) -> the screens use the clips
 LIGHTS = tuple(control_schema.FIELDS['light']['choices'])          # ('off', 'pool', 'eddies', 'leds')
@@ -133,11 +140,7 @@ def screen_level(t, times, opening=True):
     return 1.0 - (1 - SCREEN_CALM) * ease((t - st) / max(1.0, c - st))
 
 
-def read_json(path):
-    try:
-        return json.loads(Path(path).read_text(encoding='utf-8-sig'))
-    except (OSError, ValueError):
-        return None
+read_json = files.read_json         # (td/looks/inputs.py and older callers)
 
 
 def median(xs):
@@ -224,7 +227,7 @@ class Show:
         self.show = show
         self.loop = clock.Loop(seed)
         self.ropes = ropes_mod.Ropes(self.z, seed)
-        self.panels = panels_mod.Panels(self.z, seed)
+        self.motion = motion_mod.Motion()     # the river's motion level (the ropes' flow without sound)
         self.water = water_mod.Water()
         self.calib = (pixelmap, screens, zones_path, seed)
         self.fields = {}
@@ -252,6 +255,9 @@ class Show:
         self.night = 0.0
         self.state = self.reflex = None
         self.state_mtime = None
+        self.presence_raw = None              # presence.json as read (before any simulated people), for td/looks/inputs.py
+        self.last_tick = None                 # the last tick's time: the looks' inputs reuse what it read while it's fresh
+        self._reflex_src = None
         self.control = dict(CONTROL_DEFAULT)
         self.overrides = {}                   # control.json's overrides block, validated (control_schema.validate_overrides)
         self.control_mtime = None
@@ -270,12 +276,14 @@ class Show:
         self.fps = 0.0
         self.rope_frame = np.zeros((ropes_mod.N_ROPES, ropes_mod.N_PX, 3), np.float32)
         self.rope_dt = 0.0
-        self.panel_frame = np.zeros((panels_mod.QH, panels_mod.QW * panels_mod.NQ, 3), np.float32)
+        self.panel_frame = np.zeros((water_mod.QH, water_mod.QW * water_mod.NQ, 3), np.float32)
+        self.panel_static = False             # panel_frame is the GPU path's untouched black frame (panel_image reuses it)
         self.last_status = None
         self.last_day = None
         self.error = None
         self.ticks = 0
         self.panel_dt = 0.0
+        self._black = None                    # the GPU path's black panel frame (never written to)
 
     def screens_now(self):
         """What the screens run on now (status.json screens; the Remembered river page's "Now on bitcube")."""
@@ -293,18 +301,17 @@ class Show:
         return self.gpu_ok and self.control['screen_gpu'] and self.field_kind == 'ribbons'
 
     def use_field(self, kind):
-        """Switch the particle windows to another field (built once, kept); round 2b's streaks if one can't be built."""
-        if kind == self.field_kind:
+        """The particle windows' field: the ribbons (the retired 'fine' and 'streaks' map to them), built once and kept;
+        a black field ('none': dark screens, no rope overlay) if they can't be built."""
+        kind = RETIRED_FIELDS.get(kind, kind)
+        if self.field_kind is not None:
             return
-        if kind not in self.fields:
-            try:
-                self.fields[kind] = _build_field(kind, *self.calib)
-            except Exception as e:                                # noqa: BLE001
-                print(f'remembered: the {kind} field failed ({e}); using the round 2b streaks')
-                kind = 'streaks'
-                if kind not in self.fields:
-                    self.fields[kind] = _build_field(kind, *self.calib)
-        self.field, self.field_kind = self.fields[kind], kind
+        try:
+            self.field, self.field_kind = _build_field(kind, *self.calib), kind
+        except Exception as e:                                    # noqa: BLE001
+            print(f'remembered: the {kind} field failed ({e}); the screens stay dark')
+            self.field, self.field_kind = BlackField(), 'none'
+        self.fields = {self.field_kind: self.field}
     def _calm_level(self, opening, preset, day, hour, room, now, lo=0.18, hi=0.6):
         """M4: calm is a continuous curve, not one fixed level: the remembered day's hours (its rain and flow), the
         room (busier than usual: higher) and a slow drift, around the usual calm level; clamped to lo..hi (the calm_min /
@@ -356,39 +363,32 @@ class Show:
     # ---- inputs ----------------------------------------------------------------------------------------------------
 
     def feed_river(self, img, source, now):
-        """A new river frame (row 0 at the top; live cam or the recorded clip)."""
-        self.panels.feed(img)                                     # the river cam's motion level (the ropes' flow without sound)
+        """A new river frame (row 0 at the top; live cam or the recorded clip): one luma copy for the motion level and,
+        while the video is drawn, the water's motion mask."""
+        g = motion_mod.river_luma(img)
+        self.motion.feed_luma(g)
         if self.wants_video():
-            self.water.feed(img)
+            self.water.feed_luma(g)
         self.river_source = source
         self.river_t = now
 
     def _read(self, now):
+        """Look at the input files on their schedules; each is parsed again only when it changed (files.read_json_cached:
+        the same dict back otherwise, never changed here: copies are made before anything is added)."""
         if now >= self.next['dave']:
             self.next['dave'] = now + READ_DAVE_S
-            p = self.river / 'gallery_state' / 'state.json'
-            self.state = read_json(p)
-            try:
-                self.state_mtime = p.stat().st_mtime
-            except OSError:
-                self.state_mtime = None
-            rp = self.river / 'gallery_state' / 'reflex.json'
-            self.reflex = read_json(rp)
-            if isinstance(self.reflex, dict):
-                try:
-                    self.reflex['_mtime'] = rp.stat().st_mtime
-                except OSError:
-                    pass
+            self.state, self.state_mtime = files.read_json_cached(self.river / 'gallery_state' / 'state.json')
+            raw, rmtime = files.read_json_cached(self.river / 'gallery_state' / 'reflex.json')
+            if raw is not self._reflex_src or not isinstance(raw, dict):
+                self._reflex_src = raw
+                self.reflex = dict(raw) if isinstance(raw, dict) else raw
+                if isinstance(self.reflex, dict) and rmtime is not None:
+                    self.reflex['_mtime'] = rmtime
             self.knobs.set_scene(self.state, now)
             self.knobs.set_reflex(self.reflex, now)
         if now >= self.next['control']:                          # before presence: the simulated people are overrides
             self.next['control'] = now + READ_CONTROL_S
-            cp = self.river / 'remembered' / 'control.json'
-            raw = read_json(cp)
-            try:
-                mtime = cp.stat().st_mtime
-            except OSError:
-                mtime = None
+            raw, mtime = files.read_json_cached(self.river / 'remembered' / 'control.json')
             self.control_mtime = mtime
             self.control, why = effective_light(parse_control(raw), raw, mtime, self.started, now)
             if why and why != self.light_dropped:
@@ -403,10 +403,11 @@ class Show:
                 self.overrides = {}
         if now >= self.next['presence']:
             self.next['presence'] = now + READ_PRESENCE_S
-            self.room.add(now, self._people(read_json(self.river / 'presence.json'), now))
+            self.presence_raw = files.read_json_cached(self.river / 'presence.json')[0]
+            self.room.add(now, self._people(self.presence_raw, now))
         if now >= self.next['library']:
             self.next['library'] = now + READ_LIBRARY_S
-            self.lib = clock.load_library(self.data)
+            self.lib = clock.load_library(self.data)              # parsed again only when its files changed
 
     def _people(self, raw, now):
         """presence.json as the show takes it: the counter's file, or (while someone simulates people, overrides.py
@@ -534,6 +535,7 @@ class Show:
             self.fps += (1.0 / dt - self.fps) * 0.05
         if self.started is None:
             self.started = now
+        self.last_tick = now
         self._read(now)
         self.params = {}
         mirror_age = None if self.state_mtime is None else max(0.0, now - self.state_mtime)
@@ -582,7 +584,7 @@ class Show:
         self.room_state.update(dt, count, room['lingerers'], room['available'])
         heard = heard_of(self.reflex, now)
         river_live = self.river_t is not None and now - self.river_t < RIVER_STALE_S
-        motion = self.panels.motion.level if river_live else None
+        motion = self.motion.level if river_live else None
         flow_level, _ = self._ov('flow_level', heard if heard is not None else motion, now)
         cmin, _ = self._ov('calm_min', control_schema.PARAMS['calm_min']['default'], now)
         cmax, _ = self._ov('calm_max', control_schema.PARAMS['calm_max']['default'], now)
@@ -625,15 +627,18 @@ class Show:
         if self.ticks % PANEL_EVERY == 0:                 # the screens at 30 fps: half the work, still smooth
             # the artists' simulator look (water.py): the moving water through four drifting windows, everything else off
             self.gpu_gain = 0.0
+            self.panel_static = False
             self.pal_now = {k: tuple(float(c) for c in pal[k]) for k in ('deep', 'mid', 'light')}
             if self.control['screen_mode'] == 'particles' and self.gpu_active():
                 # the GPU draws the ribbons and the river under them (ribbon_params -> ribbons_draw ... ribbons_out, and
-                # river_gpu); panel_render carries nothing; now and then a numpy render for the lit share in status.json
+                # river_gpu); panel_render carries one black frame, made once; every ~10 s a sample of the field (no
+                # render, no trails) for the lit share in status.json
                 self.gpu_gain = self.screen_intensity()
-                if self.ticks % 300 == 0:
-                    self.field.render_screens(pal['light'])
-                if self.panel_frame is None or self.panel_frame.any():
-                    self.panel_frame = np.zeros((ribbons_gpu.QH, ribbons_gpu.QW * 4, 3), np.float32)
+                if self.ticks % LIT_EVERY == 0 or self.ticks <= PANEL_EVERY:
+                    self.field.lit_sample()
+                if self._black is None:
+                    self._black = np.zeros((ribbons_gpu.QH, ribbons_gpu.QW * 4, 3), np.float32)
+                self.panel_frame, self.panel_static = self._black, True
             elif self.control['screen_mode'] == 'particles':
                 inten = self.screen_intensity()
                 if self.field_kind == 'ribbons':                 # intensity folded into the ribbons' colour lookup
@@ -703,11 +708,26 @@ def _project_name():
 
 
 def _build_field(kind, pixelmap, screens, zones_path, seed):
-    if kind == 'ribbons':
-        return ribbons_mod.Ribbons.from_files(pixelmap, screens, zones_path, seed)
-    if kind == 'fine':
-        return flow_mod.FineField.from_files(pixelmap, screens, zones_path, seed)
-    return particles_mod.Field(particles_mod.Geometry(pixelmap, screens), seed)
+    if kind != 'ribbons':
+        raise ValueError(f'no field {kind!r}')
+    return ribbons_mod.Ribbons.from_files(pixelmap, screens, zones_path, seed)
+
+
+class BlackField:
+    """The field when the ribbons can't be built (a calibration file unreadable): dark screens, nothing on the ropes."""
+    lit_pct = [0, 0, 0, 0]
+
+    def step(self, dt, intensity, rope_speed_leds, turbulence=0.5):
+        pass
+
+    def lit_sample(self):
+        return self.lit_pct
+
+    def render_ropes(self, colour):
+        return np.zeros((ropes_mod.N_ROPES, ropes_mod.N_PX, 3), np.float32)
+
+    def render_screens(self, colour, gain=1.0):
+        return np.zeros((water_mod.QH, water_mod.QW * water_mod.NQ, 3), np.float32)
 
 
 def get(comp):
@@ -729,11 +749,6 @@ def frame(comp):
         o = comp.op(n)
         if o is not None:
             o.cook(force=True)
-
-
-VIDEO_CALM = 0.45                   # the river video behind the GPU ribbons in calm, as a share of a surge's
-VIDEO_BOOST = 1.6                   # and brighter than the simulator's intensity (it shares the screens with the ribbons)
-GPU_OPS = ('ribbons_draw', 'ribbons_trail', 'ribbons_out', 'river_gpu')
 
 
 def check_gpu(comp, show):
@@ -773,9 +788,14 @@ def params_image(show, fade=1.0, on=True):
     return np.ascontiguousarray(ribbons_gpu.params(show.field, show.pal_now, gain, video))
 
 
+def all_looks(show):
+    """The all-looks show files (river-all-looks.toe, river-all-looks-v2.toe): Will's recorded-video rules apply."""
+    return show is not None and str(getattr(show, 'show', '') or '').startswith(ALL_LOOKS)
+
+
 def direct_recorded_video(show):
     """All-looks only: recorded video bypasses the slow mask when explicitly requested."""
-    return (show is not None and show.show == 'river-all-looks.toe'
+    return (all_looks(show)
             and show.river_source == 'clip' and show.control.get('screen_motion_mask', True) is False)
 
 
@@ -783,21 +803,35 @@ def cpu_video_crops(show):
     """GPU recorded footage samples the movie directly, with or without the slow mask.
     CPU water mode and GPU failure still receive fresh crops on the very next tick.
     """
-    gpu_recorded = (show is not None and show.show == 'river-all-looks.toe'
+    gpu_recorded = (all_looks(show)
                     and show.river_source == 'clip'
                     and show.control.get('screen_mode', 'particles') == 'particles'
                     and show.gpu_active())
     return show.wants_video() and not gpu_recorded
 
 
+_bufs = {}                          # the TD images' RGBA buffers, reused frame to frame (copyNumpyArray copies them)
+
+
+def _rgba(name, h, w):
+    """A reused h x w x 4 float32 buffer with alpha 1 (refill its RGB; never keep a reference across frames)."""
+    b = _bufs.get(name)
+    if b is None or b.shape[:2] != (h, w):
+        b = _bufs[name] = np.empty((h, w, 4), np.float32)
+        b[..., 3] = 1.0
+    return b
+
+
 def mask_image(show):
     """river_mask: water.py's motion mask (320 x 180, 1 = moving water) for river_gpu, upright in TD."""
-    m = show.water.mask if show is not None else np.zeros((water_mod.MH, water_mod.MW), np.float32)
     if direct_recorded_video(show):
-        return np.ones((water_mod.MH, water_mod.MW, 4), np.float32)
-    img = np.empty((m.shape[0], m.shape[1], 4), np.float32)
+        b = _bufs.get('mask_ones')
+        if b is None:
+            b = _bufs['mask_ones'] = np.ones((water_mod.MH, water_mod.MW, 4), np.float32)
+        return b
+    m = show.water.mask if show is not None else np.zeros((water_mod.MH, water_mod.MW), np.float32)
+    img = _rgba('mask', m.shape[0], m.shape[1])
     img[..., 0] = img[..., 1] = img[..., 2] = m[::-1]
-    img[..., 3] = 1.0
     return img
 
 
@@ -846,7 +880,7 @@ def step(comp):
             small = comp.op('river_small')
             a = small.numpyArray(delayed=True) if small is not None else None
             if a is not None:
-                show.feed_river(np.ascontiguousarray(a[::-1, :, :3]), 'live' if getattr(h, 'live', False) else 'clip', now)
+                show.feed_river(a[::-1], 'live' if getattr(h, 'live', False) else 'clip', now)   # (one luma copy: no RGB copy)
         if h.frame % 2 == 0 and cpu_video_crops(show):                # each screen's window of the footage
             for k in range(4):
                 w = comp.op(f'win{k + 1}_fit')
@@ -870,18 +904,20 @@ def step(comp):
 def rope_image(show):
     """[rope][led][rgb] -> the TOP's pixels: 20 wide, 400 tall, LED 0 on the top row (rows start at the bottom)."""
     f = show.rope_frame
-    img = np.empty((f.shape[1], f.shape[0], 4), np.float32)
+    img = _rgba('ropes', f.shape[1], f.shape[0])
     img[..., :3] = f.transpose(1, 0, 2)[::-1]
-    img[..., 3] = 1.0
-    return np.ascontiguousarray(img)
+    return img
 
 
 def panel_image(show):
+    """The screens' 256 x 512 frame, upright in TD. The GPU path's black frame is converted once, not every frame."""
     f = show.panel_frame
-    img = np.empty((f.shape[0], f.shape[1], 4), np.float32)
+    img = _rgba('panels', f.shape[0], f.shape[1])
+    if getattr(show, 'panel_static', False) and _bufs.get('panels_src') is f:
+        return img
     img[..., :3] = f[::-1]
-    img[..., 3] = 1.0
-    return np.ascontiguousarray(img)
+    _bufs['panels_src'] = f if getattr(show, 'panel_static', False) else None
+    return img
 
 
 def cook_ropes(scriptOp):

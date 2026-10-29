@@ -17,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
-from remembered.particles import Geometry, QW, QH, NQ, N_ROPES, N_PX  # noqa: F401
+from remembered.geometry import Geometry, QW, QH, NQ, N_ROPES, N_PX  # noqa: F401
 
 SCREEN_M = (0.32, 0.64)
 SCREEN3_HEIGHT_M = 1.81                       # the calibration's (zones file), the anchor of the measured chain

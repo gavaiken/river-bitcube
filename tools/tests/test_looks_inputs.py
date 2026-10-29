@@ -166,8 +166,8 @@ def test_stale_files_are_unknown(tmp_path):
 def fake_show(river_t=T0 - 2, source='clip', level=0.25, usual=1.2, last_status=None):
     """Just enough of a remembered Show for gather and used_by: its river, its room, its last status."""
     room = types.SimpleNamespace(stats=lambda now: {'available': True, 'usual': usual})
-    panels = types.SimpleNamespace(motion=types.SimpleNamespace(level=level))
-    return types.SimpleNamespace(river_t=river_t, river_source=source, panels=panels, room=room, last_status=last_status)
+    return types.SimpleNamespace(river_t=river_t, river_source=source, motion=types.SimpleNamespace(level=level), room=room,
+                                 last_status=last_status)
 
 
 def test_the_river_from_the_show_when_its_status_is_stale(tmp_path):
@@ -223,3 +223,21 @@ def test_the_summary_line(tmp_path):
     assert inputs.summary_line(blank, {}) == 'Dave: no state, river none, room unknown'
     assert inputs.summary_line(None, None) == 'Dave: no state, river unknown, room unknown'
     assert inputs.summary_line('junk', 'junk') == 'Dave: no state, river unknown, room unknown'
+
+
+def test_a_ticking_show_lends_its_parsed_inputs_instead_of_a_second_read(tmp_path):
+    """While the remembered show ticks, gather takes its state, reflex, presence and last status (no file reads);
+    once it stops ticking (another look) the files are read again."""
+    lay_out(tmp_path)
+    s = fake_show(last_status={'t': T0 - 0.2, 'river_source': 'live', 'river_motion': 0.5, 'room': {'usual': 2.0}})
+    s.last_tick = T0 - 0.1
+    s.state, s.state_mtime = {'memory': {'date': '1999-01-02'}, 'set_at_epoch': T0 - 60}, T0 - 60
+    s.reflex = {'heard': 0.5, 'updated_epoch': T0 - 5, '_mtime': T0 - 5}
+    s.presence_raw = {'t': T0 - 1, 'count': 7, 'lingerers': []}
+    got = inputs.gather(tmp_path, T0, remembered_show=s)
+    assert got['dave']['memory_date'] == '1999-01-02' and got['dave']['age_s'] == 60 and got['dave']['heard_age_s'] == 5
+    assert got['river'] == {'source': 'live', 'motion': 0.5, 'age_s': 0} and got['room']['people'] == 7
+    assert got['room']['usual'] == 2.0
+    s.last_tick = T0 - 10                                 # not ticking: the files as before
+    files_view = inputs.gather(tmp_path, T0, remembered_show=s)
+    assert files_view['dave'] == inputs.gather(tmp_path, T0)['dave'] and files_view['room']['people'] == 3

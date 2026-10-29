@@ -1,8 +1,8 @@
 """Silk ribbons of glitter (28 Oct, Gavin's reference: a twisting translucent sheet of fine sparkling particles, brighter
 where it folds edge-on, loose glitter and soft bokeh around it). numpy only. Not physics: a cheap procedural look.
 
-Same API as flow.FineField / particles.Field: step(dt, intensity, rope_speed_leds, turbulence), render_screens(colour),
-render_ropes(colour), lit_pct.
+API (show.py): step(dt, intensity, rope_speed_leds, turbulence), render_screens(colour, gain), render_ropes(colour),
+lit_sample() (the lit share without a render, for the GPU path), lit_pct.
 
 The space is the filling glass's (x across the piece in the calibration's frame px, y = real height above the floor in the
 same scale), so a ribbon is one continuous thing passing through all four windows and down the ropes.
@@ -131,6 +131,16 @@ class Ribbons:
         self.ch = int(self.y1 - self.y0) + 40
         self.rope_ix = np.clip(np.round(rope[:, 0] - self.cx0).astype(int), 0, self.cw - 1)
         self.rope_iy = np.clip(np.round(rope[:, 1] - self.cy0).astype(int), 0, self.ch - 1)
+        # render_ropes reads each LED's canvas cell and its four neighbours only: number those cells once (slot), so a
+        # frame bins its points into them alone instead of into the whole canvas (29 Oct, step 5)
+        pw = self.cw + 2
+        ry, rx = self.rope_iy + 1, self.rope_ix + 1                 # in the canvas padded by one cell
+        cells = np.stack([ry * pw + rx, (ry - 1) * pw + rx, (ry + 1) * pw + rx, ry * pw + rx - 1, ry * pw + rx + 1])
+        used, inv = np.unique(cells, return_inverse=True)
+        self.rope_slots = inv.reshape(cells.shape)                  # (5, LEDs): each LED's five cells as slots
+        self.n_slots = len(used)
+        self.slot_of = np.full((self.ch + 2) * pw, -1, np.int32)    # padded canvas cell -> slot, -1 when no LED reads it
+        self.slot_of[used] = np.arange(len(used), dtype=np.int32)
 
     # ---- the sheets ----------------------------------------------------------------------------------------------------
 
@@ -179,10 +189,10 @@ class Ribbons:
 
     # ---- drawing -------------------------------------------------------------------------------------------------------
 
-    def render_screens(self, colour, gain=1.0):
+    def _accumulate(self):
+        """Every screen's points, glitter and bokeh -> (NQ, QH, QW) brightness before the glow."""
         # (speed, M7) every screen's points into one bincount, then the glow, trace and colour on all four at once: bitcube
         # was spending 14.5 ms here with one pass per screen and ribbon
-        col = np.asarray(colour, np.float32)
         shown = self._shown()
         bright = 0.9 + 0.5 * self.level
         idx, vals = [], []
@@ -227,6 +237,19 @@ class Ribbons:
                 x0, x1, y0, y1 = max(0, bx - n), min(QW, bx + n + 1), max(0, by - n), min(QH, by + n + 1)
                 if x0 < x1 and y0 < y1:
                     img[k, y0:y1, x0:x1] += disc[y0 - by + n:y1 - by + n, x0 - bx + n:x1 - bx + n] * a
+        return img
+
+    def lit_sample(self):
+        """The lit share of each screen now (lit_pct), without a render: the points and the glow only, no trails, no
+        colour, the trails untouched (the GPU ribbons' status.json number, every ~10 s)."""
+        img = self._accumulate()
+        frame = img * 0.5 + _soft(_soft(img)) * 1.5
+        self.lit_pct = [int(round(100 * float(m))) for m in (frame > 0.03).mean(axis=(1, 2))]
+        return self.lit_pct
+
+    def render_screens(self, colour, gain=1.0):
+        col = np.asarray(colour, np.float32)
+        img = self._accumulate()
         frame = img * 0.5 + _soft(_soft(img)) * 1.5
         tr = np.maximum(self.trails * TRAIL, frame)
         tr[tr < 0.015] = 0.0
@@ -255,14 +278,15 @@ class Ribbons:
             ix = np.round(xs[g] + vW * c[g] - self.cx0).astype(np.int32)
             iy = np.round(y + vW * sn[g] * 0.45 - self.cy0).astype(np.int32)
             ok = (ix >= 0) & (ix < self.cw) & (iy >= 0) & (iy < self.ch)
-            idx.append(iy[ok] * self.cw + ix[ok])
-            vals.append(np.full(int(ok.sum()), 0.5 * shown[i], np.float32))
+            slot = self.slot_of[(iy[ok] + 1) * (self.cw + 2) + ix[ok] + 1]
+            hit = slot >= 0
+            idx.append(slot[hit])
+            vals.append(np.full(int(hit.sum()), 0.5 * shown[i], np.float32))
         acc = np.zeros(len(self.rope_ix), np.float32)
         if idx:
-            can = np.bincount(np.concatenate(idx), np.concatenate(vals), self.ch * self.cw).astype(np.float32)
-            can = np.pad(can.reshape(self.ch, self.cw), 1)
-            ry, rx = self.rope_iy + 1, self.rope_ix + 1
-            acc = (can[ry, rx] + can[ry - 1, rx] + can[ry + 1, rx] + can[ry, rx - 1] + can[ry, rx + 1]) / 2.5
+            can = np.bincount(np.concatenate(idx), np.concatenate(vals), self.n_slots).astype(np.float32)
+            sl = self.rope_slots
+            acc = (can[sl[0]] + can[sl[1]] + can[sl[2]] + can[sl[3]] + can[sl[4]]) / 2.5
         acc = acc * self.rope_ok * (0.4 + 0.6 * self.level)
         out = np.clip(acc, 0, 1)[:, None] * np.asarray(colour, np.float32)
         return out.reshape(N_ROPES, N_PX, 3)

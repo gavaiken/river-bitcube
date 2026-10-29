@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'td'))
 from remembered import show, water  # noqa: E402
@@ -49,20 +50,44 @@ def test_control_sets_screen_intensity_and_threshold():
     assert show.parse_control({})['screen_intensity'] is None
 
 
-def test_particle_field_windows_follow_the_room():
-    from remembered import particles
+def test_geometry_screens_hang_at_their_measured_tilts():
+    from remembered import geometry
     repo = Path(__file__).resolve().parents[2]
-    g = particles.Geometry(repo / 'tools/pixelmap/pixelmap-2026-10-27.json', repo / 'tools/pixelmap/screens-2026-10-27.json')
+    g = geometry.Geometry(repo / 'tools/pixelmap/pixelmap-2026-10-27.json', repo / 'tools/pixelmap/screens-2026-10-27.json')
     angles = [round(np.degrees(a)) for _, a, _, _ in g.screens]
     assert angles == [21, -19, -20, 23]
-    calm, surge = particles.Field(g), particles.Field(g)
-    for _ in range(300):
-        calm.step(1 / 60, 0.1, 40)
-        surge.step(1 / 60, 0.9, 120)
-    sc, ss = calm.render_screens((1, 1, 1)), surge.render_screens((1, 1, 1))
-    assert ss.mean() > sc.mean() > 0                       # the field follows the ropes' intensity
-    r = surge.render_ropes((1, 1, 1))
-    assert r.shape == (20, 400, 3) and 0 < r.max() <= 1
+    assert g.led_xy.shape == (20, 400, 2) and len(g.led_pts) > 1000
+
+
+def test_blur_and_quantile_match_the_float64_originals():
+    rng = np.random.default_rng(2)
+    a = rng.random((water.MH, water.MW)).astype(np.float32) * 0.05
+
+    def blur64(x, r=3):                                   # water.py's blur before 29 Oct (np.pad + cumsum, float64)
+        out = x
+        for _ in range(3):
+            p = np.pad(out, ((0, 0), (r, r)), mode='edge')
+            c = np.concatenate([np.zeros((p.shape[0], 1)), np.cumsum(p, axis=1)], axis=1)
+            out = (c[:, 2 * r + 1:] - c[:, :-2 * r - 1]) / (2 * r + 1)
+            p = np.pad(out, ((r, r), (0, 0)), mode='edge')
+            c = np.concatenate([np.zeros((1, p.shape[1])), np.cumsum(p, axis=0)], axis=0)
+            out = (c[2 * r + 1:, :] - c[:-2 * r - 1, :]) / (2 * r + 1)
+        return out
+    b = water._blur(a)
+    assert b.dtype == np.float32 and np.abs(b - blur64(a)).max() < 1e-6
+    assert water.quantile(b, 0.9) == pytest.approx(float(np.quantile(b, 0.9)), abs=1e-7)
+
+
+def test_one_luma_pass_feeds_the_motion_level_and_the_mask(tmp_path):
+    s = show.Show(river_dir=tmp_path)
+    rng = np.random.default_rng(0)
+    w = water.Water()
+    for i in range(10):
+        f = rng.random((180, 320, 3)).astype(np.float32)
+        s.feed_river(f, 'clip', 1_800_000_000 + i)
+        w.feed(f)                                         # Water.feed (its own luma) gives the same mask
+    assert s.motion.frames == 9 and s.motion.level > 0
+    assert np.array_equal(s.water.mask, w.mask) and s.water.mask.dtype == np.float32
 
 
 def test_show_runs_with_the_particle_field(tmp_path):

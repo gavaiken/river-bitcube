@@ -7,11 +7,12 @@
 #
 #   /project1/inputs      the template's: river cam (recorded clip when stale) -> inputs/river. Unchanged.
 #   /project1/remembered  THE SHOW. The brains are plain Python files in td/remembered/ (clock, palette, zones, ropes,
-#                         panels, water, particles, flow, ribbons, status, show), imported from the repo (sys.path), reloaded by this build:
+#                         knobs, room, overrides, motion, water, geometry, ribbons, status, show, files), imported from the repo
+#                         (sys.path), reloaded by this build:
 #                           remembered_exec (Execute DAT, every frame) -> show.frame(): reads River\gallery_state\
 #                             state.json + reflex.json, River\presence.json, River\remembered\control.json and
 #                             data\remembered\ (fallback days); runs the loop; renders; writes River\remembered\status.json
-#                           river_small (320x180 of inputs/river, read ~10 fps for the screens' moving highlights)
+#                           river_small (320x180 of inputs/river, read ~10 fps: the river's motion level and mask)
 #                           rope_render (Script TOP, 20x400, LED 0 on top) -> rope_canvas -> /project1/ropes
 #                           panel_render (Script TOP, 512x256: the four screens upright side by side) -> screen<k>_crop
 #   /project1/outputs     the template's screens (td/build/screens.py, pinned screens file): screen<k>_src now takes
@@ -54,7 +55,8 @@ if missing:
 # package td/remembered ("remembered"), imported with <repo>/td on sys.path.
 if TD_DIR not in sys.path:
     sys.path.insert(0, TD_DIR)
-for _m in ('control_schema', 'palette', 'zones', 'clock', 'ropes', 'panels', 'water', 'particles', 'flow', 'ribbons', 'ribbons_gpu', 'video_library', 'status', 'show'):
+for _m in ('files', 'control_schema', 'palette', 'zones', 'clock', 'knobs', 'overrides', 'room', 'inputs_log', 'ropes',
+           'motion', 'water', 'geometry', 'ribbons', 'ribbons_gpu', 'video_library', 'status', 'show'):
     if 'remembered.' + _m in sys.modules:
         importlib.reload(sys.modules['remembered.' + _m])
 from remembered import show as remembered_show                         # noqa: E402

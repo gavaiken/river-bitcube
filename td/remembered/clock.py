@@ -193,9 +193,32 @@ def preset_day():
     return day
 
 
+LIBRARY_FILES = ('notable.json', 'profiles.json.gz', 'days.csv')
+_library_cache = {}                 # folder -> (the three files' stat signatures, the library)
+
+
 def load_library(folder):
-    """data/remembered as {'notable': [...], 'profiles': {date: profile}, 'days': {date: row}}; empty parts when missing."""
+    """data/remembered as {'notable': [...], 'profiles': {date: profile}, 'days': {date: row}}; empty parts when missing.
+    Parsed (~90 ms: a gzip JSON and a 0.5 MB CSV) only when one of its files changed since the last call; otherwise the
+    same library object back (treat it as read-only). The show calls this at start and every READ_LIBRARY_S."""
     folder = Path(folder)
+    sig = []
+    for name in LIBRARY_FILES:
+        try:
+            st = (folder / name).stat()
+            sig.append((st.st_mtime_ns, st.st_size))
+        except OSError:
+            sig.append(None)
+    sig = tuple(sig)
+    hit = _library_cache.get(str(folder))
+    if hit is not None and hit[0] == sig:
+        return hit[1]
+    lib = _parse_library(folder)
+    _library_cache[str(folder)] = (sig, lib)
+    return lib
+
+
+def _parse_library(folder):
     lib = {'notable': [], 'profiles': {}, 'days': {}}
     try:
         lib['notable'] = [n for n in json.loads((folder / 'notable.json').read_text(encoding='utf-8'))

@@ -1,6 +1,6 @@
 """The filling glass (river-filling.toe, round 2 milestone M1, 27 Oct night): every rope and every screen is one canvas,
 painted by where each LED really is in the room (the calibration's frame, as the gallery camera sees the piece, the
-screens at their measured tilts: td/remembered/particles.py Geometry). Water rises from the floor to the top like a
+screens at their measured tilts: td/remembered/geometry.py). Water rises from the floor to the top like a
 glass filling, turbulent, sloshing and crashing, blues and blacks, a river filling a pool; holds churning at the top;
 then drains all the way out, leaving drips; and again. numpy only.
 
@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from remembered.particles import QW, QH, NQ, N_ROPES, N_PX  # noqa: E402
+from remembered.geometry import QW, QH, NQ, N_ROPES, N_PX  # noqa: E402
 from filling import space as space_mod  # noqa: E402
 
 RIVER = Path(r'C:\Users\user\River')

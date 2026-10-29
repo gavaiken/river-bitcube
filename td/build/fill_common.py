@@ -7,7 +7,7 @@ if missing:
 
 if TD_DIR not in sys.path:
     sys.path.insert(0, TD_DIR)
-for _m in ('remembered.particles', 'filling.space', 'filling.fill', 'filling.simple'):
+for _m in ('remembered.geometry', 'filling.space', 'filling.fill', 'filling.simple'):
     if _m in sys.modules:
         importlib.reload(sys.modules[_m])
 from filling import fill as filling_fill                                 # noqa: E402

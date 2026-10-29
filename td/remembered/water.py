@@ -34,27 +34,45 @@ P_NORM = 0.90
 
 
 def _blur(a, r=3):
-    """Separable box blur (three passes ~ gaussian), edges clamped."""
-    out = a
+    """Separable box blur (three passes ~ gaussian), edges clamped. float32, the window summed from shifted slices
+    (29 Oct: it ran in float64 through np.pad and cumsum, ~2 ms a river frame)."""
+    out = np.asarray(a, np.float32)
+    h, w = out.shape
+    n = 2 * r + 1
+    k = np.float32(1.0 / n)
+    ph = np.empty((h, w + 2 * r), np.float32)                 # [edge x r | row | edge x r]
+    pv = np.empty((h + 2 * r, w), np.float32)
     for _ in range(3):
-        p = np.pad(out, ((0, 0), (r, r)), mode='edge')
-        c = np.cumsum(p, axis=1)
-        c = np.concatenate([np.zeros((c.shape[0], 1)), c], axis=1)
-        out = (c[:, 2 * r + 1:] - c[:, :-2 * r - 1]) / (2 * r + 1)
-        p = np.pad(out, ((r, r), (0, 0)), mode='edge')
-        c = np.cumsum(p, axis=0)
-        c = np.concatenate([np.zeros((1, c.shape[1])), c], axis=0)
-        out = (c[2 * r + 1:, :] - c[:-2 * r - 1, :]) / (2 * r + 1)
+        ph[:, :r] = out[:, :1]
+        ph[:, r:r + w] = out
+        ph[:, r + w:] = out[:, -1:]
+        out = ph[:, :w].copy()
+        for i in range(1, n):
+            out += ph[:, i:i + w]
+        out *= k
+        pv[:r] = out[:1]
+        pv[r:r + h] = out
+        pv[r + h:] = out[-1:]
+        out = pv[:h].copy()
+        for i in range(1, n):
+            out += pv[i:i + h]
+        out *= k
     return out
+
+
+def quantile(a, q):
+    """np.quantile(a, q) (linear interpolation) through one partition instead of a full sort."""
+    flat = a.ravel()
+    pos = q * (flat.size - 1)
+    lo = int(pos)
+    hi = min(lo + 1, flat.size - 1)
+    part = np.partition(flat, (lo, hi))
+    return float(part[lo] + (part[hi] - part[lo]) * (pos - lo))
 
 
 def smoothstep(e0, e1, x):
     t = np.clip((x - e0) / max(e1 - e0, 1e-6), 0.0, 1.0)
     return t * t * (3 - 2 * t)
-
-
-def luma(rgb):
-    return rgb[..., 0] * 0.2126 + rgb[..., 1] * 0.7152 + rgb[..., 2] * 0.0722
 
 
 class Water:
@@ -67,36 +85,27 @@ class Water:
         self.norm = 40.0
         self.mask = np.zeros((MH, MW), np.float32)
         self.lit_pct = [0, 0, 0, 0]
-        self.brightness = 0.0          # mean linear light of the last frame, 0..1
 
     # ---- the motion mask --------------------------------------------------------------------------------------------
     def feed(self, img):
-        """A new river frame (MH x MW x 3, float 0..1 or uint8, row 0 at the top)."""
-        a = np.asarray(img, np.float32)
-        if a.dtype != np.float32 or a.max() > 1.5:
-            a = a / 255.0
-        if a.shape[:2] != (MH, MW):
-            ys = (np.arange(MH) * a.shape[0] / MH).astype(int)
-            xs = (np.arange(MW) * a.shape[1] / MW).astype(int)
-            a = a[ys][:, xs]
-        L = luma(a[..., :3])
+        """A new river frame (any size x 3, float 0..1 or uint8, row 0 at the top)."""
+        from .motion import river_luma
+        self.feed_luma(river_luma(img))
+
+    def feed_luma(self, L):
+        """The frame's MH x MW float32 luma (motion.river_luma: show.feed_river makes it once for this and the motion level)."""
         if self.prev is not None and self.prev.shape == L.shape:
-            d = np.abs(L - self.prev)
-            a_slow = max(A_SLOW, 1.0 / (self.frames + 1))      # settle fast at the start, then slow
-            self.slow += (d - self.slow) * a_slow
+            a_slow = np.float32(max(A_SLOW, 1.0 / (self.frames + 1)))      # settle fast at the start, then slow
+            self.slow += (np.abs(L - self.prev) - self.slow) * a_slow
         self.prev = L
         self.frames += 1
         b = _blur(self.slow, 3)
-        p = float(np.quantile(b, P_NORM))
+        p = quantile(b, P_NORM)
         want = 1.0 / max(p, 1e-3)
         self.norm += (want - self.norm) * 0.25
         thr = 0.05 + self.s['sens'] * 0.9
         soft = 0.05 + self.s['soft'] * 0.8
-        self.mask = smoothstep(thr, thr + soft, b * self.norm).astype(np.float32)
-
-    @property
-    def water_frac(self):
-        return float((self.mask > 0.5).mean())
+        self.mask = smoothstep(thr, thr + soft, b * np.float32(self.norm)).astype(np.float32)
 
     # ---- where each screen looks ---------------------------------------------------------------------------------------
     def windows(self, t):
@@ -139,7 +148,6 @@ class Water:
         gain = np.float32(max(inten, 0.0) ** (1 / 2.2))
         floor, contrast, sat = np.float32(s['floor']), np.float32(s['contrast']), np.float32(s['sat'])
         w = np.array([0.2126, 0.7152, 0.0722], np.float32)
-        light = 0.0
         for k in range(NQ):
             c = crops[k] if k < len(crops) and crops[k] is not None else None
             if c is None:
@@ -166,6 +174,4 @@ class Water:
                 v = v.repeat(2, 0).repeat(2, 1)
             out[:, k * QW:(k + 1) * QW] = v * gain
             self.lit_pct[k] = int(round(100 * float((kf > 0).mean())))
-            light += float((v[::4, ::4] ** 2.2).mean()) * inten
-        self.brightness = light / NQ
         return out

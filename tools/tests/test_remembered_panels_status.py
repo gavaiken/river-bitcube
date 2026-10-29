@@ -1,6 +1,6 @@
-"""The remembered river on the four screens (td/remembered/panels.py) and its status.json (td/remembered/status.py,
-show.py): at most 30 % of each screen lit, cap 55 %, soft edges, calm almost black, different crops; status.json in
-exactly the contract's shape (docs/remembered-river.md section 5); control.json shapes; reflex freshness."""
+"""The remembered river's motion level (td/remembered/motion.py) and its status.json (td/remembered/status.py, show.py):
+status.json in exactly the contract's shape (docs/remembered-river.md section 5); control.json shapes; reflex freshness;
+the v2 wiring."""
 import datetime as dt
 import gzip
 import json
@@ -13,97 +13,49 @@ import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'td'))
-from remembered import clock  # noqa: E402
-from remembered import palette  # noqa: E402
-from remembered import panels  # noqa: E402
-from remembered import ropes  # noqa: E402
+from remembered import motion  # noqa: E402
 from remembered import show  # noqa: E402
-from remembered import zones  # noqa: E402
 
 T0 = 1_800_000_000.0
 
 
 def noisy_river(rng, n=1):
-    """Busy water: lots of motion everywhere (the worst case for the lit limit)."""
+    """Busy water: lots of motion everywhere."""
     return [(rng.random((180, 320, 3)) * 255).astype(np.uint8) for _ in range(n)]
 
 
-def run_panels(phase_t, times, day, seconds=6.0, tilt=0.0, seed=0):
-    z = zones.Zones({'screens': [{'screen': k, 'tilt_deg': tilt} for k in range(1, 5)]})
-    p = panels.Panels(z, seed)
-    rng = np.random.default_rng(seed)
-    img = None
-    for i in range(int(seconds * 30)):
-        if i % 3 == 0:
-            p.feed(noisy_river(rng)[0])
-        t = phase_t - seconds + i / 30
-        c = ropes.default_ctx(t=t, times=times, phase=clock.phase_at(t, times), pal=palette.palette('autumn'),
-                              flow_pct=90, day=day, rope_speed=80.0)
-        img = p.step(1 / 30, c)
-    return p, img
+# ---- the river's motion level (td/remembered/motion.py; the old Panels screens were deleted on 29 Oct) -------------
+
+def test_motion_level_rises_with_moving_water_and_falls_when_still():
+    m = motion.Motion()
+    rng = np.random.default_rng(0)
+    for f in noisy_river(rng, 20):
+        m.feed(f)
+    assert m.frames == 19 and m.level > 0.9                    # busy water: at its own peak
+    still = noisy_river(rng)[0]
+    for _ in range(5):
+        m.feed(still)
+    assert m.level == 0.0
 
 
-@pytest.fixture(scope='module')
-def day():
-    prof = {'flow': [10 + h for h in range(24)], 'rain': [0.0] * 12 + [5.0] * 3 + [0.0] * 9, 'is_day': [1] * 24}
-    return clock.make_day('2017-01-08', prof, {'flow_pct': 90, 'heaviest_hour': 13, 'dry': False})
+def test_motion_level_is_the_mean_of_the_brightest_15_percent_of_the_blurred_difference():
+    rng = np.random.default_rng(3)
+    a, b = rng.random((180, 320)).astype(np.float32), rng.random((180, 320)).astype(np.float32)
+    m = motion.Motion()
+    m.feed_luma(a)
+    m.feed_luma(b)
+    d = np.abs(b - a)
+    d = (d + np.roll(d, 1, 0) + np.roll(d, -1, 0) + np.roll(d, 1, 1) + np.roll(d, -1, 1)) / 5.0     # the old panels.py way
+    thr = np.partition(d.ravel(), int(0.85 * d.size))[int(0.85 * d.size)]
+    assert abs(m.peak - float(d[d > thr].mean())) < 1e-5 and m.level == 1.0
 
 
-def quads(img):
-    return [img[:, 128 * k:128 * (k + 1)] for k in range(4)]
-
-
-@pytest.mark.parametrize('tilt', [0.0, -4.5])
-def test_surge_lights_every_screen_but_at_most_30_percent(day, tilt):
-    times = clock.phase_times(day, 150.0)
-    p, img = run_panels(times['surge'] + 20, times, day, tilt=tilt)
-    assert img.shape == (256, 512, 3) and img.max() <= panels.CAP + 1e-6
-    for q in quads(img):
-        lit = panels.lit_fraction(q)
-        assert 0.02 < lit <= panels.LIT_MAX
-    assert all(0 < v <= 30 for v in p.lit_pct)
-
-
-def test_calm_is_almost_black(day):
-    times = clock.phase_times(day, 150.0)
-    p, img = run_panels(40.0, times, day, seconds=10)
-    for q in quads(img):
-        assert panels.lit_fraction(q) <= 0.03
-    assert (img > 0).mean() < 0.02
-
-
-def test_screens_show_different_crops_outside_a_surge(day):
-    times = clock.phase_times(day, 150.0)
-    p, img = run_panels(times['surge'] + 25, times, day)
-    q = quads(img)
-    for a in range(4):
-        for b in range(a + 1, 4):
-            assert not np.allclose(q[a], q[b])
-
-
-def test_soft_edges_and_cap(day):
-    times = clock.phase_times(day, 150.0)
-    p, img = run_panels(times['surge'] + 20, times, day)
-    for q in quads(img):
-        assert q[0].max() == 0 and q[-1].max() == 0 and q[:, 0].max() == 0 and q[:, -1].max() == 0
-    assert img.max() <= 0.55
-
-
-def test_cap_lit_keeps_only_the_brightest():
-    rng = np.random.default_rng(1)
-    i = rng.random((256, 128)).astype(np.float32)
-    out = panels.cap_lit(i, 0.3)
-    assert (out > panels.LIT_EPS).mean() <= 0.3 and out.max() == i.max()
-
-
-def test_screens_light_in_height_order_as_the_front_passes(day):
-    z = zones.Zones()
-    p = panels.Panels(z)
-    times = clock.phase_times(day, 150.0)
-    c = ropes.default_ctx(times=times, flow_pct=90, t=0.0)
-    ft = p._front_times(c)
-    order = z.screen_order()
-    assert [ft[i] for i in order] == sorted(ft) and ft[order[0]] >= times['surge']
+def test_river_luma_takes_any_frame_size_and_uint8():
+    f = np.zeros((360, 640, 4), np.uint8)
+    f[..., 1] = 255
+    g = motion.river_luma(f)
+    assert g.shape == (180, 320) and g.dtype == np.float32 and np.allclose(g, 0.7152)
+    assert motion.river_luma(np.full((180, 320, 3), 0.5, np.float32)).max() == pytest.approx(0.5)
 
 
 # ---- status.json ------------------------------------------------------------------------------------------------

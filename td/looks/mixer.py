@@ -21,6 +21,8 @@ from pathlib import Path
 
 import numpy as np
 
+from remembered import files   # td/ is on sys.path (the builds, the tests)
+
 LOOKS = ('remembered', 'fill-simple', 'fill-configurable', 'seasons', 'modal')
 UNIT = {'remembered': 'loops', 'fill-simple': 'cycles', 'fill-configurable': 'cycles', 'seasons': 'minutes', 'modal': 'minutes'}
 OPERATOR = ('seasons', 'modal')     # looks that are TouchDesigner networks (a COMP each), not numpy frames
@@ -29,7 +31,7 @@ AUTO_REMEMBERED_LOOPS = 4
 DEFAULT_PLAYLIST = ({'look': 'remembered', 'for': {'loops': AUTO_REMEMBERED_LOOPS}}, {'look': 'fill-simple', 'for': {'cycles': 1}})
 FLOOD_PCT = 90                      # a remembered day this high in the record is a flood: the fill follows it (M6)
 MAX_ENTRIES, MAX_COUNT, MAX_MINUTES = 12, 20, 120
-RIVER = Path(r'C:\Users\user\River')
+RIVER = files.RIVER
 SHOW = 'river-looks.toe'
 
 
@@ -193,10 +195,8 @@ def reset():
 
 
 def _read(path):
-    try:
-        return json.loads(Path(path).read_text(encoding='utf-8-sig'))
-    except (OSError, ValueError):
-        return None
+    """A control file, parsed again only when it changed (files.read_json_cached; never change what comes back)."""
+    return files.read_json_cached(path)[0]
 
 
 def _write(path, data):
@@ -336,17 +336,22 @@ def cook(scriptOp):
         from remembered import show as rshow
         scriptOp.copyNumpyArray(rshow.mask_image(rshow._holder().show))
         return
+    from remembered import show as rshow
     if scriptOp.name == 'rope_render':
         f = h.ropes
         if f is None:
             return
-        img = np.empty((f.shape[1], f.shape[0], 4), np.float32)          # 20 wide, 400 tall, LED 0 on the top row
-        img[..., :3] = f.transpose(1, 0, 2)[::-1] * k
+        img = rshow._rgba('mix_ropes', f.shape[1], f.shape[0])          # 20 wide, 400 tall, LED 0 on the top row
+        np.multiply(f.transpose(1, 0, 2)[::-1], np.float32(k), out=img[..., :3])
     else:
         f = h.panels
         if f is None:
             return
-        img = np.empty((f.shape[0], f.shape[1], 4), np.float32)
-        img[..., :3] = f[::-1] * k
-    img[..., 3] = 1.0
-    scriptOp.copyNumpyArray(np.ascontiguousarray(img))
+        img = rshow._rgba('mix_panels', f.shape[0], f.shape[1])
+        s = rshow._holder().show
+        static = s is not None and f is s.panel_frame and getattr(s, 'panel_static', False)
+        # the GPU ribbons' black frame: black at any fade, so converted once (it was ~1 ms a frame)
+        if not (static and rshow._bufs.get('mix_panels_src') is f):
+            np.multiply(f[::-1], np.float32(k), out=img[..., :3])
+            rshow._bufs['mix_panels_src'] = f if static else None
+    scriptOp.copyNumpyArray(img)
