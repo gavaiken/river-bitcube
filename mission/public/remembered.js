@@ -6,9 +6,10 @@
 // GET /api/remembered every 2 s, /api/status every 5 s, /api/lights every 4 s, the stills every 30 s. Plain ES module, no build step.
 import { mountShell, poll, tick, watchContact, art, fmt, control, api, esc, DOC_LINKS, serverNow } from '/ui.js';
 import { fetchTimed } from '/app.js';
-import { derive, changeLabel, dur, EXPECT_S, REMEMBERED_POOL_M, REMEMBERED_ONLY } from '/model.js';
+import { derive, changeLabel, dur, EXPECT_S, REMEMBERED_ONLY } from '/model.js';
 import { decodeLights, fitCanvas, paintStrips, paintScreens, paintEmpty, litMeterHTML } from '/frames-view.js';
-import { rememberedView, dayStripSVG, mss, hourWords, dateWords } from '/remembered-words.js';
+import { rememberedView, dayStripSVG, mss, hourWords, dateWords, screensChange, REMEMBERED_SCREENS_DEFAULT } from '/remembered-words.js';
+import SCHEMA from '/remembered-schema.js';
 
 const REM_MS = 2000, LIGHTS_MS = 4000, STILL_MS = 30_000;
 const $ = (s) => document.querySelector(s);
@@ -185,19 +186,24 @@ function drawLights() {
 }
 
 // ---- controls ----------------------------------------------------------------------------------------------------------------
+// the pool line's range and starting point: control.json's schema (remembered-schema.js, from td/remembered/control_schema.py)
+const POOL = SCHEMA.fields.pool_height_m, POOL_START = SCHEMA.ui.pool_height_m;
 const poolInput = $('#pool');
-const clampPool = (x) => Math.round(Math.min(REMEMBERED_POOL_M[1], Math.max(REMEMBERED_POOL_M[0], x)) * 20) / 20;
+poolInput.min = String(POOL.min); poolInput.max = String(POOL.max);
+const clampPool = (x) => Math.round(Math.min(POOL.max, Math.max(POOL.min, x)) * 20) / 20;
 function setPool(x, touched = true) { S.pool = clampPool(x); if (touched) S.poolTouched = true; poolInput.value = String(S.pool); $('#pool-out').textContent = `${S.pool.toFixed(2)} m`; }
 poolInput.addEventListener('input', () => setPool(Number(poolInput.value)));
-$('#pool-less').addEventListener('click', () => setPool((S.pool ?? 0.6) - 0.05));
-$('#pool-more').addEventListener('click', () => setPool((S.pool ?? 0.6) + 0.05));
+$('#pool-less').addEventListener('click', () => setPool((S.pool ?? POOL_START) - 0.05));
+$('#pool-more').addEventListener('click', () => setPool((S.pool ?? POOL_START) + 0.05));
+// a light check goes back to the show by itself after SCHEMA.light_max_s (and never survives a restart of the show)
+const LIT_FOR = `${Math.round(SCHEMA.light_max_s / 60)} minutes`;
 const ZONE_COPY = {
   pool: { label: 'Light the pool', kind: 'primary', done: 'Asked TouchDesigner to light the pool',
-    before: 'Lights the LEDs below the pool line so you can see where it falls, until you press Off. Asks first.',
-    confirm: () => ({ title: 'Light the pool?', body: `TouchDesigner lights the LEDs below the pool line (${(S.pool ?? 0.6).toFixed(2)} m) instead of the show there, until someone presses Off.`, ok: 'Light the pool', cancel: 'Not now', destructive: true }) },
+    before: `Lights the LEDs below the pool line so you can see where it falls, until you press Off (at most ${LIT_FOR}). Asks first.`,
+    confirm: () => ({ title: 'Light the pool?', body: `TouchDesigner lights the LEDs below the pool line (${(S.pool ?? POOL_START).toFixed(2)} m) instead of the show there, until someone presses Off or for ${LIT_FOR}.`, ok: 'Light the pool', cancel: 'Not now', destructive: true }) },
   eddies: { label: 'Light the eddies', kind: 'primary', done: 'Asked TouchDesigner to light the eddies',
-    before: 'Lights the LEDs where a rope crosses a log (the driftwood eddies), until you press Off. Asks first.',
-    confirm: () => ({ title: 'Light the eddies?', body: 'TouchDesigner lights the LEDs at the driftwood eddies instead of the show there, until someone presses Off.', ok: 'Light the eddies', cancel: 'Not now', destructive: true }) },
+    before: `Lights the LEDs where a rope crosses a log (the driftwood eddies), until you press Off (at most ${LIT_FOR}). Asks first.`,
+    confirm: () => ({ title: 'Light the eddies?', body: `TouchDesigner lights the LEDs at the driftwood eddies instead of the show there, until someone presses Off or for ${LIT_FOR}.`, ok: 'Light the eddies', cancel: 'Not now', destructive: true }) },
   off: { label: 'Off: back to the show', kind: 'plain', done: 'Asked TouchDesigner to go back to the show', before: 'Puts the pool and eddies back to the show, and keeps the pool line you set.', confirm: null },
 };
 const ctls = {};
@@ -214,23 +220,24 @@ ctls.opening = control($('#z-opening'), { action: 'remembered-opening', expectS:
   noAnswer: 'the line above says what bitcube has', done: 'Sent', run: () => api('/api/control/remembered-opening', { on: S.openingWant === true }),
   onSent: () => { pollRemembered(); status.refresh(); }, onFail: () => status.refresh() });
 S.openingShown = undefined;
-// the screens (M7 intensity and threshold, M9 the river video under the particle windows): drafts in percent until Apply; each
-// follows bitcube's value until moved here, and Apply sends all three
+// the screens (M7 intensity and threshold, M9 the river video under the particle windows): drafts in whole percent until Apply;
+// each follows bitcube's value until moved here, and Apply sends only the sliders moved (an untouched one keeps what bitcube has)
 const SCREEN_KEYS = ['intensity', 'threshold', 'video'];
 const screenInput = Object.fromEntries(SCREEN_KEYS.map((k) => [k, $(`#${k}`)]));
 S.scr = {}; S.scrTouched = {};
-const screensBody = () => Object.fromEntries(SCREEN_KEYS.filter((k) => S.scr[k] != null).map((k) => [k, S.scr[k] / 100]));
+const screensBody = () => screensChange(S.scr, S.scrTouched);
+const UNTOUCHED = 'move a slider first';
 function setScreen(k, pct, touched = true) {
-  S.scr[k] = Math.round(Math.min(100, Math.max(0, pct)) / 5) * 5; if (touched) S.scrTouched[k] = true;
+  S.scr[k] = Math.round(Math.min(100, Math.max(0, pct))); if (touched) S.scrTouched[k] = true;
   screenInput[k].value = String(S.scr[k]); $(`#${k}-out`).textContent = fmt.nb(`${S.scr[k]} %`);
-  ctls.video?.update({ what: changeLabel('remembered-screens', screensBody()) });
+  if (touched) ctls.video?.update({ what: changeLabel('remembered-screens', screensBody()), why: screensWhy(S.v) });
 }
 for (const k of SCREEN_KEYS) screenInput[k].addEventListener('input', () => setScreen(k, Number(screenInput[k].value)));
 ctls.video = control($('#z-video'), { action: 'remembered-screens', expectS: EXPECT_S['remembered-screens'], label: 'Apply', kind: 'primary',
-  before: 'Moves only the screens: the ropes keep the show.', what: changeLabel('remembered-screens', { intensity: 0.82, threshold: 0.35, video: 0.7 }),
+  before: 'Moves only the screens: the ropes keep the show.', what: changeLabel('remembered-screens', REMEMBERED_SCREENS_DEFAULT),
   noAnswer: 'the lines above the button say what bitcube has',
-  done: () => `Asked TouchDesigner for ${changeLabel('remembered-screens', screensBody()).replace(/^the change of /, '')}`,
-  run: () => api('/api/control/remembered-screens', screensBody()),
+  done: () => `Asked TouchDesigner for ${changeLabel('remembered-screens', S.scrSent ?? {}).replace(/^the change of /, '')}`,
+  run: () => { S.scrSent = screensBody(); return api('/api/control/remembered-screens', S.scrSent); },
   onSent: () => { S.scrTouched = {}; pollRemembered(); status.refresh(); }, onFail: () => status.refresh(),
   lock: () => SCREEN_KEYS.map((k) => screenInput[k]) });
 
@@ -242,12 +249,14 @@ function whyFor(action, v) {
   if (v && !v.running) return v.inLooks ? (v.notRunning ?? REMEMBERED_ONLY) : REMEMBERED_ONLY;
   return null;
 }
+/** Apply's reason it can't run: the remembered river's, else nothing moved yet. */
+function screensWhy(v) { return whyFor('remembered-screens', v) ?? (Object.keys(screensBody()).length ? null : UNTOUCHED); }
 function renderControls(v) {
   // the pool line: bitcube's until someone moves it here
   const now = v?.zones?.pool_height_m ?? v?.control?.pool_height_m ?? null;
   $('#pool-now').textContent = now == null ? 'not known' : `${Number(now).toFixed(2)} m${v?.zones?.light && v.zones.light !== 'off' ? `, ${v.zones.light} lit` : ''}${v?.zones?.file ? ` (${v.zones.file})` : ''}`;
   if (!S.poolTouched && now != null) setPool(Number(now), false);
-  else if (S.pool == null) setPool(0.6, false);
+  else if (S.pool == null) setPool(POOL_START, false);
   const zwhy = whyFor('remembered-zones', v), owhy = whyFor('remembered-opening', v);
   for (const l of ['pool', 'eddies', 'off']) ctls[l].update({ why: zwhy, whyBy: S.m?.controls?.['remembered-zones']?.by ?? null });
   const on = v?.opening ?? null;
@@ -265,9 +274,9 @@ function renderControls(v) {
     const now = v?.[k]?.now ?? null, asked = v?.[k]?.asked ?? null;
     $(`#${k}-now`).textContent = now != null ? fmt.nb(`${Math.round(now * 100)} %`) : asked != null ? `${fmt.nb(`${Math.round(asked * 100)} %`)} asked (TouchDesigner hasn't said)` : 'not known';
     if (!S.scrTouched[k] && (now ?? asked) != null) setScreen(k, (now ?? asked) * 100, false);
-    else if (S.scr[k] == null) setScreen(k, (v?.[k]?.default ?? { intensity: 0.82, threshold: 0.35, video: 0.7 }[k]) * 100, false);
+    else if (S.scr[k] == null) setScreen(k, (v?.[k]?.default ?? REMEMBERED_SCREENS_DEFAULT[k]) * 100, false);
   }
-  ctls.video.update({ why: whyFor('remembered-screens', v), whyBy: S.m?.controls?.['remembered-screens']?.by ?? null });
+  ctls.video.update({ why: screensWhy(v), whyBy: S.m?.controls?.['remembered-screens']?.by ?? null });
 }
 /** Each status answer: the controls see the model (their own change's entry, the server's verdict). */
 function judge() {
@@ -281,7 +290,7 @@ function renderFooter() {
 }
 
 // ---- go ----------------------------------------------------------------------------------------------------------------------
-setPool(0.6, false);
+setPool(POOL_START, false);
 render();
 pollRemembered(); pollLights(); stills();
 setInterval(pollRemembered, REM_MS);

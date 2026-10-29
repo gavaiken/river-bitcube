@@ -2,11 +2,17 @@
 // CONTRACT) -> everything the page lays out, in the team's words (GLOSSARY.md: remembered day, loop, phase, surge, the pool,
 // lingerer). Pure: no DOM, so node tests it (test/remembered.test.mjs). The page (remembered.js) only places it.
 import { dur, FILES, LOOKS_FILES, LOOK_IN_LINE } from './model.js';
+import SCHEMA from './remembered-schema.js';
 
-/** The river video's strength under the particle windows (M9) until someone sets it, 0..1. */
-export const REMEMBERED_VIDEO_DEFAULT = 0.7;
-/** The screens' intensity and motion threshold until someone sets them (td/remembered/water.py SETTINGS), 0..1. */
-export const REMEMBERED_SCREENS_DEFAULT = { intensity: 0.82, threshold: 0.35 };
+/** The screens' three sliders until someone sets them, 0..1: control.json's defaults (td/remembered/control_schema.py). */
+export const REMEMBERED_SCREENS_DEFAULT = Object.fromEntries(['intensity', 'threshold', 'video'].map((k) => [k, SCHEMA.fields[`screens.${k}`].default]));
+/** The screens' Apply body: only the sliders moved on the page (`touched`), each from whole percent (`pct`) to 0..1 at 1 %
+ *  resolution; an untouched slider is left out, so it keeps what bitcube has. */
+export function screensChange(pct, touched) {
+  return Object.fromEntries(Object.keys(REMEMBERED_SCREENS_DEFAULT)
+    .filter((k) => touched?.[k] && Number.isFinite(pct?.[k]))
+    .map((k) => [k, Math.round(Math.min(100, Math.max(0, pct[k]))) / 100]));
+}
 
 export const PHASES = ['calm', 'building', 'surge', 'settling'];
 export const PHASE_WORDS = {
@@ -115,9 +121,8 @@ export function rememberedView(p, { now = Date.now(), sinceS = 0 } = {}) {
   out.control = obj(b.control);
   // the river video under the particle windows (M9): what TouchDesigner reports, else what was asked last (control.json), 0..1
   const vid = (x) => { const n = num(x); return n != null && n >= 0 && n <= 1 ? n : null; };
-  out.video = { now: vid(obj(st?.screens)?.video), asked: vid(obj(out.control?.screens)?.video), default: REMEMBERED_VIDEO_DEFAULT };
-  // the screens' intensity and motion threshold (M7 sliders): the same three sources
-  for (const k of ['intensity', 'threshold']) out[k] = { now: vid(obj(st?.screens)?.[k]), asked: vid(obj(out.control?.screens)?.[k]), default: REMEMBERED_SCREENS_DEFAULT[k] };
+  // and the screens' intensity and motion threshold (M7 sliders): the same three sources
+  for (const k of ['video', 'intensity', 'threshold']) out[k] = { now: vid(obj(st?.screens)?.[k]), asked: vid(obj(out.control?.screens)?.[k]), default: REMEMBERED_SCREENS_DEFAULT[k] };
   out.field = typeof obj(st?.screens)?.field === 'string' ? st.screens.field : null;
   return out;
 }

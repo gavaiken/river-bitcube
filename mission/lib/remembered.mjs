@@ -11,8 +11,8 @@
 //     state:    gallery_state\state.json         (Dave's scene, mirrored by sync.py): only { memory, surge_at, scene, set_at }
 //     reflex:   gallery_state\reflex.json         (Dave's reflex: offsets and heard)
 //     presence: presence.json                     (the people counter: presence, usual, relative, lingerers, people)
-//     control:  remembered\control.json           (the last request mission control wrote: { pool_height_m, light, opening_night,
-//                                                  screens: { video }, at })
+//     control:  remembered\control.json           (the last requests: public/remembered-schema.js, from td/remembered/control_schema.py:
+//                                                  { pool_height_m?, light?, light_at?, opening_night?, screens?: { intensity, threshold, video }, at })
 //     looks:    looks\status.json                 (river-looks.toe's own report: which look shows; docs/mission-ui.md "Looks") }
 //   each file part is { age_s, json } (age from the file's write time), { missing: true } or { error }.
 // probe.ps1 -Action remembered-zones -Light off|pool|eddies [-PoolHeight 0.60] / -Action remembered-opening [-On] /

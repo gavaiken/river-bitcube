@@ -137,7 +137,7 @@ if ($CAL_BLOCKED -contains $Action) {
 }
 # The remembered river (docs/remembered-river.md section 5): its files, and its two controls. Each file is { age_s, json },
 # { missing = true } or { error }. A control is taken only while TouchDesigner's own status file says the remembered river runs (written
-# twice a second: under 10 s old, show river-remembered.toe); it writes control.json ({ pool_height_m, light, opening_night, at }, merged
+# twice a second: under 10 s old, show river-remembered.toe); it writes control.json (td/remembered/control_schema.py's flat shape, merged
 # with what was there) to a temporary file and swaps it in, so TouchDesigner never reads half a file. Nothing else runs.
 # A file a show writes for mission control (the remembered river's, the filling glass's): { age_s, json }, { missing = $true } or { error }.
 function Read-RiverJson([string]$path) {
@@ -180,11 +180,33 @@ if ($Action -in 'remembered', 'remembered-zones', 'remembered-opening', 'remembe
         elseif ($Action -eq 'remembered-zones' -and -not $Light) { $out.ok = $false; $out.error = 'remembered-zones needs -Light off|pool|eddies'; $out.refused = $Action }
         elseif ($Action -eq 'remembered-screens' -and $null -eq $Video -and $null -eq $Intensity -and $null -eq $Threshold) { $out.ok = $false; $out.error = 'remembered-screens needs -Video, -Intensity or -Threshold 0..1'; $out.refused = $Action }
         else {
-            # merged with what was there: every field kept (screens too), only the one asked for changed
-            $ctl = [ordered]@{ pool_height_m = $null; light = 'off'; opening_night = $false; at = $null }
+            # merged with what was there: every field kept (screens too), only the one asked for changed. The canonical shape
+            # (td/remembered/control_schema.py): flat keys, nothing seeded (opening night is TouchDesigner's default, on, until
+            # remembered-opening writes it). The nested zones block zones.py light --write leaves is folded into flat keys
+            # (a flat key wins) and dropped, its t becoming light_at, so TouchDesigner reads one answer.
+            $ctl = [ordered]@{}
             $was = Read-RiverJson $ctlFile
             if ($was.json) { foreach ($pp in $was.json.PSObject.Properties) { if ($null -ne $pp.Value) { $ctl[$pp.Name] = $pp.Value } } }
-            if ($Action -eq 'remembered-zones') { $ctl.light = $Light; if ($null -ne $PoolHeight) { $ctl.pool_height_m = [math]::Round([double]$PoolHeight, 2) } }
+            if ($ctl.Contains('zones')) {
+                $z = $ctl.zones
+                if ($z -is [Management.Automation.PSCustomObject]) {
+                    foreach ($k in 'pool_height_m', 'light', 'leds') { if (-not $ctl.Contains($k) -and $null -ne $z.$k) { $ctl[$k] = $z.$k } }
+                    if ($null -ne $z.light -and -not $ctl.Contains('light_at') -and $ctl.Contains('t')) {
+                        try { $ctl.light_at = [DateTimeOffset]::FromUnixTimeMilliseconds([long]([double]$ctl.t * 1000)).UtcDateTime.ToString('yyyy-MM-ddTHH:mm:ssZ') } catch {}
+                    }
+                }
+                $ctl.Remove('zones')
+            }
+            $ctl.Remove('t')
+            if ($ctl.Contains('opening') -and -not $ctl.Contains('opening_night') -and $ctl.opening -is [Management.Automation.PSCustomObject] -and $ctl.opening.on -is [bool]) { $ctl.opening_night = $ctl.opening.on }
+            $ctl.Remove('opening')
+            $nowIso = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            if ($Action -eq 'remembered-zones') {
+                # light_at: TouchDesigner drops a light set before it started, or over 10 minutes ago (control_schema.LIGHT_MAX_S)
+                $ctl.light = $Light; $ctl.light_at = $nowIso
+                if ($Light -eq 'off') { $ctl.Remove('leds') }
+                if ($null -ne $PoolHeight) { $ctl.pool_height_m = [math]::Round([double]$PoolHeight, 2) }
+            }
             elseif ($Action -eq 'remembered-screens') {
                 $sc = [ordered]@{}
                 if ($ctl.Contains('screens') -and $ctl.screens) { foreach ($pp in $ctl.screens.PSObject.Properties) { $sc[$pp.Name] = $pp.Value } }
@@ -193,11 +215,11 @@ if ($Action -in 'remembered', 'remembered-zones', 'remembered-opening', 'remembe
                 if ($null -ne $Threshold) { $sc.threshold = [math]::Round([double]$Threshold, 2) }
                 $ctl.screens = $sc
             }
-            else { $ctl.opening_night = [bool]$On }
-            $ctl.at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            elseif ($Action -eq 'remembered-opening') { $ctl.opening_night = [bool]$On }
+            $ctl.at = $nowIso
             $null = New-Item -ItemType Directory -Force -Path $rdir
             $tmp = "$ctlFile.tmp"
-            [IO.File]::WriteAllText($tmp, ($ctl | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding $false))
+            [IO.File]::WriteAllText($tmp, (ConvertTo-Json -InputObject $ctl -Compress -Depth 6), (New-Object Text.UTF8Encoding $false))
             if (Test-Path -LiteralPath $ctlFile) { [IO.File]::Replace($tmp, $ctlFile, $null) } else { [IO.File]::Move($tmp, $ctlFile) }
             $out.written = $ctl
         }

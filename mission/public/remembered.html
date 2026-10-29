@@ -78,7 +78,7 @@
         <div class="poolrow">
           <label for="pool">Pool line <output id="pool-out">–</output></label>
           <div class="stepper"><button type="button" class="btn step" id="pool-less" aria-label="Lower the pool line 5 cm">−</button>
-            <input type="range" id="pool" min="0" max="1.5" step="0.05" value="0.6" aria-describedby="pool-hint">
+            <input type="range" id="pool" min="0" max="1.5" step="0.05" aria-describedby="pool-hint">
             <button type="button" class="btn step" id="pool-more" aria-label="Raise the pool line 5 cm">+</button></div>
           <p class="hint muted" id="pool-hint">Metres above the floor: LEDs below the line are the pool. Now on bitcube: <b id="pool-now">–</b></p>
         </div>
@@ -91,18 +91,18 @@
       <div class="ctl" id="video-ctl">
         <div class="ctl-h">Screens</div>
         <div class="poolrow">
-          <label for="intensity">Intensity <output id="intensity-out">82 %</output></label>
-          <input type="range" id="intensity" min="0" max="100" step="5" value="80" aria-describedby="intensity-hint">
+          <label for="intensity">Intensity <output id="intensity-out">–</output></label>
+          <input type="range" id="intensity" min="0" max="100" step="1" aria-describedby="intensity-hint">
           <p class="hint muted" id="intensity-hint">How bright the four screens are, ribbons and video alike. Now on bitcube: <b id="intensity-now">–</b></p>
         </div>
         <div class="poolrow">
-          <label for="threshold">Threshold <output id="threshold-out">35 %</output></label>
-          <input type="range" id="threshold" min="0" max="100" step="5" value="35" aria-describedby="threshold-hint">
+          <label for="threshold">Threshold <output id="threshold-out">–</output></label>
+          <input type="range" id="threshold" min="0" max="100" step="1" aria-describedby="threshold-hint">
           <p class="hint muted" id="threshold-hint">How much the river has to move to show in its video: higher keeps only the most active water. Now on bitcube: <b id="threshold-now">–</b></p>
         </div>
         <div class="poolrow">
-          <label for="video">River video <output id="video-out">70 %</output></label>
-          <input type="range" id="video" min="0" max="100" step="5" value="70" aria-describedby="video-hint">
+          <label for="video">River video <output id="video-out">–</output></label>
+          <input type="range" id="video" min="0" max="100" step="1" aria-describedby="video-hint">
           <p class="hint muted" id="video-hint">How strongly the river video shows under the particle windows: 0 % is the particles alone. Now on bitcube: <b id="video-now">–</b></p>
         </div>
         <div id="z-video"></div>

@@ -98,10 +98,9 @@ export function showCard(file) {
 export const MODAL_INPUT_FILE = 'river-combined-modal-inputs.toe';
 export const MODAL_SOURCES = ['off', 'canvas', 'scene', 'frames'];
 // ---- The remembered river (river-remembered.toe, docs/remembered-river.md) ---------------------------------------------------
-// Its two controls write River\remembered\control.json on bitcube through probe.ps1 (lib/mission.mjs planControl), only while it runs.
+// Its controls write River\remembered\control.json on bitcube through probe.ps1 (lib/mission.mjs planControl), only while it runs.
+// That file's fields, ranges and defaults: remembered-schema.js (generated from td/remembered/control_schema.py).
 export const REMEMBERED_FILE = 'river-remembered.toe';
-export const REMEMBERED_LIGHTS = ['off', 'pool', 'eddies'];
-export const REMEMBERED_POOL_M = [0, 1.5];          // the pool line's height above the floor, metres (the slider's range)
 /** The 409 a remembered-river control gets while another show runs (the server and the pages, one sentence). */
 export const REMEMBERED_ONLY = "the remembered river isn't running (its controls work only while it runs)";
 // ---- The filling glass (river-filling.toe, docs/mission-ui.md "Filling glass dials") ---------------------------------------

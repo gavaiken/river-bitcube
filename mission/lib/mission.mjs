@@ -11,7 +11,8 @@ import { checkedCalibrate, noAnswer } from './lights.mjs';
 import { ModalSeen, withSeen } from './modal-seen.mjs';
 import { ModalFeed, MODAL_FEED_EVERY_MS } from './modal-feed.mjs';
 import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights, TEST_ON, testShowing, FILES, MODAL_INPUT_FILE, MODAL_SOURCES,
-  FILLING_PALETTES, FILLING_RANGE, REMEMBERED_LIGHTS, REMEMBERED_POOL_M, LOOKS, showBoundWhy } from '../public/model.js';
+  FILLING_PALETTES, FILLING_RANGE, LOOKS, showBoundWhy } from '../public/model.js';
+import REMEMBERED_SCHEMA from '../public/remembered-schema.js';
 import { LOOK_MODES, playlistProblem, checkPlaylist } from '../public/looks.js';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
@@ -516,12 +517,14 @@ export function planControl(action, body = {}) {
       return { kind: 'probe', args: `-Action filling -Palette ${body.palette} -Brightness ${v.brightness} -Intensity ${v.intensity} -Speed ${v.speed}` };
     }
     case 'remembered-zones': {
-      // the pool and eddy adjusters (docs/remembered-river.md section 5): what to light, and optionally the pool line in metres
-      if (!REMEMBERED_LIGHTS.includes(body.light)) throw bad('light is off, pool or eddies');
+      // the pool and eddy adjusters (docs/remembered-river.md section 5): what to light, and optionally the pool line in metres;
+      // the choices and the range are control.json's schema (public/remembered-schema.js, from td/remembered/control_schema.py)
+      const lights = REMEMBERED_SCHEMA.ui.lights, pool = REMEMBERED_SCHEMA.fields.pool_height_m;
+      if (!lights.includes(body.light)) throw bad(`light is ${lights.slice(0, -1).join(', ')} or ${lights.at(-1)}`);
       let args = `-Action remembered-zones -Light ${body.light}`;
       if (body.pool_height_m !== undefined) {
         const h = num(body.pool_height_m);
-        if (!(h >= REMEMBERED_POOL_M[0] && h <= REMEMBERED_POOL_M[1])) throw bad(`pool_height_m is ${REMEMBERED_POOL_M[0]} to ${REMEMBERED_POOL_M[1]} metres`);
+        if (!(h >= pool.min && h <= pool.max)) throw bad(`pool_height_m is ${pool.min} to ${pool.max} metres`);
         args += ` -PoolHeight ${h.toFixed(2)}`;
       }
       return { kind: 'remembered', args };
@@ -536,8 +539,8 @@ export function planControl(action, body = {}) {
       const parts = [];
       for (const [key, flag] of [['video', 'Video'], ['intensity', 'Intensity'], ['threshold', 'Threshold']]) {
         if (body[key] === undefined) continue;
-        const v = num(body[key]);
-        if (!(v >= 0 && v <= 1)) throw bad(`${key} is 0 to 1`);
+        const v = num(body[key]), f = REMEMBERED_SCHEMA.fields[`screens.${key}`];
+        if (!(v >= f.min && v <= f.max)) throw bad(`${key} is ${f.min} to ${f.max}`);
         parts.push(`-${flag} ${v.toFixed(2)}`);
       }
       if (!parts.length) throw bad('video is 0 to 1');

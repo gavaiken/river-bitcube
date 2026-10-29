@@ -5,7 +5,7 @@ every frame and the two Script TOPs call cook_ropes / cook_panels.
 Inputs (on bitcube, under C:\\Users\\user\\River):
   gallery_state\\state.json, reflex.json   Dave's mirror: memory + surge_at (section 2), scene knobs/colours, reflexes, heard
   presence.json                            people + lingerers (section 4)
-  remembered\\control.json                 {pool_height_m, light: off|pool|eddies, opening_night}
+  remembered\\control.json                 the control request file (control_schema.py; section 5)
   <repo>\\data\\remembered\\                notable.json, profiles.json.gz, days.csv (the fallback library)
 Output: remembered\\status.json (section 5), twice a second.
 
@@ -25,6 +25,7 @@ import numpy as np
 
 
 from . import clock
+from . import control_schema
 from . import palette
 from . import panels as panels_mod
 from . import ropes as ropes_mod
@@ -52,18 +53,20 @@ ROPE_EVERY = 2                      # the ropes step every 2nd frame (30 Hz), al
 PANEL_EVERY = 2                     # screens step every 2nd frame
 KNOBS = ('speed', 'density', 'brightness', 'turbulence')
 NEUTRAL = {k: 0.5 for k in KNOBS}
-CONTROL_DEFAULT = {'pool_height_m': None, 'light': 'off', 'leds': [], 'opening_night': True,   # opening night ON unless told
-                   'screen_intensity': None, 'screen_threshold': None,                          # None: water.SETTINGS
-                   'screen_mode': 'particles',       # particles (one field, the screens as windows) | water (video)
-                   'screen_video': 0.7,              # M9: how strongly the river video shows under the particles (0..1)
-                                                     # (28 Oct: 0.25, 0.15 for the numpy haze, then 0.35 on the GPU: Gavin
-                                                     # wants the river clips playing behind the ribbons; 0.7: "see the
-                                                     # water video more")
-                   'screen_field': 'ribbons',        # what the particle windows look onto (FIELDS)
-                   'screen_gpu': True, 'screen_motion_mask': True}               # ribbons drawn on the GPU when its shaders are healthy (ribbons_gpu.py)
+# control.json's fields (control_schema.FIELDS) -> the keys the show uses
+CONTROL_KEYS = {'pool_height_m': 'pool_height_m', 'light': 'light', 'leds': 'leds', 'opening_night': 'opening_night',
+                'screens.intensity': 'screen_intensity', 'screens.threshold': 'screen_threshold',
+                'screens.mode': 'screen_mode', 'screens.video': 'screen_video', 'screens.field': 'screen_field',
+                'screens.gpu': 'screen_gpu', 'screens.motion_mask': 'screen_motion_mask'}
+# the defaults are control_schema's (opening night ON unless told; the river video 0.7: Gavin, 28 Oct, "see the water video
+# more"), except intensity and threshold: None until someone sets them, so the screens use water.SETTINGS (whose values are
+# control_schema's defaults too)
+CONTROL_DEFAULT = {key: control_schema.DEFAULTS[name] for name, key in CONTROL_KEYS.items()}
+CONTROL_DEFAULT.update(leds=[], screen_intensity=None, screen_threshold=None)
+LIGHT_CLOCK_SLACK_S = 2.0           # a light stamped this much before the show started still counts (clock rounding)
 # the particle fields: ribbons (silk of glitter, Gavin's reference, 28 Oct, the default) | fine (M2's smoky streaks with
 # ledges, flow.py) | streaks (round 2b, particles.py, checkpoint remembered-particles-v1)
-FIELDS = ('ribbons', 'fine', 'streaks')
+FIELDS = tuple(control_schema.FIELDS['screens.field']['choices'])   # ('ribbons', 'fine', 'streaks')
 # M4 (the artists, 27 Oct: "more dynamic"): small surges between the main ones
 MINI_EMPTY_S = (60.0, 240.0)        # an empty room: a random small surge every 1-4 minutes
 MINI_ROOM_GAP_S = 60.0              # a busy room or a lingerer: at most one a minute
@@ -71,48 +74,37 @@ MINI_LEN_S = 24.0                   # a small surge's body and settling (ropes.M
 MINI_CLEAR_S = 45.0                 # never within this of the main surge
 SCREEN_CALM = 0.4                   # the screens in calm, as a share of their intensity (artists, 27 Oct: follow the loop)
 DARK_LUMA = 0.08                    # the live cam darker than this (night) -> the screens use the clips
-LIGHTS = ('off', 'pool', 'eddies', 'leds')
+LIGHTS = tuple(control_schema.FIELDS['light']['choices'])          # ('off', 'pool', 'eddies', 'leds')
 
 
 def parse_control(c):
-    """River\\remembered\\control.json -> {pool_height_m, light, leds, opening_night}. The shape zones.py light --write and
-    mission control write: {"t", "zones": {"file", "light": off|pool|eddies|leds, "leds": [{rope, from, to}],
-    "pool_height_m"?}, "opening_night"?}; flat keys (pool_height_m, light, opening_night) are read too.
-    Opening night: on by default; "opening_night": false (or "opening": {"on": false}) turns it off."""
+    """River\\remembered\\control.json -> {pool_height_m, light, leds, opening_night, screen_*}, through the one schema
+    (control_schema.py: the canonical flat shape; zones.{light, pool_height_m, leds}, opening.on and screen_<name> are read
+    only when the flat key is absent). Opening night: on unless the file says "opening_night": false. The light here is what
+    was asked; Show._read drops one set before the show started or over control_schema.LIGHT_MAX_S ago (effective_light)."""
     ctl = dict(CONTROL_DEFAULT)
-    if not isinstance(c, dict):
-        return ctl
-    z = c.get('zones') if isinstance(c.get('zones'), dict) else {}
-    ph = z.get('pool_height_m', c.get('pool_height_m'))
-    if isinstance(ph, (int, float)) and not isinstance(ph, bool) and 0 <= ph <= 5:
-        ctl['pool_height_m'] = float(ph)
-    light = z.get('light', c.get('light'))
-    if light in LIGHTS:
-        ctl['light'] = light
-    leds = z.get('leds', c.get('leds'))
-    if isinstance(leds, list):
-        ctl['leds'] = [e for e in leds if isinstance(e, dict)]
-    on = c.get('opening_night', True)               # Gavin and the artists: on unless control.json says false
-    if isinstance(c.get('opening'), dict):
-        on = c['opening'].get('on', on)
-    ctl['opening_night'] = bool(on)
-    sc = c.get('screens') if isinstance(c.get('screens'), dict) else {}
-    v = sc.get('video', c.get('screen_video'))
-    if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 1:
-        ctl['screen_video'] = float(v)
-    if sc.get('mode', c.get('screen_mode')) in ('particles', 'water'):
-        ctl['screen_mode'] = sc.get('mode', c.get('screen_mode'))
-    if sc.get('field') in FIELDS:
-        ctl['screen_field'] = sc['field']
-    if isinstance(sc.get('gpu'), bool):
-        ctl['screen_gpu'] = sc['gpu']
-    if isinstance(sc.get('motion_mask'), bool):
-        ctl['screen_motion_mask'] = sc['motion_mask']
-    for key, name in (('screen_intensity', 'intensity'), ('screen_threshold', 'threshold')):
-        v = sc.get(name, c.get(key))
-        if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 1:
-            ctl[key] = float(v)
+    for name, v in control_schema.validate(c).items():
+        if name in CONTROL_KEYS:
+            ctl[CONTROL_KEYS[name]] = v
     return ctl
+
+
+def effective_light(ctl, raw, mtime, started, now):
+    """The light a parsed control may use now: a light check (pool, eddies, leds) set before this show started (a restart
+    or a rebuild: never come up in calibration white) or more than LIGHT_MAX_S ago goes back to off. Returns (ctl, why),
+    why a short reason when it was dropped, else None. The file is left as it is (TouchDesigner only reads it); probe.ps1
+    stamps light_at whenever someone picks a light, so a later write of another control doesn't bring an old one back."""
+    if ctl['light'] == 'off':
+        return ctl, None
+    at = control_schema.light_set_at(control_schema.validate(raw), mtime)
+    why = None
+    if at is None or (started is not None and at < started - LIGHT_CLOCK_SLACK_S):
+        why = 'set before the show started'
+    elif now - at > control_schema.LIGHT_MAX_S:
+        why = f'set over {control_schema.LIGHT_MAX_S / 60:.0f} minutes ago'
+    if why:
+        ctl = dict(ctl, light='off', leds=[])
+    return ctl, why
 
 
 def screen_level(t, times, opening=True):
@@ -138,6 +130,28 @@ def read_json(path):
         return json.loads(Path(path).read_text(encoding='utf-8-sig'))
     except (OSError, ValueError):
         return None
+
+
+_warned = set()
+
+
+def warn_once(key, msg):
+    """Print msg the first time key comes up (a bad value from a file read every 2 s must not flood TouchDesigner's log)."""
+    if key not in _warned:
+        _warned.add(key)
+        print(f'remembered: {msg}')
+
+
+def num_or(v, default, what):
+    """v as a finite float, else default (and a warning, once per what)."""
+    try:
+        x = float(v)
+        if math.isfinite(x):
+            return x
+    except (TypeError, ValueError):
+        pass
+    warn_once(what, f'{what} is {v!r}, not a number: using {default}')
+    return default
 
 
 def median(xs):
@@ -208,16 +222,18 @@ class Knobs:
         return {k: self.start[k] + (self.target[k] - self.start[k]) * f for k in KNOBS}
 
     def set_scene(self, state, now):
-        sc = (state or {}).get('scene') or {}
-        if not sc or sc.get('placeholder'):
+        sc = (state or {}).get('scene') if isinstance(state, dict) else None
+        if not isinstance(sc, dict) or not sc or sc.get('placeholder'):
             return
         seq = state.get('seq', state.get('set_at_epoch'))
         if seq == self.seq:
             return
         first = self.seq is None
         self.start = self.scene(now)
-        self.target = {k: min(1.0, max(0.0, float(sc.get(k, 0.5)))) for k in KNOBS}
-        self.t0, self.seconds = now, 0.0 if first else max(0.0, float(sc.get('transition_seconds', 60.0)))
+        # Dave's scene is someone else's file: a knob that isn't a number keeps the neutral 0.5 (never aborts the tick)
+        self.target = {k: min(1.0, max(0.0, num_or(sc.get(k, 0.5), 0.5, f'scene.{k}'))) for k in KNOBS}
+        self.t0 = now
+        self.seconds = 0.0 if first else max(0.0, num_or(sc.get('transition_seconds', 60.0), 60.0, 'scene.transition_seconds'))
         self.seq = seq
         self.colors = sc.get('colors') or None
 
@@ -226,8 +242,8 @@ class Knobs:
         if not reflex or not fresh_reflex(reflex, now):
             self.reflex_target = zero
             return
-        off = reflex.get('offsets') or {}
-        self.reflex_target = {k: min(1.0, max(-1.0, float(off.get(k, 0.0)))) for k in KNOBS}
+        off = reflex.get('offsets') if isinstance(reflex.get('offsets'), dict) else {}
+        self.reflex_target = {k: min(1.0, max(-1.0, num_or(off.get(k, 0.0), 0.0, f'reflex.offsets.{k}'))) for k in KNOBS}
 
     def step(self, dt):
         a = 1 - math.exp(-dt / REFLEX_TAU) if dt > 0 else 0.0
@@ -311,6 +327,8 @@ class Show:
         self.state = self.reflex = None
         self.state_mtime = None
         self.control = dict(CONTROL_DEFAULT)
+        self.started = None                   # the first tick's time: a light check from before it is never taken up
+        self.light_dropped = None             # why the light control.json asks for is ignored now (printed once)
         self.lib = None
         self.next = {'dave': 0.0, 'presence': 0.0, 'control': 0.0, 'library': 0.0, 'status': 0.0}
         self.river_source = 'none'
@@ -329,8 +347,13 @@ class Show:
         """What the screens run on now (status.json screens; the Remembered river page's "Now on bitcube")."""
         c = self.control
         return {'mode': c['screen_mode'], 'field': self.field_kind, 'video': round(c['screen_video'], 2),
-                'intensity': round(c['screen_intensity'] if c['screen_intensity'] is not None else water_mod.SETTINGS['intensity'], 2),
+                'intensity': round(self.screen_intensity(), 2),
                 'threshold': round(self.water.s['sens'] if c['screen_threshold'] is None else c['screen_threshold'], 2)}
+
+    def screen_intensity(self):
+        """The screens' intensity: control.json's (0 is legal: dark screens), else the schema's default."""
+        v = self.control['screen_intensity']
+        return control_schema.DEFAULTS['screens.intensity'] if v is None else v
 
     def gpu_active(self):
         return self.gpu_ok and self.control['screen_gpu'] and self.field_kind == 'ribbons'
@@ -426,7 +449,16 @@ class Show:
             self.room.add(now, read_json(self.river / 'presence.json'))
         if now >= self.next['control']:
             self.next['control'] = now + READ_CONTROL_S
-            self.control = parse_control(read_json(self.river / 'remembered' / 'control.json'))
+            cp = self.river / 'remembered' / 'control.json'
+            raw = read_json(cp)
+            try:
+                mtime = cp.stat().st_mtime
+            except OSError:
+                mtime = None
+            self.control, why = effective_light(parse_control(raw), raw, mtime, self.started, now)
+            if why and why != self.light_dropped:
+                print(f'remembered: control.json asks for light {parse_control(raw)["light"]}, {why}: back to the show')
+            self.light_dropped = why
             self.use_field(self.control['screen_field'])
         if now >= self.next['library']:
             self.next['library'] = now + READ_LIBRARY_S
@@ -440,6 +472,8 @@ class Show:
             self.fps = fps
         elif dt > 0:
             self.fps += (1.0 / dt - self.fps) * 0.05
+        if self.started is None:
+            self.started = now
         self._read(now)
         mirror_age = None if self.state_mtime is None else max(0.0, now - self.state_mtime)
         dave, _why = clock.dave_day(self.state, now, mirror_age) if self.state else (None, 'no state.json')
@@ -511,13 +545,13 @@ class Show:
             if self.control['screen_mode'] == 'particles' and self.gpu_active():
                 # the GPU draws the ribbons and the river under them (ribbon_params -> ribbons_draw ... ribbons_out, and
                 # river_gpu); panel_render carries nothing; now and then a numpy render for the lit share in status.json
-                self.gpu_gain = self.control['screen_intensity'] or 0.82
+                self.gpu_gain = self.screen_intensity()
                 if self.ticks % 300 == 0:
                     self.field.render_screens(pal['light'])
                 if self.panel_frame is None or self.panel_frame.any():
                     self.panel_frame = np.zeros((ribbons_gpu.QH, ribbons_gpu.QW * 4, 3), np.float32)
             elif self.control['screen_mode'] == 'particles':
-                inten = self.control['screen_intensity'] or 0.82
+                inten = self.screen_intensity()
                 if self.field_kind == 'ribbons':                 # intensity folded into the ribbons' colour lookup
                     frame = self.field.render_screens(pal['light'], gain=inten)
                 else:

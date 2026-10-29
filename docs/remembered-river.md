@@ -93,7 +93,7 @@ File (`zones-<date>.json`; rope numbers 0-based as in the pixel map, LED 0 = the
 - **Screens** (screens file in the same frame as the map: pin them together): each hangs at the distance of the two ropes nearest it (or `--screen-distance-m`); `height_m` of its centre as for an LED; `tilt_deg` = how far its top leans from vertical as seen from the camera, + = to the right (rotate by −tilt to cancel); `size_m` is a sanity check.
 - **Logs** (`tools/remembered/logs-<date>.json`, made by marking `zones.py still`'s picture, which has a 0.1 grid, every LED, rope numbers at the feet and a tick where each pool begins): `[{"name": "big log", "polygon": [[x, y], ...]}]` in the show view (0–1, top left), or `{"frame": "map", "logs": [...]}` for the map's own frame. Eddies = runs of a rope's LEDs inside an outline (gaps ≤ 2 bridged, runs < 3 dropped).
 - **Old single-view maps** work too (each pixel through an 87° pinhole guess), but the 23 Oct map's view never reaches the floor, so it needs `--rope-distance-m` or `--led-pitch-m`.
-- **Lighting checks:** `light` prints the LED ranges and with `--write` writes `River\remembered\control.json`: `{"t": unix, "zones": {"file": "zones-….json", "light": "pool|eddies|leds|off", "leds": [{"rope", "from", "to"}], "pool_height_m"?}}` for the remembered show to light (mission control's `remembered-zones` sends the same shape).
+- **Lighting checks:** `light` prints the LED ranges and with `--write` writes `River\remembered\control.json`: `{"t": unix, "zones": {"file": "zones-….json", "light": "pool|eddies|leds|off", "leds": [{"rope", "from", "to"}], "pool_height_m"?}}` for the remembered show to light (the whole file: it drops the other controls). TouchDesigner reads that nested block only where the canonical flat key is absent, and mission control's next write folds it into flat keys (section 5, the control request file).
 
 ## 4. Lingerers (people counter)
 
@@ -128,18 +128,34 @@ TD writes `River\remembered\status.json` twice a second (read by the full check 
  "zones": {"file": "zones-2026-10-27.json", "pool_height_m": 0.6, "light": "off"}}
 ```
 
-Mission control controls (all through `probe.ps1`, refused while another show runs): `remembered-zones {pool_height_m?, light: off|pool|eddies}`, `remembered-opening {on}`. Both end up in `River\remembered\control.json` (also written by `zones.py light … --write`, with `light: leds` for individual LEDs).
+Mission control controls (all through `probe.ps1`, refused while another show runs): `remembered-zones {pool_height_m?, light: off|pool|eddies}`, `remembered-opening {on}`, `remembered-screens {video?, intensity?, threshold?}`. All end up in `River\remembered\control.json` (also written by `zones.py light … --write`, with `light: leds` for individual LEDs).
 
 Optional, additive: `day.profile` (`{flow, rain, temp, snow, is_day}`, 24 values each, as in `profiles.json.gz`) when bitcube plays a day that isn't Dave's (a notable day): the debug page then draws that day's hours; without it, it draws Dave's `memory.profile` only when the day playing is his.
 
-**The control request file** `River\remembered\control.json` (written by mission control through `probe.ps1`, read by TouchDesigner; built by whoever builds the TD side):
+**The control request file** `River\remembered\control.json` (written by mission control through `probe.ps1`, read by TouchDesigner). **One schema**, `td/remembered/control_schema.py` (each field's type, range, default and meaning); mission control and its page read a generated copy, `mission/public/remembered-schema.js` (regenerate with `python td/remembered/control_schema.py`; `tools/tests/test_control_schema.py` fails while it is stale). The canonical shape, flat keys and the screens in one block:
 
 ```json
-{"pool_height_m": 0.6, "light": "pool", "opening_night": false, "screens": {"video": 0.25}, "at": "2026-10-28T04:12:09Z"}
+{"pool_height_m": 0.6, "light": "pool", "light_at": "2026-10-29T04:12:09Z", "opening_night": true,
+ "screens": {"intensity": 0.82, "threshold": 0.35, "video": 0.7}, "at": "2026-10-29T04:12:09Z"}
 ```
 
-- `pool_height_m`: the pool line in metres above the floor (0–1.5; `null` until someone sets it: keep the zones file's own). `light`: `off` (the show), `pool` (light the LEDs at or below the pool line, to check it) or `eddies` (light the eddy LEDs). `opening_night`: the opening-night switch. `screens.video` (M9): how strongly the river video shows under the particle windows, 0–1 (`remembered-screens {video}`, `probe.ps1 -Action remembered-screens -Video 0.25`; absent until someone sets it: 25 %); TouchDesigner reports what it uses as `screens.video` in its status. `at`: when it was written (UTC). TouchDesigner reports what it took in its status (`zones`, `opening_night`).
-- Each control changes only its own fields; the others keep what the file held. The file is written whole to `control.json.tmp` and swapped in (`[IO.File]::Replace`), so a reader never sees half of it: read it when its write time changes.
+| Field | Range | Default (absent) | Meaning |
+|---|---|---|---|
+| `pool_height_m` | 0–1.5 m | `null`: the zones file's own | the pool line above the floor |
+| `light` | `off` `pool` `eddies` `leds` | `off` (the show) | light the LEDs at or below the pool line, the eddy LEDs, or `leds` (zones.py only) to check them |
+| `light_at` | UTC time | the file's `at`, else its write time | when `light` was last set (probe.ps1 stamps it with every `remembered-zones`) |
+| `leds` | `[{rope, from, to}]` | `[]` | `light: leds` only |
+| `opening_night` | true/false | **true** | the opening-night switch: on unless the file says `false` |
+| `screens.intensity` | 0–1 | 0.82 | how bright the screens are (0: dark, not "unset") |
+| `screens.threshold` | 0–1 | 0.35 | how much the river has to move to show in its video |
+| `screens.video` | 0–1 | 0.7 | how strongly the river video shows under the particle windows (M9) |
+| `screens.mode` / `.field` / `.gpu` / `.motion_mask` | `particles`·`water` / `ribbons`·`fine`·`streaks` / bool / bool | `particles` / `ribbons` / true / true | the screens' engine (set by hand or by tools, not by the page) |
+| `at` | UTC time | | when the file was last written |
+
+- **Precedence:** a flat key wins. The older spellings count only when the flat key is absent: `zones.{pool_height_m, light, leds}` (and its `t` as `light_at`; what `zones.py light --write` writes), `opening.on`, `screen_<name>`. An invalid value is dropped (its default stands), it never lets an older spelling back in. probe.ps1 folds the nested `zones` block (and `t`, `opening`) into flat keys on every write and drops it, so after one mission control write the file is canonical again.
+- **Light checks never stick:** TouchDesigner ignores a `light` other than `off` that was set before the show started (a restart of bitcube or TouchDesigner, or a rebuild: it never comes up in calibration white) or more than 10 minutes ago (`control_schema.LIGHT_MAX_S`): it goes back to the show by itself and prints why once. TouchDesigner only reads the file (no second writer); since `light_at` moves only when someone picks a light, a later slider write doesn't bring an old light back. Its status reports the light it actually uses (`zones.light`).
+- **Nothing is seeded:** a write changes only its own fields; the others keep what the file held, and a field nobody set stays absent (TouchDesigner uses its default). In particular `opening_night` is written only by `remembered-opening`. The screens' Apply sends only the sliders moved, in 1 % steps. The file is written whole to `control.json.tmp` and swapped in (`[IO.File]::Replace`), so a reader never sees half of it.
+- Room is left for an `overrides` block (plan step 3c); nothing reads one yet. TouchDesigner reports what it took in its status (`zones`, `opening_night`, `screens`).
 - `probe.ps1 -Action remembered-zones -Light off|pool|eddies [-PoolHeight 0.60]` and `-Action remembered-opening [-On]` (and `-Action remembered-screens [-Video] [-Intensity] [-Threshold] <0..1>`) write it, only while `status.json` is under 10 s old and names `river-remembered.toe`, or `River\looks\status.json` is under 10 s old and says `river-looks.toe` shows the remembered look (else `{ok: false, error: "the remembered river isn't running (…)", refused}`); mission control also refuses them (409) while the full check sees another show, and `remembered-zones` during a calibration or the test pattern. `probe.ps1 -Action remembered` reads `status.json`, Dave's `gallery_state\state.json` (only `memory`, `surge_at`, `scene`, `set_at`) and `reflex.json`, `presence.json` and `control.json`, each as `{age_s, json}`, `{missing}` or `{error}`, for `GET /api/remembered` (`mission/lib/remembered.mjs`; the page: `docs/mission-ui.md` "Remembered river page").
 
 ## Round 2: the artists on site (27 Oct, night)

@@ -16,11 +16,14 @@ import math
 
 import numpy as np
 
+from . import control_schema
+
 QW, QH, NQ = 128, 256, 4
 MW, MH = 320, 180
 
 # The artists' settings (the simulator's "Copy settings", 27 Oct): screens 1-4 left to right.
-SETTINGS = {'intensity': 0.82, 'sens': 0.35, 'soft': 0.35, 'floor': 0.12, 'contrast': 1.4, 'sat': 0.85, 'trail': 0.5}
+# intensity and sens (the motion threshold) are control.json's defaults: control_schema.py holds them, mission control shows them
+SETTINGS = {'intensity': control_schema.DEFAULTS['screens.intensity'], 'sens': control_schema.DEFAULTS['screens.threshold'], 'soft': 0.35, 'floor': 0.12, 'contrast': 1.4, 'sat': 0.85, 'trail': 0.5}
 HOMES = [(0.1818, 0.2875, 0.1125, 0.4), (0.3438, 0.5425, 0.1125, 0.4),
          (0.4449, 0.0756, 0.1125, 0.4), (0.6168, 0.2639, 0.1125, 0.4)]
 DRIFT = 0.035                  # how far a window wanders from home (fraction of the frame), each axis
