@@ -51,22 +51,22 @@
 <main class="explainer">
   <section class="card" id="toc">
     <h2>What is happening, exactly</h2>
-    <p class="lede">For whoever speaks for the piece: what feeds what, and how that becomes light. It describes the show file running now, <b>The river: all looks (playlist)</b> <span class="kind composite">composite: several looks inside</span>, the default since 28 Oct. Check it is still the one on <a href="/status">Status → What's showing</a>; its settings and live values are on the <a href="/looks">Looks</a> tab.</p>
+    <p class="lede">For whoever speaks for the piece: what feeds what, and how that becomes light. It describes the show file running now, <b>The river: all looks v2</b> <span class="kind composite">composite: several looks inside</span>, running since 29 Oct: the same playlist with the remembered river v2, where people visibly change the light. The file before it, <b>The river: all looks (playlist)</b>, is kept frozen as the rollback and is still what opens at restart. Check which one is on <a href="/status">Status → What's showing</a>; the playlist is on the <a href="/looks">Looks</a> tab, every input and who is steering it on the <a href="/remembered-v2">Remembered river v2</a> page.</p>
     <p class="toc"><a href="#short">In short</a> · <a href="#flow">What feeds what</a> · <a href="#cycle">The cycle</a> · <a href="#inputs">Each input and what it changes</a> · <a href="#missing">When something is missing</a> · <a href="#agent">What the agent is, and isn't</a> · <a href="#see">Where to see it live</a></p>
   </section>
 
   <section class="card" id="short">
     <h2>In short</h2>
     <p>A real river, Dry Creek in the Sierra foothills, is watched by a camera. Every five minutes an AI agent on <b>Modal</b> (Dave's) looks at what the river camera and the gallery camera have sent, reads its own journal, and decides three things: <b>which real day from the creek's past</b> (2002–2023) the piece should relive next, <b>when that day's surge lands</b>, and <b>the colours and mood</b> (a palette and four knobs). It writes them down with a one-sentence reason.</p>
-    <p><b>bitcube</b>, the PC in the gallery, reads that decision and makes the light: every five-minute <b>loop</b> replays one remembered day's 24 hours on the twenty ropes and the four screens: calm drips, a building flow, the surge (a white front falling down every rope into a churning pool), then settling. A new day arrives with one slow wave down the ropes. Between the remembered days, about every twenty minutes, the piece plays one cycle of <b>Fill my cup</b>, water rising from the floor to the top and draining out. People standing still near the ropes slow the light and draw it toward them.</p>
+    <p><b>bitcube</b>, the PC in the gallery, reads that decision and makes the light: every five-minute <b>loop</b> replays one remembered day's 24 hours on the twenty ropes and the four screens: calm drips, a building flow, the surge (a white front falling down every rope into a churning pool), then settling. A new day arrives with one slow wave down the ropes. Between the remembered days, about every twenty minutes, the piece plays one cycle of <b>Fill my cup</b>, water rising from the floor to the top and draining out. People change the light: someone standing still near the ropes sends sparks and splashes up and down the two to four ropes nearest them; a crowd stirs turbulence at head height and below, mounting over a minute; an empty room settles into slow ocean waves and then a still pond.</p>
     <p>The agent chooses and composes; it does not render pixels. bitcube renders; it does not choose the day. If the agent is late or the internet drops, bitcube carries on with a notable day of its own: the piece never stops.</p>
   </section>
 
   <section class="card" id="flow">
     <h2>What feeds what</h2>
-    <div class="scroll"><svg class="diagram" viewBox="0 0 720 470" role="img" aria-labelledby="flow-t flow-d">
-      <title id="flow-t">Data flow of the playlist show file</title>
-      <desc id="flow-d">The river camera and the gallery camera send clips to Dave's agent on Modal, which also reads today's river flow, the weather and the 2002–2023 record. Every five minutes it writes a remembered day, a surge hour, a palette, four knobs and reflexes. bitcube mirrors that every three seconds, adds the river camera picture, the people counter and the remembered-days library, and renders the twenty ropes over Art-Net and the four screens over HDMI.</desc>
+    <div class="scroll"><svg class="diagram" viewBox="0 0 720 476" role="img" aria-labelledby="flow-t flow-d">
+      <title id="flow-t">Data flow of the playlist show file (v2)</title>
+      <desc id="flow-d">The river camera and the gallery camera send clips to Dave's agent on Modal, which also reads today's river flow, the weather and the 2002–2023 record. Every five minutes it writes a remembered day, a surge hour, a palette, four knobs and reflexes. bitcube mirrors that every three seconds, adds the river camera picture, the people counter and the remembered-days library, and renders the twenty ropes over Art-Net and the four screens over HDMI. The room, seen by the gallery camera's people counter, changes the ropes directly.</desc>
       <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
 
       <!-- sources, left column -->
@@ -112,7 +112,7 @@
       <text class="small" x="532" y="106">every 3 s</text>
       <text x="532" y="132">+ river camera picture</text>
       <text x="532" y="152">+ people counter</text>
-      <text class="small" x="532" y="168">(2 fps; lingerers by rope)</text>
+      <text class="small" x="532" y="168">(2 fps; crowd, lingerers by rope)</text>
       <text x="532" y="194">+ the remembered-days</text>
       <text x="532" y="212">library, for fallback</text>
       <text x="532" y="240">runs the loop clock,</text>
@@ -124,6 +124,14 @@
       <!-- the river cam straight to bitcube, the counter from the gallery cam -->
       <path class="arrow" d="M200 72 H222 V300 H540 V256"/>
       <text class="small" x="240" y="294">river picture (live, or the recorded clips)</text>
+
+      <!-- the room straight to the ropes (v2: people change the light) -->
+      <rect class="box" x="10" y="350" width="190" height="80" rx="10"/>
+      <text x="22" y="372">The room</text>
+      <text class="small" x="22" y="388">gallery camera → people counter</text>
+      <text class="small" x="22" y="402">lingerers, a crowd, an empty room</text>
+      <text class="small" x="22" y="416">change the ropes within seconds</text>
+      <path class="arrow" d="M200 390 H330"/>
 
       <!-- outputs -->
       <rect class="box out" x="330" y="360" width="190" height="60" rx="10"/>
@@ -140,8 +148,8 @@
       <path class="arrow" d="M600 256 C 600 330, 425 290, 425 360"/>
 
       <!-- status back to mission control -->
-      <text class="small" x="10" y="440">Status back to mission control (this site): what bitcube is doing, twice a second; what Modal sent and how old it is.</text>
-      <text class="small" x="10" y="456">Nothing here is real time: Modal thinks every five minutes; bitcube renders every frame.</text>
+      <text class="small" x="10" y="448">Status back to mission control (this site): what bitcube is doing, twice a second; what Modal sent and how old it is.</text>
+      <text class="small" x="10" y="464">Nothing here is real time: Modal thinks every five minutes; bitcube renders every frame.</text>
     </svg></div>
     <p class="cap">The machines, addresses and links behind this: <a href="/map">System map</a> (live) · <a href="https://gavaiken.github.io/river-bitcube/system/" target="_blank" rel="noopener">interactive map</a>.</p>
     <p>Two things are easy to get wrong in conversation. The agent never sees raw video: each clip becomes a short caption and a few numbers before it reads anything. And the agent's decision does not reach the ropes directly: bitcube reads it from a mirrored file and folds it into the next loop, with easing, clamps and a power limit, so the agent can ask for a mood but can never cause a flash.</p>
@@ -196,10 +204,10 @@
       <tr><td><b>The remembered day</b></td><td class="from">Dave's agent, each tick: the day most like today (today's flow, rain, temperature, the date) or, when the river camera is offline or dark or nothing changed, one of 30 notable days (a flood, a drought, the first rains). Chosen with a one-sentence reason.</td><td class="does">Which day's 24 hours the loop replays: its hourly flow and rain shape how fast the water builds and how heavy the surge is; its season shades the colours (icy winter, teal-green spring); night is greyer and darker; cold is whiter. A dry day has no surge of its own.</td></tr>
       <tr><td><b>The surge hour</b></td><td class="from">Dave's agent (<code>surge_at</code>), else the day's heaviest hour of rain.</td><td class="does">When the surge lands in the loop, always between 1½ and 3½ minutes in. During opening nights (the default) every loop gets a surge, even on a dry day.</td></tr>
       <tr><td><b>The palette</b></td><td class="from">Dave's scene colours.</td><td class="does">The water's colours: 60 % Dave's palette, 40 % the day's season, always kept cool and saturated. The front of the surge is always white-cyan.</td></tr>
-      <tr><td><b>The four knobs</b></td><td class="from">Dave's scene: speed, density, brightness, turbulence (0–1), with his reflexes nudging them between ticks.</td><td class="does">How fast the flow runs, how many ropes carry drips, how bright the body of the water is, how rough the surge looks.</td></tr>
+      <tr><td><b>The four knobs</b></td><td class="from">Dave's scene (speed, density, brightness, turbulence, 0–1, with his reflexes nudging them between ticks) and the remembered day's hourly flow, rain, temperature and daylight.</td><td class="does">How fast the flow runs, how many ropes carry drips, how bright the body of the water is, how rough the surge looks. Half of each knob is Dave's (his narrow range stretched to a useful one), half the remembered day's own hours: its flow sets speed and density, its rain the turbulence, its temperature and daylight the brightness, hour by hour through the loop. A flood day and a dry day look different.</td></tr>
       <tr><td><b>"Heard"</b></td><td class="from">Dave's reflexes: how loud the river sounds in the latest clip (0–1).</td><td class="does">The ropes follow the sound when it is fresh: louder water, more flow. Without it they follow the river picture's motion.</td></tr>
       <tr><td><b>The river picture</b></td><td class="from">The river camera, live when it is up and light enough; otherwise the two approved recorded clips of the same creek (a 22 s cascade, an evening of 3.8 min).</td><td class="does">The screens: moving water plays faintly beneath twisting ribbons of glitter that fall through the four windows in the same direction as the ropes beside them; the water shows more as the loop builds and most at the surge. Its motion also drives the ropes when there is no sound.</td></tr>
-      <tr><td><b>The room</b></td><td class="from">The people counter on bitcube (the gallery camera, twice a second): how many people, and who has stood still for 8 s close to the ropes.</td><td class="does">A busy room or a lingerer brings the surge 30 s sooner; an empty room 30 s later. Someone standing still slows the light and gathers it toward the ropes nearest them. An empty room gets small random surges every few minutes; a busy room can bring one on, at most once a minute.</td></tr>
+      <tr><td><b>The room</b></td><td class="from">The people counter on bitcube (the gallery camera, twice a second): how many people, and who has stood still for 8 s close to the ropes.</td><td class="does"><b>Someone standing still:</b> sparks and splashes run up and down their two to four nearest ropes, the light gathers there and the pool's waterline rises. <b>A crowd</b> (four people is full): turbulence at head height and below, mounting over about a minute and subsiding over a minute after they leave. <b>An empty room:</b> slow ocean waves over the pool, settling to a still pond; the surge still plays at 60 %; anyone walking in wakes it within seconds. Small random surges come every few minutes only when the room is empty, never while it is busy; a busy room or a lingerer can bring one on, at most once a minute. A busy room or a lingerer also brings the main surge 30 s sooner; an empty room 30 s later.</td></tr>
       <tr><td><b>Calibration</b></td><td class="from">Measured on site: where every LED hangs (height above the floor), where the ropes coil (the pool), the screens' positions and tilts.</td><td class="does">Where the pool line sits, which LEDs churn, the order the surge front reaches the screens, the ribbons' direction on each screen.</td></tr>
     </table>
     <h3>Fill my cup (one cycle in about twenty)</h3>
@@ -211,9 +219,10 @@
   <section class="card" id="missing">
     <h2>When something is missing</h2>
     <ul>
-      <li><b>Dave's agent is late or the internet is down:</b> if his choice is more than 15 minutes old, bitcube picks a notable day itself from the same record (never the same twice in an hour) and plays on with the season's colours. Each of his choices plays once; between them bitcube fills with notable days too.</li>
+      <li><b>Dave's agent is late or the internet is down:</b> his choice counts until the time he gives it (up to an hour; 15 minutes when he gives none). After that bitcube picks a notable day itself from the same record (never the same twice in an hour) and plays on with the season's colours. Each of his choices plays once; between them bitcube fills with notable days too.</li>
       <li><b>The river camera is down or dark:</b> the screens play the recorded clips of the same creek; the ropes follow "heard" or, without it, the clips' motion. The agent is told the camera is dark and offers notable days.</li>
-      <li><b>The people counter stops:</b> the room is treated as empty: no shift of the surge, no lingerers.</li>
+      <li><b>The people counter stops:</b> the room effects relax to neutral: no crowd, no lingerers, not an empty room, no shift of the surge.</li>
+      <li><b>Something looks wrong on v2:</b> mission control's What's showing switches back to the frozen file, the remembered river as it was on 28 Oct. Anyone on the team can do it.</li>
       <li><b>The screens' GPU shaders fail:</b> a simpler drawing of the same ribbons takes over by itself.</li>
       <li><b>The ropes lose their signal:</b> the sender retries every two seconds; the ropes pick the river up again when power returns.</li>
     </ul>
@@ -223,7 +232,7 @@
   <section class="card" id="agent">
     <h2>What the agent is, and isn't</h2>
     <p>Dave's agent is an open-weight language model (on Modal) that reads its own <b>journal</b> every tick: the sensors are raw material; the journal is what makes its choices consistent and its own rather than a reaction to the last number. It is not a translator from data to light; louder water does not simply mean brighter lights. Its weights never change; its continuity is the journal, the way a person's is memory.</p>
-    <p>What it controls: the remembered day and why, the surge hour, the palette, the four knobs, the questions it asks of each clip and the small reflexes those answers may make. What it does not control: the rendering, the brightness limits, the power cap, the playlist, the calibration. Those are bitcube's and the team's.</p>
+    <p>What it controls: the remembered day and why, the surge hour, the palette, the four knobs, the questions it asks of each clip and the small reflexes those answers may make. What it does not control: the rendering, the room's effects, the brightness limits, the power cap, the playlist, the calibration. Those are bitcube's and the team's. The team can also fix or adjust any input by hand on the Remembered river v2 page, and simulate people for two minutes to test the room's effects.</p>
     <p>Its page, with the journal and its own canvas: <a href="https://to-be-a-river--river.modal.run/" target="_blank" rel="noopener">to-be-a-river--river.modal.run</a>.</p>
   </section>
 
@@ -232,9 +241,10 @@
     <p class="links">
       <a href="/status">Status: what's showing, the verdict</a>
       <a href="/looks">Looks: the playlist, each look's settings, the live inputs and what the look did with them</a>
-      <a href="/remembered">Remembered river: the day playing and why, the loop, the surge, the room, the screens' settings</a>
+      <a href="/remembered-v2">Remembered river v2: every input, where it comes from, what it feeds, and the hand overrides</a>
+      <a href="/remembered">Remembered river (v1): the same for the frozen file</a>
       <a href="/map">System map: every machine and link, live</a>
-      <a href="https://gavaiken.github.io/river-bitcube/files/river-all-looks" target="_blank" rel="noopener">The show file's page</a>
+      <a href="https://gavaiken.github.io/river-bitcube/files/river-all-looks-v2" target="_blank" rel="noopener">The show file's page</a>
       <a href="https://github.com/gavaiken/river-bitcube/blob/main/GLOSSARY.md" target="_blank" rel="noopener">Glossary: the agreed words</a>
       <a href="/help">Help: how to play with it</a>
     </p>

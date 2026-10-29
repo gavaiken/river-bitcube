@@ -62,6 +62,22 @@
 
 **Day's season**: The season of the remembered date, which sets the loop's palette. Not the **season cycle** of the river's year.
 
-**Lingerer**: Someone standing still close to the column. The room's one visible reflex: the light slows and gathers toward the ropes nearest them.
+**Lingerer**: Someone standing still close to the column (8 s or more). Since v2 (29 Oct) sparks and splashes run up and down their two to four nearest ropes, the light gathers there (the other ropes dim a little) and the pool's waterline rises under them; it fades a few seconds after they move on.
+
+**Crowd**: How full the room is, as the ropes feel it: one person is a hint, four or more the full crowd. It mounts over about a minute as people are counted and subsides over about a minute when they leave, as turbulence at head height and below (swirls, sloshing, bursts). _Avoid_: presence (the raw count) for this smoothed effect.
+
+**Empty room**: Nobody seen for a few seconds. The calm becomes slow ocean waves over the pool, settling to a still pond; the day's surge still plays, softer, and the random small surges happen only now. Anyone walking in wakes it within seconds, with a ripple across the pool.
+
+**Override**: A hand on one of the remembered river's parameters, from mission control's v2 page: **auto** (the show's own value), **fix** (a chosen value) or **adjust** (the show's value scaled and shifted). It holds until someone clears it. _Avoid_: manual (that is a mode of the river's year).
+
+**Simulated people**: A pretend headcount or a pretend lingerer by one rope, set on the v2 page to test the people effects with nobody in the room. It clears itself after two minutes, and the page shows a red SIMULATING banner meanwhile.
+
+**Master brightness**: One multiplier on every rope's brightness (0–150 %, normally 100 %), set on the v2 page. The 1,400 W power limit still applies on top.
+
+**Calm range**: The floor and ceiling of the calm's brightness (normally 18 % and 60 %), set on the v2 page; the calm moves between them with the day, the room and a slow drift.
+
+**Inputs log**: bitcube's running record of every input and parameter with where it came from (`River\logs\inputs.jsonl`), a line every few seconds. The v2 page draws its sparklines from it.
+
+**The frozen file**: `river-all-looks.toe`, the remembered river as it was before v2, pinned so that no code change can reach it. It is **the rollback**: switching back to it from mission control's What's showing undoes v2. _Avoid_: old file (old files have `old-` in their names and are never offered).
 
 **Show view**: Where the gallery camera points while the piece runs: low, seeing the people and the base of the piece. It turns away only during a calibration, and always comes back.

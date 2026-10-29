@@ -16,7 +16,7 @@ The final visualization, agreed with Gavin, Will and Justine on 27 Oct (the gril
 | Calibration | Each LED's height above the floor, the pool line, the driftwood eddies, each rope's foot in the show view, the screens' heights | `tools/remembered/zones.py` → `tools/pixelmap/zones-<date>.json` |
 | Mission control | The **Remembered river** debug page (inputs, decision, outputs, why), the pool/eddy adjusters, the opening-night switch | `mission/public/remembered.*` |
 
-Decisions: bitcube owns the loop clock; a new remembered day takes effect only at the next loop boundary (with the decision wave). The surge lands at Dave's `surge_at` when present, else at the day's heaviest hour of rain moved by the room, clamped to 1.5–3.6 min into the loop. Each of Dave's choices plays once, if it is under 15 min old; between his choices (his ticks run about 5–15 min apart) and when he is absent, bitcube plays one of the notable days itself, never the same twice in an hour. Remembered days come only from days that have data. The gallery cam stays on the show view (low: people and the base of the piece); it pans and tilts only during a calibration, and always returns home.
+Decisions: bitcube owns the loop clock; a new remembered day takes effect only at the next loop boundary (with the decision wave). The surge lands at Dave's `surge_at` when present, else at the day's heaviest hour of rain moved by the room, clamped to 1.5–3.6 min into the loop. Each of Dave's choices plays once, if it is under 15 min old (v2: until his `valid_until`, at most an hour; see [v2](#v2-29-oct-2026)); between his choices (his ticks run about 5–15 min apart) and when he is absent, bitcube plays one of the notable days itself, never the same twice in an hour. Remembered days come only from days that have data. The gallery cam stays on the show view (low: people and the base of the piece); it pans and tilts only during a calibration, and always returns home.
 
 ## 1. The data: remembered days
 
@@ -248,3 +248,54 @@ Next, in order:
   - **How:** each look renders into the same rope canvas and screen image; a selector crossfades them. Only the visible look runs (both only during a fade), so it costs no more than one show. The remembered river's loop clock pauses while it's hidden and picks up where it left off (or starts a fresh loop: decide). Ropes keep their power limit and safety ramps through the fades.
 - **Mission control's side of M8 and M9 (28 Oct):** the Looks card on Status, `POST /api/control/looks`, `probe.ps1 -Action looks`, the looks' `control.json` / `status.json` contract, the remembered river's controls while its look shows, and the River video slider on the Remembered river page (`remembered-screens`, `control.json` `screens.video`): docs/mission-ui.md "Looks" and "Remembered river page". The show file itself (`river-looks.toe`) is separate work.
 - **M9 A subtle river under the remembered river's screens:** the artists' simulator look (round 2 step 1: the moving water through four drifting windows) as a faint layer under the particle windows, with its own strength setting.
+
+## v2 (29 Oct 2026)
+
+Agreed with Gavin on 29 Oct after his audit of the night before: people didn't visibly change anything, and Dave's knobs barely moved. Plan, decisions and log: [remembered-v2-plan.md](remembered-v2-plan.md). The running file is **`river-all-looks-v2.toe`** ([its page](files/river-all-looks-v2.md)), built from the live `td/remembered/`. Numbers below are the constants in the code (`room.py`, `ropes.py`, `knobs.py`, `clock.py`, `show.py`, `control_schema.py`, `inputs_log.py`); change them there and here together.
+
+### People change the light
+
+`room.py` turns the people counter into three smoothed signals for the ropes: **linger** (per rope), **crowd** and **empty**. It reads the counter's newest raw count (not the 30 s median: waking has to be fast) and its lingerers. Without the counter (missing or stale) all three relax to neutral: no crowd, not empty, no lingerers.
+
+- **A lingerer** (still ≥ 8 s, close: box ≥ 40 % of the frame, as before) lights their **2–4 nearest ropes**: the counter's two nearest, widened by the ropes' feet within 0.012 of the show view (the old 0.08 lit 11–18 of the 20), weighted 1, 1, 0.85, 0.7, never fewer than two. It builds over 3 s and fades over 5 s after they go. On those ropes: **sparks and splashes** (short streaks of 5–20 px, about 7 a second on a fully lingered rope; 60 % thrown up from the waterline at 90–170 px/s, the rest falling from 1.6–2.6 m, all pulled down into the pool where they splash, 2.2 s each), **the light gathers** (up to ×1.9 with a standing glow, every other rope down by up to 25 %), the water slows by up to 60 %, and **the pool's waterline rises** 0.4 m. Strongest between 0.5 and 1.8 m.
+- **A crowd:** 4 people or more is the full crowd, 1 person a hint. Crowd **mounts over ~60 s** as people are counted and **subsides over ~60 s** when they go. It brings Fantasia-style turbulence **at head height and below (LEDs ≤ 1.8 m)**: swirling eddies, a slosh across the ropes, bursts (up to 3 a second at a full crowd, × crowd²); it adds up to 0.4 to the turbulence knob, lifts the calm toward 0.6 and wakes more ropes.
+- **An empty room:** after 5 s with nobody seen, empty ramps up over 60 s. The calm becomes **slow ocean waves** over the pool and across the ropes (periods 13–19 s, lifting the waterline up to 0.14 m), then settles to a **still pond** breathing at about 0.15; fewer ropes carry drips. The day's main **surge still plays, at 60 %**. Anyone entering drops empty to 0 within 1.5 s and sends a wake (a ripple across the pool, fading over 4 s).
+- **Small surges:** random ones (every 1–4 min) only when the room is empty or the counter is out, and **never while the room is busy** (crowd over 0.3, or anyone lingering). A busy room (relative presence over 1.5) or a lingerer can still bring one on, at most once a minute, never within 45 s of the main surge. The room still moves the main surge 30 s sooner or later (unchanged).
+
+### The knobs follow the remembered day as well as Dave
+
+Each knob is `0.5 × Dave (remapped) + 0.5 × the day + the reflex` (reflex gain 1), clamped 0–1; until the show has a day, Dave and the reflex alone.
+
+- **The day, hour by hour through the loop:** its **flow** drives speed (0.15–0.90) and density (0.25–0.85), half from the day's flow percentile in the record and half from the hour's flow within the day (damped on a day that barely varies); its **rain** drives turbulence (0.15–0.90): the hour's rain over the day's wettest hour, times how wet the day got (a wettest hour of 3 mm/h counts as full), plus a little flow; its **temperature** and **daylight** tilt brightness around 0.55 (±0.08 each). The day part eases over ~2 s, so a new day at the loop boundary doesn't jump. A flood day and a dry day now give visibly different curves.
+- **Dave's voice, remapped:** his agent keeps the knobs in a narrow band (50 ticks audited on 28 Oct). `knobs.REMAP` stretches that band onto a useful range, linear between the points, clamped at the ends:
+
+| Knob | Dave's band (audit) | becomes | Dave 0 → | Dave 1 → |
+|---|---|---|---|---|
+| speed | 0.04–0.14 | 0.25–0.75 | 0.20 | 0.90 |
+| density | 0.25–0.58 | 0.30–0.75 | 0.25 | 0.85 |
+| brightness | 0.47–0.65 | 0.45–0.75 | 0.35 | 0.85 |
+| turbulence | 0.075–0.14 | 0.25–0.70 | 0.20 | 0.85 |
+
+- Status shows the parts per knob: "Dave 0.42 · day 0.61 → 0.52" (the reflex only when it moves the knob).
+
+### Dave's `valid_until` and signals (river-agent PR #14)
+
+[drocamor/river-agent#14](https://github.com/drocamor/river-agent/pull/14) (additive, awaiting Dave; the show reads both with defaults and doesn't depend on it):
+- `memory.valid_until`: his choice counts until then (he sends `chosen_at` + 20 min), capped at `chosen_at` + 1 h against a bad clock. Without it, 15 min from `chosen_at` as before; either way only while the mirror is fresh (rewritten within 15 min). With it, Dave's ticks up to 18 min apart no longer drop the show to its own day.
+- `reflex.json` `signals`: raw `{gallery, river}: {name: {value, slow, age_s}}`; a signal older than 10 min reads as none. Reported in status and on the v2 page; they don't drive the light.
+
+### Overrides and simulated people
+
+The control file's `overrides` block (contract and parameter table in section 5): every parameter the show drives is **auto** (the show's own), **fix** (a value) or **adjust** (auto × gain + offset, clamped), sticky until cleared or "clear all". Two of them steer the whole column: **master brightness** (0–1.5, default 1.0; the 1,400 W limit still applies) and the **calm range** (`calm_min` / `calm_max`, defaults 0.18 / 0.6: the floor and ceiling of the calm brightness curve). **Simulated people** (a headcount 0–20, a lingerer by rope 0–19) stand in for the counter and clear themselves after **2 minutes** at most, with a red SIMULATING banner on the page: every people effect can be tested with nobody in the room. `status.json` reports each parameter as `{mode, auto, value, source, expires_in_s}`.
+
+### The inputs log
+
+`River\logs\inputs.jsonl`: every input and parameter with its value and source, one line every 5 s, or sooner (at most every 1 s) when a source changes or a value moves more than 2 %. At 20 MB it moves to `inputs.jsonl.1` (one old file kept). The page reads it back for its 24 h sparklines (at most 300 points each). Writing never stops the show.
+
+### The frozen v1 and the rollback
+
+The bug fixes (opening-night seed, nested zones block, light reset at boot, intensity 0, slider snap, a non-numeric knob) landed in v1 first (tag `all-looks-v1-bugs`). Then **`river-all-looks.toe` was frozen**: it imports its code from a second checkout pinned at that tag, `River\river-bitcube-v1`, so a pull can't change it (tag `all-looks-v1-frozen`; [checkpoints](checkpoints.md)). **Rolling back** is mission control's What's showing → `river-all-looks.toe`. The boot default stays the frozen v1 until Gavin says otherwise.
+
+### The v2 page
+
+Mission control's **Remembered river v2** page (`/remembered-v2`; [mission-ui.md](mission-ui.md) "Remembered river v2 page"): inputs → parameters → outputs, each with its source, age and sparkline; the overrides, master brightness, calm range and Simulate people; a ? on everything. `/remembered` stays the v1 page; each says so when the other file is running, and the menu links to the one that matches.

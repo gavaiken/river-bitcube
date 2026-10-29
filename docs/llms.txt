@@ -19,6 +19,7 @@
 - [shows.json](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/shows.json): every show file, its description, inputs, editors and pinned calibration.
 - History (decisions and what happened, not instructions): [execution plan](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/execution-plan.md), [plan.md](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/plan.md), [log](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/a-river-becoming-log.md).
 - [Hardware](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/a-river-becoming-hardware.md): ropes, PSAC10 boxes, rack controller, panels, cameras.
+- [The remembered river](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/docs/remembered-river.md): the final visualization's design and contracts (Dave's scene, calibration zones, lingerers, status and overrides), with the v2 changes of 29 Oct (people effects, knobs from the remembered day, overrides, the frozen v1 rollback). Terms: [GLOSSARY.md](https://raw.githubusercontent.com/gavaiken/river-bitcube/main/GLOSSARY.md).
 
 ## Optional
 
