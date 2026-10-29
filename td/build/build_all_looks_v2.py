@@ -16,6 +16,5 @@ registry.require_build(project.name, 'td/build/build_all_looks_v2.py')      # ne
 _cal = registry.calibration_for(TOE)
 TOE_OVERRIDE, BUILD_OVERRIDE, DRIVER_OVERRIDE = TOE, 'td/build/build_all_looks_v2.py', 'looks'
 exec(open(REPO + '/td/build/build_remembered.py', encoding='utf-8').read())
-# The softer ribbon projection the artists approved for the all-looks file (update_all_looks_ribbons.py checks the name).
-_v2 = open(REPO + '/td/build/update_all_looks_ribbons.py', encoding='utf-8').read()
-exec(_v2.replace("if project.name != 'river-all-looks.toe':", "if project.name not in ('river-all-looks.toe', 'river-all-looks-v2.toe'):"))
+# The softer ribbon projection the artists approved for the all-looks files (update_all_looks_ribbons.py accepts both names).
+exec(open(REPO + '/td/build/update_all_looks_ribbons.py', encoding='utf-8').read())

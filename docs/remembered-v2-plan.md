@@ -51,6 +51,8 @@ Gavin audited the remembered river on 28 Oct (the look in `river-all-looks.toe`)
 
 ## Log
 
+- 29 Oct 07:51 **the v1-era runtime tools, done** (was open: they named only the v1 file). `tools/remembered/runtime_guard.py`: `direct_video.py`, `video_trial.py` and `profile_capture.py` (start) refuse when `remembered.show` loads from `river-bitcube-v1` (the frozen file: never patch it) or the open file isn't `river-all-looks-v2.toe`, and print what replaced them. On v2: `direct_video.py` only writes `control.json` `screens.motion_mask` (atomic; the show reads it, the readback skip is built in); `video_trial.py` keeps/rolls back/reports v2's own `video-library.json` entry (rolling back a trial v2 only inherits pins it to the originals), changing only the running clip list, no module patching; `profile_capture.py` times `river_luma`, `Motion.feed_luma`, `Water.feed_luma` (no `Water.feed`, no panels). `update_all_looks_ribbons.py` accepts both all-looks names, so `build_all_looks_v2.py` no longer string-patches it (shows.json entries updated; nothing rebuilt). Tests: `test_runtime_guard.py`, `test_direct_video.py`, `test_video_trial.py`, `test_profile_capture.py`.
+
 - 29 Oct 02:15 **all steps done.** v2 rebuilt after step 5 and running on bitcube (`abab5ab`), 60 fps, Python ~3 ms. Open: v2 as the boot default (Gavin); Dave's PR #14.
 
 - 29 Oct 01:52 v2 page live in mission control (self-updates within ~5 min); probe actions proven on bitcube; perf agent (5) and docs agent (7) running.

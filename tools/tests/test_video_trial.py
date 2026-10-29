@@ -24,8 +24,9 @@ class Params:
 @pytest.fixture
 def trial(tmp_path, monkeypatch):
     source = (ROOT / 'tools/remembered/video_trial.py').read_text()
-    ns = {'project': types.SimpleNamespace(name='river-all-looks.toe')}
-    exec(compile(source.rsplit('\ntrial()', 1)[0], '<video_trial>', 'exec'), ns)
+    ns = {'project': types.SimpleNamespace(name='river-all-looks-v2.toe'),
+          '__file__': str(ROOT / 'tools/remembered/video_trial.py')}
+    exec(compile(source, '<video_trial>', 'exec'), ns)           # no op: nothing runs until ns['trial']()
     river = tmp_path / 'River'
     original = river / 'recordings/river/remembered'
     candidate = river / 'recordings/river/motion30-trial-20261028'
@@ -52,7 +53,8 @@ def test_keep_survives_fresh_selection_and_rollback_restores_originals(trial):
     config.write_text(json.dumps({'shows': {'another.toe': {'directory': 'leave', 'files': ['x.mp4']}}}))
     ns['ACTION'] = 'keep'
     ns['trial']()
-    assert clips_for(river, 'river-all-looks.toe') == holder.clips != baseline
+    assert clips_for(river, 'river-all-looks-v2.toe') == holder.clips != baseline
+    assert clips_for(river, 'river-all-looks.toe') == baseline          # the frozen v1's own choice is untouched
     assert clips_for(river, 'river-two-looks.toe') == baseline
     checkpoint = (ns['ROOT'] / 'trial-state.json').read_bytes()
     ns['trial']()
@@ -61,7 +63,7 @@ def test_keep_survives_fresh_selection_and_rollback_restores_originals(trial):
     ns['ACTION'] = 'rollback'
     ns['trial']()
     assert holder.clips == baseline and player.par.file.eval() == baseline[0]
-    assert clips_for(river, 'river-all-looks.toe') == baseline
+    assert clips_for(river, 'river-all-looks-v2.toe') == baseline
     assert json.loads(config.read_text())['shows'] == {'another.toe': {'directory': 'leave', 'files': ['x.mp4']}}
 
 
@@ -81,5 +83,30 @@ def test_partial_candidate_does_not_write_preference_or_change_live_list(trial):
     ns['ACTION'] = 'keep'
     (ns['ROOT'] / ns['NAMES'][0]).write_bytes(b'partial upload')
     with pytest.raises(RuntimeError):
+        ns['trial']()
+    assert holder.clips == before and not (river / 'remembered/video-library.json').exists()
+
+
+def test_v2_rollback_of_a_trial_it_only_inherits_pins_the_originals(trial):
+    ns, river, holder, player = trial
+    baseline = holder.clips[:]
+    config = river / 'remembered/video-library.json'
+    choice = {'directory': ns['ROOT'].name, 'files': list(ns['NAMES'])}
+    config.write_text(json.dumps({'shows': {'river-all-looks.toe': choice}}))   # v1 kept the trial; v2 inherits it
+    ns['ACTION'] = 'apply'
+    ns['trial']()
+    ns['ACTION'] = 'rollback'
+    ns['trial']()
+    assert holder.clips == baseline and clips_for(river, 'river-all-looks-v2.toe') == baseline
+    assert json.loads(config.read_text())['shows']['river-all-looks.toe'] == choice
+
+
+def test_frozen_v1_modules_refuse_before_anything_changes(trial, monkeypatch):
+    ns, river, holder, _ = trial
+    before = holder.clips[:]
+    monkeypatch.setitem(sys.modules, 'remembered.show',
+                        types.SimpleNamespace(__file__='C:/Users/user/River/river-bitcube-v1/td/remembered/show.py'))
+    ns['ACTION'] = 'keep'
+    with pytest.raises(RuntimeError, match='frozen v1'):
         ns['trial']()
     assert holder.clips == before and not (river / 'remembered/video-library.json').exists()

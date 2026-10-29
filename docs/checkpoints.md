@@ -68,5 +68,5 @@ Going back: as above (`git checkout remembered-particles-v1 -- td/remembered td/
 
 - **Roll back to it:** mission control, What's showing → `river-all-looks.toe` (or `probe.ps1 -Action switch -BootFile river-all-looks.toe`); set it as default if v2 was made the default.
 - **Never rebuild it from the live checkout** (`build_all_looks.py` without `REPO_OVERRIDE`): that would bake the live code back in. To move the frozen point: `git -C C:\Users\user\River\river-bitcube-v1 checkout <tag>`, rebuild with the override, save, restart.
-- The runtime helpers `tools/remembered/direct_video.py` and `video_trial.py` patch the running module from the **live** source; don't run them against the frozen file.
+- The runtime helpers `tools/remembered/direct_video.py`, `video_trial.py` and `profile_capture.py` refuse to run against the frozen file (`tools/remembered/runtime_guard.py`); they work on v2 without patching modules.
 - v2 work: `td/remembered/` in the live checkout, `river-all-looks-v2.toe` (`td/build/build_all_looks_v2.py`), plan `docs/remembered-v2-plan.md`.

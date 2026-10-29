@@ -1,9 +1,13 @@
-"""Temporary timings around the existing all-looks callbacks; never saves or changes controls.
+"""Temporary timings around the existing callbacks of river-all-looks-v2.toe; never saves or changes controls.
 Run through tools/td.ps1. CAPTURE_ACTION='status'|'stop'; default start, CAPTURE_SECONDS=1500.
 State and open files live outside comp.storage; wrappers automatically remove themselves.
+Start refuses on the frozen river-all-looks.toe (runtime_guard.py: its modules come from the pinned v1 checkout); status and
+stop always work. Sections are v2's (29 Oct, step 5): the river frame's luma (motion.river_luma), then Motion.feed_luma and
+Water.feed_luma (Water.feed and panels.py are gone).
 """
 import csv
 import functools
+import importlib
 import json
 import os
 from pathlib import Path
@@ -15,7 +19,28 @@ import time
 import types
 
 KEY = '_river_full_cycle_profile'
-SECTIONS = ('remembered_step', 'show_tick', 'field_step', 'field_ropes', 'field_screens', 'rope_step', 'water_feed', 'water_step', 'fill_frames')
+SECTIONS = ('remembered_step', 'show_tick', 'field_step', 'field_ropes', 'field_screens', 'rope_step', 'river_luma', 'motion_feed',
+            'water_feed', 'water_step', 'fill_frames')
+REPLACED = 'the same capture, timing the v2 sections (river_luma, Motion.feed_luma, Water.feed_luma; no panels)'
+
+
+def sections(show, ribbons, ropes, motion, water, fill):
+    """(object, attribute, label) for every timed section, on the v2 modules."""
+    return ((show, 'step', 'remembered_step'), (show.Show, 'tick', 'show_tick'),
+            (ribbons.Ribbons, 'step', 'field_step'), (ribbons.Ribbons, 'render_ropes', 'field_ropes'),
+            (ribbons.Ribbons, 'render_screens', 'field_screens'), (ropes.Ropes, 'step', 'rope_step'),
+            (motion, 'river_luma', 'river_luma'), (motion.Motion, 'feed_luma', 'motion_feed'),
+            (water.Water, 'feed_luma', 'water_feed'), (water.Water, 'step', 'water_step'), (fill.Fill, 'frames', 'fill_frames'))
+
+
+def _guard():
+    here = globals().get('__file__')
+    folder = str(Path(here).resolve().parent) if here and (Path(here).resolve().parent / 'runtime_guard.py').is_file() \
+        else 'C:/Users/user/River/river-bitcube/tools/remembered'
+    if folder not in sys.path:
+        sys.path.insert(0, folder)
+    import runtime_guard
+    return importlib.reload(runtime_guard)
 FIELDS = ('kind', 'epoch', 'elapsed_s', 'frame', 'interval_ms', 'callback_ms', 'probe_ms', 'look', 'position', 'loop', 'clip',
           'sent', 'send_gap_ms', 'dropped', *[n + '_ms' for n in SECTIONS], 'draw_cpu_ms', 'draw_gpu_ms', 'river_cpu_ms', 'river_gpu_ms', 'trail_gpu_ms')
 
@@ -167,20 +192,18 @@ def run_td(op, project, action='start', seconds=1500):
             existing.stop()
         print('Profiler stopped; original functions restored')
         return
-    if project.name != 'river-all-looks.toe' or existing and existing.active:
-        raise RuntimeError('Wrong show or an active profiler already exists; nothing changed')
+    _guard().check('profile_capture.py', project=project, replaced=REPLACED)
+    if existing and existing.active:
+        raise RuntimeError('An active profiler already exists; nothing changed')
     from looks import mixer
-    from remembered import show, ribbons, ropes, water
+    from remembered import show, ribbons, ropes, motion, water
     from filling import fill
     if mixer._holder().looks is None:
         raise RuntimeError('Playlist not initialized')
     out = Path('C:/Users/user/River/profiles') / ('cycle-' + time.strftime('%Y%m%d-%H%M%S'))
     cap = Capture(out, seconds)
     try:
-        for obj,name,label in ((show,'step','remembered_step'), (show.Show,'tick','show_tick'),
-            (ribbons.Ribbons,'step','field_step'), (ribbons.Ribbons,'render_ropes','field_ropes'),
-            (ribbons.Ribbons,'render_screens','field_screens'), (ropes.Ropes,'step','rope_step'),
-            (water.Water,'feed','water_feed'), (water.Water,'step','water_step'), (fill.Fill,'frames','fill_frames')):
+        for obj,name,label in sections(show, ribbons, ropes, motion, water, fill):
             cap.patch_section(obj,name,label)
         cache = {'at': 0, 'clip': ''}
         def tags():

@@ -5,8 +5,8 @@ import importlib
 import sys
 
 REPO = globals().get('REPO_OVERRIDE', 'C:/Users/user/River/river-bitcube')   # a frozen show builds from its own pinned checkout
-if project.name != 'river-all-looks.toe':
-    raise RuntimeError('This update is only for river-all-looks.toe')
+if project.name not in ('river-all-looks.toe', 'river-all-looks-v2.toe'):   # the frozen v1 (from its pinned checkout) and v2
+    raise RuntimeError('This update is only for river-all-looks.toe and river-all-looks-v2.toe')
 if REPO + '/td' not in sys.path:
     sys.path.insert(0, REPO + '/td')
 from remembered import ribbons_gpu

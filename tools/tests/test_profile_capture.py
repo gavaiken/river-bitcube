@@ -1,6 +1,7 @@
 """Diagnostics must preserve callbacks and restore only wrappers they still own."""
 import csv
 import importlib.util
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 import pytest
@@ -57,3 +58,26 @@ def test_stop_does_not_overwrite_someone_elses_later_patch(tmp_path):
     obj.f=later
     c.stop();c.writer.join(timeout=2)
     assert obj.f is later
+
+
+def test_sections_exist_on_the_v2_modules():
+    sys.path.insert(0, str(P.parents[2] / 'td'))
+    from remembered import show, ribbons, ropes, motion, water
+    from filling import fill
+    secs = M.sections(show, ribbons, ropes, motion, water, fill)
+    assert [label for _, _, label in secs] == list(M.SECTIONS)
+    for obj, name, label in secs:
+        assert callable(getattr(obj, name)), label
+    assert not any('panels' in getattr(o, '__module__', getattr(o, '__name__', '')) for o, _, _ in secs)
+    assert show.motion_mod is motion                         # the show calls motion.river_luma through this module
+
+
+def test_start_refuses_the_frozen_v1_file(tmp_path, monkeypatch):
+    monkeypatch.setitem(sys.modules, 'remembered.show',
+                        SimpleNamespace(__file__='C:/Users/user/River/river-bitcube-v1/td/remembered/show.py'))
+    monkeypatch.delitem(sys.modules, M.KEY, raising=False)
+    with pytest.raises(RuntimeError, match='frozen v1'):
+        M.run_td(None, SimpleNamespace(name='river-all-looks-v2.toe'))
+    with pytest.raises(RuntimeError, match='runs only in'):
+        monkeypatch.delitem(sys.modules, 'remembered.show')
+        M.run_td(None, SimpleNamespace(name='river-all-looks.toe'))

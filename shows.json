@@ -172,7 +172,7 @@
       "created": "2026-10-28",
       "updated_by": "Gavin (Claude, Mac mini)",
       "updated": "2026-10-29",
-      "last_change": "pins zones-2026-10-29.json: the driftwood eddies (11 runs where ropes cross the logs, marked on the show-view still, checked by lighting them on the piece 07:49); rebuilt",
+      "last_change": "pins zones-2026-10-29.json: the driftwood eddies (11 runs where ropes cross the logs, marked on the show-view still, checked by lighting them on the piece 07:49); rebuilt. Then build script only, not rebuilt: update_all_looks_ribbons.py accepts this name itself, so build_all_looks_v2.py no longer string-patches it (same result).",
       "composite": true
     },
     {
