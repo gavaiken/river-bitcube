@@ -25,6 +25,13 @@
 //     remembered-screens '{"intensity":0.82,"threshold":0.35,"video":0.15}'   (the same, any of the three, each 0 to 1:
 //                                                       the screens' intensity, their motion threshold, and how strongly
 //                                                       the river video shows under the particle windows)
+//     remembered-override '{"param":"knob.speed","mode":"fix","value":0.7}'   remembered-override '{"param":"master_brightness",
+//                                                       "mode":"adjust","gain":1.2,"offset":0}'   '{"param":"knob.speed","mode":"auto"}'
+//                                                       (only while the river v2 runs: river-all-looks-v2.toe; params and ranges:
+//                                                       docs/remembered-river.md section 5 "Overrides")
+//     remembered-override-clear   remembered-override-clear '{"param":"palette"}'   (every override, or one)
+//     remembered-simulate '{"headcount":8,"lingerer_rope":12}'   remembered-simulate '{"stop":true}'   (pretend people for 2 min
+//                                                       at most: a headcount 0-20 and/or a lingerer at rope 0-19, 0-based)
 //     looks '{"mode":"auto"}'   looks '{"mode":"manual","look":"fill-simple"}'   (only while the river (all looks) runs; auto:
 //                                                       four loops of the remembered river, then one cycle of Fill my cup
 //                                                       (simple), again; manual: fade to remembered, fill-simple or
@@ -49,7 +56,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const ACTIONS = ['ropes', 'hub75', 'test', 'switch', 'bootfile', 'rebuild', 'lightsroute', 'mode', 'target', 'rules', 'rules-reset', 'check', 'calibrate', 'modalinput', 'filling', 'remembered-zones', 'remembered-opening', 'remembered-screens', 'looks'];
+export const ACTIONS = ['ropes', 'hub75', 'test', 'switch', 'bootfile', 'rebuild', 'lightsroute', 'mode', 'target', 'rules', 'rules-reset', 'check', 'calibrate', 'modalinput', 'filling', 'remembered-zones', 'remembered-opening', 'remembered-screens', 'remembered-override', 'remembered-override-clear', 'remembered-simulate', 'looks'];
 const LIMIT_S = { status: 10, rebuild: 420 };          // a rebuild builds, saves and restarts: minutes; the rest a little past 60 s
 const socketPath = (env) => env.MISSION_CONTROL_SOCKET || join(env.MISSION_STATE_DIR || join(homedir(), 'mission-state'), 'mc.sock');
 

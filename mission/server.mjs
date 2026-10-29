@@ -20,7 +20,7 @@
 //                           removed on exit. The agent gets its path in its environment (lib/agent.mjs).
 //
 // Routes (all JSON unless said; everything but /login, /healthz, /version, /shows.json and the assets sits behind the login cookie):
-//   GET  /status /lights /looks /chat /map /hub75 /remembered /login   the v2 pages (public/*.html, docs/mission-ui.md); /, /mission and /status.html
+//   GET  /status /lights /looks /chat /map /hub75 /remembered /remembered-v2 /login   the v2 pages (public/*.html, docs/mission-ui.md); /, /mission and /status.html
 //                                              (the v1 addresses) redirect to /status; /map/ is the engineers' diagram with live dots
 //   GET  /api/status                           lib/mission.mjs snapshot + studio + now (the server's clock) + since + last_action;
 //                                              applying: every control in flight (lib/applying.mjs; docs/mission-ui.md "Applying
@@ -36,6 +36,9 @@
 //                                              status.json, Dave's scene, reflex and the day's profile, the people counter, the
 //                                              last control request; read through probe.ps1 -Action remembered (cached 1.5 s);
 //                                              503 { ok: false, error } in plain words when bitcube can't be read
+//   GET  /api/remembered/history?fields=inputs.heard,params.knob.speed   the inputs log's last 24 h per field (the v2 page's
+//                                              sparklines; lib/remembered.mjs): probe.ps1 -Action remembered-history, cached 30 s;
+//                                              400 for an unknown field, 503 in plain words
 //   GET  /api/pixelmap                         { map, screens, still }: the newest LED map and screens file (lib/lights.mjs)
 //   GET  /api/calibration                      the calibration job's progress file, or { running: false, none: true }; plus
 //                                              rebuilt: { at, map, file } | null, the last rebuild that went all the way and was
@@ -74,7 +77,7 @@ import { Studio } from './lib/studio.mjs';
 import { Mission, checkedControl } from './lib/mission.mjs';
 import { REQUEST_ID } from './lib/applying.mjs';
 import { FixtureMission, CALIBRATION_OUTCOMES } from './lib/fixtures.mjs';
-import { Remembered, shapeRemembered } from './lib/remembered.mjs';
+import { Remembered, shapeRemembered, RememberedHistory, checkedHistoryFields, shapeHistory, syntheticHistory } from './lib/remembered.mjs';
 import { Lights, readLocalPixelmap, readLocalScreens, checkedCalibrate } from './lib/lights.mjs';
 import { History, describeEvent, feed } from './lib/history.mjs';
 import { describeTool } from './lib/steps.mjs';
@@ -168,6 +171,7 @@ const update = new SelfUpdate({ boot: codeTree(), tree: codeTree, exit: () => pr
 const studio = new Studio({ runner: await makeRunner(), dir: STATE });
 const lights = FIXTURES ? null : new Lights({ sshHost: 'bitcube' });
 const remembered = FIXTURES ? null : new Remembered({ sshHost: 'bitcube' });
+const rememberedHistory = FIXTURES ? null : new RememberedHistory({ sshHost: 'bitcube' });
 mission = FIXTURES ? new FixtureMission({ dir: FIXTURES, stateDir: STATE, pixelmapDir: PIXELMAP_DIR, calibrateS: Number(env.MISSION_FIXTURE_CALIBRATE_S || 60),
                                                 applyS: Number(env.MISSION_FIXTURE_APPLY_S ?? 6) })
                          : new Mission({ sshHost: 'bitcube', lights, stateDir: STATE });   // fixtures: nothing is polled or run
@@ -278,7 +282,7 @@ function withWords(ev) { return ev ? { ...ev, words: describeEvent(ev), ago_s: M
 
 // ---- helpers ---------------------------------------------------------------------------------------------
 // The v2 pages (docs/mission-ui.md). A page file that is not built yet answers 404 { error: 'not built yet' } rather than 500.
-const PAGES = { '/status': 'status.html', '/lights': 'lights.html', '/chat': 'chat.html', '/map': 'map.html', '/hub75': 'hub75.html', '/remembered': 'remembered.html', '/looks': 'looks.html', '/help': 'help.html', '/explainer': 'explainer.html', '/login': 'login.html' };
+const PAGES = { '/status': 'status.html', '/lights': 'lights.html', '/chat': 'chat.html', '/map': 'map.html', '/hub75': 'hub75.html', '/remembered': 'remembered.html', '/remembered-v2': 'remembered-v2.html', '/looks': 'looks.html', '/help': 'help.html', '/explainer': 'explainer.html', '/login': 'login.html' };
 const REDIRECTS = { '/': '/status', '/mission': '/status', '/status.html': '/status' };     // the v1 addresses
 // Assets under public/ (styles, scripts, icons, the manifest) are served to anyone, like the login page itself: they hold no data.
 // HTML is only served through PAGES (behind the login); the design prototypes (public/proto/) are in git history.
@@ -575,6 +579,19 @@ const server = createServer(async (req, res) => {
       const td = mission.snapshot(scenario).probe?.value?.td;
       const now = FIXTURES ? mission.clock(scenario) : Date.now();
       const body = shapeRemembered(raw, { tdFile: td && td.ok !== false && typeof td.file === 'string' ? td.file : null, readAt: at, now });
+      return send(res, body.ok ? 200 : 503, body);
+    }
+    // The inputs log's last 24 h for the v2 page's sparklines (lib/remembered.mjs): one shape in both modes
+    if (path === '/api/remembered/history') {
+      let fields;
+      try { fields = checkedHistoryFields(url.searchParams.get('fields')); } catch (e) { return send(res, 400, { ok: false, error: e.message }); }
+      let raw, at;
+      if (FIXTURES) {
+        try { at = mission.clock(scenario); raw = syntheticHistory(mission.remembered(scenario), fields, Math.round(at / 1000)); }
+        catch (e) { return send(res, e.status || 503, { ok: false, error: e.message }); }
+      } else if (mission.snapshot().bitcube?.value?.online === false) return send(res, 503, { ok: false, error: 'bitcube is offline' });
+      else ({ raw, at } = await rememberedHistory.read(fields));
+      const body = shapeHistory(raw, fields, { readAt: at, now: FIXTURES ? mission.clock(scenario) : Date.now() });
       return send(res, body.ok ? 200 : 503, body);
     }
     if (path === '/api/pixelmap') return send(res, 200, await pixelmapPayload(scenario));

@@ -69,11 +69,13 @@ export const LOOKS_ENTRY = {
   calibration: { pixelmap: 'tools/pixelmap/pixelmap-2026-10-27.json', screens: 'tools/pixelmap/screens-2026-10-27.json', zones: null },
   description: 'One show file with several looks: the remembered river, Fill my cup (simple) and Fill my cup (configurable). It fades between them without restarting TouchDesigner: on Auto, four loops of the remembered river, then one full cycle of Fill my cup (simple), again; on Manual, the chosen look stays.',
   inputs: ["Dave's agent (remembered day, palette, knobs, heard)", 'river camera (recorded clip as fallback)', 'gallery camera (people counter)', 'the LED map and screens (calibration, measured tilts)'],
-  created_by: 'gavin', created: '2026-10-28', updated_by: 'gavin', updated: '2026-10-28', last_change: 'Fixture entry until the show is in shows.json',
+  created_by: 'gavin', created: '2026-10-28', updated_by: 'gavin', updated: '2026-10-28', last_change: 'Fixture entry until the show is in shows.json', composite: true,
 };
 // The river (all looks, playlist) (docs/mission-ui.md "Looks page"): five looks and a playlist. Its entry here carries the looks'
 // words (shows.json "looks"), as the real entry will.
 export const ALL_LOOKS_FILE = 'river-all-looks.toe';
+// The river v2 (river-all-looks-v2.toe, in the real shows.json): the remembered river with overrides and simulated people.
+export const V2_FILE = 'river-all-looks-v2.toe';
 export const ALL_LOOKS = ['remembered', 'fill-simple', 'fill-configurable', 'seasons', 'modal'];
 export const ALL_LOOKS_ENTRY = {
   file: ALL_LOOKS_FILE, title: 'The river (all looks, playlist)', label: 'the river (playlist)', kind: 'show', offered: true, build: 'td/build/build_all_looks.py',
@@ -87,7 +89,7 @@ export const ALL_LOOKS_ENTRY = {
     seasons: { title: "The river's year", description: "The live river through the year's seasons, steered by the room.", inputs: ['river camera', 'people counter'] },
     modal: { title: 'Combined with Modal Input Selector', description: "One of Dave's Modal inputs at a time drives the river.", inputs: ["Dave's Modal canvas, scene and frames", 'river camera'] },
   },
-  created_by: 'gavin', created: '2026-10-28', updated_by: 'gavin', updated: '2026-10-28', last_change: "Fixture entry with the looks' words until shows.json has them",
+  created_by: 'gavin', created: '2026-10-28', updated_by: 'gavin', updated: '2026-10-28', last_change: "Fixture entry with the looks' words until shows.json has them", composite: true,
 };
 const RULES = recorded.seasons.value.rules;            // the defaults, as served by the control page
 const ADDRESSES = recorded.probe.value.addresses;      // bitcube's addresses at Gray Area
@@ -526,6 +528,23 @@ const SCENARIOS = {
       used: { steering: 'the room: 3 people, more than usual', speed: 1.2 } }), { file: ALL_LOOKS_FILE }),
   },
 
+  // ---- the remembered river v2 (river-all-looks-v2.toe): the v2 page (/remembered-v2; public/remembered-v2-words.js) -------------
+  // (the v1 file running, for the v2 page's banner: all-looks-auto)
+  'remembered-v2-simulating': {
+    title: 'The river v2: simulating 8 people and a lingerer by rope 13',
+    description: `TouchDesigner runs ${V2_FILE} on its playlist, in the remembered river's third loop. Someone pressed Simulate on the v2 page 46 s ago: a headcount of 8 and a lingerer by rope 13 (index 12), so the show treats them as real for 74 s more (red SIMULATING banner); the lingerer's ropes spark. Speed is adjusted (auto × 1.2 + 0.02), set 10 min ago. Everything else is on Auto: Dave's day, the river camera live, the sound heard.`,
+    expect: { headline: 'Everything is up: the river v2 is showing; lights and cameras fine', severity: 'ok', items: v2Items(),
+      action: 'Nothing to do. The simulation clears itself; Stop simulating on the Remembered river v2 page ends it now.' },
+    build: () => v2Show({ sim: true }),
+  },
+  'remembered-v2-stale': {
+    title: "The river v2: TouchDesigner's reports stopped 45 s ago",
+    description: `The full check says TouchDesigner runs ${V2_FILE}, but its looks report and the remembered river's status.json were last written 45 s ago (TouchDesigner busy or stuck): the v2 page greys everything out and says how old it is, and the controls are refused until it writes again.`,
+    expect: { headline: 'Everything is up: the river v2 is showing; lights and cameras fine', severity: 'ok', items: v2Items(),
+      action: 'Wait a minute; if it stays old, check TouchDesigner on bitcube (VNC).' },
+    build: () => v2Show({ statusAge: 45 }),
+  },
+
   'no-internet': {
     title: 'No internet at Gray Area',
     description: 'bitcube can\'t open connections to the internet (1.1.1.1:443 fails) while the install router answers: the router\'s uplink (the venue\'s staff Wi-Fi) has dropped. bitcube\'s existing Tailscale tunnel to the mini still carries traffic, so the mini can still probe it. Dave\'s agent is fine as seen from the mini, but the Modal link on bitcube can\'t upload: its last successful clips (the last INFO lines) are from 02:38, 20 minutes ago, and every clip since has failed with an ERROR line, so the log files are still fresh; the sync has logged nothing since its last update. The river camera (via Starlink and Will\'s tailnet) is unreachable, and the recorder\'s current run can\'t connect. The show is unaffected: the seasons file needs no network.',
@@ -571,7 +590,7 @@ const isoZ = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
 function rememberedRaw({ statusAge = 0.3, phase = 'calm', t_s = 41.5, day = {}, surge = {}, heard = 0.62, river_motion = 0.41, river_source = 'live',
                          lingerers = [{ x: 0.42, y: 0.78, still_s: 12, ropes: [7, 8] }], presence = 3.2, usual = 2.1, lit = [12, 8, 22, 4], watts = 410,
                          chosenAge = 220, opening = false, zones = { file: 'zones-2026-10-27.json', pool_height_m: 0.6, light: 'off' }, fps = 60,
-                         show = REMEMBERED_FILE, looks = null, video = 0.25 } = {}) {
+                         show = REMEMBERED_FILE, looks = null, video = 0.25, v2 = null } = {}) {
   const chosen = NOW - chosenAge * S;
   const dayJ = { date: MEMORY_WET.date, reason: MEMORY_WET.reason, chosen_by: 'resemblance', source: 'dave', age_s: chosenAge, next: null, ...day };
   const relative = Math.round(presence / usual * 100) / 100;
@@ -582,6 +601,7 @@ function rememberedRaw({ statusAge = 0.3, phase = 'calm', t_s = 41.5, day = {}, 
     palette: PALETTE_WINTER, ropes_follow: heard == null ? 'picture' : 'sound', heard, river_motion, river_source,
     room: { presence, usual, relative, lingerers },
     panels: { lit_pct: lit, cap: 0.55 }, ropes: { watts }, opening_night: opening, zones, screens: { video } };
+  if (v2) Object.assign(status, v2.status);
   const people = [{ x: 0.42, y: 0.78, h: 0.46, still_s: 12 }, { x: 0.71, y: 0.62, h: 0.3, still_s: 2 }, { x: 0.63, y: 0.71, h: 0.42, still_s: 9 }];
   return {
     status: { age_s: statusAge, json: status },
@@ -589,7 +609,8 @@ function rememberedRaw({ statusAge = 0.3, phase = 'calm', t_s = 41.5, day = {}, 
       scene: { animation: 'drift', palette_name: 'winter-creek', colors: PALETTE_WINTER, speed: 0.5, density: 0.6, brightness: 0.7, turbulence: 0.4 }, set_at: isoPdt(chosen) } },
     reflex: { age_s: 4, json: { live: true, offsets: { speed: 0.05, density: 0, brightness: 0, turbulence: -0.04 }, heard, updated_at: isoUtc(NOW - 4 * S) } },
     presence: { age_s: 0.4, json: { presence, usual, relative, people: people.slice(0, Math.max(2, Math.round(presence))), lingerers } },
-    control: { age_s: 3600, json: { pool_height_m: zones.pool_height_m, light: zones.light, opening_night: opening, screens: { video }, at: isoZ(NOW - 3600 * S) } },
+    control: { age_s: v2?.controlAge ?? 3600, json: { pool_height_m: zones.pool_height_m, light: zones.light, opening_night: opening, screens: { video },
+      ...(v2?.overrides ? { overrides: v2.overrides } : {}), at: isoZ(NOW - (v2?.controlAge ?? 3600) * S) } },
     ...(looks ? { looks } : {}),
   };
 }
@@ -603,6 +624,43 @@ function rememberedShow(remembered, { watts = [210, 200] } = {}) {
   st.probe.value.devices.seasons_page = false;
   return { status: st, ...CAMS_GOOD, remembered };
 }
+// ---- the remembered river v2 (river-all-looks-v2.toe; docs/remembered-river.md section 5 "v2 additions"; the v2 page) ----------------
+/** TouchDesigner's v2 status additions (inputs, params, effects, overrides, simulating) and control.json's overrides block, as
+ *  status.py and probe.ps1 write them. sim: someone simulates 8 people and a lingerer by rope 13 (index 12), 46 s ago (74 s left);
+ *  speed is adjusted (× 1.2 + 0.02) from mission control 10 min ago either way. */
+function v2Parts({ sim = false } = {}) {
+  const at = (s) => isoZ(NOW - s * S), until = (s) => isoZ(NOW + s * S);
+  const inp = (value, source, age_s, fresh = true) => ({ value, source, age_s, fresh });
+  const par = (auto, value = auto, mode = 'auto', expires_in_s = null) => ({ mode, auto, value, source: mode === 'auto' ? 'auto' : mode === 'fix' ? 'fixed' : 'adjusted', expires_in_s });
+  const palette = PALETTE_WINTER.slice(0, 3);
+  const overrides = { 'knob.speed': { mode: 'adjust', offset: 0.02, gain: 1.2, at: at(600), expires_at: null } };
+  if (sim) Object.assign(overrides, { headcount: { mode: 'fix', value: 8, at: at(46), expires_at: until(74) }, lingerer_rope: { mode: 'fix', value: 12, at: at(46), expires_at: until(74) } });
+  const cleaned = Object.fromEntries(Object.entries(overrides).map(([k, e]) => [k, { ...e, expires_in_s: e.expires_at ? 74 : null, simulated: k === 'headcount' || k === 'lingerer_rope' }]));
+  return {
+    controlAge: sim ? 46 : 600, overrides,
+    status: {
+      inputs: { day: inp(MEMORY_WET.date, 'dave', 220), scene: inp([0.5, 0.6, 0.7, 0.4], 'dave', 220), reflex: inp([0.05, 0, 0, -0.04], 'dave', 4),
+        heard: inp(0.62, 'sound', 4), river_motion: inp(0.41, 'cam', 0.1), headcount: sim ? inp(8, 'simulated', 0.5) : inp(3.2, 'counter', 0.5),
+        lingerers: sim ? inp([12], 'simulated', 0.5) : inp([7, 8], 'counter', 0.5), control: inp(null, 'control', sim ? 46 : 600) },
+      params: { day: par(MEMORY_WET.date), surge_hour: par(13.5), 'knob.speed': par(0.5, 0.62, 'adjust'), 'knob.density': par(0.6), 'knob.brightness': par(0.7),
+        'knob.turbulence': par(0.4), palette: par(palette), flow_level: par(0.62), headcount: sim ? par(3.2, 8, 'fix', 74) : par(3.2),
+        lingerer_rope: sim ? par(7, 12, 'fix', 74) : par(7), calm_min: par(0.18), calm_max: par(0.6), master_brightness: par(1.0) },
+      effects: sim ? { lingerer: 0.82, crowd: 0.55, empty: 0, sparks: 14 } : { lingerer: 0.31, crowd: 0.12, empty: 0, sparks: 3 },
+      overrides: cleaned, simulating: sim,
+    },
+  };
+}
+/** The river v2 running its remembered look (river-all-looks-v2.toe's looks report and the remembered river's files). statusAge: how
+ *  old both reports are (over 10 s: TouchDesigner has stopped writing them). */
+function v2Show({ sim = false, statusAge = 0.3 } = {}) {
+  const l = allLooksRaw({});
+  l.status.json.show = V2_FILE;
+  l.status.age_s = statusAge;
+  const x = looksShow(l, { file: V2_FILE, remembered: rememberedRaw({ show: V2_FILE, looks: l.status, statusAge, v2: v2Parts({ sim }),
+    ...(sim ? { lingerers: [{ x: null, y: null, still_s: null, ropes: [12], simulated: true }], presence: 8 } : {}) }) });
+  return x;
+}
+function v2Items() { return items({ touchdesigner: 'ok: the river v2 at 60 fps', seasons: 'ok: not used (this show has no year)', ropes: 'ok: showing the show, sender open' }); }
 function rememberedItems() { return items({ touchdesigner: 'ok: the remembered river at 60 fps', seasons: 'ok: not used (this show has no year)', ropes: 'ok: showing the show, sender open' }); }
 
 /** probe.ps1's probe.filling at the fixtures' moment: control.json and status.json, each { age_s, json }. */

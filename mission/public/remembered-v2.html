@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e141a" media="(prefers-color-scheme: dark)">
+<title>Remembered river v2 · Mission control</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" href="/v2.css">
+<link rel="stylesheet" href="/remembered.css">
+<link rel="stylesheet" href="/remembered-v2.css">
+<script>try { const t = localStorage.getItem('mc-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
+</head>
+<body>
+<main class="rem2">
+  <p class="banner lv-warning rem2-version" id="version" hidden></p>
+  <section class="sim-banner" id="sim-banner" role="status" hidden>
+    <span class="sim-words" id="sim-words">SIMULATING</span>
+    <button type="button" class="btn sim-stop" id="sim-banner-stop">Stop simulating</button>
+  </section>
+
+  <section class="card rem-now" id="now" aria-label="What the remembered river is doing">
+    <div class="now-main">
+      <p class="phase" id="now-phase">Connecting…</p>
+      <div class="loopbar" id="now-loopbar" aria-hidden="true"><span class="fill"></span><span class="surge"></span></div>
+      <p class="now-line" id="now-line"></p>
+    </div>
+    <p class="notrunning" id="now-notrunning" hidden></p>
+    <p class="from muted" id="now-from"></p>
+    <p class="stale-line" id="now-stale" hidden></p>
+    <ul class="problems" id="now-problems" hidden></ul>
+    <div class="now-acts"><button type="button" class="btn" id="how-btn" data-explain="how">How this works</button>
+      <span class="muted secondary" id="now-overrides"></span></div>
+  </section>
+
+  <section class="card steer" id="steer" aria-labelledby="steer-h">
+    <div class="card-top"><h2 class="card-h" id="steer-h">Steer the river</h2></div>
+    <div class="steer-grid">
+      <div class="ctl" id="master-ctl">
+        <div class="ctl-h">Master brightness <button type="button" class="q" data-explain="ctl.master" title="Every rope's brightness times this; 100 % is the show as designed" aria-label="What is master brightness?">?</button></div>
+        <div class="poolrow">
+          <label for="master">Ropes <output id="master-out">–</output></label>
+          <input type="range" id="master" min="0" max="150" step="5" aria-describedby="master-now">
+          <p class="hint muted" id="master-now">Now on bitcube: –</p>
+        </div>
+        <div class="two-btns"><div id="master-apply"></div><div id="master-auto"></div></div>
+      </div>
+      <div class="ctl" id="calm-ctl">
+        <div class="ctl-h">Calm range <button type="button" class="q" data-explain="ctl.calm" title="How dark and how bright the ropes may get between surges" aria-label="What is the calm range?">?</button></div>
+        <div class="poolrow">
+          <label for="calm-lo">Floor <output id="calm-lo-out">–</output></label>
+          <input type="range" id="calm-lo" min="0" max="100" step="1">
+          <label for="calm-hi">Ceiling <output id="calm-hi-out">–</output></label>
+          <input type="range" id="calm-hi" min="0" max="100" step="1">
+          <div class="calm-bar" id="calm-bar" aria-hidden="true"><span class="calm-band"></span></div>
+          <p class="hint muted" id="calm-now">Now on bitcube: –</p>
+        </div>
+        <div class="two-btns"><div id="calm-apply"></div><div id="calm-auto"></div></div>
+      </div>
+      <div class="ctl sim-ctl" id="sim-ctl">
+        <div class="ctl-h">Simulate people <button type="button" class="q" data-explain="ctl.simulate" title="Pretend people are in the room for 2 minutes at most" aria-label="What does Simulate do?">?</button></div>
+        <label class="check"><input type="checkbox" id="sim-hc-on" checked> A headcount</label>
+        <div class="poolrow">
+          <label for="sim-hc">People in the room <output id="sim-hc-out">–</output></label>
+          <input type="range" id="sim-hc" min="0" max="20" step="1" value="8">
+        </div>
+        <label class="check"><input type="checkbox" id="sim-lr-on"> A lingerer (someone standing still)</label>
+        <div class="poolrow">
+          <label for="sim-lr">By rope <output id="sim-lr-out">–</output></label>
+          <input type="range" id="sim-lr" min="1" max="20" step="1" value="10" aria-describedby="sim-lr-hint">
+          <p class="hint muted" id="sim-lr-hint">Ropes counted 1 to 20, as on the Lights page.</p>
+        </div>
+        <div id="sim-go"></div>
+        <div id="sim-stop"></div>
+      </div>
+      <div class="ctl" id="clear-ctl">
+        <div class="ctl-h">Overrides <button type="button" class="q" data-explain="ctl.clear" title="Put every parameter back to Auto" aria-label="What does Clear all overrides do?">?</button></div>
+        <p class="readout" id="clear-now">–</p>
+        <div id="clear-all"></div>
+      </div>
+    </div>
+  </section>
+
+  <details class="card fold-ctl" id="more-ctl">
+    <summary><span class="card-h">Screens, the pool and opening night</span> <span class="chev" aria-hidden="true">›</span></summary>
+    <div class="more-body" id="controls">
+      <div class="ctl" id="video-ctl">
+        <div class="ctl-h">Screens <button type="button" class="q" data-explain="ctl.screens" title="The four screens' brightness, motion threshold and river video" aria-label="What do the screens sliders do?">?</button></div>
+        <div class="poolrow">
+          <label for="intensity">Intensity <output id="intensity-out">–</output></label>
+          <input type="range" id="intensity" min="0" max="100" step="1" aria-describedby="intensity-hint">
+          <p class="hint muted" id="intensity-hint">How bright the four screens are. Now on bitcube: <b id="intensity-now">–</b></p>
+        </div>
+        <div class="poolrow">
+          <label for="threshold">Threshold <output id="threshold-out">–</output></label>
+          <input type="range" id="threshold" min="0" max="100" step="1" aria-describedby="threshold-hint">
+          <p class="hint muted" id="threshold-hint">How much the river has to move to show in its video. Now on bitcube: <b id="threshold-now">–</b></p>
+        </div>
+        <div class="poolrow">
+          <label for="video">River video <output id="video-out">–</output></label>
+          <input type="range" id="video" min="0" max="100" step="1" aria-describedby="video-hint">
+          <p class="hint muted" id="video-hint">How strongly the river video shows under the particle windows. Now on bitcube: <b id="video-now">–</b></p>
+        </div>
+        <div id="z-video"></div>
+      </div>
+      <div class="ctl" id="zones-ctl">
+        <div class="ctl-h">The pool and the eddies <button type="button" class="q" data-explain="ctl.pool" title="Where the pool reaches, and lighting it to check" aria-label="What is the pool line?">?</button></div>
+        <div class="poolrow">
+          <label for="pool">Pool line <output id="pool-out">–</output></label>
+          <div class="stepper"><button type="button" class="btn step" id="pool-less" aria-label="Lower the pool line 5 cm">−</button>
+            <input type="range" id="pool" min="0" max="1.5" step="0.05" aria-describedby="pool-hint">
+            <button type="button" class="btn step" id="pool-more" aria-label="Raise the pool line 5 cm">+</button></div>
+          <p class="hint muted" id="pool-hint">Metres above the floor: LEDs below the line are the pool. Now on bitcube: <b id="pool-now">–</b></p>
+        </div>
+        <div class="zone-btns"><div id="z-pool"></div><div id="z-eddies"></div><div id="z-off"></div></div>
+      </div>
+      <div class="ctl" id="opening-ctl">
+        <div class="ctl-h">Opening night <button type="button" class="q" data-explain="ctl.opening" title="Calm a little brighter, a surge at least every 5 minutes" aria-label="What is opening night?">?</button></div>
+        <p class="readout" id="opening-now">–</p>
+        <div id="z-opening"></div>
+      </div>
+    </div>
+  </details>
+
+  <div class="flow-wrap">
+    <div class="flow-head" aria-hidden="true"><span>Inputs</span><span class="arr">→</span><span>Parameters</span></div>
+    <div class="flow" id="flow"><p class="muted card">Waiting for bitcube…</p></div>
+  </div>
+
+  <div class="rem-col out-col" id="col-out">
+    <h2 class="col-h">Outputs</h2>
+    <section class="card strips" id="out" aria-labelledby="out-h">
+      <h3 class="card-h" id="out-h">What the lights are sent <button type="button" class="q" data-explain="ctl.ropes" title="The ropes and screens exactly as TouchDesigner sends them" aria-label="About this picture">?</button></h3>
+      <div class="striplabels muted"><span>Ropes 1–10</span><span>11–20 · plug end at the top</span></div>
+      <canvas id="strips-canvas" role="img" aria-label="The 20 ropes as TouchDesigner is sending them, plug end at the top"></canvas>
+      <canvas id="quads-canvas" role="img" aria-label="The four screens as TouchDesigner is sending them, each upright as seen"></canvas>
+      <div class="stripnums quads" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span></div>
+      <p class="muted secondary" id="out-note"></p>
+      <dl class="facts" id="facts"></dl>
+    </section>
+    <section class="card" id="effects" aria-labelledby="fx-h">
+      <h3 class="card-h" id="fx-h">People effects <button type="button" class="q" data-explain="ctl.effects" title="What the people in the room are doing to the ropes now" aria-label="What are the people effects?">?</button></h3>
+      <div id="fx-body"><p class="muted">Waiting for bitcube…</p></div>
+      <div id="room-body"></div>
+    </section>
+    <footer class="foot" id="foot"></footer>
+  </div>
+</main>
+<script type="module" src="/remembered-v2.js"></script>
+</body>
+</html>

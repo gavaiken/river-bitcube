@@ -1,7 +1,7 @@
 // The Looks page's words (/looks; docs/mission-ui.md "Looks page"): what shows now, the playlist as rows, each look's section and the
 // inputs the looks share, all from the model (derive()) and the looks status (public/looks.js looksView). Pure: the page only places
 // what this returns, and test/looks-page.test.mjs reads it in node. Relative imports: in the browser /model.js, under node the file.
-import { FILES, ALL_LOOKS_FILE, LOOK_IN_LINE, dur } from './model.js';
+import { FILES, isAllLooksFile, LOOK_IN_LINE, dur } from './model.js';
 import { looksView, LOOK_WORDS, DEFAULT_PLAYLIST, unitFor, FOR_RANGE, PLAYLIST_MAX, positionWords, forWords, checkPlaylist } from './looks.js';
 
 const obj = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : null);
@@ -87,7 +87,7 @@ export function inputsWords(inputs, used, look) {
 export function pageView(m, draft = null) {
   const file = m?.show?.file?.name ?? null, raw = m?.show?.looks ?? null;
   const v = raw ? looksView(raw, m?.show?.fresh?.probe_age_s ?? 0) : null;
-  const allLooks = file === ALL_LOOKS_FILE, why = m?.controls?.looks?.why ?? null;
+  const allLooks = isAllLooksFile(file), why = m?.controls?.looks?.why ?? null;
   const n = v?.now ?? null;
   const listed = n?.looks?.length ? n.looks : raw ? ['remembered', 'fill-simple', 'fill-configurable'] : [];
   const showing = n?.fading && n.target ? n.target : n?.look ?? null;

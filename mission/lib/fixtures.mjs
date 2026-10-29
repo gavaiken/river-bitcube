@@ -48,7 +48,8 @@ import { CAMERAS, calBlocked, checkedControl, awaitsReading, startingBlocked, te
 import { Applying } from './applying.mjs';
 import { readLocalPixelmap, summarizePixelmap, checkedCalibrate } from './lights.mjs';
 import { atlasFromUprights } from '../public/screens.js';
-import { changeLabel, FILES, MODAL_INPUT_FILE, FILLING_FILE, FILLING_ONLY, LOOKS_FILES, showBoundWhy } from '../public/model.js';
+import { changeLabel, FILES, MODAL_INPUT_FILE, FILLING_FILE, FILLING_ONLY, LOOKS_FILES, showBoundWhy, REMEMBERED_V2_ACTIONS } from '../public/model.js';
+import { adjusted, SIMULATED, SIM } from '../public/remembered-v2-words.js';
 import { FRAME_ELEMENTS } from '../public/modal-input.js';
 import { DEFAULT_PLAYLIST } from '../public/looks.js';
 
@@ -379,6 +380,26 @@ export class FixtureMission {
         w.remembered = c;
         return { ok: true, fixture: true, action, body: checked, written: c, note: 'fixture mode: nothing was changed' };
       }
+      if (REMEMBERED_V2_ACTIONS.includes(action)) {
+        // as probe.ps1: control.json's overrides block merged (stamped at; simulated people expire at + 2 min); TouchDesigner (in
+        // this world) takes it at once (remembered() below applies it to the status, as overrides.py would)
+        const nowMs = this.clock(scenario), at = isoZ(nowMs);
+        const c = { ...(w.remembered ?? {}), at };
+        // what control.json holds now: this world's last write, else the scenario's own (its times moved with the fixture clock)
+        const ov = { ...(c.overrides ?? this.remembered(scenario)?.control?.json?.overrides ?? {}) };
+        const sim = (k, v) => { ov[k] = { mode: 'fix', value: v, at, expires_at: isoZ(nowMs + SIM.simulated_max_s * 1000) }; };
+        if (action === 'remembered-override') {
+          if (checked.mode === 'auto') delete ov[checked.param];
+          else if (SIMULATED.includes(checked.param)) sim(checked.param, checked.value);
+          else { const { param, ...entry } = checked; ov[param] = { ...entry, at, expires_at: null }; }
+        } else if (action === 'remembered-override-clear') {
+          if (checked.param) delete ov[checked.param]; else for (const k of Object.keys(ov)) delete ov[k];
+        } else if (checked.stop) { for (const k of SIMULATED) delete ov[k]; }
+        else for (const k of SIMULATED) if (checked[k] !== undefined) sim(k, checked[k]);
+        c.overrides = ov;
+        w.remembered = c;
+        return { ok: true, fixture: true, action, body: checked, written: c, note: 'fixture mode: nothing was changed' };
+      }
       if (action === 'test') {       // as probe.ps1 -Action test: through TouchDesigner, refused when it doesn't answer
         if (!td || td.ok === false) return { ok: false, error: 'TouchDesigner is not running', fixture: true };
         w.test = checked.on;
@@ -464,6 +485,7 @@ export class FixtureMission {
         if (c.light !== undefined || c.pool_height_m !== undefined) sj.zones = { ...(sj.zones ?? {}), ...(c.light !== undefined ? { light: c.light } : {}), ...(c.pool_height_m !== undefined ? { pool_height_m: c.pool_height_m } : {}) };
         if (c.opening_night !== undefined) sj.opening_night = c.opening_night;
         if (c.screens) sj.screens = { ...(sj.screens ?? {}), ...c.screens };
+        if (c.overrides) applyOverrides(sj, c.overrides, clock);
       }
     }
     return raw;
@@ -822,3 +844,31 @@ const round3 = (x) => Math.round(x * 1000) / 1000;
 function stamp(s) { const d = new Date(s * 1000); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 /** A dict the way Python prints it (capture.py's 'before:' line). */
 function pyDict(o) { return '{' + Object.entries(o).map(([k, v]) => `'${k}': ${typeof v === 'string' ? `'${v}'` : typeof v === 'boolean' ? (v ? 'True' : 'False') : v}`).join(', ') + '}'; }
+
+const isoZ = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+/** A world's overrides as TouchDesigner (td/remembered/overrides.py) would take them into its status.json: params' mode, value and
+ *  source, the cleaned overrides with expires_in_s and simulated, simulating, and the simulated people as inputs. Fixture mode only. */
+export function applyOverrides(sj, ov, nowMs) {
+  const params = sj.params && typeof sj.params === 'object' ? sj.params : null;
+  if (!params) return;                                          // a v1 status: nothing reads overrides
+  const out = {};
+  for (const [name, p] of Object.entries(params)) {
+    const e = ov[name], auto = p?.auto ?? null;
+    const exp = typeof e?.expires_at === 'string' ? Date.parse(e.expires_at) : NaN;
+    const left = Number.isFinite(exp) ? Math.round((exp - nowMs) / 1000) : null;
+    if (!e || (left != null && left <= 0)) { params[name] = { ...p, mode: 'auto', value: auto, source: 'auto', expires_in_s: null }; continue; }
+    const value = e.mode === 'fix' ? e.value : adjusted(name, auto, e.gain ?? 1, e.offset ?? 0);
+    params[name] = { ...p, mode: e.mode, value, source: e.mode === 'fix' ? 'fixed' : 'adjusted', expires_in_s: left };
+    out[name] = { ...e, expires_in_s: left, simulated: SIMULATED.includes(name) };
+  }
+  sj.overrides = out;
+  sj.simulating = SIMULATED.some((k) => out[k]);
+  if (sj.inputs && typeof sj.inputs === 'object') {
+    // the simulated people stand in for the counter's while they last; then the counter's own again
+    const real = (k) => sj.inputs[k]?.source === 'simulated';
+    if (out.headcount) sj.inputs.headcount = { value: out.headcount.value, source: 'simulated', age_s: 0, fresh: true };
+    else if (real('headcount')) sj.inputs.headcount = { value: params.headcount?.auto ?? null, source: 'counter', age_s: 0.5, fresh: true };
+    if (out.lingerer_rope) sj.inputs.lingerers = { value: [out.lingerer_rope.value], source: 'simulated', age_s: 0, fresh: true };
+    else if (real('lingerers')) sj.inputs.lingerers = { value: params.lingerer_rope?.auto != null ? [params.lingerer_rope.auto] : [], source: 'counter', age_s: 0.5, fresh: true };
+  }
+}

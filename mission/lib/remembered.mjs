@@ -28,6 +28,18 @@
 //     profile: { flow, rain, temp, snow, is_day } | null (the playing day's 24 hours: TouchDesigner's day.profile, else Dave's
 //               memory.profile when it is that day), profile_date, problems: [plain sentences] }
 //   look: { look, target, fading } while river-looks.toe reports (its looks\status.json fresh), else null.
+//   overrides: control.json's overrides block as written ({ <param>: { mode, value?, offset?, gain?, at, expires_at } }), or null
+//   (v2: the status itself carries inputs, params, effects, overrides (cleaned, with expires_in_s) and simulating, served as-is).
+// v2 overrides (docs/remembered-river.md section 5 "Overrides"; river-all-looks-v2.toe only):
+//   probe.ps1 -Action remembered-override -Param <p> -Mode auto|fix|adjust [-Value v] [-Offset:o] [-Gain:g]
+//             -Action remembered-override-clear [-Param <p>]     -Action remembered-simulate [-Headcount n] [-LingerRope r] [-Stop]
+//   -> the same answer as remembered-zones after merging control.json's overrides block (stamped at; simulated people get
+//   expires_at = at + 120 s), or { ok: false, error, refused } unless the remembered river v2 is the look showing.
+// GET /api/remembered/history?fields=inputs.heard,params.knob.speed -> probe.ps1 -Action remembered-history -Fields <list>
+//   (tools/remembered/history.py: td/remembered/inputs_log.py recent() over River\logs\inputs.jsonl, the last 24 h, at most 300
+//   points a field), cached HISTORY_CACHE_MS per list: { ok: true, now_s, fields: { <field>: [[t, value], ...] }, read_at, age_s },
+//   400 for a field that isn't inputs.<input> or params.<param>, 503 in plain words. Fixture mode: syntheticHistory() from the
+//   scenario's status.
 //   running: TouchDesigner's status.json is fresh (under STATUS_FRESH_S old) and names river-remembered.toe, or river-looks.toe reports
 //   the remembered river as the look showing (and the remembered river's status.json is fresh). Everything is scrubbed of
 //   logins (scrubCreds), as every other answer.
@@ -35,6 +47,7 @@
 import { scrubCreds } from './scrub.mjs';
 import { sshProbe } from './mission.mjs';
 import { REMEMBERED_FILE, LOOKS_FILE, LOOKS_FILES, LOOKS } from '../public/model.js';
+import { INPUTS, PARAM_NAMES } from '../public/remembered-v2-words.js';
 
 export const REMEMBERED_CACHE_MS = 1500;
 export const STATUS_FRESH_S = 10;
@@ -88,6 +101,7 @@ export function shapeRemembered(raw, { tdFile = null, readAt = Date.now(), now =
     status: sv, status_age_s: stAge,
     dave, dave_age_s: dp ? num(dp.age_s) : null,
     reflex: part('reflex')?.json ?? null, presence: part('presence')?.json ?? null, control: part('control')?.json ?? null,
+    overrides: obj(part('control')?.json?.overrides) ?? null,
     profile, profile_date: profileDate, problems,
   });
 }
@@ -116,4 +130,70 @@ export class Remembered {
     await c.pending;
     return { raw: c.raw, at: c.at };
   }
+}
+
+// ---- the inputs log, for the v2 page's sparklines ------------------------------------------------------------------------------------
+export const HISTORY_CACHE_MS = 30_000;
+export const HISTORY_MAX_FIELDS = 24;
+/** ?fields= -> the checked list (inputs.<input>, params.<param>; sorted, each once), or throws (status 400). */
+export function checkedHistoryFields(q) {
+  const list = [...new Set(String(q ?? '').split(',').map((x) => x.trim()).filter(Boolean))].sort();
+  if (!list.length) throw Object.assign(new Error('fields is a list like inputs.heard,params.knob.speed'), { status: 400 });
+  if (list.length > HISTORY_MAX_FIELDS) throw Object.assign(new Error(`at most ${HISTORY_MAX_FIELDS} fields`), { status: 400 });
+  for (const f of list) {
+    const [part, ...rest] = f.split('.'), name = rest.join('.');
+    if (!(part === 'inputs' ? INPUTS.includes(name) : part === 'params' ? PARAM_NAMES.includes(name) : false))
+      throw Object.assign(new Error(`unknown field ${f.slice(0, 40)}: inputs.<${INPUTS.join('|')}> or params.<param>`), { status: 400 });
+  }
+  return list;
+}
+/** probe.ps1 -Action remembered-history over SSH (fields already checked: letters, dots, underscores and commas only). */
+export function sshRememberedHistory(sshHost, fields, opts = {}) {
+  return sshProbe(sshHost, `-Action remembered-history -Fields ${fields.join(',')}`, 30_000, opts);
+}
+/** The live reader: cached HISTORY_CACHE_MS per field list, one fetch per list at a time. */
+export class RememberedHistory {
+  constructor({ sshHost = 'bitcube', fetch = sshRememberedHistory, now = () => Date.now(), cacheMs = HISTORY_CACHE_MS } = {}) {
+    Object.assign(this, { sshHost, fetch, now, cacheMs });
+    this.c = new Map();
+  }
+  async read(fields) {
+    const key = fields.join(',');
+    let c = this.c.get(key);
+    if (!c) { c = {}; this.c.set(key, c); if (this.c.size > 32) this.c.delete(this.c.keys().next().value); }
+    if (c.raw !== undefined && this.now() - c.at < this.cacheMs) return { raw: c.raw, at: c.at };
+    if (!c.pending) c.pending = this.fetch(this.sshHost, fields).then((v) => { if (v?.ok !== false) { c.raw = v; c.at = this.now(); } return v; }).finally(() => { c.pending = null; });
+    const v = await c.pending;
+    return v?.ok === false ? { raw: v, at: this.now() } : { raw: c.raw, at: c.at };
+  }
+}
+/** history.py's answer -> GET /api/remembered/history's body (scrubbed), or { ok: false, error } in words. */
+export function shapeHistory(raw, fields, { readAt = Date.now(), now = Date.now() } = {}) {
+  const r = obj(raw);
+  if (!r || r.ok === false) return { ok: false, error: plainRememberedError(r?.error).replace("the remembered river's files", 'the inputs log') };
+  const src = obj(r.fields) ?? {};
+  const out = {};
+  for (const f of fields) out[f] = (Array.isArray(src[f]) ? src[f] : []).filter((p) => Array.isArray(p) && num(p[0]) != null).slice(-400);
+  return scrubCreds({ ok: true, now_s: num(r.now_s), fields: out, read_at: readAt, age_s: Math.max(0, Math.round((now - readAt) / 1000)) });
+}
+/** Fixture mode: 24 h of made-up history for each field, ending at the scenario's value now (inputs and params of its status), a
+ *  point every 5 minutes, deterministic (the same field draws the same line). */
+export function syntheticHistory(raw, fields, nowS) {
+  const st = obj(obj(raw?.status)?.json);
+  const fieldsOut = {};
+  for (const f of fields) {
+    const [part, ...rest] = f.split('.'), e = obj(obj(st?.[part])?.[rest.join('.')]);
+    const v = num(e?.value);
+    if (v == null) { fieldsOut[f] = []; continue; }
+    let seed = 0; for (const ch of f) seed = (seed * 31 + ch.charCodeAt(0)) % 9973;
+    const amp = Math.max(0.05, Math.abs(v) * 0.35), pts = [];
+    for (let k = 287; k >= 0; k--) {
+      const t = nowS - k * 300, x = (287 - k) / 287;
+      const wave = Math.sin(x * 6.3 + seed) * 0.6 + Math.sin(x * 23 + seed * 0.7) * 0.3 + Math.sin(x * 71 + seed * 1.3) * 0.1;
+      pts.push([Math.round(t), Math.round(Math.max(0, v + amp * wave * (1 - x * 0.8)) * 1e4) / 1e4]);
+    }
+    pts[pts.length - 1][1] = v;
+    fieldsOut[f] = pts;
+  }
+  return { ok: true, action: 'remembered-history', now_s: nowS, fields: fieldsOut, synthetic: true };
 }

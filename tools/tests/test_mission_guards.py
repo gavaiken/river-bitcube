@@ -144,7 +144,10 @@ def test_probe_looks_and_the_remembered_screens_match_mission_control():
     src = PROBE.read_text(encoding='utf-8')
     attrs = {n: a for a, n, _ in param_block(src)}
     model = MODEL_JS.read_text(encoding='utf-8')
-    assert quoted(re.search(r"ValidateSet\(([^)]*)\)", attrs['Mode']).group(1)) == quoted(re.search(r"export const LOOK_MODES = \[([^\]]*)\]", (MODEL_JS.parent / 'looks.js').read_text(encoding='utf-8')).group(1))
+    # -Mode is the looks' (auto, manual) and the v2 overrides' (auto, fix, adjust: control_schema.MODES); the looks action refuses the others
+    look_modes = quoted(re.search(r"export const LOOK_MODES = \[([^\]]*)\]", (MODEL_JS.parent / 'looks.js').read_text(encoding='utf-8')).group(1))
+    assert quoted(re.search(r"ValidateSet\(([^)]*)\)", attrs['Mode']).group(1)) == sorted(set(look_modes) | {'auto', 'fix', 'adjust'})
+    assert "$Mode -notin 'auto', 'manual'" in src[src.index("if ($Action -eq 'looks') {"):]
     assert quoted(re.search(r"ValidateSet\(([^)]*)\)", attrs['Look']).group(1)) == quoted(re.search(r"export const LOOKS = \[([^\]]*)\]", model).group(1))
     assert '[ValidateRange(0,1)]' in attrs['Video'] and 'Nullable[double]' in attrs['Video']
     block = src[src.index("if ($Action -eq 'looks') {"):]
@@ -159,3 +162,37 @@ def test_probe_looks_and_the_remembered_screens_match_mission_control():
                   "the remembered river isn't the look showing now (pick it under Looks on Status first)",
                   "Fill my cup isn't the look showing now (pick it under Looks on Status first)"):
         assert words in src and words in model, words
+
+
+def test_probe_v2_overrides_are_checked_and_merged_like_the_other_remembered_controls():
+    """The v2 overrides (remembered-override, -override-clear, -simulate): only while river-all-looks-v2.toe reports the remembered
+    look; checked against the generated schema; merged into control.json's overrides block, simulated people stamped with an
+    expiry; written to a temporary file swapped in; then answered as -Action remembered (docs/mission-ui.md "Remembered river v2 page")."""
+    src = PROBE.read_text(encoding='utf-8')
+    attrs = {n: a for a, n, _ in param_block(src)}
+    assert '[ValidateRange(0,20)]' in attrs['Headcount'] and '[ValidateRange(0,19)]' in attrs['LingerRope'] and 'switch' in attrs['Stop']
+    v2 = src[src.index("if ($Action -in 'remembered-override', 'remembered-override-clear', 'remembered-simulate') {"):src.index("if ($Action -eq 'remembered-history') {")]
+    assert "$ls.json.show -eq 'river-all-looks-v2.toe'" in v2 and "$ls.json.look -ne 'remembered'" in v2
+    assert 'Get-RememberedSchema' in src and "mission\\public\\remembered-schema.js" in src
+    assert '$was.json.PSObject.Properties' in v2 and '$ctl.overrides = $ov' in v2 and '$expIso' in v2
+    assert '.tmp' in v2 and '[IO.File]::Replace(' in v2
+    assert "$Action = 'remembered'" in v2
+    for words in ("the river v2 isn't running (overrides work only in it)",):
+        assert words in src and words in MODEL_JS.read_text(encoding='utf-8'), words
+    assert src.index("if ($Action -in 'remembered-override'") < src.index("if ($Action -in 'remembered', 'remembered-zones'")
+    hist = src[src.index("if ($Action -eq 'remembered-history') {"):]
+    assert "tools\\remembered\\history.py" in hist and '-cnotmatch' in hist
+
+
+def test_probe_accepts_the_all_looks_v2_file_wherever_it_accepts_the_all_looks_file():
+    """river-all-looks-v2.toe (29 Oct) passes every guard river-all-looks.toe passes: Test-AllLooksFile, the same pattern as
+    mission/public/model.js isAllLooksFile, in the looks report's check and the looks and filling actions."""
+    src = PROBE.read_text(encoding='utf-8')
+    assert "function Test-AllLooksFile([string]$name) { return $name -cmatch '^river-all-looks(-v2)?\\.toe$' }" in src
+    assert "isAllLooksFile = (f) => typeof f === 'string' && /^river-all-looks(-v2)?\\.toe$/.test(f)" in MODEL_JS.read_text(encoding='utf-8')
+    assert "'river-all-looks-v2.toe'" in re.search(r"^\$LOOKS_FILES = @\(([^)]*)\)", src, re.M).group(1)
+    look = src[src.index('function Get-LookShowing'):src.index("if ($Action -in 'remembered-override'")]
+    assert 'Test-AllLooksFile $ls.json.show' in look
+    for block in ("if ($Action -eq 'filling') {", "if ($Action -eq 'looks') {"):
+        b = src[src.index(block):]
+        assert 'Test-AllLooksFile $td.file' in b[:b.index('$tmp')], block

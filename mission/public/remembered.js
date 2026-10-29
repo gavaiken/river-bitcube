@@ -10,6 +10,7 @@ import { derive, changeLabel, dur, EXPECT_S, REMEMBERED_ONLY } from '/model.js';
 import { decodeLights, fitCanvas, paintStrips, paintScreens, paintEmpty, litMeterHTML } from '/frames-view.js';
 import { rememberedView, dayStripSVG, mss, hourWords, dateWords, screensChange, REMEMBERED_SCREENS_DEFAULT } from '/remembered-words.js';
 import SCHEMA from '/remembered-schema.js';
+import { versionBanner } from '/remembered-v2-words.js';
 
 const REM_MS = 2000, LIGHTS_MS = 4000, STILL_MS = 30_000;
 const $ = (s) => document.querySelector(s);
@@ -62,9 +63,15 @@ function render() {
   const v = S.rem ? rememberedView(S.rem, { now: serverNow(), sinceS: since(S.remAt) }) : null;
   S.v = v;
   art.setSeason(null);
-  renderNow(v); renderDave(v); renderRiver(v); renderRoom(v); renderDecision(v); renderOutputs(v); renderControls(v); renderFooter();
+  renderVersion(); renderNow(v); renderDave(v); renderRiver(v); renderRoom(v); renderDecision(v); renderOutputs(v); renderControls(v); renderFooter();
 }
 
+/** The one-line banner when the v2 file runs: this page is for v1 (docs/mission-ui.md "Remembered river v2 page"). */
+function renderVersion() {
+  const td = status.last?.probe?.value?.td, b = versionBanner('v1', td && td.ok !== false ? td.file : null), el = $('#version');
+  el.hidden = !b;
+  put('version', b ? `<span>${esc(b.text)} → <a href="${b.href}">${esc(b.link)}</a></span>` : '');
+}
 function renderNow(v) {
   const sec = $('#now');
   const phase = $('#now-phase'), line = $('#now-line'), nr = $('#now-notrunning');

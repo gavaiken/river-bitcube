@@ -14,6 +14,7 @@ import { CAL_RUNNING, changeLabel, tdStartingWhy, TD_UNREADABLE_WHY, calNoLights
   FILLING_PALETTES, FILLING_RANGE, LOOKS, showBoundWhy } from '../public/model.js';
 import REMEMBERED_SCHEMA from '../public/remembered-schema.js';
 import { LOOK_MODES, playlistProblem, checkPlaylist } from '../public/looks.js';
+import { checkedOverride, checkedClear, checkedSimulate } from '../public/remembered-v2-words.js';
 
 const PS = 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\user\\River\\river-bitcube\\tools\\mission\\';
 const PROBE = PS + 'probe.ps1';
@@ -546,6 +547,27 @@ export function planControl(action, body = {}) {
       if (!parts.length) throw bad('video is 0 to 1');
       return { kind: 'remembered', args: `-Action remembered-screens ${parts.join(' ')}` };
     }
+    case 'remembered-override': {
+      // v2 (docs/remembered-river.md section 5 "Overrides"): one parameter at a time, auto (clear it), fix (value) or adjust (gain,
+      // offset), each checked against control.json's schema (public/remembered-v2-words.js checkedOverride, from the generated
+      // remembered-schema.js); probe.ps1 merges it into control.json's overrides block, stamping at (and expires_at for simulated people)
+      const c = checkedOverride(body);
+      let args = `-Action remembered-override -Param ${c.param} -Mode ${c.mode}`;
+      if (c.mode === 'fix') args += ` -Value ${Array.isArray(c.value) ? c.value.join(',') : c.value}`;
+      // the colon form keeps a negative offset a value, never read as a parameter name
+      if (c.mode === 'adjust') args += ` -Offset:${c.offset} -Gain:${c.gain}`;
+      return { kind: 'remembered', args };
+    }
+    case 'remembered-override-clear': {
+      const c = checkedClear(body);
+      return { kind: 'remembered', args: `-Action remembered-override-clear${c.param ? ` -Param ${c.param}` : ''}` };
+    }
+    case 'remembered-simulate': {
+      // simulated people (decision 6): a headcount 0..20 and/or a lingerer at rope 0..19, for SIMULATED_MAX_S (2 min) at most; or stop
+      const c = checkedSimulate(body);
+      if (c.stop) return { kind: 'remembered', args: '-Action remembered-simulate -Stop' };
+      return { kind: 'remembered', args: `-Action remembered-simulate${c.headcount !== undefined ? ` -Headcount ${c.headcount}` : ''}${c.lingerer_rope !== undefined ? ` -LingerRope ${c.lingerer_rope}` : ''}` };
+    }
     case 'looks': {
       // the river (all looks) (docs/mission-ui.md "Looks"): auto (the playlist, looping: the one given, else the one control.json has,
       // else the file's default) or manual (fade to the look and stay on it); probe.ps1 writes River\looks\control.json
@@ -614,6 +636,9 @@ export function checkedControl(action, body = {}) {
     case 'remembered-zones': return { light: body.light, ...(body.pool_height_m !== undefined ? { pool_height_m: Number(num(body.pool_height_m).toFixed(2)) } : {}) };
     case 'remembered-opening': return { on: body.on === true };
     case 'remembered-screens': return Object.fromEntries(['video', 'intensity', 'threshold'].filter((k) => body[k] !== undefined).map((k) => [k, Number(num(body[k]).toFixed(2))]));
+    case 'remembered-override': return checkedOverride(body);
+    case 'remembered-override-clear': return checkedClear(body);
+    case 'remembered-simulate': return checkedSimulate(body);
     case 'looks': return { mode: body.mode, ...(body.look !== undefined ? { look: body.look } : {}), ...(body.playlist !== undefined ? { playlist: checkPlaylist(body.playlist) } : {}) };
     case 'bootfile': case 'switch': case 'rebuild': return { file: body.file };
     case 'lightsroute': return { route: body.route };

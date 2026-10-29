@@ -262,7 +262,8 @@ test('R7 #1: text answers are gzipped when asked; files revalidate (ETag, no-cac
   assert.match(js.h.vary ?? '', /accept-encoding/i);
   const { gunzipSync } = await import('node:zlib');
   assert.match(gunzipSync(js.body).toString('utf8'), /export function derive/);
-  assert.ok(js.body.length < 51_000, `model.js compressed: ${js.body.length} bytes`);
+  // 51 kB until 29 Oct; 52 kB since the remembered river v2's controls (overrides, simulated people) joined the model's tables
+  assert.ok(js.body.length < 52_000, `model.js compressed: ${js.body.length} bytes`);
   const again = await raw('/model.js', { 'accept-encoding': 'gzip', 'if-none-match': js.h.etag });
   assert.deepEqual([again.status, again.body.length], [304, 0]);
   const plain = await raw('/v2.css');

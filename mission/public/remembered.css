@@ -107,3 +107,5 @@ main.rem { max-width: 720px; }
 /* the three zone buttons share one reason: said once, above the first */
 #z-eddies .ctl-why, #z-off .ctl-why { display: none; }
 .dot.below .lab { bottom: auto; top: 22px; }   /* every other label under its dot, so two lingerers side by side stay readable */
+main.rem > .banner { grid-column: 1 / -1; }   /* the v1/v2 banner spans the columns */
+.banner[hidden] { display: none; }

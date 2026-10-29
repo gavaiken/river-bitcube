@@ -103,6 +103,7 @@ export const MODAL_SOURCES = ['off', 'canvas', 'scene', 'frames'];
 export const REMEMBERED_FILE = 'river-remembered.toe';
 /** The 409 a remembered-river control gets while another show runs (the server and the pages, one sentence). */
 export const REMEMBERED_ONLY = "the remembered river isn't running (its controls work only while it runs)";
+export const REMEMBERED_V2_FILE = 'river-all-looks-v2.toe';
 // ---- The filling glass (river-filling.toe, docs/mission-ui.md "Filling glass dials") ---------------------------------------
 // Its four dials write River\filling\control.json on bitcube through probe.ps1 -Action filling (lib/mission.mjs planControl), only
 // while it runs; td/filling/fill.py reads that file every second and reports River\filling\status.json, which the full check
@@ -126,7 +127,9 @@ export function fillingWords(b) {
 // three files share River\looks (the all-looks one has the playlist and 5 looks; the Looks page)
 export const LOOKS_FILE = 'river-looks.toe';
 export const ALL_LOOKS_FILE = 'river-all-looks.toe';
-export const LOOKS_FILES = [LOOKS_FILE, 'river-two-looks.toe', ALL_LOOKS_FILE];
+export const LOOKS_FILES = [LOOKS_FILE, 'river-two-looks.toe', ALL_LOOKS_FILE, 'river-all-looks-v2.toe'];
+/** The all-looks file (playlist, five looks) or its v2: probe.ps1 Test-AllLooksFile, the same pattern. */
+export const isAllLooksFile = (f) => typeof f === 'string' && /^river-all-looks(-v2)?\.toe$/.test(f);
 export const LOOKS = ['remembered', 'fill-simple', 'fill-configurable', 'seasons', 'modal'];
 export const LOOK_IN_LINE = { remembered: 'the remembered river', 'fill-simple': 'Fill my cup (simple)', 'fill-configurable': 'Fill my cup (configurable)',
   seasons: "the river's year", modal: 'Combined with Modal Input Selector' };
@@ -146,8 +149,11 @@ export function showBoundWhy(action, pr) {
   const pick = (ok, own, not) => (file === own ? null : !lk ? not : ok ? null : look ? (own === FILLING_FILE ? FILLING_LOOK_ONLY : REMEMBERED_LOOK_ONLY) : LOOK_UNKNOWN);
   if (action === 'looks') return lk ? null : LOOKS_ONLY;
   if (action === 'filling') return pick(FILL_LOOKS.includes(look), FILLING_FILE, FILLING_ONLY);
+  if (REMEMBERED_V2_ACTIONS.includes(action) && file !== REMEMBERED_V2_FILE) return REMEMBERED_V2_ONLY;
   return /^remembered-/.test(action) ? pick(look === 'remembered', REMEMBERED_FILE, REMEMBERED_ONLY) : null;
 }
+export const REMEMBERED_V2_ACTIONS = ['remembered-override', 'remembered-override-clear', 'remembered-simulate'];
+export const REMEMBERED_V2_ONLY = "the river v2 isn't running (overrides work only in it)";
 export const looksWords = (b) => (b?.mode === 'auto' ? (Array.isArray(b.playlist) ? `a playlist of ${b.playlist.length} looks` : 'Auto')
   : b?.mode === 'manual' ? (LOOK_IN_LINE[b.look] ? `${LOOK_IN_LINE[b.look]} (manual)` : 'Manual') : null);
 /** Each choice's button and its one line, in the pages' words (docs/mission-ui.md "Modal input"). */
@@ -195,10 +201,12 @@ export const calNoLights = (c) => calDryRun(c) || (!!c && typeof c === 'object' 
 // Applying a change (docs/mission-ui.md): what a change in flight blocks, when the server's entry names no blocks of its own.
 // A switch or a rebuild restarts TouchDesigner on the year: everything that touches either waits; a boot-file change only
 // the file controls (and a calibration's start); a lighting port change the lights; the rest only a second copy of itself.
-const TD_TOUCHING = ['overlay', 'modalinput', 'filling', 'remembered-zones', 'remembered-opening', 'remembered-screens', 'looks', 'ropes', 'hub75', 'test', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
+const TD_TOUCHING = ['overlay', 'modalinput', 'filling', 'remembered-zones', 'remembered-opening', 'remembered-screens', ...REMEMBERED_V2_ACTIONS, 'looks', 'ropes', 'hub75', 'test', 'mode', 'target', 'rules', 'rules-reset', 'lightsroute', 'switch', 'rebuild', 'bootfile', 'calibrate'];
+const OV = REMEMBERED_V2_ACTIONS;
 export const APPLY_BLOCKS = {
   switch: TD_TOUCHING, rebuild: TD_TOUCHING, bootfile: ['switch', 'rebuild', 'bootfile', 'calibrate'], lightsroute: ['ropes', 'hub75', 'test', 'lightsroute', 'calibrate'],
-  overlay: ['overlay'], modalinput: ['modalinput'], filling: ['filling'], 'remembered-zones': ['remembered-zones'], 'remembered-opening': ['remembered-opening'], 'remembered-screens': ['remembered-screens'], looks: ['looks'], ropes: ['ropes', 'test'], hub75: ['hub75'], test: ['test', 'ropes', 'calibrate'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
+  overlay: ['overlay'], modalinput: ['modalinput'], filling: ['filling'], 'remembered-zones': ['remembered-zones'], 'remembered-opening': ['remembered-opening'], 'remembered-screens': ['remembered-screens'],
+  'remembered-override': OV, 'remembered-override-clear': OV, 'remembered-simulate': OV, looks: ['looks'], ropes: ['ropes', 'test'], hub75: ['hub75'], test: ['test', 'ropes', 'calibrate'], mode: ['mode'], target: ['target'], rules: ['rules', 'rules-reset'], 'rules-reset': ['rules-reset', 'rules'],
   calibrate: ['ropes', 'hub75', 'test', 'switch', 'lightsroute', 'rebuild', 'calibrate', 'overlay', 'modalinput', 'filling', 'remembered-zones', 'remembered-screens', 'looks'],   // a calibration's start: what a running one blocks, and a second start
 };
 /** The changes that wait for the server's verdict before they are done, and what shows each on bitcube: a full check's reading
@@ -253,6 +261,8 @@ export function changeLabel(action, body = {}, { running = null } = {}) {
       if (parts.length === 1 && parts[0][0] === 'video') return `the change of the river video under the particles to ${pct(b.video)}`;
       return `the change of the screens to ${parts.map(([k, w]) => `${w} ${pct(b[k])}`).join(', ')}`;
     }
+    case 'remembered-override': case 'remembered-override-clear': return 'the change of the overrides';
+    case 'remembered-simulate': return b.stop === true ? 'the end of the simulation' : 'the simulation of people';
     case 'looks': { const w = looksWords(b); return w ? `the change of the looks to ${w}` : 'the change of the looks'; }
     case 'hub75': return x != null ? `the change of the panels to ${Math.round(Math.min(1, Math.max(0, x)) * 100)} %` : 'the change of the panels';
     case 'mode': return typeof b.mode === 'string' && b.mode ? `the change of the mode to ${cap(b.mode)}` : 'the change of the mode';
@@ -272,7 +282,7 @@ export function changeLabel(action, body = {}, { running = null } = {}) {
 /** The usual time of each change, in seconds, until bitcube's reading shows it: the server's own table (lib/applying.mjs EXPECT_S,
  *  kept equal by test/model.test.mjs), so a page can say "usually about 1 min" for its own change before status.applying has it. */
 export const EXPECT_S = { overlay: 15, modalinput: 15, filling: 15,'remembered-zones': 10, 'remembered-opening': 10, 'remembered-screens': 10, looks: 10, switch: 60, rebuild: 150, bootfile: 15, lightsroute: 20, ropes: 15, hub75: 15, test: 15, mode: 3, target: 3, rules: 3, 'rules-reset': 3, calibrate: 10,
-  check: 30 };   // the full check (an SSH round trip): never a lock (lib/applying.mjs records only what APPLY_BLOCKS names), only its usual time
+  check: 30, ...Object.fromEntries(OV.map((a) => [a, 10])) };   // the full check (an SSH round trip): never a lock (lib/applying.mjs records only what APPLY_BLOCKS names), only its usual time
 /** What the boot file's confirming line says in place of a usual time: its reading comes with bitcube's next full check. */
 export const BOOT_USUAL = "bitcube's full check shows it within a minute";
 /** What a calibration start's confirming line says in place of a usual time: the run shows itself in its progress file. */
@@ -1190,6 +1200,7 @@ export function derive(status, nowMs) {
     'remembered-zones': ctl(first('remembered-zones') ?? cantTd ?? cantCal ?? (testOn ? TEST_ON : null) ?? showBoundWhy('remembered-zones', pr)),
     'remembered-opening': ctl(first('remembered-opening') ?? cantTd ?? showBoundWhy('remembered-opening', pr)),
     'remembered-screens': ctl(first('remembered-screens') ?? cantTd ?? cantCal ?? (testOn ? TEST_ON : null) ?? showBoundWhy('remembered-screens', pr)),
+    ...Object.fromEntries(OV.map((a) => [a, ctl(first(a) ?? cantTd ?? showBoundWhy(a, pr))])),   // v2: like opening night
     hub75: ctl(first('hub75') ?? cantTd ?? cantCal),   // the camera is photographing the panels and ropes
     // never while TouchDesigner is restarting (a second switch kills the half-opened file: another minute dark), and never on
     // a full check too old to say what runs now (the buttons' labels come from it)

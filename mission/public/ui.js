@@ -38,7 +38,7 @@
 import { api as rawApi, esc, md, plainError, noAnswerText, POLL_TIMEOUT_MS } from '/app.js';
 import { dur as modelDur, CONTACTS, TZ, ctlInit, ctlStep, ctlView, applyingWords, applyingText, confirmingWords, CONFIRMING_SAID, unconfirmedWords,
   notSentWords, failWords, EXPECT_S, newRequestId, heldWords, heldMaybe, ownVerdict, confirmLimitS, liveNews, byMinute, UNKNOWN_ANSWERS, NOT_RECEIVED,
-  neverGotWords, elapsedClock } from '/model.js';
+  neverGotWords, elapsedClock, REMEMBERED_V2_FILE } from '/model.js';
 
 export { esc, md, plainError, noAnswerText };
 
@@ -64,7 +64,7 @@ const LINKS = {
 /** The footer's links, in order: [label, href]. */
 export const DOC_LINKS = [LINKS.explainer, LINKS.map, LINKS.files, LINKS.install, LINKS.plan];
 // which part of the Help page each page's ? opens
-const HELP_SECTION = { status: 'status', lights: 'lights', looks: 'looks', chat: 'chat', remembered: 'remembered', hub75: 'hub75', map: 'status', help: 'toc', explainer: 'big-picture' };
+const HELP_SECTION = { status: 'status', lights: 'lights', looks: 'looks', chat: 'chat', remembered: 'remembered', 'remembered-v2': 'remembered', hub75: 'hub75', map: 'status', help: 'toc', explainer: 'big-picture' };
 const TABS = [
   ['status', 'Status', '/status', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>'],
   ['lights', 'Lights', '/lights', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.6 1 1.3 1 2.5h6c0-1.2.3-1.9 1-2.5A6 6 0 0 0 12 3z"/></svg>'],
@@ -1155,7 +1155,7 @@ function openMenu(shell) {
       <div class="ctl" data-m="check-host"><div class="ctl-h" data-m="check-h">The full check</div><div class="ctl-before"></div><button class="btn" type="button" data-m="check">Check now</button><div class="ctl-status"></div></div>
     </div>
     <div><div class="ctl-h">Theme</div><div class="seg" role="group" aria-label="Theme">${['auto', 'light', 'dark'].map((x) => `<button type="button" data-theme="${x}" class="${t === x ? 'lit' : ''}" aria-pressed="${t === x}">${cap(x)}</button>`).join('')}</div></div>
-    <div class="links">${DOC_LINKS.map(([l, h]) => `<a href="${h}" ${h.startsWith('/') ? '' : 'target="_blank" rel="noopener"'}>${esc(l)}</a>`).join('')}</div>
+    <div class="links">${[rememberedLink(), ...DOC_LINKS].map(([l, h]) => `<a href="${h}" ${h.startsWith('/') ? '' : 'target="_blank" rel="noopener"'}>${esc(l)}</a>`).join('')}</div>
   </div>`);
   const s = sheet({ title: 'Menu', body, actions: [{ label: 'Log out', onClick: () => logout(shell) }, { label: 'Close' }], row: true });
   body.querySelector('[data-m="contacts"]').onclick = () => openContacts(shell);
@@ -1169,6 +1169,12 @@ function openMenu(shell) {
     onDone: () => document.dispatchEvent(new CustomEvent('mc:check')) });
   // a page that doesn't poll the status (the studio chat) asks once, so the button says what it will do
   if (bitcubeOffline() == null) fetchStatus().then((j) => { if (j && !check.busy && check.button.isConnected) check.update(words(j?.bitcube?.value?.online === false)); });
+}
+/** The menu's link to the Remembered river page that matches the file TouchDesigner runs (remembered-v2-words.js rememberedPage:
+ *  /remembered-v2 for river-all-looks-v2.toe, else /remembered), by the newest /api/status this page polled. */
+function rememberedLink() {
+  const td = lastStatus.j?.probe?.value?.td;
+  return td && td.ok !== false && td.file === REMEMBERED_V2_FILE ? ['Remembered river v2 (inputs, overrides)', '/remembered-v2'] : ['Remembered river (debug view)', '/remembered'];
 }
 /** The menu's Check now, in the same words as Status's: "Try bitcube again" (the quick check) while bitcube is offline. */
 function checkWords(offline) {
@@ -1205,7 +1211,7 @@ export function mountShell({ page = 'status', title = '' } = {}) {
   if (main) main.before(header); else document.body.prepend(header);
   // the System map has no tab of its own: it is reached from Status, so Status is marked as where you are (its parent); the
   // HUB75 simulator and the Remembered river page likewise sit under Lights
-  const tabOf = page === 'map' || page === 'explainer' ? 'status' : page === 'hub75' || page === 'remembered' ? 'lights' : page;
+  const tabOf = page === 'map' || page === 'explainer' ? 'status' : page === 'hub75' || page === 'remembered' || page === 'remembered-v2' ? 'lights' : page;
   if (!$('nav.tabs')) document.body.append(el(`<nav class="tabs" aria-label="Pages">${TABS.map(([k, l, h, svg]) =>
     `<a href="${h}" class="${k === tabOf ? 'on' : ''}" ${k === tabOf ? `aria-current="${k === page ? 'page' : 'true'}"` : ''}>${svg}${esc(l)}</a>`).join('')}</nav>`));
   // the focus order follows where the tabs are drawn: last on a phone (the bar at the bottom), right after the header from

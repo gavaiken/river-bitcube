@@ -70,6 +70,7 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { derive, FILES, intensityWord, awaited, changeLabel, confirmLimitS, EXPECT_S, calDryRun, calStep, CAL_STAGE_WORDS, MODAL_SOURCE_WORDS, fillingWords, looksWords } from '../public/model.js';
+import { overrideWords, simulateWords, REMEMBERED_PARAM_WORDS } from '../public/remembered-v2-words.js';
 import { scrubCreds } from './scrub.mjs';
 import { REQUEST_ID } from './applying.mjs';
 
@@ -637,6 +638,9 @@ export function actionPhrase(ev) {
     case 'filling': return ['Set', 'set', `the filling glass to ${fillingWords(b) ?? 'new settings'}`];
     case 'remembered-opening': return ['Switched', 'switch', `opening night ${b.on === true ? 'on' : 'off'}`];
     case 'remembered-screens': return ['Set', 'set', screensWords(b)];
+    case 'remembered-override': { const w = overrideWords(b); return b.mode === 'auto' ? ['Put', 'put', w ?? 'an override back to auto'] : ['Set', 'set', w ?? 'an override']; }
+    case 'remembered-override-clear': return ['Cleared', 'clear', REMEMBERED_PARAM_WORDS[b.param] ? `the override of ${REMEMBERED_PARAM_WORDS[b.param]}` : 'every override'];
+    case 'remembered-simulate': return b.stop === true ? ['Stopped', 'stop', 'simulating people'] : ['Simulated', 'simulate', simulateWords(b) ?? 'people'];
     case 'looks': return ['Set', 'set', `the looks to ${looksWords(b) ?? 'a new choice'}`];
     case 'test': return b.on === true ? ['Started', 'start', 'the test pattern on the ropes and panels'] : ['Stopped', 'stop', 'the test pattern'];
     // a switch to the file TouchDesigner was running is the button's "Restart on …" (its label says so, model.js changeLabel)

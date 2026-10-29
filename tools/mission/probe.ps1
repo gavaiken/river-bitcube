@@ -30,6 +30,19 @@
 #                                                                the river video shows under the particle windows (M9), the screens'
 #                                                                intensity and their motion threshold (M7), each 0..1: screens.video,
 #                                                                .intensity, .threshold in control.json
+#   [-Action remembered-override -Param knob.speed -Mode fix -Value 0.7]   the remembered river v2 only (river-all-looks-v2.toe
+#                                                                reporting the remembered look in looks\status.json, under 10 s old):
+#                                                                one parameter's override (mission/public/remembered-schema.js params:
+#                                                                its type, range and modes), merged into control.json's overrides block
+#                                                                stamped at: -Mode auto (clears it), fix -Value <number | YYYY-MM-DD |
+#                                                                #rrggbb,#rrggbb,#rrggbb>, or adjust -Offset:<o> -Gain:<g> (auto x gain
+#                                                                + offset). headcount and lingerer_rope (simulated) get expires_at =
+#                                                                at + simulated_max_s (120 s)
+#   [-Action remembered-override-clear [-Param palette]]        the same: one override, or the whole overrides block
+#   [-Action remembered-simulate -Headcount 8 -LingerRope 12]    the same: simulated people, either or both (rope 0-19), 2 min at most;
+#   [-Action remembered-simulate -Stop]                          -Stop removes both. All three then answer as -Action remembered
+#   [-Action remembered-history -Fields inputs.heard,params.knob.speed]   the inputs log's last 24 h per field (River\logs\
+#                                                                inputs.jsonl through tools/remembered/history.py): its one JSON line
 #                                                                The remembered river's three controls also work while river-looks.toe
 #                                                                shows it (its looks\status.json, under 10 s old, says look remembered)
 #   [-Action looks -Mode auto|manual [-Look remembered|fill-simple|fill-configurable|seasons|modal] [-Playlist '<json>']]
@@ -55,7 +68,7 @@
 #   ropes, hub75, test, switch, rebuild, lightsroute, overlay, filling and looks are refused while a calibration runs ({ ok: false, error: "a calibration is
 #   running. Stop it on the Lights page first", refused: <action> } with the status), whoever runs this script; a dry run (or a
 #   decode of earlier photos) touches no lights and refuses nothing.
-param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25, [ValidateSet('auto','original','channel','channel-multi','pool','pool-multi')][string]$Framing, [ValidateSet('current','gavin','recorded','manual','cycle')][string]$Screenmode, [ValidateRange(0,1)][double]$Screenblend=0, [ValidateSet(15,30,60,120)][int]$Screenhold=30, [ValidateRange(0,1)][Nullable[double]]$Screenrecorded, [ValidateRange(0,120)][Nullable[double]]$Screenoffset, [ValidateSet('off','canvas','scene','frames')][string]$Source, [ValidateRange(0,1)][Nullable[double]]$Strength, [ValidateSet('off','pool','eddies')][string]$Light, [ValidateRange(0,1.5)][Nullable[double]]$PoolHeight, [ValidateSet('river','glacier','midnight','teal')][string]$Palette, [ValidateRange(0,1)][Nullable[double]]$Intensity, [ValidateRange(0.25,3)][Nullable[double]]$Speed, [ValidateSet('auto','manual')][string]$Mode, [ValidateSet('remembered','fill-simple','fill-configurable','seasons','modal')][string]$Look, [string]$Playlist, [ValidateRange(0,1)][Nullable[double]]$Video, [ValidateRange(0,1)][Nullable[double]]$Threshold)
+param([string]$Action = 'status', [switch]$Dark, [double]$Brightness = 1.0, [string]$BootFile, [string]$LightsRoute, [switch]$On, [ValidateRange(0,1)][double]$Overlay = 0.25, [ValidateSet('auto','original','channel','channel-multi','pool','pool-multi')][string]$Framing, [ValidateSet('current','gavin','recorded','manual','cycle')][string]$Screenmode, [ValidateRange(0,1)][double]$Screenblend=0, [ValidateSet(15,30,60,120)][int]$Screenhold=30, [ValidateRange(0,1)][Nullable[double]]$Screenrecorded, [ValidateRange(0,120)][Nullable[double]]$Screenoffset, [ValidateSet('off','canvas','scene','frames')][string]$Source, [ValidateRange(0,1)][Nullable[double]]$Strength, [ValidateSet('off','pool','eddies')][string]$Light, [ValidateRange(0,1.5)][Nullable[double]]$PoolHeight, [ValidateSet('river','glacier','midnight','teal')][string]$Palette, [ValidateRange(0,1)][Nullable[double]]$Intensity, [ValidateRange(0.25,3)][Nullable[double]]$Speed, [ValidateSet('auto','manual','fix','adjust')][string]$Mode, [ValidateSet('remembered','fill-simple','fill-configurable','seasons','modal')][string]$Look, [string]$Playlist, [ValidateRange(0,1)][Nullable[double]]$Video, [ValidateRange(0,1)][Nullable[double]]$Threshold, [string]$Param, [string]$Value, [Nullable[double]]$Offset, [Nullable[double]]$Gain, [ValidateRange(0,20)][Nullable[double]]$Headcount, [ValidateRange(0,19)][Nullable[int]]$LingerRope, [switch]$Stop, [string]$Fields)
 $ErrorActionPreference = 'Continue'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $river = Split-Path $repo -Parent
@@ -155,16 +168,126 @@ function Read-RiverJson([string]$path) {
 # The look it shows now, when that report is under 10 s old and names river-looks.toe; else $null.
 # The three files that share River\looks (river-all-looks.toe also plays a playlist and has five looks).
 $ldir = Join-Path $river 'looks'
-$LOOKS_FILES = @('river-looks.toe', 'river-two-looks.toe', 'river-all-looks.toe')
+# the all-looks file and its v2 (river-all-looks-v2.toe, 29 Oct): mission/public/model.js isAllLooksFile, the same pattern
+function Test-AllLooksFile([string]$name) { return $name -cmatch '^river-all-looks(-v2)?\.toe$' }
+$LOOKS_FILES = @('river-looks.toe', 'river-two-looks.toe', 'river-all-looks.toe', 'river-all-looks-v2.toe')
 $LOOK_NAMES = @('remembered', 'fill-simple', 'fill-configurable', 'seasons', 'modal')
 function Get-LookShowing {
     $ls = Read-RiverJson (Join-Path $ldir 'status.json')
-    if ($ls.json -and $ls.json.show -in $LOOKS_FILES -and $ls.age_s -lt 10) { return [string]$ls.json.look }
+    if ($ls.json -and ($ls.json.show -in $LOOKS_FILES -or (Test-AllLooksFile $ls.json.show)) -and $ls.age_s -lt 10) { return [string]$ls.json.look }
     return $null
+}
+# The remembered river v2's overrides and simulated people (docs/remembered-river.md section 5 "Overrides"; mission/lib/remembered.mjs
+# CONTRACT): taken only while river-all-looks-v2.toe reports the remembered look (looks\status.json under 10 s old), each value checked
+# against the one schema (mission/public/remembered-schema.js, generated from td/remembered/control_schema.py, which TouchDesigner
+# checks again when it reads the file), merged into control.json's overrides block (every other field kept) and written to a
+# temporary file swapped in. Then the answer is -Action remembered's.
+function Get-RememberedSchema {
+    $t = [IO.File]::ReadAllText((Join-Path $repo 'mission\public\remembered-schema.js'))
+    $i = $t.IndexOf('export default ') + 'export default '.Length
+    return ($t.Substring($i, $t.LastIndexOf('}') - $i + 1) | ConvertFrom-Json)
+}
+function Test-OverrideValue($schema, $p, [string]$name, [string]$v) {
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    switch ($p.type) {
+        'number' { $d = 0.0; if ([double]::TryParse($v, [Globalization.NumberStyles]::Float, $inv, [ref]$d) -and $d -ge $p.min -and $d -le $p.max) { return @{ value = [math]::Round($d, 3) } }; return @{ error = "$name is $($p.min) to $($p.max)" } }
+        'int' { $n = 0; if ([int]::TryParse($v, [ref]$n) -and $n -ge $p.min -and $n -le $p.max) { return @{ value = $n } }; return @{ error = "$name is a whole number, $($p.min) to $($p.max)" } }
+        'date' {
+            $dt = [datetime]::MinValue
+            if ($v -match '^\d{4}-\d{2}-\d{2}$' -and [datetime]::TryParseExact($v, 'yyyy-MM-dd', $inv, [Globalization.DateTimeStyles]::None, [ref]$dt)) {
+                $days = $schema.overrides.days
+                if ((-not $days.first -or $v -ge $days.first) -and (-not $days.last -or $v -le $days.last)) { return @{ value = $v } }
+            }
+            return @{ error = "day is a remembered day, YYYY-MM-DD" }
+        }
+        'palette' { $c = @($v -split ','); if ($c.Count -eq 3 -and -not ($c | Where-Object { $_ -notmatch '^#[0-9a-fA-F]{6}$' })) { return @{ value = @($c | ForEach-Object { $_.ToLower() }) } }; return @{ error = 'palette is three colours: #rrggbb,#rrggbb,#rrggbb' } }
+    }
+    return @{ error = "$name can't be fixed" }
+}
+$remAsked = $null
+if ($Action -in 'remembered-override', 'remembered-override-clear', 'remembered-simulate') {
+    $remAsked = $Action
+    $rdir = Join-Path $river 'remembered'
+    $ctlFile = Join-Path $rdir 'control.json'
+    $ls = Read-RiverJson (Join-Path $ldir 'status.json')
+    $err = $null
+    $schema = $null
+    try { $schema = Get-RememberedSchema } catch { $err = "couldn't read the control schema (remembered-schema.js): $($_.Exception.Message)" }
+    $p = $(if ($schema -and $Param) { $schema.params.PSObject.Properties[$Param].Value } else { $null })
+    $sim = @($(if ($schema) { $schema.overrides.simulated } else { @('headcount', 'lingerer_rope') }))
+    $entry = $null
+    if ($err) { }
+    elseif (-not ($ls.json -and $ls.json.show -eq 'river-all-looks-v2.toe' -and $ls.age_s -lt 10)) { $err = "the river v2 isn't running (overrides work only in it)" }
+    elseif ($ls.json.look -ne 'remembered') { $err = "the remembered river isn't the look showing now (pick it under Looks on Status first)" }
+    elseif ($Action -eq 'remembered-override') {
+        if (-not $p) { $err = 'remembered-override needs -Param <one of the schema''s params>' }
+        elseif (-not $Mode -or $Mode -notin @($p.modes)) { $err = "$Param's -Mode is $(@($p.modes) -join ', ')" }
+        elseif ($Mode -eq 'fix') { $c = Test-OverrideValue $schema $p $Param $Value; if ($c.error) { $err = $c.error } else { $entry = [ordered]@{ mode = 'fix'; value = $c.value } } }
+        elseif ($Mode -eq 'adjust') {
+            $span = [double]$p.max - [double]$p.min
+            $o = $(if ($null -ne $Offset) { [double]$Offset } else { 0.0 }); $g = $(if ($null -ne $Gain) { [double]$Gain } else { 1.0 })
+            if ($o -lt -$span -or $o -gt $span) { $err = "offset is -$span to $span" }
+            elseif ($g -lt $schema.overrides.gain[0] -or $g -gt $schema.overrides.gain[1]) { $err = "gain is $($schema.overrides.gain[0]) to $($schema.overrides.gain[1])" }
+            else { $entry = [ordered]@{ mode = 'adjust'; offset = [math]::Round($o, 3); gain = [math]::Round($g, 2) } }
+        }
+    }
+    elseif ($Action -eq 'remembered-override-clear') { if ($Param -and -not $p) { $err = 'remembered-override-clear: -Param is one of the schema''s params (or none: every override)' } }
+    elseif (-not $Stop -and $null -eq $Headcount -and $null -eq $LingerRope) { $err = 'remembered-simulate needs -Headcount 0..20, -LingerRope 0..19 or -Stop' }
+    if ($err) { $out.ok = $false; $out.error = $err; $out.refused = $Action }
+    else {
+        $ctl = [ordered]@{}
+        $was = Read-RiverJson $ctlFile
+        if ($was.json) { foreach ($pp in $was.json.PSObject.Properties) { if ($null -ne $pp.Value) { $ctl[$pp.Name] = $pp.Value } } }
+        $ov = [ordered]@{}
+        if ($ctl.Contains('overrides') -and $ctl.overrides -is [Management.Automation.PSCustomObject]) { foreach ($pp in $ctl.overrides.PSObject.Properties) { $ov[$pp.Name] = $pp.Value } }
+        $nowUtc = (Get-Date).ToUniversalTime()
+        $nowIso = $nowUtc.ToString('yyyy-MM-ddTHH:mm:ssZ')
+        $expIso = $nowUtc.AddSeconds($(if ($schema.overrides.simulated_max_s) { [double]$schema.overrides.simulated_max_s } else { 120.0 })).ToString('yyyy-MM-ddTHH:mm:ssZ')
+        if ($Action -eq 'remembered-override') {
+            if ($Mode -eq 'auto') { $ov.Remove($Param) }
+            else { $entry.at = $nowIso; $entry.expires_at = $(if ($Param -in $sim) { $expIso } else { $null }); $ov[$Param] = $entry }
+        }
+        elseif ($Action -eq 'remembered-override-clear') { if ($Param) { $ov.Remove($Param) } else { $ov.Clear() } }
+        elseif ($Stop) { foreach ($k in $sim) { $ov.Remove($k) } }
+        else {
+            if ($null -ne $Headcount) { $ov['headcount'] = [ordered]@{ mode = 'fix'; value = [math]::Round([double]$Headcount, 1); at = $nowIso; expires_at = $expIso } }
+            if ($null -ne $LingerRope) { $ov['lingerer_rope'] = [ordered]@{ mode = 'fix'; value = [int]$LingerRope; at = $nowIso; expires_at = $expIso } }
+        }
+        if ($ov.Count) { $ctl.overrides = $ov } else { $ctl.Remove('overrides') }
+        $ctl.at = $nowIso
+        try {
+            $null = New-Item -ItemType Directory -Force -Path $rdir
+            $tmp = "$ctlFile.tmp"
+            [IO.File]::WriteAllText($tmp, (ConvertTo-Json -InputObject $ctl -Compress -Depth 8), (New-Object Text.UTF8Encoding $false))
+            if (Test-Path -LiteralPath $ctlFile) { [IO.File]::Replace($tmp, $ctlFile, $null) } else { [IO.File]::Move($tmp, $ctlFile) }
+            $out.written = $ctl
+        } catch { $out.ok = $false; $out.error = "couldn't write the remembered river's control file: $($_.Exception.Message)" }
+    }
+    $Action = 'remembered'             # then the answer is the remembered river's files, as below
+}
+# The inputs log for the v2 page's sparklines: tools/remembered/history.py prints its own one line of JSON (read-only).
+if ($Action -eq 'remembered-history') {
+    if ($Fields -cnotmatch '^(inputs|params)\.[A-Za-z0-9_.]{1,40}(,(inputs|params)\.[A-Za-z0-9_.]{1,40}){0,23}$') {
+        $out.ok = $false; $out.action = $Action; $out.refused = $Action; $out.error = 'remembered-history needs -Fields inputs.<name>,params.<name>'
+        $out | ConvertTo-Json -Compress
+        exit 0
+    }
+    $py = Join-Path $repo '.venv\Scripts\python.exe'
+    if (-not (Test-Path -LiteralPath $py)) { $py = 'python' }
+    $lines = @(& $py (Join-Path $repo 'tools\remembered\history.py') --fields $Fields --river $river 2>&1 | ForEach-Object { "$_" })
+    $line = $lines | Where-Object { $_.StartsWith('{') } | Select-Object -Last 1
+    if ($line) { Write-Output $line }
+    else {
+        $out.ok = $false; $out.action = $Action
+        $msg = Mask-Creds (($lines -join ' ').Trim())
+        $out.error = "history.py didn't answer: $($msg.Substring(0, [math]::Min(200, $msg.Length)))"
+        $out | ConvertTo-Json -Compress
+    }
+    exit 0
 }
 if ($Action -in 'remembered', 'remembered-zones', 'remembered-opening', 'remembered-screens') {
     $rdir = Join-Path $river 'remembered'
-    $out.action = $Action
+    $out.action = $(if ($remAsked) { $remAsked } else { $Action })
     $out.now_s = [math]::Round(([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) / 1000.0, 2)
     $ctlFile = Join-Path $rdir 'control.json'
     if ($Action -ne 'remembered') {
@@ -319,7 +442,7 @@ $fdir = Join-Path $river 'filling'
 if ($Action -eq 'filling') {
     if (-not $Palette -or -not $PSBoundParameters.ContainsKey('Brightness') -or $Brightness -lt 0 -or $Brightness -gt 1 -or $null -eq $Intensity -or $null -eq $Speed) {
         $out.ok = $false; $out.error = 'filling needs -Palette river|glacier|midnight|teal, -Brightness 0..1, -Intensity 0..1 and -Speed 0.25..3'; $out.refused = $Action
-    } elseif (-not $td -or $td.ok -eq $false -or ($td.file -notin 'river-filling.toe', 'river-looks.toe' -and $td.file -notin $LOOKS_FILES)) {
+    } elseif (-not $td -or $td.ok -eq $false -or ($td.file -notin 'river-filling.toe', 'river-looks.toe' -and $td.file -notin $LOOKS_FILES -and -not (Test-AllLooksFile $td.file))) {
         $out.ok = $false; $out.error = "the filling glass isn't running (its dials work only while it runs)"; $out.refused = $Action
     } elseif ($td.file -in $LOOKS_FILES -and (Get-LookShowing) -notin 'fill-simple', 'fill-configurable') {
         $out.ok = $false; $out.error = "Fill my cup isn't the look showing now (pick it under Looks on Status first)"; $out.refused = $Action
@@ -370,13 +493,13 @@ function Test-Playlist([string]$text) {
 if ($Action -eq 'looks') {
     $pl = $null
     if ($PSBoundParameters.ContainsKey('Playlist')) { $pl = Test-Playlist $Playlist }
-    if (-not $Mode -or ($Mode -eq 'manual' -and -not $Look)) {
+    if (-not $Mode -or $Mode -notin 'auto', 'manual' -or ($Mode -eq 'manual' -and -not $Look)) {
         $out.ok = $false; $out.error = 'looks needs -Mode auto|manual (manual with -Look remembered|fill-simple|fill-configurable|seasons|modal)'; $out.refused = $Action
     } elseif ($pl -and $Mode -ne 'auto') {
         $out.ok = $false; $out.error = 'a playlist goes with -Mode auto'; $out.refused = $Action
     } elseif ($pl -and $pl.error) {
         $out.ok = $false; $out.error = $pl.error; $out.refused = $Action
-    } elseif (-not $td -or $td.ok -eq $false -or ($td.file -ne 'river-looks.toe' -and $td.file -notin $LOOKS_FILES)) {
+    } elseif (-not $td -or $td.ok -eq $false -or ($td.file -ne 'river-looks.toe' -and $td.file -notin $LOOKS_FILES -and -not (Test-AllLooksFile $td.file))) {
         $out.ok = $false; $out.error = "the river (all looks) isn't running (its looks can be picked only while it runs)"; $out.refused = $Action
     } else {
         $ctlFile = Join-Path $ldir 'control.json'
