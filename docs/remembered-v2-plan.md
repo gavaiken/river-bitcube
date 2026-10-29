@@ -41,15 +41,17 @@ Gavin audited the remembered river on 28 Oct (the look in `river-all-looks.toe`)
 | 3a | People effects: `room.py` (the people model) + `ropes.py` (sparks/splashes, gathering, crowd turbulence ≤ 1.8 m, ocean → pond); tests, offline preview | Opus | ✅ `04e43e1` |
 | 3b | Knobs from the day's profile + Dave remap (`knobs.py`, `clock.py` valid_until + signals); tests | Opus | ✅ `4562c73` |
 | 3c | Overrides in `parse_control` + schema; simulated people with 2-min expiry; master brightness; calm range; applied in `show.py`; reported in `status.json` with sources; inputs logger | Opus | ✅ `66825e4` (modules), `6268ce2` (`show.py` wired) |
-| 3d | Build `river-all-looks-v2.toe` (`build_all_looks_v2.py`), `shows.json` entry, rebuild, verify with simulated people, tag | Fable | ➡️ `4107199` registered, `5186f33` rebuilt from live code, TD on it 01:35; boot default still `river-all-looks.toe` (v1) |
-| 4 | v2 page: `mission/public/remembered-v2.*`, `/api/remembered` extended, overrides API in `mission.mjs` + `probe.ps1`, route detection, explainers; tests; `docs/mission-ui.md` | Opus | ➡️ |
+| 3d | Build `river-all-looks-v2.toe` (`build_all_looks_v2.py`), `shows.json` entry, rebuild, verify with simulated people, tag | Fable | ✅ `4107199` registered, `5186f33` rebuilt from live code, TD on it 01:35; verified 01:36 with a simulated lingerer (rope 7) + 6 people: sparks 25–40, crowd 0→0.68 in 42 s, 300–960 W, 57–64 fps, the column visibly lit on the cam. **Boot default still `river-all-looks.toe` (v1)** until Gavin says. |
+| 4 | v2 page: `mission/public/remembered-v2.*`, `/api/remembered` extended, overrides API in `mission.mjs` + `probe.ps1`, route detection, explainers; tests; `docs/mission-ui.md` | Opus | ✅ `03c28cf` + `e97c8fb` (the writers swap with Move-Item: IO.File::Replace failed on bitcube); all six probe actions exercised on bitcube 01:51 |
 | 5 | Perf + dead code: `panels.py` → `motion.py`; drop `particles.py`/`flow.py` if unreachable; one motion pass; `lit_pct` cheaper; library load off-thread; mtime-gated reads; constants in one place | Opus | ➡️ |
 | 6 | `river-agent` PR: `signals` block in `reflex.json`; `memory.valid_until` | Opus | ✅ [PR #14](https://github.com/drocamor/river-agent/pull/14), awaiting Dave; the show reads both in 3b/3c |
-| 7 | Docs: `remembered-river.md` v2 section, explainer page, GLOSSARY, HANDOFF | Fable | ❌ |
+| 7 | Docs: `remembered-river.md` v2 section, explainer page, GLOSSARY, index; HANDOFF + session summary | Opus (docs), Fable (handoff) | ➡️ |
 
 ✅ done · ➡️ in progress · ❌ not started
 
 ## Log
+
+- 29 Oct 01:52 v2 page live in mission control (self-updates within ~5 min); probe actions proven on bitcube; perf agent (5) and docs agent (7) running.
 
 - 29 Oct 01:35 v2 file built from the live code and running on bitcube (`5186f33`); step 4 (page) and 5 (perf) agents running; simulated-people test next. Found: `probe.ps1`'s looks / remembered-* guards only accept `river-all-looks.toe`, so they refuse while v2 runs (fix in step 4).
 
