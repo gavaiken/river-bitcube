@@ -191,3 +191,42 @@ def test_each_dave_choice_plays_once_then_bitcube_fills_in():
     assert first['source'] == 'dave'
     again = loop._choose(T0 + 300, dave, lib)
     assert again['source'] != 'dave'
+
+
+# ---- valid_until and the raw signals (drocamor/river-agent#14, read with defaults) ----------------------------------
+
+def test_dave_day_honours_valid_until_over_the_900_s_rule():
+    st = state_for(chosen_at=T0 - 1100)
+    st['memory']['valid_until'] = iso(T0 - 1100 + 1200)          # chosen 18 min ago, valid for 20: still Dave's
+    assert clock.dave_day(st, T0)[0]['source'] == 'dave'
+    day, why = clock.dave_day(st, T0 + 200)                       # 101 s past valid_until
+    assert day is None and 'valid_until' in why
+    st = state_for(chosen_at=T0 - 60)
+    st['memory']['valid_until'] = iso(T0 - 1)                      # Dave says it already expired
+    assert clock.dave_day(st, T0)[0] is None
+    st['memory']['valid_until'] = iso(T0 + 86400)                  # absurd: capped at chosen_at + MEMORY_MAX_VALID_S
+    assert clock.dave_day(st, T0)[0] is not None
+    assert clock.dave_day(st, T0 - 60 + clock.MEMORY_MAX_VALID_S + 1)[0] is None
+    st['memory']['valid_until'] = 'soon'                           # not a time: the 900 s rule
+    assert clock.dave_day(st, T0)[0] is not None
+    assert clock.dave_day(st, T0 - 60 + 901)[0] is None
+
+
+def test_read_signals_with_staleness_and_absence():
+    empty = {'gallery': {}, 'river': {}}
+    assert clock.read_signals(None, T0) == empty
+    assert clock.read_signals({'heard': 0.3}, T0) == empty
+    assert clock.read_signals({'signals': 'x'}, T0) == empty
+    rx = {'updated_epoch': T0 - 100, 'signals': {
+        'gallery': {'motion': {'value': 0.4, 'slow': 0.3, 'age_s': 5}, 'old': {'value': 0.9, 'slow': 0.8, 'age_s': 550},
+                    'bad': {'value': 'loud', 'age_s': 1}, 'bare': 0.2},
+        'river': {'level': {'value': 0.7, 'slow': 0.6, 'age_s': 0}}, 'junk': 3}}
+    s = clock.read_signals(rx, T0)
+    assert s['gallery']['motion'] == {'value': 0.4, 'slow': 0.3, 'age_s': 105.0, 'stale': False}
+    assert s['gallery']['old'] == {'value': None, 'slow': None, 'age_s': 650.0, 'stale': True}   # over SIGNALS_TTL_S
+    assert s['gallery']['bad']['value'] is None and not s['gallery']['bad']['stale']
+    assert s['gallery']['bare']['value'] == 0.2
+    assert s['river']['level']['value'] == 0.7 and 'junk' not in s
+    assert clock.read_signals(rx, T0, ttl=50)['river']['level']['value'] is None
+    mt = clock.read_signals({'_mtime': T0 - 10, 'signals': {'river': {'level': {'value': 1, 'age_s': 2}}}}, T0)
+    assert mt['river']['level']['age_s'] == 12.0

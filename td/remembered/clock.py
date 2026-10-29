@@ -7,7 +7,8 @@ phase, when the surge lands, and the fallback when Dave's agent is late. Plain P
   30 s sooner by a busy room (relative presence > 1.3) or a lingerer and 30 s later by an empty room; always clamped to
   90-216 s into the loop. A dry day (stats.dry, or surge_at null) has no surge, unless opening night (a surge every loop, at
   150 s for a dry day; opening night is on unless control.json says opening_night false).
-- Dave's choice counts while chosen_at is under 5 min old and the mirror is fresh. Otherwise bitcube picks a notable
+- Dave's choice counts until memory.valid_until when he sends it (drocamor/river-agent#14: chosen_at + 20 min, capped at
+  MEMORY_MAX_VALID_S), else while chosen_at is under MEMORY_MAX_AGE_S (15 min) old; and only while the mirror is fresh. Otherwise bitcube picks a notable
   day itself (data/remembered/notable.json + profiles.json.gz), never the same date twice within an hour. With no
   data either: the preset calm loop at 30 %.
 - Phases: calm -> building -> surge -> settling -> calm, placed around the surge by the day's weather.
@@ -30,6 +31,8 @@ ROOM_SHIFT_S = 30.0
 BUSY_RELATIVE = 1.3
 EMPTY_ROOM_S = 60.0                  # nobody for this long = an empty room
 MEMORY_MAX_AGE_S = 900.0             # Dave's chosen_at older than this -> bitcube picks (his ticks run ~5-15 min apart)
+MEMORY_MAX_VALID_S = 3600.0          # a valid_until further than this past chosen_at is capped here (a bad clock)
+SIGNALS_TTL_S = 600.0                # a raw signal in reflex.json older than this reads as None (stale)
 MIRROR_STALE_S = 900.0               # state.json (the mirror) not rewritten for this long -> stale
 NO_REPEAT_S = 3600.0                 # a fallback date never plays twice within an hour
 DRAWBACK_S = 8.0                     # the last seconds before the surge: the pool dims, the top metre glows
@@ -131,7 +134,12 @@ def dave_day(state, now, mirror_age_s=0.0):
     chosen = parse_time(mem.get('chosen_at'))
     if chosen is None:
         return None, 'memory has no chosen_at'
-    if now - chosen > MEMORY_MAX_AGE_S:
+    until = parse_time(mem.get('valid_until'))
+    if until is not None:
+        until = min(until, chosen + MEMORY_MAX_VALID_S)
+        if now > until:
+            return None, f'Dave chose {round(now - chosen)} s ago (past valid_until by {round(now - until)} s)'
+    elif now - chosen > MEMORY_MAX_AGE_S:
         return None, f'Dave chose {round(now - chosen)} s ago (over {int(MEMORY_MAX_AGE_S)} s)'
     surge = state.get('surge_at', _MISSING)
     if surge is not _MISSING and surge is not None:
@@ -142,6 +150,38 @@ def dave_day(state, now, mirror_age_s=0.0):
     day = make_day(mem['date'], mem['profile'], mem.get('stats'), source='dave', reason=str(mem.get('reason') or ''),
                    chosen_by=str(mem.get('chosen_by') or 'dave'), chosen_at=chosen, surge_at=surge)
     return day, 'Dave'
+
+
+def _finite(v):
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else None
+
+
+def read_signals(reflex, now, ttl=SIGNALS_TTL_S):
+    """reflex.json's raw signals (drocamor/river-agent#14, read with defaults: absent -> empty groups):
+    {group: {name: {value, slow, age_s}}} for group gallery, river (and any other group Dave adds). age_s is the signal's
+    age when the file was written, plus the file's own age now (updated_epoch, else the file mtime kept as '_mtime');
+    value and slow are None when that is over ttl or not a number. Returns {group: {name: {value, slow, age_s, stale}}}."""
+    out = {'gallery': {}, 'river': {}}
+    if not isinstance(reflex, dict):
+        return out
+    sig = reflex.get('signals')
+    if not isinstance(sig, dict):
+        return out
+    written = _finite(reflex.get('updated_epoch')) or _finite(reflex.get('_mtime'))
+    file_age = max(0.0, now - written) if written is not None else 0.0
+    for group, names in sig.items():
+        if not isinstance(names, dict):
+            continue
+        g = out.setdefault(str(group), {})
+        for name, s in names.items():
+            s = s if isinstance(s, dict) else {'value': s}
+            a = _finite(s.get('age_s'))
+            age = (a if a is not None else 0.0) + file_age
+            stale = age > ttl
+            g[str(name)] = {'value': None if stale else _finite(s.get('value')),
+                            'slow': None if stale else _finite(s.get('slow')),
+                            'age_s': round(age, 1), 'stale': stale}
+    return out
 
 
 def preset_day():
