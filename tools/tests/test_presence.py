@@ -147,3 +147,68 @@ def test_zones_path_prefers_the_argument_then_a_pin_then_the_newest(tmp_path):
     assert counter.zones_path('elsewhere.json', tmp_path) == Path('elsewhere.json')
     feet = counter.Feet(tmp_path / 'tools' / 'pixelmap' / 'zones-2026-10-27.json')
     assert feet.get(0) == []
+
+
+# ---- surviving a busy presence.json and a restart (docs/remembered-v2-plan.md step 1a) -------------------------------
+def refusing_replace(fails, calls):
+    """An os.replace that raises Windows' WinError 5 the first `fails` times (a reader has the file open)."""
+    import os
+
+    def replace(src, dst):
+        calls.append(dst)
+        if len(calls) <= fails:
+            raise PermissionError(13, 'Access is denied')
+        os.replace(src, dst)
+    return replace
+
+
+def test_write_json_retries_a_refused_swap(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(counter, '_replace', refusing_replace(2, calls))
+    f = tmp_path / 'presence.json'
+    assert counter.write_json(f, {'t': 1.0, 'count': 3}, wait=0) is True
+    assert len(calls) == 3 and json.loads(f.read_text()) == {'t': 1.0, 'count': 3}
+
+
+def test_write_json_skips_a_write_it_cant_swap_in_without_raising(tmp_path, monkeypatch):
+    calls, logged = [], []
+    monkeypatch.setattr(counter, '_replace', refusing_replace(10 ** 6, calls))
+    monkeypatch.setattr(counter, 'log', logged.append)
+    monkeypatch.setattr(counter, '_logged', {})
+    f = tmp_path / 'presence.json'
+    f.write_text('{"t": 0.5, "count": 1}')                        # the last good one stays for readers
+    for _ in range(3):
+        assert counter.write_json(f, {'t': 1.0, 'count': 3}, wait=0) is False
+    assert len(calls) == 3 * counter.REPLACE_TRIES
+    assert json.loads(f.read_text()) == {'t': 0.5, 'count': 1}
+    assert len(logged) == 1 and 'presence.json not written' in logged[0]   # logged once, not every 0.5 s
+
+
+def test_write_json_never_raises_on_an_unwritable_object(tmp_path):
+    assert counter.write_json(tmp_path / 'x.json', {'bad': object()}) is False
+
+
+def test_tracker_state_round_trips_and_keeps_the_stillness_clock(tmp_path):
+    t = counter.Tracker(640, 360)
+    for k in range(12):                                           # 5.5 s still
+        t.update([box(320, 340, 0.5), box(100 + 15 * k, 330, 0.45)], 1000 + k * 0.5)
+    f = tmp_path / 'presence-tracker.json'
+    assert counter.write_json(f, t.state(1005.5))
+    restarted = counter.Tracker(640, 360)                         # the supervisor's restart, 15 s later
+    assert restarted.restore(counter.read_tracker_state(f), 1020.5) == 2
+    assert restarted.next_id == t.next_id and restarted.people(1020.5) == []   # nobody shown until seen again
+    ppl = restarted.update([box(321, 340, 0.5)], 1021.0)          # the still one is seen again; the walker has gone
+    assert len(ppl) == 1 and ppl[0]['still_s'] == 21.0            # clock from 1000, not from the restart
+    assert len(counter.lingerers(ppl, [])) == 1                   # so they count as a lingerer at once
+    restarted.update([box(320, 340, 0.5)], 1023.0)
+    assert len(restarted.tracks) == 1                             # the walker, never seen again, is forgotten
+
+
+def test_tracker_state_too_old_or_broken_is_ignored(tmp_path):
+    t = counter.Tracker(640, 360)
+    t.update([box(320, 340, 0.5)], 1000.0)
+    fresh = counter.Tracker(640, 360)
+    assert fresh.restore(t.state(1000.0), 1000.0 + counter.TRACKER_MAX_AGE_S + 1) == 0 and fresh.tracks == []
+    assert fresh.restore(None, 1000.0) == 0
+    assert fresh.restore({'t': 1000.0, 'people': [{'id': 1}]}, 1001.0) == 0 and fresh.tracks == []
+    assert counter.read_tracker_state(tmp_path / 'missing.json') is None

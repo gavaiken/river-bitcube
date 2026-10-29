@@ -18,7 +18,10 @@ People are followed between frames by a simple tracker (box overlap, else neares
 stillness: nothing about anyone is kept once they've been out of sight TRACK_KEEP_S. Rope feet come from the zones file
 (tools/pixelmap/zones-<date>.json): --zones=PATH, else the one a show pins in shows.json (calibration.zones), else the
 newest; without one, lingerers' ropes are []. With the motion fallback, people and lingerers are []. Also
-River\\presence-status.json (detector, frame rate, raw and near counts) for whoever is tuning.
+River\\presence-status.json (detector, frame rate, raw and near counts) for whoever is tuning, and
+River\\presence-tracker.json (the tracker's people, so a restarted counter keeps their stillness clocks; see TRACKER_MAX_AGE_S).
+A write that Windows refuses (a reader such as TouchDesigner or mission control has the file open: WinError 5, 28 Oct) is
+retried a few times, then skipped; nothing in one frame's detect-or-write step can stop the counter.
 
 Input: the gallery cam's sub stream (640x360) at 2 frames a second, through ffmpeg; the camera login comes from
 secrets.local.json and is never logged. Detector: YOLOv8 nano (ONNX, CPU, 2 threads; River\\models\\yolov8n.onnx,
@@ -46,6 +49,7 @@ REPO = Path(__file__).resolve().parents[2]
 RIVER = REPO.parent
 OUT = RIVER / 'presence.json'
 STATUS = RIVER / 'presence-status.json'
+TRACKER = RIVER / 'presence-tracker.json'
 DEBUG = RIVER / 'presence-debug.jpg'
 LOG = RIVER / 'logs' / 'presence.log'
 MODEL = RIVER / 'models' / 'yolov8n.onnx'
@@ -69,6 +73,11 @@ ROPE_RADIUS = 0.35         # a lingerer's ropes: rope feet within this (frame he
 NEAREST_ROPES = 2          # ... at most this many, nearest first
 LOCK_PORT = 8772          # held by the running supervisor, so a second one exits at once
 RESTART_SECONDS = 10
+REPLACE_TRIES = 5          # a refused swap of a JSON file (a reader has it open) is tried this many times ...
+REPLACE_WAIT = 0.06        # ... this long apart (~250 ms in all), then that write is skipped
+LOG_EVERY_S = 60.0         # the same failure is logged at most this often (with how many times it happened)
+TRACKER_MAX_AGE_S = RESTART_SECONDS + 15   # a restarted counter takes the tracker's people back if this fresh: the
+                           # supervisor waits RESTART_SECONDS, then the model and the stream take a few more
 
 
 # ---- detection (pure) ----------------------------------------------------------------------------------------------
@@ -178,8 +187,33 @@ class Tracker:
                 self.tracks.append({'id': self.next_id, 'box': tuple(b[:4]), 'foot': f, 'anchor': f,
                                     'still_since': now, 'seen': now})
                 self.next_id += 1
-        self.tracks = [t for t in self.tracks if now - t['seen'] <= TRACK_KEEP_S]
+        self.tracks = [t for t in self.tracks if now - t['seen'] <= TRACK_KEEP_S or now <= t.get('grace', 0)]
         return self.people(now)
+
+    def state(self, now):
+        """What a restarted counter needs to keep everyone's stillness clock (presence-tracker.json): their id, last
+        box (so foot and h), the foot point their clock started at, and when it started (unix time)."""
+        return {'t': round(now, 2), 'next_id': self.next_id,
+                'people': [{'id': t['id'], 'box': [round(v, 1) for v in t['box']],
+                            'foot': [round(v, 4) for v in t['foot']], 'anchor': [round(v, 4) for v in t['anchor']],
+                            'still_since': round(t['still_since'], 2)} for t in self.tracks]}
+
+    def restore(self, state, now, max_age=TRACKER_MAX_AGE_S):
+        """Take back the people from state() if it was written at most max_age ago; returns how many. They stay out
+        of people() until a detection picks them up (within TRACK_KEEP_S of now, their 'grace'), and their clocks go
+        on from still_since; anyone who moved meanwhile restarts their clock as usual, anyone gone is forgotten."""
+        try:
+            if not state or not 0 <= now - float(state['t']) <= max_age:
+                return 0
+            tracks = [{'id': int(p['id']), 'box': tuple(map(float, p['box'])), 'foot': tuple(map(float, p['foot'])),
+                       'anchor': tuple(map(float, p['anchor'])), 'still_since': float(p['still_since']),
+                       'seen': float(state['t']), 'grace': now + TRACK_KEEP_S}
+                      for p in state['people']]
+        except (KeyError, TypeError, ValueError):
+            return 0
+        self.tracks = tracks
+        self.next_id = max([int(state.get('next_id', 1))] + [t['id'] + 1 for t in tracks])
+        return len(tracks)
 
     def people(self, now):
         """[{x, y, h, still_s}] of everyone seen in the last PEOPLE_KEEP_S (show view, 0..1 from the top left)."""
@@ -247,6 +281,14 @@ class Feet:
         return self.feet
 
 
+def read_tracker_state(path):
+    """presence-tracker.json as written by the last counter, or None."""
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+
+
 def motion_count(prev, cur, thresh=25, per_person=0.04):
     """Fallback: share of the frame that changed, as a rough head count (one person ~ 4% of the frame)."""
     if prev is None:
@@ -255,10 +297,29 @@ def motion_count(prev, cur, thresh=25, per_person=0.04):
     return int(round(changed / per_person))
 
 
-def write_json(path, obj):
+_replace = os.replace       # tests swap this for one that fails
+
+
+def write_json(path, obj, tries=REPLACE_TRIES, wait=REPLACE_WAIT):
+    """Write obj to path whole (temp file, then swap it in). Windows refuses the swap while a reader has path open
+    (PermissionError, WinError 5), so it's tried `tries` times `wait` apart; if it still fails the write is skipped
+    (logged at most every LOG_EVERY_S) and False returned. Never raises: a skipped write is replaced 0.5 s later."""
     tmp = path.with_suffix('.tmp')
-    tmp.write_text(json.dumps(obj), encoding='utf-8')
-    os.replace(tmp, path)
+    err = None
+    try:
+        tmp.write_text(json.dumps(obj), encoding='utf-8')
+        for k in range(tries):
+            try:
+                _replace(tmp, path)
+                return True
+            except OSError as e:
+                err = e
+                if k < tries - 1:
+                    time.sleep(wait)
+    except (OSError, TypeError, ValueError) as e:
+        err = e
+    log_every('write ' + path.name, f'{path.name} not written ({type(err).__name__}: {err}); skipped')
+    return False
 
 
 # ---- the counter ---------------------------------------------------------------------------------------------------
@@ -268,9 +329,26 @@ def camera_url():
 
 
 def log(msg):
-    LOG.parent.mkdir(parents=True, exist_ok=True)
-    with open(LOG, 'a', encoding='utf-8') as f:
-        f.write(time.strftime('%Y-%m-%d %H:%M:%S ') + msg + '\n')
+    try:
+        LOG.parent.mkdir(parents=True, exist_ok=True)
+        with open(LOG, 'a', encoding='utf-8') as f:
+            f.write(time.strftime('%Y-%m-%d %H:%M:%S ') + msg + '\n')
+    except OSError:
+        pass                                                           # a log we can't write never stops the counter
+
+
+_logged = {}                # key -> [last logged (time.time()), times since]
+
+
+def log_every(key, msg, every=LOG_EVERY_S):
+    """log(msg), but the same key at most once every `every` s, saying how many times it happened meanwhile."""
+    now = time.time()
+    last, n = _logged.get(key, [None, 0])
+    n += 1
+    if last is None or now - last >= every:
+        log(msg + (f' ({n}x in the last {now - last:.0f} s)' if last is not None and n > 1 else ''))
+        last, n = now, 0
+    _logged[key] = [last, n]
 
 
 class Frames:
@@ -311,31 +389,45 @@ def run(debug=False, min_height=MIN_HEIGHT, zones=None):
     frames = Frames(camera_url())
     tracker, feet = Tracker(W, H), Feet(zones_path(zones))
     log(f'rope feet for lingerers: {feet.path.name if feet.path else "none (no zones file): lingerers get no ropes"}')
+    saved = read_tracker_state(TRACKER) if detector else None        # the last counter's people (taken back below)
     count, raw, prev, last_n, last_write, last_debug, t_det = 0, 0, None, 0, 0.0, 0.0, []
     while True:
         now = time.time()
         if frames.n != last_n and frames.frame is not None:
             last_n, img = frames.n, frames.frame
-            t0 = time.perf_counter()
-            if detector:
-                x, geom = letterbox(img)
-                boxes = people(detector.run(None, {detector.get_inputs()[0].name: x})[0], geom, W, H)
-                raw, count = len(boxes), near(boxes, H, min_height)
-                tracker.update(boxes, now)
-            else:
-                boxes, count = [], motion_count(prev, img)
-                raw, prev = count, img
-            t_det = (t_det + [time.perf_counter() - t0])[-20:]
-            if debug and now - last_debug > 10:
-                save_debug(img, boxes, min_height)
-                last_debug = now
+            try:
+                t0 = time.perf_counter()
+                if detector:
+                    if saved is not None:                              # at the first frame, not at start: the stream
+                        n = tracker.restore(saved, now)                # can take seconds, and TRACK_KEEP_S is 2 s
+                        log(f'took back {n} people from {TRACKER.name}' if n else
+                            f'{TRACKER.name} too old or unreadable; starting with nobody')
+                        saved = None
+                    x, geom = letterbox(img)
+                    boxes = people(detector.run(None, {detector.get_inputs()[0].name: x})[0], geom, W, H)
+                    raw, count = len(boxes), near(boxes, H, min_height)
+                    tracker.update(boxes, now)
+                else:
+                    boxes, count = [], motion_count(prev, img)
+                    raw, prev = count, img
+                t_det = (t_det + [time.perf_counter() - t0])[-20:]
+                if debug and now - last_debug > 10:
+                    last_debug = now
+                    save_debug(img, boxes, min_height)
+            except Exception as e:                                     # one bad frame never stops the counter
+                log_every('frame', f'frame {last_n} failed ({type(e).__name__}: {e}); going on')
         if now - last_write >= WRITE_EVERY:
-            fresh = now - frames.last < 30
-            write_json(OUT, record(now, count, tracker if detector else None, feet.get(now)))
-            write_json(STATUS, {'t': round(now, 2), 'count': int(count), 'raw': int(raw), 'frames': frames.n,
-                                'detector': 'yolov8n' if detector else 'motion', 'min_height': min_height,
-                                'ms': round(1000 * sum(t_det) / len(t_det)) if t_det else None, 'stream': fresh})
             last_write = now
+            try:
+                fresh = now - frames.last < 30
+                write_json(OUT, record(now, count, tracker if detector else None, feet.get(now)))
+                write_json(STATUS, {'t': round(now, 2), 'count': int(count), 'raw': int(raw), 'frames': frames.n,
+                                    'detector': 'yolov8n' if detector else 'motion', 'min_height': min_height,
+                                    'ms': round(1000 * sum(t_det) / len(t_det)) if t_det else None, 'stream': fresh})
+                if detector:
+                    write_json(TRACKER, tracker.state(now))
+            except Exception as e:                                     # nor does one bad write (write_json itself
+                log_every('write', f'write failed ({type(e).__name__}: {e}); going on')   # never raises)
         time.sleep(0.05)
 
 
