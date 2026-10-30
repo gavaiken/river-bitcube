@@ -1,6 +1,6 @@
 #!/bin/bash
-# Wake bitcube from the Mac mini (Gavin, 28 Oct 2026). bitcube shuts itself down after the gallery closes
-# (tools/power/nightly_shutdown.ps1); if the staff then pulled the power, plugging it back in boots it (BIOS Auto
+# Wake bitcube from the Mac mini (Gavin, 28 Oct 2026). bitcube shuts itself down after 3 hours with nobody seen
+# (tools/power/idle_shutdown.ps1); if the staff then pulled the power, plugging it back in boots it (BIOS Auto
 # Power On), but if they forgot, nothing would: this sends a Wake-on-LAN magic packet to its ROUTER port
 # (Ethernet 2, 00:e7:43:0e:5f:c4, on the install router's LAN2; BIOS Wake On LAN and the adapter's "Shutdown
 # Wake-On-Lan" are both on, checked 28 Oct). The mini has no route onto the install LAN while bitcube is off, so the

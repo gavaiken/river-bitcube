@@ -20,6 +20,8 @@ stillness: nothing about anyone is kept once they've been out of sight TRACK_KEE
 newest; without one, lingerers' ropes are []. With the motion fallback, people and lingerers are []. Also
 River\\presence-status.json (detector, frame rate, raw and near counts) for whoever is tuning, and
 River\\presence-tracker.json (the tracker's people, so a restarted counter keeps their stillness clocks; see TRACKER_MAX_AGE_S).
+River\\presence-seen.json ({"t"}: the last time anyone was in frame, near or not, every SEEN_EVERY s while they are; read
+by tools/power/idle_shutdown.py, which shuts bitcube down after 3 hours without anyone).
 A write that Windows refuses (a reader such as TouchDesigner or mission control has the file open: WinError 5, 28 Oct) is
 retried a few times, then skipped; nothing in one frame's detect-or-write step can stop the counter.
 
@@ -50,6 +52,8 @@ RIVER = REPO.parent
 OUT = RIVER / 'presence.json'
 STATUS = RIVER / 'presence-status.json'
 TRACKER = RIVER / 'presence-tracker.json'
+SEEN = RIVER / 'presence-seen.json'     # {"t": the last time anyone was in frame}: tools/power/idle_shutdown.py
+SEEN_EVERY = 15.0          # s between presence-seen.json writes while people are in frame
 DEBUG = RIVER / 'presence-debug.jpg'
 LOG = RIVER / 'logs' / 'presence.log'
 MODEL = RIVER / 'models' / 'yolov8n.onnx'
@@ -391,6 +395,7 @@ def run(debug=False, min_height=MIN_HEIGHT, zones=None):
     log(f'rope feet for lingerers: {feet.path.name if feet.path else "none (no zones file): lingerers get no ropes"}')
     saved = read_tracker_state(TRACKER) if detector else None        # the last counter's people (taken back below)
     count, raw, prev, last_n, last_write, last_debug, t_det = 0, 0, None, 0, 0.0, 0.0, []
+    last_seen_write = 0.0
     while True:
         now = time.time()
         if frames.n != last_n and frames.frame is not None:
@@ -426,6 +431,9 @@ def run(debug=False, min_height=MIN_HEIGHT, zones=None):
                                     'ms': round(1000 * sum(t_det) / len(t_det)) if t_det else None, 'stream': fresh})
                 if detector:
                     write_json(TRACKER, tracker.state(now))
+                if fresh and raw > 0 and now - last_seen_write >= SEEN_EVERY:   # anyone in frame, near or not
+                    last_seen_write = now
+                    write_json(SEEN, {'t': round(now, 2), 'raw': int(raw)})
             except Exception as e:                                     # nor does one bad write (write_json itself
                 log_every('write', f'write failed ({type(e).__name__}: {e}); going on')   # never raises)
         time.sleep(0.05)
