@@ -8,8 +8,9 @@
 #
 #   tools/mini/wake_bitcube.sh            send, then wait up to 5 min for bitcube to answer ssh; exit 0 when it does
 #   tools/mini/wake_bitcube.sh --send     just send one packet
+#   add --force after 6 Nov 2026 (automatic wakes stop then)
 #
-# Scheduled an hour before each opening by the launchd agent tools/mini/com.river.wake-bitcube.plist (user gav on the
+# Scheduled daily at 11:55 until 6 Nov by the launchd agent tools/mini/com.river.wake-bitcube.plist (user gav on the
 # mini); every run is appended to ~/claude/local/wake-bitcube.log. If bitcube is already up it says so and exits 0.
 ROUTER=${ROUTER:-root@100.127.193.8}
 MAC=${MAC:-00:e7:43:0e:5f:c4}
@@ -21,6 +22,10 @@ up() { $SSH -o ConnectTimeout=5 bitcube 'echo up' 2>/dev/null | tr -d '\r' | gre
 send() { $SSH "$ROUTER" "etherwake -i br-lan $MAC" 2>&1 | tr -d '\r'; }
 
 /bin/mkdir -p "$(dirname "$LOG")"
+# No automatic wake after the show week (Gavin, 30 Oct 2026): the scheduled run refuses after 6 Nov; --force overrides.
+if [ "$(date +%Y%m%d)" -gt 20261106 ] && [ "$1" != "--force" ] && [ "$2" != "--force" ]; then
+    log "after 6 Nov 2026: no automatic wake any more (run with --force to wake by hand)"; exit 0
+fi
 if [ "$1" = "--send" ]; then out=$(send); log "sent one magic packet to $MAC via $ROUTER ${out:+($out)}"; exit 0; fi
 
 if up; then log "bitcube is already up; nothing to do"; exit 0; fi

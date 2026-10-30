@@ -1,7 +1,8 @@
-# Registers River-IdleShutdown (Gavin, 29 Oct 2026): every 5 minutes, as SYSTEM, tools/power/idle_shutdown.py shuts
-# bitcube down once the people counter has seen nobody for 3 hours (it never does while the counter or its camera is
-# down). Replaces the dated River-NightlyShutdown, which registering removes. The morning wake is unchanged
-# (the Mac mini, tools/mini/wake_bitcube.sh).
+# Registers River-IdleShutdown (Gavin, 29-30 Oct 2026): every 5 minutes, as SYSTEM, tools/power/idle_shutdown.py shuts
+# bitcube down once the people counter has seen nobody for 2 hours, never between 12:00 and 21:00, never while the
+# counter or its camera is down, and only until 7 Nov 2026 00:00 (the trigger ends then and the checker removes the
+# task: no automatic on or off after the show week). Replaces the dated River-NightlyShutdown, which registering
+# removes. The morning wake (the Mac mini, tools/mini/wake_bitcube.sh) ends on 6 Nov too.
 #
 #   .\tools\power\idle_shutdown.ps1            register (or replace) the task; remove River-NightlyShutdown
 #   .\tools\power\idle_shutdown.ps1 -Status    the task, its last run, and what the checker decides right now
@@ -36,9 +37,11 @@ if ($Status) {
 if (-not (Test-Path $py)) { throw "no Python at $py" }
 $action = New-ScheduledTaskAction -Execute $py -Argument "`"$script`"" -WorkingDirectory $repo
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 5)
+$trigger.EndBoundary = '2026-11-07T00:00:00'      # local time; the checker also stops then and removes the task
+$trigger.Repetition.StopAtDurationEnd = $false
 $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -RunLevel Highest
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew `
-    -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
+    -ExecutionTimeLimit (New-TimeSpan -Minutes 2) -DeleteExpiredTaskAfter (New-TimeSpan -Days 1)
 Register-ScheduledTask -TaskName $task -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 if (Get-ScheduledTask -TaskName 'River-NightlyShutdown' -ErrorAction SilentlyContinue) {
     Unregister-ScheduledTask -TaskName 'River-NightlyShutdown' -Confirm:$false

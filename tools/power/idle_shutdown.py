@@ -1,5 +1,6 @@
-"""bitcube shuts itself down after IDLE_HOURS without anyone in the gallery cam's view (Gavin, 29 Oct 2026; replaces the
-dated nightly shutdown). Run every 5 minutes as SYSTEM by the scheduled task River-IdleShutdown
+"""bitcube shuts itself down after IDLE_HOURS without anyone in the gallery cam's view, never between 12:00 and 21:00,
+and only until UNTIL (Gavin, 29-30 Oct 2026; replaces the dated nightly shutdown). After UNTIL it never shuts bitcube
+down and the task removes itself: no automatic on or off after the show week. Run every 5 minutes as SYSTEM by the scheduled task River-IdleShutdown
 (tools/power/idle_shutdown.ps1 registers it). The morning wake is unchanged (the Mac mini, tools/mini/wake_bitcube.sh).
 
 Idle = now - the newest of: the last time the people counter saw anyone (River\\presence-seen.json, written by
@@ -18,7 +19,9 @@ import sys
 import time
 from pathlib import Path
 
-IDLE_HOURS = 3.0
+IDLE_HOURS = 2.0
+KEEP_ON_HOURS = (12, 21)   # local time: never shut down from 12:00 until 21:00
+UNTIL = (2026, 11, 7)      # local midnight starting 7 Nov: from then on, nothing (the task removes itself)
 STALE_S = 120.0            # presence-status.json older than this: the counter isn't running
 RIVER = Path(__file__).resolve().parents[3]
 STATUS = RIVER / 'presence-status.json'
@@ -29,8 +32,17 @@ MESSAGE = ('A River Becoming: nobody seen for {h:g} hours; bitcube shuts down in
            '(tools/power/idle_shutdown.py). Cancel: shutdown /a')
 
 
-def decide(now, boot_t, status, seen_t, keep_until=None, idle_s=IDLE_HOURS * 3600, stale_s=STALE_S):
-    """(shut_down, reason). status: presence-status.json as a dict, or None. Pure."""
+def until_t():
+    return time.mktime((*UNTIL, 0, 0, 0, 0, 0, -1))
+
+
+def decide(now, boot_t, status, seen_t, keep_until=None, idle_s=IDLE_HOURS * 3600, stale_s=STALE_S,
+           hour=None, expires_t=None):
+    """(shut_down, reason). status: presence-status.json as a dict, or None. hour: local hour now. Pure."""
+    if expires_t is not None and now >= expires_t:
+        return False, 'the show week is over: no automatic shutdown any more'
+    if hour is not None and KEEP_ON_HOURS[0] <= hour < KEEP_ON_HOURS[1]:
+        return False, f'{KEEP_ON_HOURS[0]}:00-{KEEP_ON_HOURS[1]}:00: never shuts down in these hours'
     if not isinstance(status, dict) or not isinstance(status.get('t'), (int, float)):
         return False, 'the people counter has written no status: keeping bitcube on'
     if now - status['t'] > stale_s:
@@ -74,7 +86,9 @@ def main(argv):
     now = time.time()
     seen = _json(SEEN)
     seen_t = seen.get('t') if isinstance(seen, dict) else None
-    shut, reason = decide(now, _boot_t(), _json(STATUS), seen_t, _keep_until())
+    expires = until_t()
+    shut, reason = decide(now, _boot_t(), _json(STATUS), seen_t, _keep_until(), hour=time.localtime(now).tm_hour,
+                          expires_t=expires)
     status_only = '--status' in argv
     line = f"{time.strftime('%Y-%m-%d %H:%M:%S')} {'SHUTDOWN' if shut and not status_only else 'on'}: {reason}"
     print(line)
@@ -86,6 +100,8 @@ def main(argv):
             f.write(line + '\n')
     except OSError:
         pass
+    if now >= expires and sys.platform == 'win32':            # the week is over: the task removes itself
+        subprocess.run(['schtasks.exe', '/Delete', '/TN', 'River-IdleShutdown', '/F'], check=False)
     if shut:
         subprocess.run(['shutdown.exe', '/s', '/f', '/t', '60', '/c', MESSAGE.format(h=IDLE_HOURS)], check=False)
     return 0

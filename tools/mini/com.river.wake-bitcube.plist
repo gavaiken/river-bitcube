@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Wakes bitcube from the Mac mini an hour before each opening of the show at Gray Area (28 Oct 2026, Gavin):
+<!-- Wakes bitcube from the Mac mini at 11:55 every day until 6 Nov 2026, just before the 12:00-21:00 hours it never
+     shuts down in (Gavin, 30 Oct 2026; was an hour before each opening, 28 Oct):
      tools/mini/wake_bitcube.sh. A LaunchAgent for user gav on the mini (gav holds the ssh keys for bitcube and the
-     install router). Dated: one fire per show day, nothing after. Install:
+     install router). Dated: one fire a day, nothing after 6 Nov (wake_bitcube.sh also refuses after it). Install:
        cp tools/mini/com.river.wake-bitcube.plist ~/Library/LaunchAgents/
        launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.river.wake-bitcube.plist
        launchctl print gui/$(id -u)/com.river.wake-bitcube | grep -A3 calendar
@@ -17,10 +18,14 @@
   </array>
   <key>StartCalendarInterval</key>
   <array>
-    <dict><key>Month</key><integer>10</integer><key>Day</key><integer>29</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Month</key><integer>10</integer><key>Day</key><integer>30</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Month</key><integer>10</integer><key>Day</key><integer>31</integer><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Month</key><integer>11</integer><key>Day</key><integer>1</integer><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Month</key><integer>10</integer><key>Day</key><integer>30</integer><key>Hour</key><integer>11</integer><key>Minute</key><integer>55</integer></dict>
+    <dict><key>Month</key><integer>10</integer><key>Day</key><integer>31</integer><key>Hour</key><integer>11</integer><key>Minute</key><integer>55</integer></dict>
+    <dict><key>Month</key><integer>11</integer><key>Day</key><integer>1</integer><key>Hour</key><integer>11</integer><key>Minute</key><integer>55</integer></dict>
+    <dict><key>Month</key><integer>11</integer><key>Day</key><integer>2</integer><key>Hour</key><integer>11</integer><key>Minute</key><integer>55</integer></dict>
+    <dict><key>Month</key><integer>11</integer><key>Day</key><integer>3</integer><key>Hour</key><integer>11</integer><key>Minute</key><integer>55</integer></dict>
+    <dict><key>Month</key><integer>11</integer><key>Day</key><integer>4</integer><key>Hour</key><integer>11</integer><key>Minute</key><integer>55</integer></dict>
+    <dict><key>Month</key><integer>11</integer><key>Day</key><integer>5</integer><key>Hour</key><integer>11</integer><key>Minute</key><integer>55</integer></dict>
+    <dict><key>Month</key><integer>11</integer><key>Day</key><integer>6</integer><key>Hour</key><integer>11</integer><key>Minute</key><integer>55</integer></dict>
   </array>
   <key>StandardOutPath</key><string>/Users/gav/claude/local/wake-bitcube.launchd.log</string>
   <key>StandardErrorPath</key><string>/Users/gav/claude/local/wake-bitcube.launchd.log</string>
