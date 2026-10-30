@@ -53,3 +53,12 @@ def test_until_is_local_midnight_7_nov():
     import time
     t = time.localtime(m.until_t())
     assert (t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min) == (2026, 11, 7, 0, 0)
+
+
+def test_counter_seen_needs_someone_for_most_of_the_window():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'presence'))
+    import counter
+    assert counter.sustained([(0, True)]) is False                          # one frame: a ghost
+    assert counter.sustained([(t, t != 2) for t in range(6)]) is True      # a dropout is fine
+    assert counter.sustained([(t, t % 2 == 0) for t in range(6)]) is False  # flicker
+    assert counter.sustained([(t, t < 5) for t in range(6)]) is False      # gone now

@@ -20,8 +20,8 @@ stillness: nothing about anyone is kept once they've been out of sight TRACK_KEE
 newest; without one, lingerers' ropes are []. With the motion fallback, people and lingerers are []. Also
 River\\presence-status.json (detector, frame rate, raw and near counts) for whoever is tuning, and
 River\\presence-tracker.json (the tracker's people, so a restarted counter keeps their stillness clocks; see TRACKER_MAX_AGE_S).
-River\\presence-seen.json ({"t"}: the last time anyone was in frame, near or not, every SEEN_EVERY s while they are; read
-by tools/power/idle_shutdown.py, which shuts bitcube down after 3 hours without anyone).
+River\\presence-seen.json ({"t"}: the last time someone was in frame for most of SEEN_WINDOW_S, near or not; read
+by tools/power/idle_shutdown.py), and a small picture of that moment in River\\frames\\seen (the newest SEEN_KEEP).
 A write that Windows refuses (a reader such as TouchDesigner or mission control has the file open: WinError 5, 28 Oct) is
 retried a few times, then skipped; nothing in one frame's detect-or-write step can stop the counter.
 
@@ -54,6 +54,11 @@ STATUS = RIVER / 'presence-status.json'
 TRACKER = RIVER / 'presence-tracker.json'
 SEEN = RIVER / 'presence-seen.json'     # {"t": the last time anyone was in frame}: tools/power/idle_shutdown.py
 SEEN_EVERY = 15.0          # s between presence-seen.json writes while people are in frame
+SEEN_WINDOW_S = 5.0        # 'seen' needs someone in frame for most of the last 5 s: one-frame ghosts don't count
+SEEN_MIN_SHARE = 0.7       # (overnight on 29 Oct the counter 'saw' someone every 30-80 min in the closed gallery)
+SEEN_MIN_FRAMES = 4
+SEEN_FRAMES = RIVER / 'frames' / 'seen'   # a small picture each time someone counts as seen (the newest SEEN_KEEP)
+SEEN_KEEP = 60
 DEBUG = RIVER / 'presence-debug.jpg'
 LOG = RIVER / 'logs' / 'presence.log'
 MODEL = RIVER / 'models' / 'yolov8n.onnx'
@@ -395,7 +400,7 @@ def run(debug=False, min_height=MIN_HEIGHT, zones=None):
     log(f'rope feet for lingerers: {feet.path.name if feet.path else "none (no zones file): lingerers get no ropes"}')
     saved = read_tracker_state(TRACKER) if detector else None        # the last counter's people (taken back below)
     count, raw, prev, last_n, last_write, last_debug, t_det = 0, 0, None, 0, 0.0, 0.0, []
-    last_seen_write = 0.0
+    last_seen_write, seen_hist = 0.0, []
     while True:
         now = time.time()
         if frames.n != last_n and frames.frame is not None:
@@ -416,6 +421,7 @@ def run(debug=False, min_height=MIN_HEIGHT, zones=None):
                     boxes, count = [], motion_count(prev, img)
                     raw, prev = count, img
                 t_det = (t_det + [time.perf_counter() - t0])[-20:]
+                seen_hist = [(t, p) for t, p in seen_hist if now - t <= SEEN_WINDOW_S] + [(now, raw > 0)]
                 if debug and now - last_debug > 10:
                     last_debug = now
                     save_debug(img, boxes, min_height)
@@ -431,12 +437,35 @@ def run(debug=False, min_height=MIN_HEIGHT, zones=None):
                                     'ms': round(1000 * sum(t_det) / len(t_det)) if t_det else None, 'stream': fresh})
                 if detector:
                     write_json(TRACKER, tracker.state(now))
-                if fresh and raw > 0 and now - last_seen_write >= SEEN_EVERY:   # anyone in frame, near or not
+                if fresh and sustained(seen_hist) and now - last_seen_write >= SEEN_EVERY:   # anyone, near or not
                     last_seen_write = now
                     write_json(SEEN, {'t': round(now, 2), 'raw': int(raw)})
+                    save_seen(img, boxes, now)
             except Exception as e:                                     # nor does one bad write (write_json itself
                 log_every('write', f'write failed ({type(e).__name__}: {e}); going on')   # never raises)
         time.sleep(0.05)
+
+
+def sustained(hist, min_share=SEEN_MIN_SHARE, min_frames=SEEN_MIN_FRAMES):
+    """hist: [(t, someone in frame)] over the last SEEN_WINDOW_S: someone in most of at least min_frames frames."""
+    return len(hist) >= min_frames and sum(1 for _, p in hist if p) >= min_share * len(hist) and hist[-1][1]
+
+
+def save_seen(img, boxes, now, folder=SEEN_FRAMES, keep=SEEN_KEEP):
+    """A 480-px JPEG with the boxes, so 'seen' can be checked by eye; never raises."""
+    try:
+        from PIL import Image, ImageDraw
+        folder.mkdir(parents=True, exist_ok=True)
+        im = Image.fromarray(img)
+        dr = ImageDraw.Draw(im)
+        for x1, y1, x2, y2, *_ in boxes:
+            dr.rectangle((x1, y1, x2, y2), outline=(0, 255, 0), width=2)
+        im.thumbnail((480, 480))
+        im.save(folder / time.strftime('seen-%Y%m%d-%H%M%S.jpg', time.localtime(now)), quality=70)
+        for old in sorted(folder.glob('seen-*.jpg'))[:-keep]:
+            old.unlink()
+    except Exception:                                                  # noqa: BLE001
+        pass
 
 
 def save_debug(img, boxes, min_height):
