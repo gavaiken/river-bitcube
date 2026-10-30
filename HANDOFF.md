@@ -1,7 +1,7 @@
 # Handoff: where things stand
 
 - **Holder:** nobody on bitcube (Gavin's Mac mini agent finished 02:15). Last on bitcube: the remembered river v2 (`river-all-looks-v2.toe` running; v1 frozen as the rollback).
-- **Where:** bitcube running **`river-all-looks-v2.toe`** (The river: all looks v2, auto playlist, 60 fps, Python ~3 ms a frame). **The boot default is still `river-all-looks.toe`** (v1, frozen): a restart rolls back to v1 by itself until Gavin sets v2 as default (mission control, Set as default).
+- **Where:** bitcube running **`river-all-looks.toe`** (v1, frozen). Boot default and running show are back on **`river-all-looks.toe` (v1, frozen)** since 29 Oct 19:14 (Gavin). v2 was the default 17:16-19:14. bitcube was off 18:31-19:12 by design (River-NightlyShutdown, closing + 30 min); woken from the mini with Wake-on-LAN through the Gray Area router (`etherwake -i br-lan 00:e7:43:0e:5f:c4`).
 - **Updated:** 2026-10-29 07:55 PT (Gavin / Claude, Mac mini: the remembered river v2, the driftwood eddies, the runtime tools guarded)
 - **Next holder:** whoever Gavin names. Read `docs/remembered-v2-plan.md` first. Open: make v2 the default (Gavin's call); Dave to merge river-agent PR #14; the runtime tools (direct_video.py, video_trial.py, profile_capture.py) refuse the frozen v1 and work on v2 (tools/remembered/runtime_guard.py).
 
